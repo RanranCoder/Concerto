@@ -41,14 +41,11 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24 }: GanttChar
   const todayX = LABEL_W + Math.max(dayjs(todayStr()).diff(dayjs(range.start), 'day'), 0) * pxPerDay
 
   const rows = useMemo(() => {
-    const byId = new Map(tasks.map((t) => [t.id, t]))
     return tasks.map((t, i) => {
       const offset = Math.max(dayjs(t.startDate).diff(dayjs(range.start), 'day'), 0)
       const px = taskToPixels(t, pxPerDay, offset)
       const y = HEADER_H + i * ROW_HEIGHT + (ROW_HEIGHT - BAR_H) / 2
-      const from = t.dependsOn != null ? byId.get(t.dependsOn) : undefined
-      const fromRow = from ? tasks.indexOf(from) : -1
-      return { t, i, y, px, from, fromRow }
+      return { t, y, px }
     })
   }, [tasks, range, pxPerDay])
 
