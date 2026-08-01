@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ColumnsType } from 'antd/es/table'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AutoComplete,
   Button,
@@ -9,7 +8,6 @@ import {
   Input,
   message,
   Popconfirm,
-  Select,
   Space,
   Spin,
   Tabs,
@@ -27,7 +25,6 @@ import {
   SendOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
-import dayjs from 'dayjs'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -40,8 +37,6 @@ import {
   type ActivityDetail,
   type ActivityPlanVO,
   type ActivityVO,
-  type ScoreRecordVO,
-  type ScoreRuleVO,
   type SeatMapVO,
 } from '@/api/activity'
 import {
@@ -53,8 +48,9 @@ import {
 } from '@/api/plan'
 import { createAgenda, deleteAgenda, listAgendas, updateAgenda } from '@/api/agenda'
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
-import { countSignins, createSignin, deleteSignin, listSignins, type SigninVO } from '@/api/signin'
 import { useAuthStore } from '@/stores/auth'
+import ScorePanel from './ScorePanel'
+import SigninPanel from './SigninPanel'
 
 // 活动状态机（与后端 ActivityStatus 一致）
 const STATUS_ORDER = ['ASSIGNED', 'PLANNING', 'PLAN_REVIEW', 'EXECUTING', 'FINISHED', 'ARCHIVED']
@@ -73,8 +69,6 @@ const PLAN_STATUS_TEXT: Record<string, string> = {
   APPROVED: '已通过',
   REJECTED: '已驳回',
 }
-
-const SIGN_TYPE_TEXT: Record<string, string> = { MANUAL: '手动', SCAN: '扫码' }
 
 const TYPE_MAP: Record<string, string> = {
   PARTY_LESSON: '党课',
@@ -699,206 +693,6 @@ function SeatTab({ activityId }: { activityId: number }) {
   )
 }
 
-// ==================== 评分 Tab（基础版，Task 15 深化） ====================
-
-function ScoreTab({ rules, records }: { rules: ScoreRuleVO[]; records: ScoreRecordVO[] }) {
-  const columns = useMemo(() => {
-    const base: Array<Record<string, unknown>> = [
-      { title: '队名', dataIndex: 'teamName', key: 'teamName' },
-      { title: '分组', dataIndex: 'groupName', key: 'groupName', render: (v: unknown) => (v as string) || '-' },
-    ]
-    rules.forEach((r) => {
-      base.push({
-        title: `${r.dimensionName} (${r.fullMarks})`,
-        dataIndex: `dim_${r.id}`,
-        key: `dim_${r.id}`,
-        width: 90,
-      })
-    })
-    base.push({ title: '总分', dataIndex: 'total', key: 'total', width: 80 })
-    base.push({ title: '名次', dataIndex: 'rankNo', key: 'rankNo', width: 80, render: (v: unknown) => v ?? '-' })
-    return base as ColumnsType<Record<string, unknown>>
-  }, [rules])
-
-  const rows = useMemo(
-    () =>
-      records.map((r) => {
-        let dims: Record<string, number> = {}
-        try {
-          dims = r.dimensionScores ? (JSON.parse(r.dimensionScores) as Record<string, number>) : {}
-        } catch {
-          dims = {}
-        }
-        const row: Record<string, unknown> = {
-          key: r.id,
-          teamName: r.teamName,
-          groupName: r.groupName ?? '',
-          total: r.total,
-          rankNo: r.rankNo,
-        }
-        rules.forEach((rule) => {
-          row[`dim_${rule.id}`] = dims[String(rule.id)] ?? '-'
-        })
-        return row
-      }),
-    [records, rules],
-  )
-
-  return (
-    <div>
-      <Space style={{ marginBottom: 12 }} wrap>
-        <Tag color="red">评分规则</Tag>
-        {rules.length === 0 && <span style={{ color: 'var(--color-text-secondary)' }}>暂无评分规则</span>}
-        {rules.map((r) => (
-          <Tag key={r.id}>{r.dimensionName}（满分 {r.fullMarks}）</Tag>
-        ))}
-      </Space>
-      <GlassTable columns={columns} dataSource={rows} pagination={false} rowKey="key" />
-      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-        完整评分面板（录入规则/记录、自动合计、名次排序）在后续任务中实现。
-      </div>
-    </div>
-  )
-}
-
-// ==================== 签到 Tab（基础版，Task 15 深化） ====================
-
-function SigninTab({ activityId }: { activityId: number }) {
-  const [list, setList] = useState<SigninVO[]>([])
-  const [count, setCount] = useState(0)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm()
-
-  const fetchData = useCallback(async () => {
-    try {
-      const [rows, c] = await Promise.all([listSignins(activityId), countSignins(activityId)])
-      setList(rows ?? [])
-      setCount(c ?? 0)
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }, [activityId])
-
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const openCreate = () => {
-    form.resetFields()
-    setModalOpen(true)
-  }
-
-  const handleSave = async () => {
-    const values = await form.validateFields()
-    setSaving(true)
-    try {
-      await createSignin({
-        activityId,
-        name: values.name,
-        studentNo: values.studentNo || null,
-        className: values.className || null,
-        identityType: values.identityType || null,
-        signType: 'MANUAL',
-        remark: values.remark || null,
-      })
-      message.success('已签到')
-      setModalOpen(false)
-      fetchData()
-    } catch {
-      /* http 拦截已提示 */
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteSignin(id)
-      message.success('已删除')
-      fetchData()
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }
-
-  const columns = [
-    { title: '姓名', dataIndex: 'name', key: 'name' },
-    { title: '学号', dataIndex: 'studentNo', key: 'studentNo', render: (v: string | null) => v || '-' },
-    { title: '班级', dataIndex: 'className', key: 'className', render: (v: string | null) => v || '-' },
-    { title: '身份', dataIndex: 'identityType', key: 'identityType', render: (v: string | null) => v || '-' },
-    { title: '方式', dataIndex: 'signType', key: 'signType', render: (v: string | null) => (v ? SIGN_TYPE_TEXT[v] ?? v : '-') },
-    { title: '签到时间', dataIndex: 'signTime', key: 'signTime', render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-') },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_: unknown, r: SigninVO) => (
-        <Popconfirm title="确认删除该签到记录？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
-      ),
-    },
-  ]
-
-  return (
-    <div>
-      <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <Space wrap>
-          <Tag color="red">已签到 {count} 人</Tag>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增手动签到
-          </Button>
-        </Space>
-      </GlassCard>
-      <GlassTable<SigninVO>
-        columns={columns}
-        dataSource={list.map((x) => ({ ...x, key: x.id }))}
-        pagination={false}
-        rowKey="id"
-      />
-      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-        完整签到面板（扫码、名单导入、筛选统计）在后续任务中实现。
-      </div>
-      <GlassModal
-        title="手动签到"
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              确认签到
-            </Button>
-          </Space>
-        }
-      >
-        <Form form={form} layout="vertical" preserve={false}>
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input maxLength={50} />
-          </Form.Item>
-          <Form.Item name="studentNo" label="学号">
-            <Input maxLength={20} />
-          </Form.Item>
-          <Form.Item name="className" label="班级">
-            <Input maxLength={100} />
-          </Form.Item>
-          <Form.Item name="identityType" label="身份">
-            <Select
-              placeholder="选择身份"
-              allowClear
-              options={['党建干事', '发展对象', '预备党员', '入党积极分子'].map((v) => ({ value: v, label: v }))}
-            />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} maxLength={200} />
-          </Form.Item>
-        </Form>
-      </GlassModal>
-    </div>
-  )
-}
-
 // ==================== 页面 ====================
 
 export default function ActivityDetail() {
@@ -1032,12 +826,12 @@ export default function ActivityDetail() {
     {
       key: 'score',
       label: '评分',
-      children: detail ? <ScoreTab rules={detail.score?.rules ?? []} records={detail.score?.records ?? []} /> : null,
+      children: <ScorePanel activityId={activityId} />,
     },
     {
       key: 'signin',
       label: '签到',
-      children: <SigninTab activityId={activityId} />,
+      children: <SigninPanel activityId={activityId} />,
     },
   ]
 
