@@ -28,7 +28,7 @@ export default function MainLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={220} theme="light" breakpoint="lg" collapsedWidth={0}>
+      <Sider width={220} breakpoint="lg" collapsedWidth={0}>
         <div style={{ padding: 16, fontWeight: 600, fontSize: 16 }}>
           党务管理系统
         </div>

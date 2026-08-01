@@ -26,6 +26,15 @@ body::before {
 .ant-layout, .ant-layout-header, .ant-layout-sider, .ant-card {
   background: transparent !important;
 }
+/* 左侧菜单：跟随主题算法取字色，背景交给玻璃 Sider 露出，不保留不透明容器白/深底 */
+.ant-menu {
+  background: transparent !important;
+}
+/* 收起态的零宽触发条（<lg 断点）跟随玻璃 token，避免 light 下残留 antd 深色 #002140 */
+.ant-layout-sider-zero-width-trigger {
+  background: var(--glass-bg) !important;
+  color: var(--color-text) !important;
+}
 .ant-table {
   background: transparent !important;
 }
