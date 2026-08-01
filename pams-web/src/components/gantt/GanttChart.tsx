@@ -8,6 +8,8 @@ interface GanttChartProps {
   tasks: GanttTask[]
   onUpdate: (t: GanttTask) => void
   pxPerDay?: number
+  /** 提供时点击任务条交给父级编辑弹窗（用于完整字段/删除），否则用内部精简弹窗 */
+  onEdit?: (t: GanttTask) => void
 }
 
 const ROW_HEIGHT = 48
@@ -24,7 +26,7 @@ function barFill(deptName?: string): string {
   return `rgb(${v}, ${v + 8}, ${v + 20})`
 }
 
-export default function GanttChart({ tasks, onUpdate, pxPerDay = 24 }: GanttChartProps) {
+export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: GanttChartProps) {
   const [editing, setEditing] = useState<GanttTask | null>(null)
 
   const range = useMemo(() => {
@@ -164,7 +166,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24 }: GanttChar
             role="button"
             aria-label={t.name}
             style={{ cursor: 'pointer' }}
-            onClick={() => setEditing(t)}
+            onClick={() => (onEdit ? onEdit(t) : setEditing(t))}
           >
             <text x={8} y={y + 16} fill="var(--color-text)" fontSize={12} style={{ userSelect: 'none' }}>
               {t.name}

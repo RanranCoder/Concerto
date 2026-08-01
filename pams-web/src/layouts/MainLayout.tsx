@@ -1,5 +1,6 @@
-import { Layout, Menu, Dropdown, Space, Avatar, Typography } from 'antd'
+import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Suspense, useMemo } from 'react'
 import {
   BellOutlined,
   CalendarOutlined,
@@ -16,7 +17,6 @@ import {
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/auth'
 import ThemeSwitch from '@/components/glass/ThemeSwitch'
-import { useMemo } from 'react'
 
 const { Sider, Header, Content } = Layout
 
@@ -108,7 +108,15 @@ export default function MainLayout() {
           </Dropdown>
         </Header>
         <Content style={{ padding: '0 24px 24px' }}>
-          <Outlet />
+          <Suspense
+            fallback={
+              <div style={{ textAlign: 'center', padding: 80 }}>
+                <Spin />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </Content>
       </Layout>
     </Layout>
