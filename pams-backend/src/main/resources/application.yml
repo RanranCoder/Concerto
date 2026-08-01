@@ -1,0 +1,50 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: pams-backend
+  datasource:
+    url: jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # pams_db 已由 Task 2 建表（非空但无 history 表）。baseline-on-migrate + baseline-version=0
+    # 让 Flyway 在空历史上建 baseline(0) 后真实执行 V1（DDL 全部 IF NOT EXISTS，幂等安全），
+    # 从而在运行时校验 DDL 兼容性。
+    baseline-on-migrate: true
+    baseline-version: 0
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+
+pams:
+  jwt:
+    secret: PAMS-2026-party-affairs-management-system-secret-key-please-change-in-prod-0123456789
+    expire-hours: 72
+  upload-dir: ./uploads
+
+# 测试库用 H2(MySQL 模式) + Flyway 同迁移脚本
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:pams;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  flyway:
+    locations: classpath:db/migration
