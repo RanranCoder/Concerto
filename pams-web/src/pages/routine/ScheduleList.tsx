@@ -10,6 +10,7 @@ import {
   updateSchedule,
   deleteSchedule,
   exportSchedule,
+  SCHEDULE_TYPE_MAP,
   SCHEDULE_TYPE_OPTIONS,
   WEEKDAY_OPTIONS,
   WEEKDAY_NAMES,
@@ -21,11 +22,8 @@ import { useAuthStore } from '@/stores/auth'
 
 interface GridEntry {
   key: number
-  schedule: ScheduleVO
-  /** 主班人员 */
-  primaryNames: string[]
-  /** 副班人员 */
-  deputyNames: string[]
+  /** 同 (weekday, sessionName) 下的全部排班，可能多条 */
+  schedules: ScheduleVO[]
 }
 
 interface FormValues {
@@ -37,20 +35,17 @@ interface FormValues {
   persons?: SchedulePersonItem[]
 }
 
-/** 按 weekday(1-7) × sessionName 组装排班网格 */
+/** 按 weekday(1-7) × sessionName 组装排班网格（同一格可能有多条排班，聚合为数组） */
 function buildGrid(list: ScheduleVO[]): { rows: { key: string; sessionName: string; cells: (GridEntry | null)[] }[] } {
   const cellsMap = new Map<string, GridEntry>()
   list.forEach((s) => {
-    cellsMap.set(`${s.weekday ?? 1}-${s.sessionName ?? ''}`, { key: s.id, schedule: s, primaryNames: [], deputyNames: [] })
-  })
-  // 收集该维度下每个格子的排班人员（同一 weekday×sessionName 可能出现多条排班）
-  list.forEach((s) => {
-    const entry = cellsMap.get(`${s.weekday ?? 1}-${s.sessionName ?? ''}`)
-    if (!entry) return
-    ;(s.persons ?? []).forEach((p) => {
-      if (p.isPrimary === 0) entry.deputyNames.push(p.personName)
-      else entry.primaryNames.push(p.personName)
-    })
+    const key = `${s.weekday ?? 1}-${s.sessionName ?? ''}`
+    const entry = cellsMap.get(key)
+    if (entry) {
+      entry.schedules.push(s)
+    } else {
+      cellsMap.set(key, { key: s.id, schedules: [s] })
+    }
   })
   const rowKeys = Array.from(new Set(list.map((s) => s.sessionName ?? '')))
   const rows = rowKeys.map((sessionName) => ({
@@ -258,31 +253,46 @@ export default function ScheduleList() {
                     >
                       {entry && (
                         <div style={{ minHeight: 48 }}>
-                          {entry.primaryNames.length > 0 && (
-                            <div style={{ fontWeight: 500, color: 'var(--color-text)' }}>{entry.primaryNames.join('、')}</div>
-                          )}
-                          {entry.deputyNames.length > 0 && (
-                            <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{entry.deputyNames.join('、')}</div>
-                          )}
-                          <Space size="small" style={{ marginTop: 4 }}>
-                            {isMinisterOrAbove && (
-                              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(entry.schedule)}>
-                                编辑
-                              </Button>
-                            )}
-                            {isMinisterOrAbove && (
-                              <Popconfirm
-                                title="确认删除该排班？"
-                                onConfirm={() => handleDelete(entry.schedule.id)}
-                                okText="删除"
-                                cancelText="取消"
-                              >
-                                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                                  删除
-                                </Button>
-                              </Popconfirm>
-                            )}
-                          </Space>
+                          {entry.schedules.map((schedule) => {
+                            const primaryNames = (schedule.persons ?? [])
+                              .filter((p) => p.isPrimary !== 0)
+                              .map((p) => p.personName)
+                            const deputyNames = (schedule.persons ?? [])
+                              .filter((p) => p.isPrimary === 0)
+                              .map((p) => p.personName)
+                            return (
+                              <div key={schedule.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px dashed var(--color-border)' }}>
+                                <div style={{ fontSize: 12, color: 'var(--color-red)', marginBottom: 2 }}>
+                                  {SCHEDULE_TYPE_MAP[schedule.scheduleType] ?? schedule.scheduleType}
+                                </div>
+                                {primaryNames.length > 0 && (
+                                  <div style={{ fontWeight: 500, color: 'var(--color-text)' }}>{primaryNames.join('、')}</div>
+                                )}
+                                {deputyNames.length > 0 && (
+                                  <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{deputyNames.join('、')}</div>
+                                )}
+                                <Space size="small" style={{ marginTop: 4 }}>
+                                  {isMinisterOrAbove && (
+                                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(schedule)}>
+                                      编辑
+                                    </Button>
+                                  )}
+                                  {isMinisterOrAbove && (
+                                    <Popconfirm
+                                      title="确认删除该排班？"
+                                      onConfirm={() => handleDelete(schedule.id)}
+                                      okText="删除"
+                                      cancelText="取消"
+                                    >
+                                      <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                                        删除
+                                      </Button>
+                                    </Popconfirm>
+                                  )}
+                                </Space>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </td>
