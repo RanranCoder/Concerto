@@ -13,6 +13,7 @@ const ActivityDetail = lazy(() => import('@/pages/activity/ActivityDetail'))
 const Gantt = lazy(() => import('@/pages/activity/Gantt'))
 const Schedules = lazy(() => import('@/pages/routine/ScheduleList'))
 const Attendance = lazy(() => import('@/pages/routine/AttendanceList'))
+const FreeSchedules = lazy(() => import('@/pages/routine/FreeScheduleList'))
 const PartyMembers = lazy(() => import('@/pages/party/PartyMemberList'))
 const PartyStages = lazy(() => import('@/pages/party/PartyStageList'))
 const Articles = lazy(() => import('@/pages/content/ArticleList'))
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       // 排班考勤
       { path: '/routine/schedules', element: <Schedules /> },
       { path: '/routine/attendance', element: <Attendance /> },
+      { path: '/routine/free-schedules', element: <FreeSchedules /> },
 
       // 党务台账
       { path: '/party/members', element: <PartyMembers /> },

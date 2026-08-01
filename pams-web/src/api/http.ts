@@ -22,6 +22,8 @@ http.interceptors.response.use(
   // 返回类型故意标注为 any：拦截器把 Result 解包为 body.data（非 AxiosResponse），
   // 由下方辅助函数以 `as unknown as Promise<T>` 断言回类型。
   (res): any => {
+    // blob（文件下载）响应跳过 Result 解包，原样返回 AxiosResponse 供导出下载使用
+    if (res.config.responseType === 'blob') return res
     const body = res.data as { code: number; message?: string; data?: unknown }
     if (body.code === 200) return body.data
     throw new ApiError(body.code ?? -1, body.message ?? '请求失败')
