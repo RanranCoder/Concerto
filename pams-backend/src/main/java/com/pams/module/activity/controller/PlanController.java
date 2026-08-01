@@ -46,7 +46,7 @@ public class PlanController {
 
     @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
     @PutMapping("/{id}/review")
-    public Result<Void> review(@PathVariable Long id, @RequestBody PlanReviewRequest req,
+    public Result<Void> review(@PathVariable Long id, @Valid @RequestBody PlanReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {
         boolean approved = req.getApproved() != null && req.getApproved();
         service.review(id, approved, req.getComment(), current == null ? null : current.getId());
