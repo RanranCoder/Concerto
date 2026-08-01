@@ -61,7 +61,7 @@ public class TaskService {
     }
 
     public Task getEntity(Long id) {
-        return repository.findById(id).orElseThrow(() -> new BizException(2004, "任务不存在"));
+        return repository.findById(id).orElseThrow(() -> new BizException(2008, "任务不存在"));
     }
 
     private void apply(Task t, TaskRequest req) {
