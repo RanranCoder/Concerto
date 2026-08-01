@@ -1,0 +1,30 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'HarmonyOS Sans SC', 'Noto Sans SC', sans-serif;
+  color: var(--color-text);
+  background: linear-gradient(135deg, var(--page-bg-start), var(--page-bg-end));
+  background-attachment: fixed;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 380px;
+  max-width: 100%;
+}
