@@ -138,7 +138,7 @@ git commit -m "chore: 初始化 monorepo 骨架"
 - Create: `D:\MyApp\PAMS\database\init_db.sql`（仅建库语句，供手动执行）
 
 **Interfaces:**
-- Produces: 25 张表，命名全部 snake_case、主键 `BIGINT AUTO_INCREMENT`、时间 `DATETIME`、逻辑删除 `deleted TINYINT DEFAULT 0`（JPA `@Where` 由实体处理）。所有表经 `CREATE TABLE IF NOT EXISTS`。
+- Produces: 28 张业务表，命名全部 snake_case、主键 `BIGINT AUTO_INCREMENT`、时间 `DATETIME`。`deleted TINYINT DEFAULT 0`（逻辑删除）仅 10 张表带：sys_user/activity/task/party_member/article/news/material/template_asset/announcement（JPA `@Where`/`@SQLRestriction` 由实体处理）。所有表经 `CREATE TABLE IF NOT EXISTS`。
 - 供 Task 4/8/10/… 的 JPA 实体直接映射列名。
 
 - [ ] **Step 1: 写建库脚本 `database/init_db.sql`**
@@ -972,6 +972,7 @@ Expected: `ResultTest` 2 通过。
 ```bash
 git add pams-backend
 git commit -m "feat: 后端脚手架与统一返回"
+```
 
 ---
 
@@ -1869,6 +1870,7 @@ Expected: UserServiceTest 2 个用例通过；原有测试不回归。
 ```bash
 git add pams-backend/src
 git commit -m "feat: 用户/部门/角色管理与数据权限"
+```
 
 ---
 
@@ -2470,6 +2472,7 @@ npm run dev
 ```bash
 git add pams-web/src
 git commit -m "feat: liquid glass 设计系统与玻璃组件库"
+```
 
 ---
 
@@ -3337,6 +3340,7 @@ cd /d/MyApp/PAMS/pams-web && npm run test
 cd /d/MyApp/PAMS/pams-backend && mvn -q test
 cd /d/MyApp/PAMS && git add pams-web/src pams-backend/src
 git commit -m "feat: 甘特图任务与自研甘特图组件"
+```
 
 ---
 
@@ -3765,6 +3769,7 @@ cd /d/MyApp/PAMS/pams-backend
 mvn -q test
 git add pams-backend/src
 git commit -m "feat: 排班/考勤/无课表后端"
+```
 
 ---
 
@@ -4013,6 +4018,7 @@ export const listTransfers = (memberId: number) => get<unknown>(`/party/transfer
 ```bash
 git add pams-web/src
 git commit -m "feat: 党务台账前端"
+```
 
 ---
 
@@ -4405,6 +4411,7 @@ export default function UploadFile({ bizType, onUploaded }: { bizType?: string; 
 ```bash
 git add pams-web/src
 git commit -m "feat: 材料库/模板/素拓/通知前端"
+```
 
 ---
 
@@ -4793,6 +4800,7 @@ Expected: 数据库建库 → 后端 8080 起 → 前端 3000 起 → 浏览器�
 ```bash
 git add start.bat README.md
 git commit -m "feat: 一键启动脚本与本地部署"
+```
 
 ---
 
@@ -4820,35 +4828,3 @@ git commit -m "feat: 一键启动脚本与本地部署"
 | medialeader | 新媒体部长 | 推文审核 |
 | techleader | 青年科技部长 | PPT/材料 |
 | admin | 系统管理员（主任级） | 用户管理 |
-
-```
-
----
-
-```
-
----
-
-```
-
----
-
-```
-
----
-
-```
-
----
-
-```
-
----
-
-```
-
----
-
-```
-
----
