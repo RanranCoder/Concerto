@@ -9,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -41,8 +42,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             u.getRole().getCode(), u.getRole().getLevel(),
                             u.getDept() == null ? null : u.getDept().getId(),
                             u.getDept() == null ? null : u.getDept().getName());
+                    // 权限用 "ROLE_" 前缀的角色码，配合 @PreAuthorize("hasAnyRole('DIRECTOR',...)") 使用
                     UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(lu, null, List.of(() -> lu.getRoleCode()));
+                            new UsernamePasswordAuthenticationToken(lu, null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_" + lu.getRoleCode())));
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }
             } catch (JwtException | IllegalArgumentException ignored) {

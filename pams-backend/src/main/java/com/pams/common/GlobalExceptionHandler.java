@@ -21,6 +21,10 @@ public class GlobalExceptionHandler {
         String msg = fe == null ? "参数校验失败" : fe.getDefaultMessage();
         return ResponseEntity.badRequest().body(Result.fail(400, msg));
     }
+    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+    public ResponseEntity<Result<Void>> handleDenied(org.springframework.security.authorization.AuthorizationDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.fail(403, "无权限访问"));
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleOther(Exception e) {
         log.error("未处理异常", e);

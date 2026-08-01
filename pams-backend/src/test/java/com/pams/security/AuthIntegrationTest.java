@@ -40,9 +40,7 @@ class AuthIntegrationTest {
 
     @Test
     void noToken_returns401() throws Exception {
-        // 说明：简报原版访问 /api/users，但该接口属 Task 5 用户管理，本任务尚未实现。
-        // 这里改访问不存在的受保护路径 /api/nonexistent 验证未认证请求被 Security 拦截返回 401，
-        // Task 5 补齐 /api/users 后可恢复为 get("/api/users")。
-        mvc.perform(get("/api/nonexistent")).andExpect(status().isUnauthorized());
+        // 说明：Task 5 已实现 /api/users，未认证访问应被 Security 拦截返回 401。
+        mvc.perform(get("/api/users")).andExpect(status().isUnauthorized());
     }
 }
