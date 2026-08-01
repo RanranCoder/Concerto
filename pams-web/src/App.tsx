@@ -32,6 +32,15 @@ function ThemeConfigProvider() {
           borderRadius: 12,
           fontFamily: "'PingFang SC','Microsoft YaHei','HarmonyOS Sans SC','Noto Sans SC',sans-serif",
         },
+        components: {
+          Menu: {
+            // 玻璃 Sider 上选中项高亮：用主题自适应红系 token，避免 antd 默认选中背景
+            // （hashed:false 下固定 #ffede6）在 dark 玻璃上退化成浅粉白块
+            itemSelectedBg: mode === 'dark' ? 'rgba(222,41,16,0.28)' : 'rgba(222,41,16,0.14)',
+            itemSelectedColor: '#DE2910',
+            itemColor: mode === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.92)',
+          },
+        },
       }}
     >
       <AntApp>

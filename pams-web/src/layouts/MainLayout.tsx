@@ -72,7 +72,6 @@ export default function MainLayout() {
         </div>
         <Menu
           mode="inline"
-          theme="dark"
           selectedKeys={[selectedKey]}
           onClick={(e) => navigate(e.key)}
           items={menuItems}
