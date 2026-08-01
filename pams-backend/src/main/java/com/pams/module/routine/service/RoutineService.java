@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -61,6 +62,11 @@ public class RoutineService {
     /** 测试用：仅注入 AttendanceRepository，其余为 null */
     public RoutineService(AttendanceRepository attendanceRepository) {
         this(null, null, attendanceRepository, null);
+    }
+
+    /** 测试用：仅注入排班与考勤 repo，其余为 null（测 summary 的 weekNo/type 过滤需走排班关联） */
+    public RoutineService(ScheduleRepository scheduleRepository, AttendanceRepository attendanceRepository) {
+        this(scheduleRepository, null, attendanceRepository, null);
     }
 
     @Autowired
@@ -221,12 +227,17 @@ public class RoutineService {
                 .collect(Collectors.toList());
     }
 
-    /** 汇总：遍历考勤按人聚合，返回 人员名/应到/实到/请假/缺勤/次数 */
+    /**
+     * 汇总：遍历考勤按人聚合，返回 人员名/应到/实到/请假/缺勤/次数。
+     * weekNo / type 均为可选过滤（null 或空串视为不限制），两者都传时同时满足。
+     * weekNo 按考勤所属排班的周次匹配，type 按考勤所属排班的排班类型（scheduleType，如 SMOKING_CURB）匹配；
+     * 未关联排班的考勤不匹配任何 weekNo/type。
+     */
     public List<Map<String, Object>> summary(Integer weekNo, String type) {
         Map<String, Map<String, Object>> acc = new LinkedHashMap<>();
         for (Attendance a : attendanceRepository.findAll()) {
             if (weekNo != null && !matchesWeekNo(a, weekNo)) continue;
-            if (type != null && !type.isBlank() && !type.equals(statusOf(a))) continue;
+            if (type != null && !type.isBlank() && !matchesScheduleType(a, type)) continue;
             Map<String, Object> row = acc.computeIfAbsent(a.getPersonName(), k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("personName", k);
@@ -256,10 +267,18 @@ public class RoutineService {
 
     /** 记录所属排班周次是否匹配。未关联排班（scheduleId 为空或排班不存在）时按 0 处理，不匹配任何 weekNo */
     private boolean matchesWeekNo(Attendance a, Integer weekNo) {
-        if (a.getScheduleId() == null || scheduleRepository == null) return false;
-        return scheduleRepository.findById(a.getScheduleId())
-                .map(s -> weekNo.equals(s.getWeekNo()))
-                .orElse(false);
+        return scheduleOf(a).map(s -> weekNo.equals(s.getWeekNo())).orElse(false);
+    }
+
+    /** 记录所属排班类型（scheduleType）是否匹配。未关联排班时不匹配任何 type */
+    private boolean matchesScheduleType(Attendance a, String type) {
+        return scheduleOf(a).map(s -> type.equals(s.getScheduleType())).orElse(false);
+    }
+
+    /** 考勤所属排班；无 scheduleId 或 repo 未注入（测试构造器）时返回 Optional.empty */
+    private Optional<Schedule> scheduleOf(Attendance a) {
+        if (a.getScheduleId() == null || scheduleRepository == null) return Optional.empty();
+        return scheduleRepository.findById(a.getScheduleId());
     }
 
     private static String statusOf(Attendance a) {

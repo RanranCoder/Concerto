@@ -34,7 +34,13 @@ public class AttendanceController {
         return Result.ok();
     }
 
-    /** 按人汇总：应到/实到/请假/缺勤/次数 */
+    /**
+     * 按人汇总：应到/实到/请假/缺勤/次数。
+     * weekNo / type 均可选（null 或空串 = 不限制，都传时同时满足）。
+     * weekNo 按考勤所属排班的周次过滤；type 按考勤所属排班的排班类型（scheduleType，
+     * 如 SMOKING_CURB 禁烟/CLASS_DUTY 值班/BOOTH 摆摊）过滤，例如"本周禁烟值班考勤汇总"。
+     * 传无效 type 不报错，找不到匹配排班的考勤即为空汇总。
+     */
     @GetMapping("/summary")
     public Result<List<Map<String, Object>>> summary(@RequestParam(required = false) Integer weekNo,
                                                      @RequestParam(required = false) String type) {
