@@ -26,9 +26,9 @@ export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // 完整菜单（当前所有登录用户可见）；按角色过滤留给 Task 26
-  const menuItems = useMemo(
-    () => [
+  // 完整菜单；用户管理仅部长及以上（roleLevel >= 3）可见（Task 26 将加 RequireRole 路由守卫，本任务先隐藏菜单入口）
+  const menuItems = useMemo(() => {
+    const items = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
       { key: '/activities', label: '活动管理', icon: <CalendarOutlined /> },
       { key: '/routine/schedules', label: '排班考勤', icon: <ScheduleOutlined /> },
@@ -38,10 +38,12 @@ export default function MainLayout() {
       { key: '/archive/templates', label: '模板库', icon: <TagsOutlined /> },
       { key: '/archive/credits', label: '素拓加分', icon: <TrophyOutlined /> },
       { key: '/archive/announcements', label: '通知公告', icon: <BellOutlined /> },
-      { key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> },
-    ],
-    [],
-  )
+    ]
+    if ((user?.roleLevel ?? 0) >= 3) {
+      items.push({ key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> })
+    }
+    return items
+  }, [user?.roleLevel])
 
   // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传；/archive/* → 材料库；/admin/* → 用户管理
   const selectedKey = useMemo(() => {
