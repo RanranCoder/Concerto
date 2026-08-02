@@ -81,6 +81,7 @@ export default function PartyMemberList() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyMemberVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<MemberFormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<MemberFormValues>()
 
@@ -108,14 +109,14 @@ export default function PartyMemberList() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
-    form.setFieldsValue({ gender: '男' })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({ gender: '男' })
     setModalOpen(true)
   }
 
   const openEdit = (record: PartyMemberVO) => {
     setEditing(record)
-    form.setFieldsValue({
+    setFormInit({
       name: record.name,
       gender: record.gender || undefined,
       nation: record.nation || undefined,
@@ -329,7 +330,13 @@ export default function PartyMemberList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `edit-${editing.id}` : 'create'}
+          initialValues={formInit}
+        >
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input maxLength={50} placeholder="请输入姓名" />
           </Form.Item>

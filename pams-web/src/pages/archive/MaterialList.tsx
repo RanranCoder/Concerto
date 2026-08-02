@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Form, Input, message, Popconfirm, Select, Space, Tree } from 'antd'
+import { Button, Empty, Form, Input, message, Popconfirm, Select, Space, Spin, Tree } from 'antd'
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -42,6 +42,7 @@ export default function MaterialList() {
   const [activities, setActivities] = useState<ActivityVO[]>([])
   const [uploadOpen, setUploadOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [fileId, setFileId] = useState<number | null>(null)
   const [form] = Form.useForm<MaterialFormValues>()
 
@@ -55,15 +56,18 @@ export default function MaterialList() {
   )
 
   const fetchTree = () => {
+    setLoading(true)
     getMaterialTree()
       .then((res) => setTree(res ?? []))
       .catch(() => {
         /* http 拦截已提示 */
       })
+      .finally(() => setLoading(false))
   }
 
   // 有搜索关键字时后端 tree 不参与过滤，改用分页列表
   const fetchFlat = () => {
+    setLoading(true)
     listMaterials({ keyword: keyword || undefined, size: 100 })
       .then((res) => {
         setFlat(res.records ?? [])
@@ -72,6 +76,7 @@ export default function MaterialList() {
       .catch(() => {
         /* http 拦截已提示 */
       })
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
@@ -216,49 +221,51 @@ export default function MaterialList() {
         </Space>
       </GlassCard>
 
-      {keyword.trim() ? (
-        <GlassCard style={{ padding: 16 }}>
-          {flat.length === 0 ? (
-            <Empty description="未找到匹配材料" />
-          ) : (
-            flat.map((m) => (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--color-border)' }}>
-                {leafIcon(m)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                  <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
-                    {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {activityNameOf(m.activityId)}
-                    {m.tag ? ` · #${m.tag}` : ''} · {dayjs(m.createdAt).format('YYYY-MM-DD')}
+      <Spin spinning={loading}>
+        {keyword.trim() ? (
+          <GlassCard style={{ padding: 16 }}>
+            {flat.length === 0 ? (
+              <Empty description="未找到匹配材料" />
+            ) : (
+              flat.map((m) => (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--color-border)' }}>
+                  {leafIcon(m)}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+                      {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {activityNameOf(m.activityId)}
+                      {m.tag ? ` · #${m.tag}` : ''} · {dayjs(m.createdAt).format('YYYY-MM-DD')}
+                    </div>
                   </div>
+                  {m.fileId && (
+                    <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(m.fileId as number, m.name)}>
+                      下载
+                    </Button>
+                  )}
+                  <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
                 </div>
-                {m.fileId && (
-                  <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(m.fileId as number, m.name)}>
-                    下载
-                  </Button>
-                )}
-                <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
-              </div>
-            ))
-          )}
-        </GlassCard>
-      ) : (
-        <GlassCard style={{ padding: 16 }}>
-          {treeData.length === 0 ? (
-            <Empty description="暂无归档材料" />
-          ) : (
-            <Tree
-              showLine
-              defaultExpandAll
-              blockNode
-              treeData={treeData}
-            />
-          )}
-        </GlassCard>
-      )}
+              ))
+            )}
+          </GlassCard>
+        ) : (
+          <GlassCard style={{ padding: 16 }}>
+            {treeData.length === 0 ? (
+              <Empty description="暂无归档材料" />
+            ) : (
+              <Tree
+                showLine
+                defaultExpandAll
+                blockNode
+                treeData={treeData}
+              />
+            )}
+          </GlassCard>
+        )}
+      </Spin>
 
       <GlassModal
         title="上传材料"

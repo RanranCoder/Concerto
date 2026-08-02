@@ -156,16 +156,18 @@ function PlanTab({
   const [modalOpen, setModalOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [formInit, setFormInit] = useState<Record<string, string>>()
   const [form] = Form.useForm()
   const [reviewForm] = Form.useForm()
 
   const openCreate = () => {
-    form.resetFields()
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = (p: ActivityPlanVO) => {
-    form.setFieldsValue({
+    setFormInit({
       background: p.background ?? '',
       purpose: p.purpose ?? '',
       content: p.content ?? '',
@@ -348,7 +350,13 @@ function PlanTab({
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={latest ? `plan-edit-${latest.id}` : 'plan-create'}
+          initialValues={formInit}
+        >
           {PLAN_FIELDS.map((f) => (
             <Form.Item key={f.name} name={f.name} label={f.label}>
               <Input.TextArea rows={4} placeholder={f.placeholder} />
@@ -390,6 +398,7 @@ function AgendaTab({ activityId }: { activityId: number }) {
   const [list, setList] = useState<ActivityAgendaVO[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ActivityAgendaVO | null>(null)
+  const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
@@ -407,15 +416,15 @@ function AgendaTab({ activityId }: { activityId: number }) {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
     const maxStep = list.reduce((a, x) => Math.max(a, x.stepNo), 0)
-    form.setFieldsValue({ stepNo: maxStep + 1 })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({ stepNo: maxStep + 1 })
     setModalOpen(true)
   }
 
   const openEdit = (a: ActivityAgendaVO) => {
     setEditing(a)
-    form.setFieldsValue({ stepNo: a.stepNo, title: a.title, remark: a.remark ?? '' })
+    setFormInit({ stepNo: a.stepNo, title: a.title, remark: a.remark ?? '' })
     setModalOpen(true)
   }
 
@@ -499,7 +508,13 @@ function AgendaTab({ activityId }: { activityId: number }) {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `agenda-edit-${editing.id}` : 'agenda-create'}
+          initialValues={formInit}
+        >
           <Form.Item name="stepNo" label="步骤序号" rules={[{ required: true, message: '请输入步骤序号' }]}>
             <Input type="number" min={1} />
           </Form.Item>
@@ -521,6 +536,7 @@ function SeatTab({ activityId }: { activityId: number }) {
   const [zones, setZones] = useState<Record<string, SeatMapVO[]>>({})
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<SeatMapVO | null>(null)
+  const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
@@ -541,14 +557,14 @@ function SeatTab({ activityId }: { activityId: number }) {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
-    if (zoneEntries.length) form.setFieldsValue({ zone: zoneEntries[0][0] })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit(zoneEntries.length ? { zone: zoneEntries[0][0] } : {})
     setModalOpen(true)
   }
 
   const openEdit = (s: SeatMapVO) => {
     setEditing(s)
-    form.setFieldsValue({
+    setFormInit({
       zone: s.zone,
       rowNo: s.rowNo,
       colNo: s.colNo,
@@ -669,7 +685,13 @@ function SeatTab({ activityId }: { activityId: number }) {
           </div>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `seat-edit-${editing.id}` : 'seat-create'}
+          initialValues={formInit}
+        >
           <Form.Item name="zone" label="区域" rules={[{ required: true, message: '请输入区域' }]}>
             <AutoComplete options={zoneOptions} placeholder="选择或输入区域" filterOption={(input, option) => ((option?.value as string) ?? '').includes(input)} />
           </Form.Item>

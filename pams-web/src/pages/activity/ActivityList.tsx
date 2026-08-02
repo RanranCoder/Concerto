@@ -10,6 +10,7 @@ import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
 import { listActivities, getActivity, createActivity, updateActivity, changeActivityStatus, deleteActivity } from '@/api/activity'
 import type { ActivitySave, ActivityVO } from '@/api/activity'
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
 
 // 活动状态 → 推进后状态（状态机：ASSIGNED→PLANNING→PLAN_REVIEW→EXECUTING→FINISHED→ARCHIVED）
@@ -34,21 +35,26 @@ const TYPE_MAP: Record<string, string> = {
 
 const TYPE_OPTIONS = Object.entries(TYPE_MAP).map(([value, label]) => ({ value, label }))
 
-const STATUS_OPTIONS = [
-  { value: 'ASSIGNED', label: '已下达' },
-  { value: 'PLANNING', label: '排期中' },
-  { value: 'PLAN_REVIEW', label: '策划审核' },
-  { value: 'EXECUTING', label: '执行中' },
-  { value: 'FINISHED', label: '已完成' },
-  { value: 'ARCHIVED', label: '已归档' },
-]
-
-const STATUS_MAP = Object.fromEntries(STATUS_OPTIONS.map((o) => [o.value, o.label]))
-
 type ActivityRecord = ActivityVO & { key: number }
 
 interface FormValues extends Omit<ActivitySave, 'startDate' | 'endDate'> {
   range?: Dayjs[] | null
+}
+
+/** 编辑回填用 initialValues + key 重挂载（GlassModal destroyOnHidden 关闭即卸载，setFieldsValue 在挂载前调用会丢失，Task 21 同款修复） */
+function toFormValues(detail?: ActivityVO & { description?: string }): FormValues | undefined {
+  if (!detail) return undefined
+  return {
+    name: detail.name,
+    theme: detail.theme,
+    type: detail.type,
+    location: detail.location,
+    organizer: detail.organizer,
+    host: detail.host,
+    leader: detail.leader,
+    description: detail.description ?? '',
+    range: detail.startDate && detail.endDate ? [dayjs(detail.startDate), dayjs(detail.endDate)] : undefined,
+  }
 }
 
 export default function ActivityList() {
@@ -66,6 +72,7 @@ export default function ActivityList() {
   const [type, setType] = useState<string | undefined>()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ActivityVO | null>(null)
+  const [formInit, setFormInit] = useState<FormValues | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<FormValues>()
 
@@ -89,27 +96,16 @@ export default function ActivityList() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = async (record: ActivityVO) => {
     setEditing(record)
     try {
-      // 列表 VO 不含 description，编辑时拉详情补全
+      // 列表 VO 不含 description，编辑时拉详情补全；回填交给 initialValues（挂载时生效）
       const detail = (await getActivity(record.id)) as ActivityVO & { description?: string }
-      form.setFieldsValue({
-        name: detail.name,
-        theme: detail.theme,
-        type: detail.type,
-        location: detail.location,
-        organizer: detail.organizer,
-        host: detail.host,
-        leader: detail.leader,
-        description: detail.description ?? '',
-        range:
-          detail.startDate && detail.endDate ? [dayjs(detail.startDate), dayjs(detail.endDate)] : undefined,
-      })
+      setFormInit(toFormValues(detail))
       setModalOpen(true)
     } catch {
       /* http 拦截已提示 */
@@ -155,7 +151,7 @@ export default function ActivityList() {
     if (!next) return
     try {
       await changeActivityStatus(record.id, next)
-      message.success(`已推进到「${STATUS_MAP[next]}」`)
+      message.success(`已推进到「${ACTIVITY_STATUS_LABEL[next]}」`)
       fetchList()
     } catch {
       /* http 拦截已提示 */
@@ -242,7 +238,7 @@ export default function ActivityList() {
           <Select
             placeholder="状态筛选"
             allowClear
-            options={STATUS_OPTIONS}
+            options={ACTIVITY_STATUS_OPTIONS}
             style={{ width: 140 }}
             value={status}
             onChange={(v) => {
@@ -298,14 +294,20 @@ export default function ActivityList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `edit-${editing.id}` : 'create'}
+          initialValues={formInit ?? { type: 'OTHER' }}
+        >
           <Form.Item name="name" label="活动名称" rules={[{ required: true, message: '请输入活动名称' }]}>
             <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="theme" label="活动主题">
             <Input maxLength={200} />
           </Form.Item>
-          <Form.Item name="type" label="活动类型" initialValue="OTHER">
+          <Form.Item name="type" label="活动类型">
             <Select options={TYPE_OPTIONS} />
           </Form.Item>
           <Form.Item name="range" label="起止日期">

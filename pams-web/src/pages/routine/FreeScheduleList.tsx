@@ -66,6 +66,7 @@ export default function FreeScheduleList() {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<FreeScheduleVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<FormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<FormValues>()
 
@@ -115,13 +116,14 @@ export default function FreeScheduleList() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = (record: FreeScheduleVO) => {
     setEditing(record)
-    form.setFieldsValue({
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({
       personName: record.personName,
       className: record.className ?? undefined,
       deptId: record.deptId ?? undefined,
@@ -276,7 +278,13 @@ export default function FreeScheduleList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `edit-${editing.id}` : 'create'}
+          initialValues={formInit}
+        >
           <Form.Item
             name="personName"
             label="姓名"

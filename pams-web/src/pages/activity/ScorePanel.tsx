@@ -61,6 +61,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   const [saving, setSaving] = useState(false)
   const [ruleForm] = Form.useForm()
   const [recordForm] = Form.useForm()
+  const [ruleInit, setRuleInit] = useState<Record<string, unknown>>()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -82,8 +83,8 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   // ---- 规则 ----
 
   const openRule = () => {
-    ruleForm.resetFields()
-    ruleForm.setFieldsValue({ sortOrder: rules.length + 1 })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setRuleInit({ sortOrder: rules.length + 1 })
     setRuleModal(true)
   }
 
@@ -329,7 +330,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
           </Space>
         }
       >
-        <Form form={ruleForm} layout="vertical" preserve={false}>
+        <Form form={ruleForm} layout="vertical" preserve={false} initialValues={ruleInit}>
           <Form.Item name="dimensionName" label="评分维度" rules={[{ required: true, message: '请输入评分维度' }]}>
             <Input maxLength={50} placeholder="如 仪容仪表 / 演讲内容 / 综合表现" />
           </Form.Item>

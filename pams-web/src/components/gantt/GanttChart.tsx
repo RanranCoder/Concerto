@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Input, DatePicker, Slider, Select, Empty, Button } from 'antd'
+import { Input, DatePicker, Slider, Empty, Button } from 'antd'
 import dayjs from 'dayjs'
 import GlassModal from '@/components/glass/GlassModal'
 import { dayRange, buildDeps, todayStr, taskToPixels, type GanttTask } from './gantt.utils'
@@ -268,16 +268,6 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: G
                 max={100}
                 value={editing.progress ?? 0}
                 onChange={(v) => setEditing({ ...editing, progress: v })}
-              />
-            </div>
-            <div>
-              <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>负责人</div>
-              <Select
-                style={{ width: '100%' }}
-                placeholder="选择负责人"
-                value={editing.assignee || undefined}
-                onChange={(v) => setEditing({ ...editing, assignee: v })}
-                options={(editing.deptName ? [editing.deptName] : []).map((d) => ({ label: d, value: d }))}
               />
             </div>
           </div>

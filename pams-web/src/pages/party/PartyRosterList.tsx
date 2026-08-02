@@ -40,6 +40,7 @@ export default function PartyRosterList() {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyRosterVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<RosterFormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<RosterFormValues>()
 
@@ -61,13 +62,14 @@ export default function PartyRosterList() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = (r: PartyRosterVO) => {
     setEditing(r)
-    form.setFieldsValue({
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({
       rosterType: r.rosterType,
       name: r.name,
       gender: r.gender ?? undefined,
@@ -210,7 +212,13 @@ export default function PartyRosterList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `edit-${editing.id}` : 'create'}
+          initialValues={formInit}
+        >
           <Form.Item name="rosterType" label="名单类型" rules={[{ required: true, message: '请选择名单类型' }]}>
             <Select options={ROSTER_TYPES as unknown as { value: string; label: string }[]} placeholder="请选择" />
           </Form.Item>

@@ -15,6 +15,7 @@ import {
   TeamOutlined,
   TrophyOutlined,
   UserOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/auth'
 import ThemeSwitch from '@/components/glass/ThemeSwitch'
@@ -59,16 +60,19 @@ export default function MainLayout() {
     }
     if (isAdmin) {
       items.push({ key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> })
+      items.push({ key: '/admin/settings', label: '系统设置', icon: <SettingOutlined /> })
     }
     return items
   }, [user?.roleCode, user?.roleLevel])
 
-  // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 精确高亮子菜单；/archive/* → 材料库；/admin/* → 用户管理
+  // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传子菜单项；
+  // /archive/* → 材料库；/admin/* → 用户管理；/activities/* → 活动管理。
+  // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
-    if (p.startsWith('/content')) return p
+    if (p.startsWith('/content')) return p.startsWith('/content/news') ? '/content/news' : '/content/articles'
     if (p.startsWith('/archive')) return '/archive/materials'
     if (p.startsWith('/admin')) return '/admin/users'
     if (p.startsWith('/activities')) return '/activities'

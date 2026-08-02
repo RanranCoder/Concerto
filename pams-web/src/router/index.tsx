@@ -26,6 +26,7 @@ const Templates = lazy(() => import('@/pages/archive/TemplateList'))
 const Credits = lazy(() => import('@/pages/archive/CreditList'))
 const Announcements = lazy(() => import('@/pages/archive/AnnouncementList'))
 const Users = lazy(() => import('@/pages/admin/UserList'))
+const Settings = lazy(() => import('@/pages/admin/Settings'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -78,6 +79,8 @@ export const router = createBrowserRouter([
 
       // 用户管理：简报"主任+额外显示用户管理"，前端仅主任/指导老师可访问
       { path: '/admin/users', element: <RequireRole roles={ADMIN_ROLES}><Users /></RequireRole> },
+      // 系统设置：仅主任/指导老师可访问
+      { path: '/admin/settings', element: <RequireRole roles={ADMIN_ROLES}><Settings /></RequireRole> },
 
       { path: '/403', element: <Forbidden /> },
       { path: '*', element: <Navigate to="/" replace /> },

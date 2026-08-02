@@ -21,16 +21,8 @@ import { listActivities, type ActivityVO } from '@/api/activity'
 import { listSchedules, SCHEDULE_TYPE_MAP, WEEKDAY_NAMES, type ScheduleVO } from '@/api/schedule'
 import { MATERIAL_BIZ_TYPE_MAP } from '@/api/material'
 import { ARTICLE_TYPE_MAP } from '@/api/article'
+import { ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
-
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  ASSIGNED: { text: '已下达', color: '#DE2910' },
-  PLANNING: { text: '排期中', color: '#F5222D' },
-  PLAN_REVIEW: { text: '策划审核', color: '#FA8C16' },
-  EXECUTING: { text: '执行中', color: '#D4380D' },
-  FINISHED: { text: '已完成', color: '#CF1322' },
-  ARCHIVED: { text: '已归档', color: '#8C8C8C' },
-}
 
 /** 统计卡配色（图标底色圆角块） */
 const CARD_ACCENT: Record<string, string> = {
@@ -310,7 +302,6 @@ export default function Dashboard() {
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {upcomingActivities.map((a) => {
-                  const meta = STATUS_MAP[a.status] ?? { text: a.status, color: '#8C8C8C' }
                   return (
                     <div
                       key={a.id}
@@ -344,8 +335,8 @@ export default function Dashboard() {
                           {a.location || a.organizer || a.theme || '—'}
                         </div>
                       </div>
-                      <Tag color={meta.color} style={{ marginInlineEnd: 0 }}>
-                        {meta.text}
+                      <Tag color={ACTIVITY_STATUS_COLOR[a.status] ?? '#8C8C8C'} style={{ marginInlineEnd: 0 }}>
+                        {ACTIVITY_STATUS_LABEL[a.status] ?? a.status}
                       </Tag>
                     </div>
                   )

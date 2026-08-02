@@ -128,7 +128,7 @@ export default function UserList() {
 
   /**
    * 编辑表单回填用 Form initialValues 而非 setFieldsValue：
-   * GlassModal destroyOnClose 会在关闭时卸载字段，打开时才挂载，setFieldsValue 在挂载前调用会丢失
+   * GlassModal destroyOnHidden 会在关闭时卸载字段，打开时才挂载，setFieldsValue 在挂载前调用会丢失
    * （Task 21 NewsList 同款缺陷，此处同步修复）。
    */
   const formInitialValues = useMemo(() => {
@@ -189,6 +189,8 @@ export default function UserList() {
       } else {
         await createUser({ ...payload, password: values.password?.trim() || undefined })
         message.success('用户已创建')
+        // 新建后回到第 1 页，保证新用户可见（Task 25 minor）
+        setPage(1)
       }
       setModalOpen(false)
       fetchList()

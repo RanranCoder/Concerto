@@ -45,6 +45,7 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyInvestigationVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<InvFormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<InvFormValues>()
 
@@ -65,13 +66,14 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = (r: PartyInvestigationVO) => {
     setEditing(r)
-    form.setFieldsValue({
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({
       fatherName: r.fatherName ?? undefined,
       fatherBranch: r.fatherBranch ?? undefined,
       fatherBranchAddr: r.fatherBranchAddr ?? undefined,
@@ -176,7 +178,13 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `inv-edit-${editing.id}` : 'inv-create'}
+          initialValues={formInit}
+        >
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 8 }}>父亲</div>
           <Space size="middle" wrap style={{ marginBottom: 8 }}>
             <Form.Item name="fatherName" label="姓名">
@@ -245,6 +253,7 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyRegisterVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<RegFormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<RegFormValues>()
 
@@ -265,13 +274,14 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
+    setFormInit(undefined)
     setModalOpen(true)
   }
 
   const openEdit = (r: PartyRegisterVO) => {
     setEditing(r)
-    form.setFieldsValue({
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({
       name: r.name ?? undefined,
       gender: r.gender ?? undefined,
       nation: r.nation ?? undefined,
@@ -392,7 +402,13 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `reg-edit-${editing.id}` : 'reg-create'}
+          initialValues={formInit}
+        >
           <Space size="middle" wrap>
             <Form.Item name="name" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
@@ -477,6 +493,7 @@ export function TransferPanel({ memberId }: { memberId: number }) {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyTransferVO | null>(null)
+  const [formInit, setFormInit] = useState<Partial<TraFormValues>>()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<TraFormValues>()
 
@@ -497,14 +514,14 @@ export function TransferPanel({ memberId }: { memberId: number }) {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
-    form.setFieldsValue({ isOnline: 1 })
+    setFormInit({ isOnline: 1 })
     setModalOpen(true)
   }
 
   const openEdit = (r: PartyTransferVO) => {
     setEditing(r)
-    form.setFieldsValue({
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({
       name: r.name ?? undefined,
       gender: r.gender ?? undefined,
       nation: r.nation ?? undefined,
@@ -617,7 +634,13 @@ export function TransferPanel({ memberId }: { memberId: number }) {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `tra-edit-${editing.id}` : 'tra-create'}
+          initialValues={formInit}
+        >
           <Space size="middle" wrap>
             <Form.Item name="name" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, DatePicker, Form, Input, InputNumber, message, Popconfirm, Select, Space } from 'antd'
+import { Button, DatePicker, Form, Input, InputNumber, message, Popconfirm, Select, Space, Spin } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -73,7 +73,7 @@ export default function ScheduleList() {
   const [form] = Form.useForm<FormValues>()
 
   /**
-   * GlassModal 用 destroyOnClose：关闭后 Form 卸载，重开时重新挂载。
+   * GlassModal 用 destroyOnHidden：关闭后 Form 卸载，重开时重新挂载。
    * 因此用 initialValues + 随 record 变化的 key 让 Form 重挂载后拿到编辑值，
    * 比在 modal 打开后再 setFieldsValue 更可靠（后者对 Form.List persons 不生效）。
    */
@@ -218,11 +218,12 @@ export default function ScheduleList() {
       </GlassCard>
 
       <GlassCard style={{ padding: 16 }}>
-        {list.length === 0 && !loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 32 }}>
-            当前筛选条件下暂无排班，点击右上角「新增排班」创建
-          </div>
-        ) : (
+        <Spin spinning={loading}>
+          {list.length === 0 && !loading ? (
+            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 32 }}>
+              当前筛选条件下暂无排班，点击右上角「新增排班」创建
+            </div>
+          ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -320,6 +321,7 @@ export default function ScheduleList() {
             </tbody>
           </table>
         )}
+        </Spin>
       </GlassCard>
 
       <GlassModal

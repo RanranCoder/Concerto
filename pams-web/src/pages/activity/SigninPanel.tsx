@@ -56,6 +56,7 @@ export default function SigninPanel({ activityId }: { activityId: number }) {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [form] = Form.useForm()
 
   const fetchData = useCallback(async () => {
@@ -76,8 +77,8 @@ export default function SigninPanel({ activityId }: { activityId: number }) {
   }, [fetchData])
 
   const openCreate = () => {
-    form.resetFields()
-    form.setFieldsValue({ signType: 'MANUAL', signTime: dayjs() })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({ signType: 'MANUAL', signTime: dayjs() })
     setModalOpen(true)
   }
 
@@ -195,7 +196,7 @@ export default function SigninPanel({ activityId }: { activityId: number }) {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={formInit}>
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input maxLength={50} placeholder="请输入姓名" />
           </Form.Item>
