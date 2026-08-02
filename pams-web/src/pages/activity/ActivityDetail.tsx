@@ -39,6 +39,7 @@ import {
   type ActivityVO,
   type SeatMapVO,
 } from '@/api/activity'
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS } from '@/api/activityStatus'
 import {
   createPlan,
   reviewPlan,
@@ -52,16 +53,8 @@ import { useAuthStore } from '@/stores/auth'
 import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
 
-// 活动状态机（与后端 ActivityStatus 一致）
-const STATUS_ORDER = ['ASSIGNED', 'PLANNING', 'PLAN_REVIEW', 'EXECUTING', 'FINISHED', 'ARCHIVED']
-const STATUS_TEXT: Record<string, string> = {
-  ASSIGNED: '已下达',
-  PLANNING: '排期中',
-  PLAN_REVIEW: '策划审核',
-  EXECUTING: '执行中',
-  FINISHED: '已完成',
-  ARCHIVED: '已归档',
-}
+// 活动状态机顺序（与 @/api/activityStatus 的 label 对应）
+const STATUS_ORDER = ACTIVITY_STATUS_OPTIONS.map((o) => o.value)
 
 const PLAN_STATUS_TEXT: Record<string, string> = {
   DRAFT: '草稿',
@@ -745,7 +738,7 @@ export default function ActivityDetail() {
     setChanging(true)
     try {
       await changeActivityStatus(activityId, target)
-      message.success(`已变更为「${STATUS_TEXT[target]}」`)
+      message.success(`已变更为「${ACTIVITY_STATUS_LABEL[target]}」`)
       fetchDetail()
     } catch {
       /* http 拦截已提示 */
@@ -800,7 +793,7 @@ export default function ActivityDetail() {
                   icon={<ArrowLeftOutlined />}
                   onClick={() => handleStatusChange(prevStatus)}
                 >
-                  回退到「{STATUS_TEXT[prevStatus]}」
+                  回退到「{ACTIVITY_STATUS_LABEL[prevStatus]}」
                 </Button>
               )}
               {nextStatus && (
@@ -810,7 +803,7 @@ export default function ActivityDetail() {
                   icon={<ArrowRightOutlined />}
                   onClick={() => handleStatusChange(nextStatus)}
                 >
-                  推进到「{STATUS_TEXT[nextStatus]}」
+                  推进到「{ACTIVITY_STATUS_LABEL[nextStatus]}」
                 </Button>
               )}
               {!prevStatus && !nextStatus && <Tag>已归档，无后续状态</Tag>}

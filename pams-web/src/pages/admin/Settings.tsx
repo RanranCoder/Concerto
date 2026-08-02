@@ -10,7 +10,8 @@ import { useAuthStore } from '@/stores/auth'
 /** 系统设置页：版本 / 上传目录 / 系统健康（GET /api/ping）。主任 / 指导老师可见。 */
 export default function Settings() {
   const user = useAuthStore((s) => s.user)
-  const [info, setInfo] = useState<SystemInfoVO | null>(null)
+  // undefined=初始加载中；null=加载失败；否则为成功数据
+  const [info, setInfo] = useState<SystemInfoVO | null | undefined>(undefined)
   const [loading, setLoading] = useState(false)
 
   const fetchInfo = () => {
@@ -18,6 +19,7 @@ export default function Settings() {
     getSystemInfo()
       .then((res) => setInfo(res))
       .catch(() => {
+        setInfo(null)
         /* http 拦截已提示 */
       })
       .finally(() => setLoading(false))
@@ -41,7 +43,11 @@ export default function Settings() {
       />
 
       <Spin spinning={loading}>
-        {!info ? (
+        {info === undefined ? (
+          <GlassCard style={{ padding: 32, textAlign: 'center' }}>
+            <Spin tip="系统信息加载中…" />
+          </GlassCard>
+        ) : info === null ? (
           <GlassCard style={{ padding: 32, textAlign: 'center' }}>
             <AntResult
               status="warning"

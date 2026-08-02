@@ -66,7 +66,7 @@ export default function MainLayout() {
   }, [user?.roleCode, user?.roleLevel])
 
   // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传子菜单项；
-  // /archive/* → 材料库；/admin/* → 用户管理；/activities/* → 活动管理。
+  // /archive/* → 材料库；/admin/users → 用户管理、/admin/settings → 系统设置；/activities/* → 活动管理。
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
@@ -74,7 +74,8 @@ export default function MainLayout() {
     if (p.startsWith('/party')) return '/party/members'
     if (p.startsWith('/content')) return p.startsWith('/content/news') ? '/content/news' : '/content/articles'
     if (p.startsWith('/archive')) return '/archive/materials'
-    if (p.startsWith('/admin')) return '/admin/users'
+    if (p === '/admin/users') return '/admin/users'
+    if (p === '/admin/settings') return '/admin/settings'
     if (p.startsWith('/activities')) return '/activities'
     return p
   }, [location.pathname])

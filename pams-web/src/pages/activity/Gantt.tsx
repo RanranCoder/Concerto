@@ -21,6 +21,7 @@ export default function Gantt() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<GanttTask | null>(null)
   const [saving, setSaving] = useState(false)
+  const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [form] = Form.useForm()
 
   // 部门列表：后端 Task 只返回 deptId，需映射 deptName 供甘特图着色（Task 12 minor）
@@ -55,14 +56,14 @@ export default function Gantt() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
-    form.setFieldsValue({ isMilestone: false, progress: 0 })
+    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
+    setFormInit({ isMilestone: false, progress: 0 })
     setOpen(true)
   }
 
   const openEdit = (t: GanttTask) => {
     setEditing(t)
-    form.setFieldsValue({
+    setFormInit({
       name: t.name,
       deptId: t.deptName ? depts.find((d) => d.name === t.deptName)?.id : undefined,
       assignee: t.assignee,
@@ -178,7 +179,13 @@ export default function Gantt() {
           </div>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `task-edit-${editing.id}` : 'task-create'}
+          initialValues={formInit}
+        >
           <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
             <Input maxLength={100} />
           </Form.Item>
