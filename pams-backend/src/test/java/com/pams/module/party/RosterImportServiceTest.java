@@ -30,6 +30,7 @@ class RosterImportServiceTest {
     void setup() {
         repo = mock(PartyRosterRepository.class);
         service = new RosterImportService(repo);
+        when(repo.findByRosterType(any())).thenReturn(List.of());
         when(repo.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -64,9 +65,10 @@ class RosterImportServiceTest {
 
     @Test
     void import_parsesRosterRows() throws Exception {
-        int count = service.importFromXlsx(new ByteArrayInputStream(sampleRoster()), "ACTIVE");
+        var result = service.importFromXlsx(new ByteArrayInputStream(sampleRoster()), "ACTIVE");
 
-        assertThat(count).isEqualTo(3);
+        assertThat(result.added()).isEqualTo(3);
+        assertThat(result.skipped()).isZero();
         @SuppressWarnings("unchecked")
         var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
         verify(repo).saveAll(captor.capture());
@@ -107,5 +109,53 @@ class RosterImportServiceTest {
         assertThatThrownBy(() -> service.importFromXlsx(new ByteArrayInputStream(bad), "ACTIVE"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("表头");
+    }
+
+    /** 性别/班级/支部列缺失时应正常导入（缺列不 NPE），仅导入姓名/学号。 */
+    @Test
+    void import_withoutOptionalColumns_importsRows() throws Exception {
+        byte[] xlsx = buildXlsx(new String[][]{
+                {"序号", "学号", "姓名"},
+                {"1", "20250101", "张三"},
+                {"2", "20250102", "李四"},
+        });
+
+        var result = service.importFromXlsx(new ByteArrayInputStream(xlsx), "ACTIVE");
+
+        assertThat(result.added()).isEqualTo(2);
+        @SuppressWarnings("unchecked")
+        var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(repo).saveAll(captor.capture());
+        List<PartyRoster> rows = new ArrayList<>();
+        captor.getValue().forEach(e -> rows.add((PartyRoster) e));
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).getGender()).isNull();
+        assertThat(rows.get(0).getClassName()).isNull();
+        assertThat(rows.get(0).getBranchName()).isNull();
+        assertThat(rows.get(0).getStudentNo()).isEqualTo("20250101");
+        assertThat(rows.get(1).getStudentNo()).isEqualTo("20250102");
+    }
+
+    /** 与库中已存在记录（rosterType+name+studentNo）重复的行应被跳过，不重复写入。 */
+    @Test
+    void import_skipsDuplicates() throws Exception {
+        PartyRoster existing = new PartyRoster();
+        existing.setRosterType("ACTIVE");
+        existing.setName("吴苑");
+        existing.setStudentNo("2435101020120");
+        when(repo.findByRosterType("ACTIVE")).thenReturn(List.of(existing));
+
+        // 文件第 2 行（谭子豪）与第 4 行（黄嘉丽）与库中无重复，仅第 1 行吴苑重复。
+        var result = service.importFromXlsx(new ByteArrayInputStream(sampleRoster()), "ACTIVE");
+
+        assertThat(result.added()).isEqualTo(2);
+        assertThat(result.skipped()).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(repo).saveAll(captor.capture());
+        List<PartyRoster> rows = new ArrayList<>();
+        captor.getValue().forEach(e -> rows.add((PartyRoster) e));
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(PartyRoster::getName).doesNotContain("吴苑");
     }
 }

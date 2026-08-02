@@ -6,6 +6,7 @@ import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.service.FileStorageService;
 import com.pams.module.party.service.RosterImportService;
+import com.pams.module.party.service.RosterImportService.RosterImportResult;
 import com.pams.security.LoginUser;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -18,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/files")
@@ -66,13 +68,14 @@ public class FileController {
     }
 
     /**
-     * 导入名单（xlsx），按 rosterType 逐行写入 party_roster。
+     * 导入名单（xlsx），按 rosterType 逐行写入 party_roster，并按 rosterType+name+studentNo 去重。
+     * 返回 {"added":新增条数, "skipped":去重跳过条数}，便于前端/调用方提示"新增 X 条、跳过 Y 条重复"。
      * 基于原始文件名判断 ~$ Office 临时文件：sanitize 会剥离 ~$ 前缀，
      * 若先 sanitize 再判断会变成永不触发的死代码，故此处用原始文件名。
      */
     @PostMapping("/import")
-    public Result<Integer> importRoster(@RequestParam("file") MultipartFile file,
-                                        @RequestParam(value = "type", defaultValue = "ACTIVE") String type) {
+    public Result<Map<String, Integer>> importRoster(@RequestParam("file") MultipartFile file,
+                                                     @RequestParam(value = "type", defaultValue = "ACTIVE") String type) {
         String original = file.getOriginalFilename() == null ? "unnamed" : file.getOriginalFilename();
         if (original.startsWith("~$")) {
             throw new BizException(4001, "请勿上传 Office 临时文件");
@@ -84,12 +87,12 @@ public class FileController {
         if (file.isEmpty()) {
             throw new BizException(4001, "文件为空");
         }
-        int count;
+        RosterImportResult result;
         try (java.io.InputStream in = file.getInputStream()) {
-            count = rosterImportService.importFromXlsx(in, type);
+            result = rosterImportService.importFromXlsx(in, type);
         } catch (java.io.IOException e) {
             throw new BizException(4001, "名单文件读取失败");
         }
-        return Result.ok(count);
+        return Result.ok(Map.of("added", result.added(), "skipped", result.skipped()));
     }
 }

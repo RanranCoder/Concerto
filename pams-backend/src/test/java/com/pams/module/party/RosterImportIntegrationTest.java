@@ -80,9 +80,38 @@ class RosterImportIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data").value(2));
+                .andExpect(jsonPath("$.data.added").value(2))
+                .andExpect(jsonPath("$.data.skipped").value(0));
 
         List<?> all = rosterRepo.findByRosterType("ACTIVE");
+        assertThat(all).hasSize(2);
+    }
+
+    /** 同一名单重复导入：第二次 skipped=2，added=0，DB 不产生重复行。 */
+    @Test
+    void importXlsx_reImportSkipsDuplicates() throws Exception {
+        String token = loginToken();
+        MockMultipartFile file = new MockMultipartFile("file", "40期入党积极分子名单.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                rosterXlsx());
+        // 用独立 rosterType 避免与同一 H2 内其他用例互相污染。
+        String type = "ACTIVE_DUP";
+
+        mvc.perform(multipart("/api/files/import").file(file)
+                        .param("type", type)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.added").value(2));
+
+        mvc.perform(multipart("/api/files/import").file(file)
+                        .param("type", type)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.added").value(0))
+                .andExpect(jsonPath("$.data.skipped").value(2));
+
+        List<?> all = rosterRepo.findByRosterType(type);
         assertThat(all).hasSize(2);
     }
 

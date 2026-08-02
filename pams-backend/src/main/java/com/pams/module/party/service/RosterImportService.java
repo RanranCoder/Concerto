@@ -18,8 +18,10 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 入党积极分子等名单 xlsx 导入 party_roster。
@@ -36,8 +38,14 @@ public class RosterImportService {
         this.rosterRepo = rosterRepo;
     }
 
+    /**
+     * 导入名单并去重：按 rosterType + name + studentNo 判定已存在，跳过重复行。
+     * party_roster 无唯一约束（同名不同人属真实场景），故在 service 层查重而非加 DDL 约束。
+     *
+     * @return 新增条数（导入条数 = 新增 + 跳过的重复条数）
+     */
     @Transactional
-    public int importFromXlsx(InputStream in, String rosterType) {
+    public RosterImportResult importFromXlsx(InputStream in, String rosterType) {
         List<PartyRoster> rows = new ArrayList<>();
         try (Workbook wb = WorkbookFactory.create(in)) {
             Sheet sheet = firstDataSheet(wb);
@@ -60,18 +68,53 @@ public class RosterImportService {
                 PartyRoster pr = new PartyRoster();
                 pr.setRosterType(rosterType);
                 pr.setName(name);
-                pr.setGender(cellStr(r.getCell(col.get("gender"))));
+                // 性别/班级/支部可选：缺列时 col.get 返回 null，跳过读取（cell 为 null）。
+                pr.setGender(cellStr(optionalCell(r, col, "gender")));
                 pr.setStudentNo(studentNo);
-                pr.setClassName(cellStr(r.getCell(col.get("className"))));
-                pr.setBranchName(cellStr(r.getCell(col.get("branchName"))));
+                pr.setClassName(cellStr(optionalCell(r, col, "className")));
+                pr.setBranchName(cellStr(optionalCell(r, col, "branchName")));
                 pr.setCreatedAt(LocalDateTime.now());
                 rows.add(pr);
             }
         } catch (IOException e) {
             throw new BizException(4001, "名单文件解析失败");
         }
-        rosterRepo.saveAll(rows);
-        return rows.size();
+        return dedupeAndSave(rows, rosterType);
+    }
+
+    /** 去重并落库：与库中已有记录（rosterType+name+studentNo）重复的行跳过。 */
+    private RosterImportResult dedupeAndSave(List<PartyRoster> rows, String rosterType) {
+        List<PartyRoster> existing = rosterRepo.findByRosterType(rosterType);
+        Set<String> seen = new HashSet<>();
+        for (PartyRoster e : existing) {
+            seen.add(key(e));
+        }
+        List<PartyRoster> toSave = new ArrayList<>();
+        int skipped = 0;
+        for (PartyRoster pr : rows) {
+            if (seen.add(key(pr))) {
+                toSave.add(pr);
+            } else {
+                skipped++;
+            }
+        }
+        if (!toSave.isEmpty()) {
+            rosterRepo.saveAll(toSave);
+        }
+        return new RosterImportResult(toSave.size(), skipped);
+    }
+
+    /** 去重键：rosterType + name + studentNo（studentNo 为空时仅 name 判定，避免空串污染键）。 */
+    private String key(PartyRoster pr) {
+        String no = pr.getStudentNo() == null ? "" : pr.getStudentNo();
+        return (pr.getRosterType() == null ? "" : pr.getRosterType()) + "|"
+                + (pr.getName() == null ? "" : pr.getName()) + "|" + no;
+    }
+
+    /** 可选列定位：缺列（col 中无该键）时返回 null，避免对 null Integer 拆箱 NPE。 */
+    private Cell optionalCell(Row r, Map<String, Integer> col, String field) {
+        Integer idx = col.get(field);
+        return idx == null ? null : r.getCell(idx);
     }
 
     private Sheet firstDataSheet(Workbook wb) {
@@ -167,5 +210,9 @@ public class RosterImportService {
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /** 名单导入结果：新增条数 + 去重跳过条数。 */
+    public record RosterImportResult(int added, int skipped) {
     }
 }

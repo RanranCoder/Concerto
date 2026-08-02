@@ -121,14 +121,16 @@ def do_import(rows, api, token, limit):
                 fail += 1
                 continue
             file_id = resp.json()["data"]["id"]
+            # 后端 MaterialRequest 字段为 camelCase（bizType/activityId/deptId/fileId），
+            # 不能传 snake_case（Spring 忽略未知字段 -> bizType 为 null -> @NotBlank 400）。
             data = {
                 "name": r["name"],
-                "biz_type": r["biz_type"],
-                "activity_id": None,
-                "dept_id": None,
+                "bizType": r["biz_type"],
+                "activityId": None,
+                "deptId": None,
                 "tag": "存量迁移",
                 "description": "存量材料按需迁移导入",
-                "file_id": file_id,
+                "fileId": file_id,
             }
             resp2 = requests.post(f"{api}/api/materials", headers=headers, json=data, timeout=30)
             if resp2.status_code == 200:
