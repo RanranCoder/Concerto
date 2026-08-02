@@ -17,5 +17,7 @@ Thumbs.db
 ~$*.docx
 # 迁移脚本生成的清单（含本机绝对路径，可随时 --dry-run 重新生成）
 database/materials.csv
+# 根目录误生成的 pom.xml 副本（真正的在 pams-backend/）
+/pom.xml
 # 工具工作区
 .superpowers/
