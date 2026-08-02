@@ -1,11 +1,13 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { lazy } from 'react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import MainLayout from '@/layouts/MainLayout'
+import RequireRole, { LEADER_ROLES, ADMIN_ROLES } from '@/components/glass/RequireRole'
 
 const Login = lazy(() => import('@/pages/Login'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
+const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const Activities = lazy(() => import('@/pages/activity/ActivityList'))
 
 // 以下页面在后续 Task 逐一实现，路由先全量配好，未实现前用占位组件保证可访问不白屏
@@ -43,7 +45,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
 
-      // 活动管理
+      // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
       { path: '/activities', element: <Activities /> },
       { path: '/activities/:id', element: <ActivityDetail /> },
       { path: '/activities/:id/gantt', element: <Gantt /> },
@@ -53,12 +55,18 @@ export const router = createBrowserRouter([
       { path: '/routine/attendance', element: <Attendance /> },
       { path: '/routine/free-schedules', element: <FreeSchedules /> },
 
-      // 党务台账
-      { path: '/party/members', element: <PartyMembers /> },
-      { path: '/party/members/:id', element: <PartyMemberDetail /> },
-      { path: '/party/rosters', element: <PartyRosters /> },
+      // 党务台账（敏感，部长及以上；干事读已脱敏，仍隐藏入口）
+      {
+        path: '/party',
+        element: <RequireRole roles={LEADER_ROLES}><Outlet /></RequireRole>,
+        children: [
+          { path: 'members', element: <PartyMembers /> },
+          { path: 'members/:id', element: <PartyMemberDetail /> },
+          { path: 'rosters', element: <PartyRosters /> },
+        ],
+      },
 
-      // 内容宣传
+      // 内容宣传（推文干事可看；新闻稿入口部长及以上显示）
       { path: '/content/articles', element: <Articles /> },
       { path: '/content/news', element: <News /> },
 
@@ -68,9 +76,10 @@ export const router = createBrowserRouter([
       { path: '/archive/credits', element: <Credits /> },
       { path: '/archive/announcements', element: <Announcements /> },
 
-      // 用户管理
-      { path: '/admin/users', element: <Users /> },
+      // 用户管理：简报"主任+额外显示用户管理"，前端仅主任/指导老师可访问
+      { path: '/admin/users', element: <RequireRole roles={ADMIN_ROLES}><Users /></RequireRole> },
 
+      { path: '/403', element: <Forbidden /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

@@ -69,10 +69,15 @@ export default function UserList() {
   const lastRoleIdRef = useRef<number | undefined>()
 
   const deptOptions = useMemo(() => depts.map((d) => ({ value: d.id, label: d.name })), [depts])
-  const roleOptions = useMemo(
-    () => roles.map((r) => ({ value: r.id, label: r.name })),
-    [roles],
-  )
+  // 角色下拉按级别过滤（Task 26 防提权）：只能授予不高于自己级别的角色。
+  // 指导老师(5)可见全部；主任(4)不可见指导老师(5)；部长(3)不可见主任/指导老师（部长本就被前端路由挡在用户管理外）。
+  // 编辑时保留已被赋予的角色选项（防回显丢失），但不允许新授予更高级别。
+  const roleOptions = useMemo(() => {
+    const level = currentUser?.roleLevel ?? 99
+    return roles
+      .filter((r) => r.level <= level || (editing && r.code === editing.roleCode))
+      .map((r) => ({ value: r.id, label: r.name }))
+  }, [roles, currentUser?.roleLevel, editing])
 
   const fetchMeta = useCallback(() => {
     listDepts().then(setDepts).catch(() => {

@@ -43,18 +43,23 @@ public class UserService {
 
     /**
      * 判断角色数据范围是否为本部门（DEPT）。
-     * Task 5 兜底实现：按角色 code 约定 STAFF 即本部门范围；
-     * Task 26 将改为按 {@link Role#getDataScope()} == "DEPT" 判断，此方法可直接复用。
+     * 由 Role.dataScope 决定：干事（STAFF）dataScope=DEPT → 只能看本部门；
+     * 部长及以上 dataScope=ALL → 可全量查看。Task 5 预留，Task 26 接入。
      */
     public boolean isDeptScoped(Role role) {
         return role != null && "DEPT".equals(role.getDataScope());
     }
 
     /**
-     * 判断角色 code 是否为干事（STAFF）。干事强制只能查看本部门。
+     * 防提权校验：被授予角色的 level 不得超过当前操作者 level。
+     * 部长（level 3）不能创建/改造成主任（4）或指导老师（5）。currentLevel 为 null 时放行（保留旧行为）。
      */
-    public boolean isStaff(String roleCode) {
-        return "STAFF".equals(roleCode);
+    private void checkAssignableLevel(Role targetRole, Integer currentLevel) {
+        if (currentLevel == null) return;
+        Integer targetLevel = targetRole.getLevel() == null ? 0 : targetRole.getLevel();
+        if (targetLevel > currentLevel) {
+            throw new BizException(1007, "不能授予高于自己级别的角色");
+        }
     }
 
     public PageResult<Map<String, Object>> page(String keyword, Long deptId, Long currentDeptId,
@@ -96,7 +101,7 @@ public class UserService {
     }
 
     @Transactional
-    public Long createUser(UserSaveRequest req) {
+    public Long createUser(UserSaveRequest req, Integer currentLevel) {
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new BizException(1003, "用户名已存在");
         }
@@ -104,19 +109,31 @@ public class UserService {
         u.setUsername(req.getUsername());
         u.setPassword(passwordEncoder.encode(
                 req.getPassword() == null || req.getPassword().isBlank() ? "123456" : req.getPassword()));
-        apply(u, req);
+        apply(u, req, currentLevel);
         u.setDeleted(0);
         return userRepository.save(u).getId();
     }
 
+    /** 兼容旧调用：无操作者级别，不做防提权校验（测试/旧代码路径）。 */
     @Transactional
-    public void updateUser(Long id, UserSaveRequest req) {
+    public Long createUser(UserSaveRequest req) {
+        return createUser(req, null);
+    }
+
+    @Transactional
+    public void updateUser(Long id, UserSaveRequest req, Integer currentLevel) {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
-        apply(u, req);
+        apply(u, req, currentLevel);
         userRepository.save(u);
     }
 
-    private void apply(User u, UserSaveRequest req) {
+    /** 兼容旧调用：无操作者级别，不做防提权校验。 */
+    @Transactional
+    public void updateUser(Long id, UserSaveRequest req) {
+        updateUser(id, req, null);
+    }
+
+    private void apply(User u, UserSaveRequest req, Integer currentLevel) {
         u.setRealName(req.getRealName());
         u.setStudentNo(req.getStudentNo());
         u.setPhone(req.getPhone());
@@ -128,6 +145,7 @@ public class UserService {
             u.setDept(null);
         }
         Role role = roleRepository.findById(req.getRoleId()).orElseThrow(() -> new BizException(1006, "角色不存在"));
+        checkAssignableLevel(role, currentLevel);
         u.setRole(role);
         u.setUpdatedAt(LocalDateTime.now());
     }

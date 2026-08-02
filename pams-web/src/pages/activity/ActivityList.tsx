@@ -199,7 +199,7 @@ export default function ActivityList() {
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
             编辑
           </Button>
-          {NEXT_STATUS[r.status] && (
+          {isMinisterOrAbove && NEXT_STATUS[r.status] && (
             <Button type="link" size="small" onClick={() => handleAdvance(r)}>
               推进状态
             </Button>

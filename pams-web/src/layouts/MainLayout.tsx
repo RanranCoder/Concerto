@@ -1,4 +1,5 @@
 import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin } from 'antd'
+import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, useMemo } from 'react'
 import {
@@ -26,31 +27,48 @@ export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // 完整菜单；用户管理仅部长及以上（roleLevel >= 3）可见（Task 26 将加 RequireRole 路由守卫，本任务先隐藏菜单入口）
+  // 菜单按角色过滤（Task 26）：
+  // - 干事：仪表盘 / 活动管理 / 排班考勤 / 材料库
+  // - 部长及以上：+ 党务台账 / 内容宣传(推文+新闻稿) / 模板库 / 素拓加分 / 通知公告
+  // - 主任 / 指导老师：+ 用户管理（后端 @PreAuthorize 为部长以上，前端按简报口径仅主任+显示）
   const menuItems = useMemo(() => {
-    const items = [
+    const roleCode = user?.roleCode
+    const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+    const isAdmin = roleCode === 'TEACHER' || roleCode === 'DIRECTOR'
+
+    const items: MenuProps['items'] = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
       { key: '/activities', label: '活动管理', icon: <CalendarOutlined /> },
       { key: '/routine/schedules', label: '排班考勤', icon: <ScheduleOutlined /> },
-      { key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> },
-      { key: '/content/articles', label: '内容宣传', icon: <FileTextOutlined /> },
       { key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> },
-      { key: '/archive/templates', label: '模板库', icon: <TagsOutlined /> },
-      { key: '/archive/credits', label: '素拓加分', icon: <TrophyOutlined /> },
-      { key: '/archive/announcements', label: '通知公告', icon: <BellOutlined /> },
     ]
-    if ((user?.roleLevel ?? 0) >= 3) {
+    if (isMinisterOrAbove) {
+      items.push({ key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> })
+      items.push({
+        key: 'content',
+        label: '内容宣传',
+        icon: <FileTextOutlined />,
+        children: [
+          { key: '/content/articles', label: '推文' },
+          { key: '/content/news', label: '新闻稿' },
+        ],
+      })
+      items.push({ key: '/archive/templates', label: '模板库', icon: <TagsOutlined /> })
+      items.push({ key: '/archive/credits', label: '素拓加分', icon: <TrophyOutlined /> })
+      items.push({ key: '/archive/announcements', label: '通知公告', icon: <BellOutlined /> })
+    }
+    if (isAdmin) {
       items.push({ key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> })
     }
     return items
-  }, [user?.roleLevel])
+  }, [user?.roleCode, user?.roleLevel])
 
-  // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传；/archive/* → 材料库；/admin/* → 用户管理
+  // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 精确高亮子菜单；/archive/* → 材料库；/admin/* → 用户管理
   const selectedKey = useMemo(() => {
     const p = location.pathname
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
-    if (p.startsWith('/content')) return '/content/articles'
+    if (p.startsWith('/content')) return p
     if (p.startsWith('/archive')) return '/archive/materials'
     if (p.startsWith('/admin')) return '/admin/users'
     if (p.startsWith('/activities')) return '/activities'

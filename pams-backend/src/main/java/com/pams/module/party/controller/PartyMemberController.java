@@ -2,12 +2,14 @@ package com.pams.module.party.controller;
 
 import com.pams.common.PageResult;
 import com.pams.common.Result;
+import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.party.dto.PartyMemberRequest;
 import com.pams.module.party.dto.PartyStageRequest;
 import com.pams.module.party.entity.PartyStage;
 import com.pams.module.party.service.PartyMemberService;
 import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,17 +44,21 @@ public class PartyMemberController {
         return Result.ok(service.detail(id, staff));
     }
 
+    /** 写操作：部长及以上（干事 STAFF 不可增删改/流转）。 */
+    @PreAuthorize(ActivityController.LEADER)
     @PostMapping
     public Result<Long> create(@Valid @RequestBody PartyMemberRequest req) {
         return Result.ok(service.create(req));
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PartyMemberRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);
@@ -62,6 +68,7 @@ public class PartyMemberController {
     /**
      * 追加流转阶段并更新政治面貌。
      */
+    @PreAuthorize(ActivityController.LEADER)
     @PutMapping("/{id}/stage")
     public Result<Void> changeStage(@PathVariable Long id, @Valid @RequestBody PartyStageRequest req) {
         service.changeStage(id, req.getStage(), req.getIssueNo(), req.getStartDate(), req.getEndDate(), req.getRemark());

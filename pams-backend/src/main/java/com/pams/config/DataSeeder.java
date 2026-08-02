@@ -53,6 +53,7 @@ public class DataSeeder implements ApplicationRunner {
         saveUser("medialeader", "新媒体部长", depts[2], roleByCode(roles, "MEDIA_LEADER"));
         saveUser("techleader", "青年科技部长", depts[3], roleByCode(roles, "TECH_LEADER"));
         saveUser("admin", "系统管理员", null, roleByCode(roles, "DIRECTOR"));
+        saveUser("staff", "干事", depts[0], roleByCode(roles, "STAFF"));
     }
 
     private Department mkDept(String name, int sort) {
