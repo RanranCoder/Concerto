@@ -290,19 +290,21 @@ public class DataSeeder implements ApplicationRunner {
         partyMember("陈静", "女", "23电子信息工程班", "正式党员", "2435101020104", now);
 
         // ---------- 10. 无课表（一条） ----------
+        // 李想为培训班学员（非系统账号），不挂接 sys_user 用户；deptId 指向其真实所在部门（文秘部）。
         FreeSchedule fs = new FreeSchedule();
-        fs.setUserId(userId("staff"));
+        fs.setUserId(null);
         fs.setPersonName("李想");
         fs.setClassName("24物联网班");
-        fs.setDeptId(deptId("组织部"));
+        fs.setDeptId(deptId("文秘部"));
         fs.setFreeWeeks("[2,4,6]");
         fs.setNote("周二/周四/周六下午可值班");
         fs.setCreatedAt(now);
         freeScheduleRepository.save(fs);
 
         // ---------- 11. 素拓加分（一条） ----------
+        // 李想为培训班学员（非系统账号），不挂接 sys_user 用户。
         CreditRecord cr = new CreditRecord();
-        cr.setUserId(userId("staff"));
+        cr.setUserId(null);
         cr.setPersonName("李想");
         cr.setStudentNo("2435101020101");
         cr.setActivityId(aid);

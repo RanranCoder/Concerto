@@ -15,6 +15,18 @@
 
 ## 快速启动
 
+### 一键启动（推荐）
+
+确保已安装 MySQL / JDK 17+ / Maven / Node.js，然后双击或运行：
+
+```bash
+cmd //c start.bat
+```
+
+脚本会自动：检查 MySQL 服务（密码默认 `root`，可设环境变量 `DB_PASSWORD` 覆盖）→ 创建数据库 `pams_db` → 分别弹出窗口启动后端（8080）与前端（3000）→ 自动打开浏览器访问登录页。
+
+### 手动启动
+
 1. 创建数据库：`mysql -u root -p < database/init_db.sql`（创建 `pams_db`，默认 utf8mb4）
 2. 后端：`cd pams-backend && mvn spring-boot:run`（端口 8080）
    - 数据库账号密码默认 `root / root`，可用环境变量覆盖：`DB_PASSWORD=yourpass`
@@ -65,6 +77,7 @@ PAMS/
 │       └── stores/               # zustand 状态
 ├── database/                     # 建库脚本 / 存量材料迁移脚本
 ├── docs/                         # 设计方案等文档
+├── start.bat                     # Windows 一键启动：建库 → 后端 → 前端 → 打开浏览器
 └── README.md
 ```
 
