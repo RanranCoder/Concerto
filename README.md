@@ -25,6 +25,19 @@ cmd //c start.bat
 
 脚本会自动：检查 MySQL 服务（密码默认 `root`，可设环境变量 `DB_PASSWORD` 覆盖）→ 创建数据库 `pams_db` → 分别弹出窗口启动后端（8080）与前端（3000）→ 自动打开浏览器访问登录页。
 
+### IDEA 启动
+
+根目录 `pom.xml` 是聚合工程（`<modules>` 指向 `pams-backend`），用 IntelliJ IDEA 打开**项目根目录**即可：
+
+1. 用 IDEA 打开本仓库根目录 → 自动识别 Maven 聚合工程与 `pams-backend` 子模块
+2. 等待 Maven 依赖导入完成（右下角进度条结束；首次需下载依赖，耗时较长）
+3. 运行配置里找到 **`PartyAffairsManagementSystemApplication`** 主类，点击 Run/Debug 一键启动后端（端口 8080）
+   - 若没有自动生成，可手动创建：`Run → Edit Configurations → + → Spring Boot → Main class` 选 `com.pams.PartyAffairsManagementSystemApplication`
+4. 前端另开终端启动：`cd pams-web && npm run dev`（端口 3000）
+5. 浏览器访问 `http://localhost:3000`（后端需已启动，MySQL 需已运行）
+
+> 提示：后端启动前确认 MySQL 服务已运行（默认账号 `root / root`），首次启动会自动建表并注入演示数据。
+
 ### 手动启动
 
 1. 创建数据库：`mysql -u root -p < database/init_db.sql`（创建 `pams_db`，默认 utf8mb4）
@@ -77,6 +90,7 @@ PAMS/
 │       └── stores/               # zustand 状态
 ├── database/                     # 建库脚本 / 存量材料迁移脚本
 ├── docs/                         # 设计方案等文档
+├── pom.xml                       # 聚合工程（Maven modules 指向 pams-backend，供 IDEA 打开根目录使用）
 ├── start.bat                     # Windows 一键启动：建库 → 后端 → 前端 → 打开浏览器
 └── README.md
 ```
