@@ -73,11 +73,39 @@ class AuthIntegrationTest {
         u.setRealName("禁用测试");
         u.setRole(role);
         u.setStatus(0);
+        // 关键：User 实体有 @SQLRestriction("deleted = 0")。若 deleted 不显式置 0（DB 落 NULL），
+        // deleted = 0 为 NULL 恒假，findByUsername 查不到该行 → u==null 误走"用户不存在"的 401，
+        // 该测试即使回退禁用用户校验也仍通过，无法隔离 status 分支。显式置 0 后才会真正命中
+        // JwtAuthenticationFilter 的 status != 0 放行判定，形成有效回归保护。
+        u.setDeleted(0);
         userRepository.save(u);
 
         String token = jwtUtil.generate(u.getId(), u.getUsername(), u.getRole().getCode());
         mvc.perform(get("/api/users")
                 .header("Authorization", "Bearer " + token))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void enabledUser_withValidToken_returns200() throws Exception {
+        // 对照：deleted=0 且 status=1 的正常用户持有效 JWT 应放行 → 200。
+        // 与 disabledUser_... 成对证明"禁用才拦截、正常放行"；
+        // 若哪天禁用用户检查被回退，本测试会继续通过而 disabledUser_... 会失败。
+        Role role = roleRepository.findByCode("ORG_LEADER").orElseThrow(); // 部长及以上才可访问 /api/users
+        String name = "enabled_" + System.nanoTime();
+        User u = new User();
+        u.setUsername(name);
+        u.setPassword(passwordEncoder.encode("123456"));
+        u.setRealName("正常测试");
+        u.setRole(role);
+        u.setStatus(1);
+        u.setDeleted(0);
+        userRepository.save(u);
+
+        String token = jwtUtil.generate(u.getId(), u.getUsername(), u.getRole().getCode());
+        mvc.perform(get("/api/users")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
     }
 }
