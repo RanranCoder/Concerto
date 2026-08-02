@@ -15,7 +15,8 @@ const Schedules = lazy(() => import('@/pages/routine/ScheduleList'))
 const Attendance = lazy(() => import('@/pages/routine/AttendanceList'))
 const FreeSchedules = lazy(() => import('@/pages/routine/FreeScheduleList'))
 const PartyMembers = lazy(() => import('@/pages/party/PartyMemberList'))
-const PartyStages = lazy(() => import('@/pages/party/PartyStageList'))
+const PartyMemberDetail = lazy(() => import('@/pages/party/PartyMemberDetail'))
+const PartyRosters = lazy(() => import('@/pages/party/PartyRosterList'))
 const Articles = lazy(() => import('@/pages/content/ArticleList'))
 const Materials = lazy(() => import('@/pages/archive/MaterialList'))
 const Templates = lazy(() => import('@/pages/archive/TemplateList'))
@@ -53,7 +54,8 @@ export const router = createBrowserRouter([
 
       // 党务台账
       { path: '/party/members', element: <PartyMembers /> },
-      { path: '/party/stages', element: <PartyStages /> },
+      { path: '/party/members/:id', element: <PartyMemberDetail /> },
+      { path: '/party/rosters', element: <PartyRosters /> },
 
       // 内容宣传
       { path: '/content/articles', element: <Articles /> },
