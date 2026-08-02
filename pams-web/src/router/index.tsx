@@ -18,6 +18,7 @@ const PartyMembers = lazy(() => import('@/pages/party/PartyMemberList'))
 const PartyMemberDetail = lazy(() => import('@/pages/party/PartyMemberDetail'))
 const PartyRosters = lazy(() => import('@/pages/party/PartyRosterList'))
 const Articles = lazy(() => import('@/pages/content/ArticleList'))
+const News = lazy(() => import('@/pages/content/NewsList'))
 const Materials = lazy(() => import('@/pages/archive/MaterialList'))
 const Templates = lazy(() => import('@/pages/archive/TemplateList'))
 const Credits = lazy(() => import('@/pages/archive/CreditList'))
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
 
       // 内容宣传
       { path: '/content/articles', element: <Articles /> },
+      { path: '/content/news', element: <News /> },
 
       // 档案资产
       { path: '/archive/materials', element: <Materials /> },
