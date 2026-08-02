@@ -36,7 +36,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = jwtUtil.parse(header.substring(7));
                 String username = claims.getSubject();
                 User u = userRepository.findByUsername(username).orElse(null);
-                if (u != null) {
+                // 已禁用用户（status=0 或 null）即使持有有效 JWT 也不放行，保持匿名走 401。
+                // 与 AuthController.login 的 status 判定保持一致。
+                if (u != null && u.getStatus() != null && u.getStatus() != 0) {
                     LoginUser lu = new LoginUser(
                             u.getId(), u.getUsername(), u.getRealName(),
                             u.getRole().getCode(), u.getRole().getLevel(),

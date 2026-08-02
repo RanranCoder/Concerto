@@ -114,7 +114,11 @@ public class UserService {
         return userRepository.save(u).getId();
     }
 
-    /** 兼容旧调用：无操作者级别，不做防提权校验（测试/旧代码路径）。 */
+    /**
+     * 仅测试使用，禁止生产调用：传 currentLevel=null，绕过防提权校验（1007）。
+     * 生产代码必须走 {@link #createUser(UserSaveRequest, Integer)} 传真实操作者级别。
+     */
+    @Deprecated
     @Transactional
     public Long createUser(UserSaveRequest req) {
         return createUser(req, null);
@@ -127,7 +131,11 @@ public class UserService {
         userRepository.save(u);
     }
 
-    /** 兼容旧调用：无操作者级别，不做防提权校验。 */
+    /**
+     * 仅测试使用，禁止生产调用：传 currentLevel=null，绕过防提权校验（1007）。
+     * 生产代码必须走 {@link #updateUser(Long, UserSaveRequest, Integer)} 传真实操作者级别。
+     */
+    @Deprecated
     @Transactional
     public void updateUser(Long id, UserSaveRequest req) {
         updateUser(id, req, null);
@@ -173,7 +181,11 @@ public class UserService {
         userRepository.save(u);
     }
 
-    /** 兼容旧调用：无操作者级别，不做防提权校验（测试/旧代码路径）。 */
+    /**
+     * 仅测试使用，禁止生产调用：传 currentLevel=null，绕过防提权校验（1008）。
+     * 生产代码必须走 {@link #deleteUser(Long, Integer)} 传真实操作者级别。
+     */
+    @Deprecated
     @Transactional
     public void deleteUser(Long id) {
         deleteUser(id, null);

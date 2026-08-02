@@ -3,11 +3,14 @@ package com.pams.module.archive;
 import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.service.FileStorageService;
+import com.pams.common.BizException;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,5 +103,39 @@ class FileStorageServiceTest {
 
         assertThat(rec.getBizType()).isEqualTo("SIGNIN");
         assertThat(rec.getPath()).startsWith("20");
+    }
+
+    @Test
+    void store_rejectsDangerousExtension() throws Exception {
+        // 危险扩展名黑名单：.exe/.jsp/.html/.svg 等一律拒绝，不落盘不写库
+        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("pams-upload");
+        FileRecordRepository repo = mock(FileRecordRepository.class);
+        FileStorageService svc = new FileStorageService(root.toString(), repo);
+
+        for (String ext : new String[]{".exe", ".jsp", ".php", ".sh", ".bat", ".cmd", ".ps1", ".html", ".htm", ".svg", ".jspx", ".war", ".php3"}) {
+            MockMultipartFile file = new MockMultipartFile("file", "恶意文件" + ext,
+                    "application/octet-stream", "evil".getBytes());
+            assertThatThrownBy(() -> svc.store(file, null, 1L))
+                    .isInstanceOf(BizException.class)
+                    .hasMessage("不允许上传该文件类型");
+        }
+        verify(repo, never()).save(org.mockito.ArgumentMatchers.any(FileRecord.class));
+    }
+
+    @Test
+    void store_allowsNormalExtensions() throws Exception {
+        // 正常文档不误伤：.xlsx/.docx/.pdf/.jpg/.png/.pptx/.txt 均应放行
+        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("pams-upload");
+        FileRecordRepository repo = mock(FileRecordRepository.class);
+        when(repo.save(org.mockito.ArgumentMatchers.any(FileRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        FileStorageService svc = new FileStorageService(root.toString(), repo);
+
+        for (String name : new String[]{"名单.xlsx", "策划书.docx", "汇总.pdf", "照片.jpg", "图片.png", "演示.pptx", "notes.txt"}) {
+            MockMultipartFile file = new MockMultipartFile("file", name,
+                    "application/octet-stream", "data".getBytes());
+            svc.store(file, null, 1L);
+        }
+        verify(repo, org.mockito.Mockito.times(7)).save(org.mockito.ArgumentMatchers.any(FileRecord.class));
     }
 }
