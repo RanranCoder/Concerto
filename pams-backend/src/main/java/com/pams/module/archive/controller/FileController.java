@@ -5,6 +5,7 @@ import com.pams.common.Result;
 import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.service.FileStorageService;
+import com.pams.module.party.service.RosterImportService;
 import com.pams.security.LoginUser;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -23,10 +24,13 @@ import java.nio.file.Path;
 public class FileController {
     private final FileStorageService storageService;
     private final FileRecordRepository fileRecordRepository;
+    private final RosterImportService rosterImportService;
 
-    public FileController(FileStorageService storageService, FileRecordRepository fileRecordRepository) {
+    public FileController(FileStorageService storageService, FileRecordRepository fileRecordRepository,
+                          RosterImportService rosterImportService) {
         this.storageService = storageService;
         this.fileRecordRepository = fileRecordRepository;
+        this.rosterImportService = rosterImportService;
     }
 
     @PostMapping("/upload")
@@ -62,24 +66,30 @@ public class FileController {
     }
 
     /**
-     * 导入入党积极分子名单（xlsx）。本任务先做骨架：仅做临时文件过滤与类型校验，
-     * 具体解析入库逻辑由 Task 24（存量材料迁移）实现。
+     * 导入名单（xlsx），按 rosterType 逐行写入 party_roster。
+     * 基于原始文件名判断 ~$ Office 临时文件：sanitize 会剥离 ~$ 前缀，
+     * 若先 sanitize 再判断会变成永不触发的死代码，故此处用原始文件名。
      */
     @PostMapping("/import")
-    public Result<Void> importRoster(@RequestParam("file") MultipartFile file,
-                                     @RequestParam(value = "type", defaultValue = "ROSTER_ACTIVE") String type) {
-        String filename = storageService.sanitize(
-                file.getOriginalFilename() == null ? "unnamed" : file.getOriginalFilename());
-        if (filename.startsWith("~$")) {
+    public Result<Integer> importRoster(@RequestParam("file") MultipartFile file,
+                                        @RequestParam(value = "type", defaultValue = "ACTIVE") String type) {
+        String original = file.getOriginalFilename() == null ? "unnamed" : file.getOriginalFilename();
+        if (original.startsWith("~$")) {
             throw new BizException(4001, "请勿上传 Office 临时文件");
         }
+        String filename = storageService.sanitize(original);
         if (!filename.toLowerCase().endsWith(".xlsx") && !filename.toLowerCase().endsWith(".xls")) {
             throw new BizException(4001, "仅支持 xlsx/xls 名单文件");
         }
         if (file.isEmpty()) {
             throw new BizException(4001, "文件为空");
         }
-        // TODO(Task 24): 解析 xlsx，按 roster_type=RECOMMEND 写入 party_roster
-        throw new BizException(4001, "名单解析尚未实现（Task 24 迁移脚本提供）");
+        int count;
+        try (java.io.InputStream in = file.getInputStream()) {
+            count = rosterImportService.importFromXlsx(in, type);
+        } catch (java.io.IOException e) {
+            throw new BizException(4001, "名单文件读取失败");
+        }
+        return Result.ok(count);
     }
 }

@@ -15,5 +15,7 @@ Thumbs.db
 *.log
 ~$*.xlsx
 ~$*.docx
+# 迁移脚本生成的清单（含本机绝对路径，可随时 --dry-run 重新生成）
+database/materials.csv
 # 工具工作区
 .superpowers/
