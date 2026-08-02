@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Form, Input, InputNumber, message, Popconfirm, Select, Space } from 'antd'
+import { Button, DatePicker, Form, Input, InputNumber, message, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import PageHeader from '@/components/glass/PageHeader'
@@ -30,6 +31,8 @@ interface FormValues {
   scheduleType: string
   weekNo?: number
   weekday?: number
+  /** 排班日期，仅用于仪表盘「本周排班」统计；可为空（旧数据无日期不参与统计） */
+  scheduleDate?: Dayjs
   sessionName?: string
   location?: string
   persons?: SchedulePersonItem[]
@@ -69,6 +72,28 @@ export default function ScheduleList() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<FormValues>()
 
+  /**
+   * GlassModal 用 destroyOnClose：关闭后 Form 卸载，重开时重新挂载。
+   * 因此用 initialValues + 随 record 变化的 key 让 Form 重挂载后拿到编辑值，
+   * 比在 modal 打开后再 setFieldsValue 更可靠（后者对 Form.List persons 不生效）。
+   */
+  const modalInitialValues: FormValues | undefined = useMemo(() => {
+    if (!editing) return undefined
+    return {
+      scheduleType: editing.scheduleType,
+      weekNo: editing.weekNo ?? undefined,
+      weekday: editing.weekday ?? undefined,
+      scheduleDate: editing.scheduleDate ? dayjs(editing.scheduleDate) : undefined,
+      sessionName: editing.sessionName ?? undefined,
+      location: editing.location ?? undefined,
+      persons: (editing.persons ?? []).map((p) => ({
+        userId: p.userId,
+        personName: p.personName,
+        isPrimary: p.isPrimary,
+      })),
+    }
+  }, [editing])
+
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
@@ -89,24 +114,11 @@ export default function ScheduleList() {
 
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
     setModalOpen(true)
   }
 
   const openEdit = (record: ScheduleVO) => {
     setEditing(record)
-    form.setFieldsValue({
-      scheduleType: record.scheduleType,
-      weekNo: record.weekNo ?? undefined,
-      weekday: record.weekday ?? undefined,
-      sessionName: record.sessionName ?? undefined,
-      location: record.location ?? undefined,
-      persons: (record.persons ?? []).map((p) => ({
-        userId: p.userId,
-        personName: p.personName,
-        isPrimary: p.isPrimary,
-      })),
-    })
     setModalOpen(true)
   }
 
@@ -118,6 +130,7 @@ export default function ScheduleList() {
         scheduleType: values.scheduleType,
         weekNo: values.weekNo,
         weekday: values.weekday,
+        scheduleDate: values.scheduleDate ? values.scheduleDate.format('YYYY-MM-DD') : null,
         sessionName: values.sessionName,
         location: values.location,
         persons: values.persons ?? [],
@@ -265,6 +278,11 @@ export default function ScheduleList() {
                                 <div style={{ fontSize: 12, color: 'var(--color-red)', marginBottom: 2 }}>
                                   {SCHEDULE_TYPE_MAP[schedule.scheduleType] ?? schedule.scheduleType}
                                 </div>
+                                {schedule.scheduleDate && (
+                                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 2 }}>
+                                    {dayjs(schedule.scheduleDate).format('YYYY-MM-DD')}
+                                  </div>
+                                )}
                                 {primaryNames.length > 0 && (
                                   <div style={{ fontWeight: 500, color: 'var(--color-text)' }}>{primaryNames.join('、')}</div>
                                 )}
@@ -317,7 +335,7 @@ export default function ScheduleList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={modalInitialValues} key={editing ? `edit-${editing.id}` : 'create'}>
           <Form.Item
             name="scheduleType"
             label="排班类型"
@@ -333,6 +351,9 @@ export default function ScheduleList() {
               <Select options={WEEKDAY_OPTIONS} placeholder="请选择" style={{ width: 120 }} />
             </Form.Item>
           </Space>
+          <Form.Item name="scheduleDate" label="排班日期">
+            <DatePicker style={{ width: '100%' }} placeholder="用于仪表盘本周排班，可留空" />
+          </Form.Item>
           <Form.Item
             name="sessionName"
             label="节次 / 时间段"
