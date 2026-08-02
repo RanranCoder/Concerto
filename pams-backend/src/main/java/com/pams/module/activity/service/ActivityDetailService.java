@@ -7,6 +7,7 @@ import com.pams.module.activity.repository.ScoreRecordRepository;
 import com.pams.module.activity.repository.ScoreRuleRepository;
 import com.pams.module.activity.repository.SeatMapRepository;
 import com.pams.module.activity.repository.SigninRepository;
+import com.pams.module.activity.repository.TaskRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -27,6 +28,7 @@ public class ActivityDetailService {
     private final ScoreRuleRepository scoreRuleRepository;
     private final ScoreRecordRepository scoreRecordRepository;
     private final SigninRepository signinRepository;
+    private final TaskRepository taskRepository;
 
     public ActivityDetailService(ActivityService activityService,
                                  PlanService planService,
@@ -34,7 +36,8 @@ public class ActivityDetailService {
                                  SeatMapRepository seatMapRepository,
                                  ScoreRuleRepository scoreRuleRepository,
                                  ScoreRecordRepository scoreRecordRepository,
-                                 SigninRepository signinRepository) {
+                                 SigninRepository signinRepository,
+                                 TaskRepository taskRepository) {
         this.activityService = activityService;
         this.planService = planService;
         this.agendaRepository = agendaRepository;
@@ -42,6 +45,7 @@ public class ActivityDetailService {
         this.scoreRuleRepository = scoreRuleRepository;
         this.scoreRecordRepository = scoreRecordRepository;
         this.signinRepository = signinRepository;
+        this.taskRepository = taskRepository;
     }
 
     public Map<String, Object> aggregate(Long activityId) {
@@ -69,8 +73,8 @@ public class ActivityDetailService {
         vo.put("seatZones", seatZones);
         vo.put("score", scoreVo);
         vo.put("signinCount", signinRepository.countByActivityId(activityId));
-        // Task 12 建好 Task 实体后改为从 TaskRepository 查询
-        vo.put("tasks", List.of());
+        // Task 12 甘特图任务接入详情聚合（Task 27 补查询，替代硬编码 List.of()）
+        vo.put("tasks", taskRepository.findByActivityIdOrderByStartDateAsc(activityId));
         return vo;
     }
 }

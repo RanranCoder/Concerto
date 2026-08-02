@@ -62,8 +62,9 @@ public class UserController {
 
     @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        userService.deleteUser(id);
+    public Result<Void> delete(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
+        Integer currentLevel = current == null ? null : current.getRoleLevel();
+        userService.deleteUser(id, currentLevel);
         return Result.ok();
     }
 

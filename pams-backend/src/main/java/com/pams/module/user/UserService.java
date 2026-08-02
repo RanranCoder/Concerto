@@ -150,12 +150,33 @@ public class UserService {
         u.setUpdatedAt(LocalDateTime.now());
     }
 
+    /**
+     * 防提权校验：被删用户的角色 level ≥ 当前操作者 level 时拒绝（部长不能删主任/指导老师，
+     * 也不能删平级部长）。与 createUser/updateUser 的"不能授予高于自己级别角色"形成闭环，
+     * 避免"有建无删不一致"。currentLevel 为 null 时放行（保留旧行为）。
+     */
+    private void checkDeleteLevel(User target, Integer currentLevel) {
+        if (currentLevel == null) return;
+        Integer targetLevel = target.getRole() == null || target.getRole().getLevel() == null
+                ? 0 : target.getRole().getLevel();
+        if (targetLevel >= currentLevel) {
+            throw new BizException(1008, "不能删除级别不低于自己的用户");
+        }
+    }
+
     @Transactional
-    public void deleteUser(Long id) {
+    public void deleteUser(Long id, Integer currentLevel) {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        checkDeleteLevel(u, currentLevel);
         u.setDeleted(1);
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
+    }
+
+    /** 兼容旧调用：无操作者级别，不做防提权校验（测试/旧代码路径）。 */
+    @Transactional
+    public void deleteUser(Long id) {
+        deleteUser(id, null);
     }
 
     @Transactional

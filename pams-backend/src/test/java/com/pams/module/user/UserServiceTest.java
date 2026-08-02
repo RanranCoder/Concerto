@@ -48,6 +48,57 @@ class UserServiceTest {
                 .isInstanceOf(BizException.class);
     }
 
+    @Test
+    void deleteUser_withHigherOrEqualLevelRole_rejects() {
+        // 部长（level 3）不能删除主任（level 4）或指导老师（level 5）
+        for (int leaderLevel : new int[]{4, 5}) {
+            RoleRepository roleRepo = mock(RoleRepository.class);
+            UserRepository userRepo = mock(UserRepository.class);
+            UserService svc = new UserService(userRepo, new BCryptPasswordEncoder(), null, roleRepo);
+
+            Role targetRole = new Role();
+            targetRole.setLevel(leaderLevel);
+            User existing = new User();
+            existing.setId(1L);
+            existing.setRole(targetRole);
+            when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> svc.deleteUser(1L, 3))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("不能删除级别不低于自己的用户");
+            verify(userRepo, never()).save(any());
+        }
+    }
+
+    @Test
+    void deleteUser_withLowerLevelRole_allowed() {
+        RoleRepository roleRepo = mock(RoleRepository.class);
+        UserRepository userRepo = mock(UserRepository.class);
+        UserService svc = new UserService(userRepo, new BCryptPasswordEncoder(), null, roleRepo);
+
+        Role staff = new Role();
+        staff.setLevel(1);
+        User existing = new User();
+        existing.setId(1L);
+        existing.setRole(staff);
+        when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
+
+        svc.deleteUser(1L, 3);
+        assertThat(existing.getDeleted()).isEqualTo(1);
+        verify(userRepo).save(existing);
+    }
+
+    @Test
+    void deleteUser_withoutLevel_legacyAllowed() {
+        // currentLevel=null（旧调用路径）放行
+        User existing = new User();
+        existing.setId(1L);
+        existing.setRole(null);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+        userService.deleteUser(1L);
+        assertThat(existing.getDeleted()).isEqualTo(1);
+    }
+
     // ==================== Task 26：角色级别防提权 ====================
 
     @Test

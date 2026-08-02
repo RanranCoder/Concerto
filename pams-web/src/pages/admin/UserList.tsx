@@ -69,6 +69,11 @@ export default function UserList() {
   const lastRoleIdRef = useRef<number | undefined>()
 
   const deptOptions = useMemo(() => depts.map((d) => ({ value: d.id, label: d.name })), [depts])
+  // 目标用户角色 level（用于删除按钮防提权展示，与后端 checkDeleteLevel 同口径）
+  const roleLevelOf = useMemo(
+    () => (code: string | null) => roles.find((r) => r.code === code)?.level ?? 0,
+    [roles],
+  )
   // 角色下拉按级别过滤（Task 26 防提权）：只能授予不高于自己级别的角色。
   // 指导老师(5)可见全部；主任(4)不可见指导老师(5)；部长(3)不可见主任/指导老师（部长本就被前端路由挡在用户管理外）。
   // 编辑时保留已被赋予的角色选项（防回显丢失），但不允许新授予更高级别。
@@ -247,7 +252,13 @@ export default function UserList() {
             </Button>
           </Popconfirm>
           <Popconfirm title="确认删除该用户？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={roleLevelOf(r.roleCode) >= (currentUser?.roleLevel ?? 99)}
+            >
               删除
             </Button>
           </Popconfirm>

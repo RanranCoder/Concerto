@@ -151,4 +151,27 @@ class PermissionGuardIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));
     }
+
+    // ==================== Task 27：deleteUser 防提权 + IllegalArgumentException → 400 ====================
+
+    @Test
+    void leader_cannotDeleteHigherRole() throws Exception {
+        // 部长（level 3）不能删除主任（level 4，id=2）
+        mvc.perform(delete("/api/users/2")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value(1008))
+            .andExpect(jsonPath("$.message").value("不能删除级别不低于自己的用户"));
+    }
+
+    @Test
+    void changeStatus_invalidEnum_returns400() throws Exception {
+        // 非法枚举：原来是 500，Task 27 统一 IllegalArgumentException → 400
+        mvc.perform(put("/api/activities/1/status")
+                .header("Authorization", bearer("orgleader"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"BOGUS\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value(400));
+    }
 }
