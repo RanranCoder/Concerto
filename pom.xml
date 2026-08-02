@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- 聚合工程：IDEA 打开本目录即可识别 pams-backend 为 Maven 子模块并生成 Spring Boot 启动项 -->
+  <groupId>com.pams</groupId>
+  <artifactId>pams</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+  <name>pams</name>
+  <description>党务管理系统（PAMS）聚合工程</description>
+
+  <modules>
+    <module>pams-backend</module>
+  </modules>
+</project>
