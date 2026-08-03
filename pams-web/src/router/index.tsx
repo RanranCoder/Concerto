@@ -6,6 +6,7 @@ import MainLayout from '@/layouts/MainLayout'
 import RequireRole, { LEADER_ROLES, ADMIN_ROLES } from '@/components/glass/RequireRole'
 
 const Login = lazy(() => import('@/pages/Login'))
+const SigninScan = lazy(() => import('@/pages/signin/SigninScan'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const Activities = lazy(() => import('@/pages/activity/ActivityList'))
@@ -37,6 +38,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  // 扫码签到落地页：免登录公开访问（与 /login 同级，位于 MainLayout / RequireAuth 之外）
+  { path: '/signin/:token', element: <SigninScan /> },
   {
     path: '/',
     element: (

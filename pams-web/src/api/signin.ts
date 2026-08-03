@@ -46,3 +46,6 @@ export const countSignins = (activityId: number) =>
   get<number>(`/signins/${activityId}/count`)
 export const generateSigninToken = (activityId: number) =>
   post<SigninToken>('/signins/token', { activityId })
+/** 扫码签到（免登录）：无效/过期 token 由后端返回业务错误，http 拦截层统一提示 */
+export const scanSignin = (data: { token: string; name: string; studentNo?: string }) =>
+  post<SigninVO>('/signins/scan', data)

@@ -6,6 +6,7 @@ import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
+import SigninQR from '@/components/signin/SigninQR'
 import {
   countSignins,
   createSignin,
@@ -155,6 +156,9 @@ export default function SigninPanel({ activityId }: { activityId: number }) {
 
   return (
     <div>
+      <GlassCard style={{ padding: 16, marginBottom: 12 }}>
+        <SigninQR activityId={activityId} onSigned={fetchData} />
+      </GlassCard>
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Space wrap>

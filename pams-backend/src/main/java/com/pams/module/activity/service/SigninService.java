@@ -4,6 +4,7 @@ import com.pams.common.BizException;
 import com.pams.module.activity.dto.SigninRequest;
 import com.pams.module.activity.dto.SigninTokenDTO;
 import com.pams.module.activity.entity.Signin;
+import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.SigninRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class SigninService {
     private final SigninRepository repository;
+    private final ActivityRepository activityRepository;
     private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
-    public SigninService(SigninRepository repository) { this.repository = repository; }
+    public SigninService(SigninRepository repository, ActivityRepository activityRepository) {
+        this.repository = repository;
+        this.activityRepository = activityRepository;
+    }
 
     public static class TokenEntry {
         private final Long activityId;
@@ -31,10 +36,12 @@ public class SigninService {
         public LocalDateTime getExpiresAt() { return expiresAt; }
     }
 
-    /** 生成一次性签到令牌（24h 有效） */
+    /** 生成一次性签到令牌（24h 有效）；刷新即作废同活动旧令牌，保证“新码生效、旧码作废” */
     public SigninTokenDTO generateToken(Long activityId) {
         String token = UUID.randomUUID().toString().replace("-", "");
         TokenEntry entry = new TokenEntry(activityId, LocalDateTime.now().plusHours(24));
+        // 先作废同活动的旧令牌（含已过期的），避免刷新后旧码仍可签到
+        tokenStore.entrySet().removeIf(e -> e.getValue().getActivityId().equals(activityId));
         tokenStore.put(token, entry);
         SigninTokenDTO dto = new SigninTokenDTO();
         dto.setToken(token);
@@ -58,8 +65,8 @@ public class SigninService {
             tokenStore.remove(token);
             throw new BizException(2303, "签到码已过期，请刷新");
         }
-        // 活动必须存在
-        if (!repository.existsById(e.getActivityId())) {
+        // 活动必须存在（用 ActivityRepository 校验真实活动，而非签到的自增 id）
+        if (!activityRepository.existsById(e.getActivityId())) {
             tokenStore.remove(token);
             throw new BizException(2001, "活动不存在");
         }
