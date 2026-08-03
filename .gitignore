@@ -1,6 +1,7 @@
 # Java
 pams-backend/target/
 pams-backend/uploads/
+uploads/
 *.class
 # Node
 pams-web/node_modules/
