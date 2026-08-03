@@ -140,7 +140,10 @@ export default function MainLayout() {
               </div>
             }
           >
-            <Outlet />
+            {/* key 用 pathname：路由切换时整个页面重挂载，触发 .page-transition 淡入动画 */}
+            <div key={location.pathname} className="page-transition">
+              <Outlet />
+            </div>
           </Suspense>
         </Content>
       </Layout>
