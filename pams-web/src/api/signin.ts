@@ -30,9 +30,19 @@ export interface SigninSave {
   remark?: string | null
 }
 
+export interface SigninToken {
+  token: string
+  activityId: number
+  expiresAt: string
+  /** 扫码 URL：{origin}/signin/{token}，由后端依据请求 origin 拼好 */
+  qrContent: string
+}
+
 export const listSignins = (activityId: number, keyword?: string) =>
   get<SigninVO[]>('/signins', { activityId, keyword })
 export const createSignin = (data: SigninSave) => post<SigninVO>('/signins', data)
 export const deleteSignin = (id: number) => del<void>(`/signins/${id}`)
 export const countSignins = (activityId: number) =>
   get<number>(`/signins/${activityId}/count`)
+export const generateSigninToken = (activityId: number) =>
+  post<SigninToken>('/signins/token', { activityId })

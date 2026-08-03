@@ -5,6 +5,7 @@ import com.pams.common.Result;
 import com.pams.module.activity.dto.SigninRequest;
 import com.pams.module.activity.entity.Signin;
 import com.pams.module.activity.service.SigninService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,14 +31,21 @@ public class SigninController {
     }
 
     @PostMapping("/token")
-    public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body) {
+    public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body,
+                                                     HttpServletRequest request) {
         Long activityId = body.get("activityId");
         if (activityId == null) throw new BizException(400, "活动ID不能为空");
         var t = service.generateToken(activityId);
+        // 依据当前请求的 scheme + Host 拼扫码 URL origin（部署在反向代理后时取 X-Forwarded-Host，回退到 Host）
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        String host = (forwardedHost != null && !forwardedHost.isBlank()) ? forwardedHost : request.getHeader("Host");
+        String origin = request.getScheme() + "://" + (host != null ? host : "localhost");
+        t.setQrContent(origin + "/signin/" + t.getToken());
         Map<String, Object> resp = new HashMap<>();
         resp.put("token", t.getToken());
         resp.put("activityId", activityId);
         resp.put("expiresAt", t.getExpiresAt());
+        resp.put("qrContent", t.getQrContent());
         return Result.ok(resp);
     }
 
