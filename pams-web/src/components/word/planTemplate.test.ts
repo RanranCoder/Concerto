@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
+  agendaToDocx,
   planFromDocxText,
   planToDocx,
   parseBudgetArray,
@@ -137,6 +138,24 @@ describe('planTemplate import/export', () => {
     expect(result.value).toContain('横幅')
     expect(result.value).toContain('展板')
     console.log('=== html-budget exported docx size ===', blob.size)
+  }, 20000)
+
+  it('agendaToDocx produces a numbered-list docx', async () => {
+    const blob = await agendaToDocx([
+      { stepNo: 1, title: '奏唱国歌', remark: null },
+      { stepNo: 2, title: '重温入党誓词', remark: '全体起立' },
+      { stepNo: 3, title: '领导致辞' },
+    ])
+    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.size).toBeGreaterThan(1000)
+    const buf = Buffer.from(await blob.arrayBuffer())
+    const mammoth = await import('mammoth')
+    const result = await mammoth.extractRawText({ buffer: buf })
+    expect(result.value).toContain('活动议程表')
+    expect(result.value).toContain('1. 奏唱国歌')
+    expect(result.value).toContain('2. 重温入党誓词　全体起立')
+    expect(result.value).toContain('3. 领导致辞')
+    console.log('=== agenda exported docx size ===', blob.size)
   }, 20000)
 
   // 导出后再导入的往返：证明导出的 docx 能被 docxToPlan 读回字段

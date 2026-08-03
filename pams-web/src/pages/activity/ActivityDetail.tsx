@@ -59,7 +59,9 @@ import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
 import WordEditor from '@/components/word/WordEditor'
 import WordPreview from '@/components/word/WordPreview'
-import { docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
+import { agendaToDocx, docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
+import SeatMapView from '@/components/seat/SeatMapView'
+import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
 import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
 
@@ -82,6 +84,35 @@ const TYPE_MAP: Record<string, string> = {
   LECTURE: '讲座',
   MEETING: '会议',
   OTHER: '其他',
+}
+
+// ==================== 座位表图例 ====================
+
+/** 座位类型默认色板：国旗红系 + 灰阶 + 强调色（按列表顺序逐个分配） */
+const SEAT_LEGEND_PALETTE = [
+  '#DE2910', // 国旗红（领导席/主席台）
+  '#C0392B', // 深红
+  '#E67E22', // 橙（嘉宾席）
+  '#E9C46A', // 金黄（礼仪/引导）
+  '#2A9D8F', // 青绿（签到/工作组）
+  '#457B9D', // 深蓝（媒体/摄影）
+  '#6C757D', // 中灰（观众席）
+  '#8C9AAB', // 浅灰（机动座）
+]
+
+const SEAT_LEGEND_KEY_PREFIX = 'pams_seat_legend_'
+
+/** 从现有 seatType 列表按色板顺序自动分配默认图例（无本地缓存时） */
+function buildDefaultLegend(types: string[]): Record<string, string> {
+  const legend: Record<string, string> = {}
+  const seen: string[] = []
+  for (const t of types) {
+    const type = t?.trim()
+    if (!type || seen.includes(type)) continue
+    seen.push(type)
+    legend[type] = SEAT_LEGEND_PALETTE[(seen.length - 1) % SEAT_LEGEND_PALETTE.length]
+  }
+  return legend
 }
 
 // ==================== 策划书 Tab ====================
@@ -559,6 +590,29 @@ function AgendaTab({ activityId }: { activityId: number }) {
     }
   }
 
+  /** 导出议程表 docx：按 stepNo 排序生成编号列表，动态 import docx 后下载 */
+  const handleExport = async () => {
+    if (list.length === 0) {
+      message.info('暂无议程可导出')
+      return
+    }
+    try {
+      const sorted = [...list].sort((a, b) => a.stepNo - b.stepNo)
+      const blob = await agendaToDocx(sorted)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = '活动议程表.docx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      message.success('议程表已导出')
+    } catch {
+      message.error('导出失败，请稍后重试')
+    }
+  }
+
   const columns = [
     { title: '步骤', dataIndex: 'stepNo', key: 'stepNo', width: 80 },
     { title: '标题', dataIndex: 'title', key: 'title' },
@@ -587,6 +641,9 @@ function AgendaTab({ activityId }: { activityId: number }) {
       <Space style={{ marginBottom: 12 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新增议程
+        </Button>
+        <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={list.length === 0}>
+          导出议程表
         </Button>
       </Space>
       <GlassTable<ActivityAgendaVO>
@@ -634,6 +691,20 @@ function AgendaTab({ activityId }: { activityId: number }) {
 
 function SeatTab({ activityId }: { activityId: number }) {
   const [zones, setZones] = useState<Record<string, SeatMapVO[]>>({})
+  const [view, setView] = useState<'matrix' | 'excel'>('matrix')
+  // 图例：localStorage pams_seat_legend_{activityId} 缓存优先；无缓存则等 seats 加载后按现有 seatType 自动分配默认色
+  const [legend, setLegend] = useState<Record<string, string>>(() => {
+    try {
+      const cached = localStorage.getItem(`${SEAT_LEGEND_KEY_PREFIX}${activityId}`)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, string>
+      }
+    } catch {
+      /* 缓存损坏时回退默认 */
+    }
+    return {}
+  })
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<SeatMapVO | null>(null)
   const [formInit, setFormInit] = useState<Record<string, unknown>>()
@@ -651,6 +722,47 @@ function SeatTab({ activityId }: { activityId: number }) {
   useEffect(() => {
     fetchZones()
   }, [fetchZones])
+
+  /** 全部座位（跨 zone 展平），供矩阵视图与 Excel 编辑共用 */
+  const allSeats = useMemo<SeatMapVO[]>(() => Object.values(zones).flat(), [zones])
+
+  /** 现有所有 seatType（去重有序） */
+  const seatTypes = useMemo(() => {
+    const seen: string[] = []
+    for (const s of allSeats) {
+      const t = s.seatType?.trim()
+      if (t && !seen.includes(t)) seen.push(t)
+    }
+    return seen
+  }, [allSeats])
+
+  /** 无本地缓存时，seats 加载后按现有 seatType 自动分配默认色 */
+  useEffect(() => {
+    setLegend((prev) => {
+      if (Object.keys(prev).length > 0) return prev // 已有图例（缓存或用户配置）不动
+      const next = buildDefaultLegend(seatTypes)
+      return Object.keys(next).length ? next : prev
+    })
+  }, [seatTypes])
+
+  const handleLegendChange = (next: Record<string, string>) => {
+    setLegend(next)
+    try {
+      localStorage.setItem(`${SEAT_LEGEND_KEY_PREFIX}${activityId}`, JSON.stringify(next))
+    } catch {
+      /* localStorage 不可用（隐私模式等）忽略 */
+    }
+  }
+
+  /** Excel 编辑回传：按 zone 重新分组刷新 zones（矩阵视图实时反映编辑） */
+  const handleExcelChange = (next: SeatMapVO[]) => {
+    const grouped: Record<string, SeatMapVO[]> = {}
+    for (const s of next) {
+      const zone = s.zone?.trim() || '未分区'
+      ;(grouped[zone] ??= []).push(s)
+    }
+    setZones(grouped)
+  }
 
   const zoneEntries = Object.entries(zones)
   const zoneOptions = zoneEntries.map(([z]) => ({ value: z, label: z }))
@@ -714,43 +826,20 @@ function SeatTab({ activityId }: { activityId: number }) {
 
   return (
     <div>
-      <Space style={{ marginBottom: 12 }}>
+      <Space style={{ marginBottom: 12 }} wrap>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新增座位
         </Button>
+        <Radio.Group value={view} onChange={(e) => setView(e.target.value)}>
+          <Radio.Button value="matrix">图表视图</Radio.Button>
+          <Radio.Button value="excel">Excel 编辑</Radio.Button>
+        </Radio.Group>
       </Space>
-      {zoneEntries.length === 0 ? (
-        <Empty description="尚未安排座位" />
+
+      {view === 'matrix' ? (
+        <SeatMapView seats={allSeats} legend={legend} onSelect={openEdit} />
       ) : (
-        zoneEntries.map(([zone, seats]) => (
-          <GlassCard key={zone} style={{ padding: 16, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>{zone}</div>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>共 {seats.length} 座</span>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {seats.map((s) => (
-                <Tooltip key={s.id} title={`${s.rowNo ?? '-'}排 ${s.colNo ?? '-'}列 · ${s.seatType ?? '普通'}`}>
-                  <div
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 8,
-                      border: '1px solid var(--glass-border)',
-                      background: 'var(--glass-bg-strong)',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      color: 'var(--color-text)',
-                    }}
-                    onClick={() => openEdit(s)}
-                  >
-                    {s.personName || `座位 ${s.id}`}
-                    {s.personName ? <span style={{ color: 'var(--color-text-secondary)', marginLeft: 4 }}>{s.seatType ?? ''}</span> : null}
-                  </div>
-                </Tooltip>
-              ))}
-            </div>
-          </GlassCard>
-        ))
+        <SeatExcelEditor seats={allSeats} legend={legend} onChangeLegend={handleLegendChange} onChangeSeats={handleExcelChange} />
       )}
 
       <GlassModal
