@@ -94,3 +94,156 @@ body::before {
     animation: none !important;
   }
 }
+
+/* ============ 策划书 Word 纸张 ============ */
+/* A4 白纸：约 595px 宽 / 842px 高，内边距 40，宋体 12pt。
+   明暗主题下始终保持白底黑字（编辑区像真实 Word，不随主题玻璃化）。 */
+.word-paper {
+  background: #ffffff;
+  color: #111111;
+  width: 595px;
+  min-height: 842px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 40px;
+  font-family: "SimSun", "宋体", "NSimSun", serif;
+  font-size: 12pt;
+  line-height: 1.8;
+  box-shadow: 0 6px 24px rgba(31, 38, 60, 0.16), 0 2px 6px rgba(31, 38, 60, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  /* 白纸内容不受主题文本色影响 */
+  color-scheme: light;
+}
+
+/* 纸张内部统一白底黑字（兼容 dark 主题下 antd 全局对 editable 的染色） */
+.word-paper .word-paper-padding,
+.word-paper .word-sec,
+.word-paper .word-sec-label,
+.word-paper .word-sec-body {
+  background: #ffffff;
+  color: #111111;
+}
+.word-paper .word-sec-body:focus {
+  outline: none;
+  background: #ffffff;
+}
+
+/* 抬头与大标题：22pt 居中 */
+.word-header-center {
+  font-size: 22pt;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 2px;
+  padding: 8px 0 2px;
+}
+.word-header-title {
+  font-size: 22pt;
+  font-weight: 700;
+  text-align: center;
+  padding: 4px 0 2px;
+}
+.word-header-sub {
+  font-size: 12pt;
+  text-align: center;
+  color: #333333;
+  padding: 2px 0 6px;
+}
+
+/* 章节 */
+.word-sec {
+  margin: 10px 0 0;
+}
+.word-sec-label {
+  font-size: 14pt;
+  font-weight: 600;
+  margin: 12px 0 4px;
+  color: #111111;
+}
+.word-sec-body {
+  font-size: 12pt;
+  min-height: 24px;
+  color: #111111;
+}
+.word-sec-static {
+  white-space: pre-wrap;
+}
+/* 编辑区空态占位 */
+.word-sec-body:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(17, 17, 17, 0.35);
+}
+.word-sec-empty::before {
+  content: attr(data-placeholder);
+  color: rgba(17, 17, 17, 0.35);
+}
+/* 当前编辑章节高亮：左侧红条提示 */
+.word-sec-active {
+  position: relative;
+}
+.word-sec-active > .word-sec-label {
+  color: #c0392b;
+}
+.word-sec-active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: #c0392b;
+}
+
+/* 章节导航 */
+.word-nav-item {
+  padding: 5px 8px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.word-nav-item:hover {
+  color: var(--color-text);
+  background: var(--color-red-soft);
+}
+.word-nav-item-active {
+  color: var(--color-red);
+  background: var(--color-red-soft);
+  font-weight: 600;
+}
+
+/* 预算表格（Word 样式） */
+.word-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12pt;
+}
+.word-table th,
+.word-table td {
+  border: 1px solid #444444;
+  padding: 4px 10px;
+  text-align: center;
+  background: #ffffff;
+  color: #111111;
+}
+.word-table th {
+  font-weight: 700;
+  background: #f2f2f2;
+}
+/* contenteditable 中表格单元格的最小高度（Word 习惯） */
+.word-table td {
+  min-width: 40px;
+}
+
+/* 落款 */
+.word-sign > div {
+  margin-bottom: 4px;
+}
+

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AutoComplete,
   Button,
@@ -8,6 +8,7 @@ import {
   Input,
   message,
   Popconfirm,
+  Radio,
   Space,
   Spin,
   Tabs,
@@ -19,10 +20,12 @@ import {
   ArrowRightOutlined,
   BarChartOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   PaperClipOutlined,
   PlusOutlined,
   SendOutlined,
+  UploadOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/glass/PageHeader'
@@ -54,6 +57,9 @@ import {
 import { createAgenda, deleteAgenda, listAgendas, updateAgenda } from '@/api/agenda'
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
+import WordEditor from '@/components/word/WordEditor'
+import WordPreview from '@/components/word/WordPreview'
+import { docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
 import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
 
@@ -78,54 +84,6 @@ const TYPE_MAP: Record<string, string> = {
   OTHER: '其他',
 }
 
-/** 策划书 flow/budget 字段：可能是 JSON 数组，也可能是纯文本 */
-function parseJsonField(s: string | null | undefined): unknown {
-  if (!s) return null
-  const t = s.trim()
-  if (!t) return null
-  if (t.startsWith('[') || t.startsWith('{')) {
-    try {
-      return JSON.parse(t)
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-function FieldBlock({ label, value }: { label: string; value: unknown }) {
-  if (value == null || (typeof value === 'string' && !value.trim())) return null
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>{label}</div>
-      <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text)', lineHeight: 1.8 }}>{String(value)}</div>
-    </div>
-  )
-}
-
-/** 流程/预算：JSON 数组按条目展示，否则按纯文本 */
-function FlowBudgetBlock({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null
-  const parsed = parseJsonField(value)
-  if (Array.isArray(parsed)) {
-    return (
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>{label}</div>
-        {parsed.map((item, i) => (
-          <div key={i} style={{ marginBottom: 4, color: 'var(--color-text)', lineHeight: 1.7 }}>
-            {typeof item === 'string'
-              ? `• ${item}`
-              : Object.entries(item as Record<string, unknown>)
-                  .map(([k, v]) => `${k}: ${String(v)}`)
-                  .join('　')}
-          </div>
-        ))}
-      </div>
-    )
-  }
-  return <FieldBlock label={label} value={value} />
-}
-
 // ==================== 策划书 Tab ====================
 
 const PLAN_FIELDS: Array<{ name: string; label: string; placeholder: string; textarea: boolean }> = [
@@ -140,10 +98,12 @@ const PLAN_FIELDS: Array<{ name: string; label: string; placeholder: string; tex
 
 function PlanTab({
   activityId,
+  activity,
   plan,
   onChanged,
 }: {
   activityId: number
+  activity?: ActivityVO & { targetAudience?: string; description?: string }
   plan: { latest: ActivityPlanVO | null; status: string | null } | null
   onChanged: () => void
 }) {
@@ -153,9 +113,39 @@ function PlanTab({
   const [modalOpen, setModalOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [mode, setMode] = useState<'preview' | 'edit'>('preview')
+  const [planFields, setPlanFields] = useState<PlanFields | null>(null)
   const [formInit, setFormInit] = useState<Record<string, string>>()
   const [form] = Form.useForm()
   const [reviewForm] = Form.useForm()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const toPlanFields = (vo: ActivityPlanVO): PlanFields => ({
+    background: vo.background ?? '',
+    purpose: vo.purpose ?? '',
+    content: vo.content ?? '',
+    flow: vo.flow ?? '',
+    notice: vo.notice ?? '',
+    emergency: vo.emergency ?? '',
+    budget: vo.budget ?? '',
+  })
+
+  /** 当前可用的 7 字段：编辑态 planFields 优先，否则回退到后端 latest */
+  const fields: PlanFields = planFields ?? (latest ? toPlanFields(latest) : { background: '', purpose: '', content: '', flow: '', notice: '', emergency: '', budget: '' })
+
+  const planMeta: PlanMeta = useMemo(
+    () => ({
+      name: activity?.name,
+      theme: activity?.theme,
+      orgName: activity?.organizer || '信息工程学院党建办公室',
+      time: activity?.startDate ? `${activity.startDate}${activity.endDate ? ` ~ ${activity.endDate}` : ''}` : '',
+      location: activity?.location ?? '',
+      organizer: activity?.organizer ?? '',
+      target: activity?.targetAudience ?? '',
+    }),
+    [activity],
+  )
 
   const openCreate = () => {
     // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
@@ -255,6 +245,75 @@ function PlanTab({
     }
   }
 
+  /** 导出 docx：planToDocx 动态 import docx 库，下载标准策划书 */
+  const handleExport = async () => {
+    try {
+      const blob = await planToDocx(fields, planMeta)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `策划书_${activity?.name ?? '活动'}.docx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      message.success('策划书已导出')
+    } catch {
+      message.error('导出失败，请稍后重试')
+    }
+  }
+
+  /** 导入 docx：mammoth 提取字段回填，编辑态直接可见，预览态进入编辑 */
+  const handleImportFile = async (file: File) => {
+    setImporting(true)
+    try {
+      const parsed = await docxToPlan(file)
+      const next = { ...fields, ...parsed }
+      setPlanFields(next)
+      setMode('edit')
+      message.success(`已导入，填充 ${Object.keys(parsed).length} 个章节字段`)
+    } catch {
+      message.error('导入失败，请确认文件为 .docx 格式')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  /** 保存：把 planFields 写入后端（updatePlan/createPlan），已审核通过则新建版本，成功后刷新并回到预览 */
+  const handleSaveFields = async () => {
+    if (!fields) return
+    setSaving(true)
+    try {
+      const payload: PlanSave = {
+        activityId,
+        background: fields.background?.trim() ? fields.background : null,
+        purpose: fields.purpose?.trim() ? fields.purpose : null,
+        content: fields.content?.trim() ? fields.content : null,
+        flow: fields.flow?.trim() ? fields.flow : null,
+        notice: fields.notice?.trim() ? fields.notice : null,
+        emergency: fields.emergency?.trim() ? fields.emergency : null,
+        budget: fields.budget?.trim() ? fields.budget : null,
+      }
+      // 已审核通过的策划书后端不允许修改，编辑保存时自动升为新版本
+      if (latest && latest.status === 'APPROVED') {
+        await createPlan({ ...payload, version: (latest.version ?? 1) + 1 })
+        message.success('已基于当前内容创建新版本')
+      } else if (latest) {
+        await updatePlan(latest.id, payload)
+        message.success('策划书已保存')
+      } else {
+        await createPlan({ ...payload, version: 1 })
+        message.success('策划书已创建')
+      }
+      setMode('preview')
+      onChanged()
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!latest) {
     return (
       <div style={{ textAlign: 'center', padding: 32 }}>
@@ -298,8 +357,8 @@ function PlanTab({
           {latest.reviewComment && <Tag color="orange">审核意见：{latest.reviewComment}</Tag>}
           {latest.status === 'DRAFT' || latest.status === 'REJECTED' ? (
             <>
-              <Button type="primary" icon={<EditOutlined />} onClick={() => openEdit(latest)}>
-                编辑
+              <Button icon={<EditOutlined />} onClick={() => openEdit(latest)}>
+                字段编辑
               </Button>
               <Button icon={<SendOutlined />} onClick={handleSubmit}>
                 提交审核
@@ -324,13 +383,50 @@ function PlanTab({
           ) : null}
         </Space>
 
-        <FieldBlock label="活动背景" value={latest.background} />
-        <FieldBlock label="活动目的" value={latest.purpose} />
-        <FieldBlock label="活动内容" value={latest.content} />
-        <FlowBudgetBlock label="活动流程" value={latest.flow} />
-        <FieldBlock label="注意事项" value={latest.notice} />
-        <FieldBlock label="应急预案" value={latest.emergency} />
-        <FlowBudgetBlock label="经费预算" value={latest.budget} />
+        {/* Word 形态工具栏：预览/编辑切换 + 导入/导出/保存 */}
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)}>
+            <Radio.Button value="preview">Word 预览</Radio.Button>
+            <Radio.Button value="edit">编辑</Radio.Button>
+          </Radio.Group>
+          {mode === 'edit' ? (
+            <>
+              <Button loading={importing} icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+                导入 docx
+              </Button>
+              <Button icon={<DownloadOutlined />} onClick={handleExport}>
+                导出 docx
+              </Button>
+              <Button type="primary" loading={saving} onClick={handleSaveFields}>
+                保存
+              </Button>
+            </>
+          ) : (
+            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+              导出 docx
+            </Button>
+          )}
+        </Space>
+
+        {/* Word 形态：预览（A4 只读渲染）/ 编辑（contenteditable） */}
+        {mode === 'edit' ? (
+          <WordEditor value={fields} onChange={setPlanFields} meta={planMeta} />
+        ) : (
+          <WordPreview plan={fields} meta={planMeta} />
+        )}
+
+        {/* 隐藏的文件选择：导入 docx */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) handleImportFile(f)
+            e.target.value = ''
+          }}
+        />
       </GlassCard>
 
       {/* 编辑/创建弹窗 */}
@@ -888,7 +984,7 @@ export default function ActivityDetail() {
     {
       key: 'plan',
       label: '策划书',
-      children: detail ? <PlanTab activityId={activityId} plan={detail.plan} onChanged={fetchDetail} /> : null,
+      children: detail ? <PlanTab activityId={activityId} activity={detail.activity} plan={detail.plan} onChanged={fetchDetail} /> : null,
     },
     {
       key: 'agenda',
