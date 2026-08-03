@@ -143,6 +143,7 @@ function PlanTab({
       location: activity?.location ?? '',
       organizer: activity?.organizer ?? '',
       target: activity?.targetAudience ?? '',
+      endDate: activity?.endDate ?? undefined,
     }),
     [activity],
   )
@@ -305,6 +306,7 @@ function PlanTab({
         await createPlan({ ...payload, version: 1 })
         message.success('策划书已创建')
       }
+      setPlanFields(null) // 清空编辑缓冲，避免旧内容残留
       setMode('preview')
       onChanged()
     } catch {
@@ -414,6 +416,11 @@ function PlanTab({
         ) : (
           <WordPreview plan={fields} meta={planMeta} />
         )}
+
+        {/* 活动流程字段不在 12 章模板中，Word 预览/导出不含流程，引导用字段编辑 */}
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          提示：活动流程字段未在 Word 展示，如需查看/编辑请用「字段编辑」。
+        </div>
 
         {/* 隐藏的文件选择：导入 docx */}
         <input

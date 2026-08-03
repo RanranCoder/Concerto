@@ -1,13 +1,14 @@
-import { PLAN_TEMPLATE_SECTIONS, parseBudgetArray, sectionMetaValue, stripHtml, type PlanFields, type PlanMeta } from './planTemplate'
+import { PLAN_TEMPLATE_SECTIONS, parseBudgetMatrix, planYearFromMeta, sectionMetaValue, stripHtml, type PlanFields, type PlanMeta } from './planTemplate'
 
 interface WordPreviewProps {
   plan: PlanFields
   meta?: PlanMeta
 }
 
-/** A4 纸张只读渲染 7 字段（按 12 章顺序，标题 14pt 加粗 + 正文 12pt；budget JSON → 表格） */
+/** A4 纸张只读渲染 7 字段（按 12 章顺序，标题 14pt 加粗 + 正文 12pt；budget JSON/HTML 表格 → 表格） */
 export default function WordPreview({ plan, meta }: WordPreviewProps) {
-  const budgetArr = parseBudgetArray(plan.budget)
+  const budgetRows = parseBudgetMatrix(plan.budget)
+  const year = planYearFromMeta(meta)
 
   return (
     <div className="word-paper">
@@ -24,23 +25,21 @@ export default function WordPreview({ plan, meta }: WordPreviewProps) {
           return (
             <div key={i} className="word-sec">
               <div className="word-sec-label">{sec.label}</div>
-              {sec.field === 'budget' && budgetArr ? (
+              {sec.field === 'budget' && budgetRows ? (
                 <table className="word-table">
                   <thead>
                     <tr>
-                      <th>物品</th>
-                      <th>数量</th>
-                      <th>单价（元）</th>
-                      <th>总价（元）</th>
+                      {budgetRows[0]?.map((h, hi) => (
+                        <th key={hi}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {budgetArr.map((item, ri) => (
+                    {budgetRows.slice(1).map((cells, ri) => (
                       <tr key={ri}>
-                        <td>{String(item?.item ?? '')}</td>
-                        <td>{String(item?.quantity ?? '')}</td>
-                        <td>{String(item?.unitPrice ?? '')}</td>
-                        <td>{String(item?.totalPrice ?? '')}</td>
+                        {cells.map((c, ci) => (
+                          <td key={ci}>{c}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -56,7 +55,7 @@ export default function WordPreview({ plan, meta }: WordPreviewProps) {
 
         <div className="word-sign" style={{ textAlign: 'right', marginTop: 32 }}>
           <div>{meta?.orgName || '信息工程学院党建办公室'}</div>
-          <div>{new Date().getFullYear()}年</div>
+          <div>{year}年</div>
         </div>
       </div>
     </div>

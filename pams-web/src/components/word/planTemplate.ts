@@ -1,5 +1,6 @@
 // 策划书 Word 模板：12 章章节骨架 + 导出 docx + 导入 docx（粗粒度）
 // 数据模型不变：仍存 PlanFields 7 字段，Word 只是编辑/展示形态
+import DOMPurify from 'dompurify'
 
 export interface PlanFields {
   background: string
@@ -42,6 +43,7 @@ export interface PlanMeta {
   location?: string
   organizer?: string
   target?: string
+  endDate?: string
 }
 
 /** 去掉 HTML 标签，导出 docx 时把编辑器产生的富文本还原为纯文本（保留段落换行） */
@@ -72,8 +74,68 @@ export function textToHtml(s: string): string {
 
 /** 进入 contenteditable 前的归一化：已是 HTML（用户编辑产物）原样返回，纯文本则转义换行 */
 export function toEditableHtml(s: string): string {
-  if (/<[a-zA-Z][\s\S]*>/i.test(s || '')) return s || ''
+  if (/<[a-zA-Z][\s\S]*>/i.test(s || '')) return sanitizeEditableHtml(s || '')
   return textToHtml(s)
+}
+
+/** XSS 防护：进入 contenteditable / 导出 docx 前把富文本净化。
+ * 允许基本排版标签（p/div/br/b/strong/table/tr/td/th/ul/ol/li/span…），
+ * 但禁止脚本类标签与一切事件属性，避免「字段编辑」粘贴的恶意 HTML 在他人打开编辑时执行。
+ * 注意：事件属性（onerror 等）本就不在 DOMPurify 默认 ALLOWED_ATTR 内，会被直接剥离；
+ * FORBID_ATTR 的 'on*' 仅为显式意图声明（DOMPurify 精确匹配，不改动时无害）。
+ * 不禁用 style 属性，编辑器「字号」功能依赖 span[style=font-size] 保留。
+ * vitest（node 环境）无 window，DOMPurify 降级为工厂函数无 .sanitize，捕获后走最小兜底净化。 */
+export function sanitizeEditableHtml(html: string): string {
+  const input = html || ''
+  if (!input) return ''
+  try {
+    return DOMPurify.sanitize(input, {
+      FORBID_TAGS: ['style', 'script', 'iframe', 'svg', 'form', 'object', 'embed', 'link', 'meta', 'base', 'math'],
+      FORBID_ATTR: ['on*'],
+    })
+  } catch {
+    // node 测试环境：DOMPurify 是工厂函数，退化为最小兜底净化（浏览器由上面真实净化兜底）
+    return input
+      .replace(/<\s*(script|style|iframe|object|embed|link|meta|base|form|svg|math)(?:\s[^>]*)?>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base|form|svg|math)(?:\s[^>]*)?>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  }
+}
+
+/** 判定一段预算字符串是否为 HTML 表格（编辑器工具条插入的 <table> 富文本） */
+export function isBudgetHtmlTable(s: string | null | undefined): boolean {
+  return typeof s === 'string' && /<table[\s>]/i.test(s.trim())
+}
+
+/** 从预算 HTML 表格提取行列文本为二维数组（首行为表头；colspan/rowspan 简化为同列文本，全空行剔除）
+ * 轻量正则实现，不依赖 DOMParser，便于单测。返回 null 表示不是可解析的 HTML 表格 */
+export function parseBudgetHtml(s: string | null | undefined): string[][] | null {
+  if (!isBudgetHtmlTable(s)) return null
+  const rows: string[][] = []
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr\s*>/gi
+  let rm: RegExpExecArray | null
+  while ((rm = rowRe.exec(s as string)) !== null) {
+    const cells = Array.from((rm[1] || '').matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]\s*>/gi)).map((cm) => stripHtml(cm[1]).trim())
+    if (cells.some((c) => c.trim() !== '')) rows.push(cells)
+  }
+  return rows.length ? rows : null
+}
+
+/** 把编辑器产物（可能是 HTML 表格 / JSON 数组 / 纯文本）解析为渲染用二维数组，取不到则 null */
+export function parseBudgetMatrix(s: string | null | undefined): string[][] | null {
+  const arr = parseBudgetArray(s)
+  if (arr) return [['物品', '数量', '单价（元）', '总价（元）']].concat(
+    arr.map((item) => [String(item?.item ?? ''), String(item?.quantity ?? ''), String(item?.unitPrice ?? ''), String(item?.totalPrice ?? '')]),
+  )
+  const htmlMatrix = parseBudgetHtml(s)
+  if (htmlMatrix) return htmlMatrix
+  return null
+}
+
+/** 落款年份：优先取活动 endDate 年份，拿不到再回退当前年（endDate 为 "YYYY-MM-DD" 或 "YYYY/MM/DD" 形式） */
+export function planYearFromMeta(meta?: PlanMeta): number {
+  const m = /(?:^|\D)(20\d{2})/.exec((meta?.endDate ?? '').slice(0, 10))
+  return m ? Number(m[1]) : new Date().getFullYear()
 }
 
 /** 固定章节（不映射字段）从活动 meta 取展示值 */
@@ -148,7 +210,7 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
   const orgName = meta?.orgName || '信息工程学院党建办公室'
   const title = meta?.name || '活动策划书'
   const theme = meta?.theme || ''
-  const budgetArr = parseBudgetArray(plan.budget)
+  const budgetRows = parseBudgetMatrix(plan.budget)
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
   const cellBorders = {
@@ -200,20 +262,11 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
       }),
     )
 
-    // 预算：JSON 数组 → 4 列表格
-    if (sec.field === 'budget' && budgetArr) {
-      const header = ['物品', '数量', '单价（元）', '总价（元）']
-      const rows = [header].concat(
-        budgetArr.map((item) => [
-          String(item?.item ?? ''),
-          String(item?.quantity ?? ''),
-          String(item?.unitPrice ?? ''),
-          String(item?.totalPrice ?? ''),
-        ]),
-      )
+    // 预算：JSON 数组或 HTML 表格 → 表格（首行表头）
+    if (sec.field === 'budget' && budgetRows) {
       const table = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: rows.map((cells, ri) =>
+        rows: budgetRows.map((cells, ri) =>
           new TableRow({
             tableHeader: ri === 0,
             children: cells.map((c) =>
@@ -253,7 +306,7 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
     }
   }
 
-  // 落款：右对齐
+  // 落款：右对齐；年份取活动 endDate 年份，拿不到再回退当前年
   children.push(
     new Paragraph({
       alignment: AlignmentType.RIGHT,
@@ -261,7 +314,7 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
       children: [new TextRun({ text: orgName, font: '宋体', size: 24 })],
     }),
   )
-  const year = new Date().getFullYear()
+  const year = planYearFromMeta(meta)
   children.push(
     new Paragraph({
       alignment: AlignmentType.RIGHT,

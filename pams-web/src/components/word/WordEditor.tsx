@@ -4,6 +4,7 @@ import { Button, Space, Tooltip } from 'antd'
 import { BoldOutlined, OrderedListOutlined, TableOutlined } from '@ant-design/icons'
 import {
   PLAN_TEMPLATE_SECTIONS,
+  sanitizeEditableHtml,
   sectionMetaValue,
   toEditableHtml,
   type PlanFields,
@@ -38,7 +39,7 @@ function EditorSection({
   onPaste: (e: ClipboardEvent<HTMLDivElement>) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const bodyHtml = toEditableHtml(html)
+  const bodyHtml = sanitizeEditableHtml(toEditableHtml(html))
   // 编辑内容跟随外部 value（导入/初始化）同步；用户输入时仅 onInput 回写，避免光标跳动
   useEffect(() => {
     const el = ref.current
@@ -100,6 +101,21 @@ export default function WordEditor({ value, onChange, meta }: WordEditorProps) {
 
   const runCmd = (cmd: string, val?: string) => {
     document.execCommand(cmd, false, val)
+    setEditorKey((k) => k + 1)
+  }
+
+  /** 字号：在选区外包 <span style="font-size:XXpt"> 实现真实 12/14/22pt（execCommand fontSize 的 '3'/'5'/'6' 是 12/18/24pt，无法精确到 14/22pt）。
+   * 无选区时不做操作（需先选中文字再点字号）。insertHTML 会触发 input 事件，onInput 自动回写 value。 */
+  const applyFontSize = (pt: number) => {
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0)
+      if (!range.collapsed) {
+        const tmp = document.createElement('div')
+        tmp.appendChild(range.cloneContents())
+        document.execCommand('insertHTML', false, `<span style="font-size:${pt}pt">${tmp.innerHTML}</span>`)
+      }
+    }
     setEditorKey((k) => k + 1)
   }
 
@@ -195,14 +211,14 @@ export default function WordEditor({ value, onChange, meta }: WordEditorProps) {
           </Tooltip>
           <span style={{ width: 1, height: 18, background: 'var(--glass-border)', margin: '0 4px' }} />
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>字号：</span>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => runCmd('fontSize', '3')}>
-            正文
+          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(12)}>
+            12pt 正文
           </Button>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => runCmd('fontSize', '5')}>
-            小四
+          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(14)}>
+            14pt 章节
           </Button>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => runCmd('fontSize', '6')}>
-            四号
+          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(22)}>
+            22pt 标题
           </Button>
           <Space size={4} style={{ marginLeft: 'auto' }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Tab 插入空格 · 粘贴自动去格式</span>
