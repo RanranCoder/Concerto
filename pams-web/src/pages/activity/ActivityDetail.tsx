@@ -44,9 +44,10 @@ import {
   type ActivityVO,
   type SeatMapVO,
 } from '@/api/activity'
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS } from '@/api/activityStatus'
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP } from '@/api/activityStatus'
 import { listMaterials, MATERIAL_BIZ_TYPE_MAP, type MaterialVO } from '@/api/material'
 import { downloadFile } from '@/api/file'
+import { listDepts } from '@/api/dept'
 import {
   createPlan,
   reviewPlan,
@@ -75,16 +76,8 @@ const PLAN_STATUS_TEXT: Record<string, string> = {
   REJECTED: '已驳回',
 }
 
-const TYPE_MAP: Record<string, string> = {
-  PARTY_LESSON: '党课',
-  DATE: '主题团日',
-  PARTY_DAY: '主题党日',
-  COMPETITION: '竞赛',
-  VOLUNTEER: '志愿服务',
-  LECTURE: '讲座',
-  MEETING: '会议',
-  OTHER: '其他',
-}
+// 活动类型中文展示（ActivityList/ActivityEdit 共用同一 ACTIVITY_TYPE_MAP 的唯一来源）
+const TYPE_MAP = ACTIVITY_TYPE_MAP
 
 // ==================== 座位表图例 ====================
 
@@ -920,6 +913,21 @@ export default function ActivityDetail() {
   const [loading, setLoading] = useState(false)
   const [changing, setChanging] = useState(false)
   const [materials, setMaterials] = useState<MaterialVO[]>([])
+  const [activeTab, setActiveTab] = useState('basic')
+  // 部门列表：后端 Task 只返回 deptId，需映射 deptName 供甘特图预览条着色（与甘特页同款处理）
+  const [depts, setDepts] = useState<Array<{ id: number; name: string }>>([])
+
+  const deptNameById = useMemo(() => {
+    const m = new Map<number, string>()
+    depts.forEach((d) => m.set(d.id, d.name))
+    return m
+  }, [depts])
+
+  useEffect(() => {
+    listDepts()
+      .then((rows) => setDepts(rows ?? []))
+      .catch(() => {})
+  }, [])
 
   const fetchDetail = useCallback(async () => {
     if (!activityId) return
@@ -949,22 +957,25 @@ export default function ActivityDetail() {
     fetchMaterials()
   }, [fetchMaterials])
 
-  /** 甘特图只读预览：detail.tasks 为后端 Task 实体（deptId 无 deptName），映射到组件所需形状 */
+  /** 甘特图只读预览：detail.tasks 为后端 Task 实体（deptId 无 deptName），映射到组件所需形状并用部门列表补 deptName 着色 */
   const ganttPreviewTasks = useMemo<GanttTask[]>(() => {
     return (detail?.tasks ?? [])
       .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
-      .map((t) => ({
-        id: Number(t.id),
-        name: String(t.name ?? ''),
-        startDate: String(t.startDate ?? ''),
-        endDate: String(t.endDate ?? ''),
-        dependsOn: t.dependsOn != null ? Number(t.dependsOn) : null,
-        deptName: t.deptName != null ? String(t.deptName) : undefined,
-        isMilestone: t.isMilestone === 1,
-        progress: t.progress != null ? Number(t.progress) : 0,
-        assignee: t.assignee != null ? String(t.assignee) : undefined,
-      }))
-  }, [detail?.tasks])
+      .map((t) => {
+        const deptId = t.deptId != null ? Number(t.deptId) : null
+        return {
+          id: Number(t.id),
+          name: String(t.name ?? ''),
+          startDate: String(t.startDate ?? ''),
+          endDate: String(t.endDate ?? ''),
+          dependsOn: t.dependsOn != null ? Number(t.dependsOn) : null,
+          deptName: deptId != null ? (deptNameById.get(deptId) ?? undefined) : undefined,
+          isMilestone: t.isMilestone === 1,
+          progress: t.progress != null ? Number(t.progress) : 0,
+          assignee: t.assignee != null ? String(t.assignee) : undefined,
+        }
+      })
+  }, [detail?.tasks, deptNameById])
 
   const handleStatusChange = async (target: string) => {
     setChanging(true)
@@ -1106,7 +1117,7 @@ export default function ActivityDetail() {
     {
       key: 'signin',
       label: '签到',
-      children: <SigninPanel activityId={activityId} />,
+      children: <SigninPanel activityId={activityId} active={activeTab === 'signin'} />,
     },
   ]
 
@@ -1134,7 +1145,7 @@ export default function ActivityDetail() {
         }
       />
       <Spin spinning={loading}>
-        <Tabs items={tabItems} />
+        <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
       </Spin>
     </div>
   )

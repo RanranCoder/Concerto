@@ -10,7 +10,7 @@ import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
 import { listActivities, getActivity, createActivity, updateActivity, changeActivityStatus, deleteActivity } from '@/api/activity'
 import type { ActivitySave, ActivityVO } from '@/api/activity'
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS } from '@/api/activityStatus'
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP, ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
 
 // 活动状态 → 推进后状态（状态机：ASSIGNED→PLANNING→PLAN_REVIEW→EXECUTING→FINISHED→ARCHIVED）
@@ -22,18 +22,9 @@ const NEXT_STATUS: Record<string, string> = {
   FINISHED: 'ARCHIVED',
 }
 
-const TYPE_MAP: Record<string, string> = {
-  PARTY_LESSON: '党课',
-  DATE: '主题团日',
-  PARTY_DAY: '主题党日',
-  COMPETITION: '竞赛',
-  VOLUNTEER: '志愿服务',
-  LECTURE: '讲座',
-  MEETING: '会议',
-  OTHER: '其他',
-}
-
-const TYPE_OPTIONS = Object.entries(TYPE_MAP).map(([value, label]) => ({ value, label }))
+// 活动类型中文展示（与 ActivityEdit/ActivityDetail 共用 ACTIVITY_TYPE_MAP 唯一来源）
+const TYPE_MAP = ACTIVITY_TYPE_MAP
+const TYPE_OPTIONS = ACTIVITY_TYPE_OPTIONS
 
 type ActivityRecord = ActivityVO & { key: number }
 

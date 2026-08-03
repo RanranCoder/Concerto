@@ -51,7 +51,7 @@ function exportCsv(rows: SigninVO[]) {
   URL.revokeObjectURL(url)
 }
 
-export default function SigninPanel({ activityId }: { activityId: number }) {
+export default function SigninPanel({ activityId, active = true }: { activityId: number; active?: boolean }) {
   const [list, setList] = useState<SigninVO[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -157,7 +157,7 @@ export default function SigninPanel({ activityId }: { activityId: number }) {
   return (
     <div>
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <SigninQR activityId={activityId} onSigned={fetchData} />
+        <SigninQR activityId={activityId} active={active} onSigned={fetchData} />
       </GlassCard>
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>

@@ -57,7 +57,11 @@ public class SigninController {
         if (token == null || name == null || name.isBlank()) {
             throw new BizException(400, "签到码或姓名不能为空");
         }
-        return Result.ok(service.scanSignin(token, name.trim(), studentNo));
+        String trimmed = name.trim();
+        if (trimmed.length() > 50) {
+            throw new BizException(400, "姓名长度不能超过50个字符");
+        }
+        return Result.ok(service.scanSignin(token, trimmed, studentNo));
     }
 
     @DeleteMapping("/{id}")

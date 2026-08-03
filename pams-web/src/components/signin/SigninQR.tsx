@@ -7,6 +7,8 @@ import { countSignins, generateSigninToken } from '@/api/signin'
 interface SigninQRProps {
   activityId: number
   onSigned: () => void
+  /** 所在 Tab 是否激活：非激活时停止轮询，避免「签到」页不在前台仍常驻轮询 */
+  active?: boolean
 }
 
 /**
@@ -20,7 +22,7 @@ interface SigninQRProps {
  *   一直有效。扫码在他人设备上发生，本组件轮询签到人数，人数增长时回调 onSigned
  *   触发列表自动刷新，出现 SCAN 记录。
  */
-export default function SigninQR({ activityId, onSigned }: SigninQRProps) {
+export default function SigninQR({ activityId, onSigned, active = true }: SigninQRProps) {
   const [qrContent, setQrContent] = useState('')
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -44,8 +46,10 @@ export default function SigninQR({ activityId, onSigned }: SigninQRProps) {
     refresh()
   }, [refresh])
 
-  // 轮询签到人数：数量增长说明有新的扫码签到，触发列表自动刷新
+  // 轮询签到人数：数量增长说明有新的扫码签到，触发列表自动刷新。
+  // 仅当「签到」Tab 处于激活状态时轮询（active=false 清除定时器，切走即停）。
   useEffect(() => {
+    if (!active) return
     const timer = setInterval(async () => {
       try {
         const c = (await countSignins(activityId)) ?? 0
@@ -58,7 +62,7 @@ export default function SigninQR({ activityId, onSigned }: SigninQRProps) {
       }
     }, 12000)
     return () => clearInterval(timer)
-  }, [activityId, onSigned])
+  }, [activityId, onSigned, active])
 
   return (
     <div style={{ textAlign: 'center', padding: 16 }}>

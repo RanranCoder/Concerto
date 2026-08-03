@@ -37,3 +37,18 @@ export const ACTIVITY_TYPES = [
   'MEETING',
   'OTHER',
 ] as const
+
+/** 活动类型 → 中文 label（ActivityEdit 下拉 / ActivityDetail 展示 / ActivityList 列表共用，唯一来源） */
+export const ACTIVITY_TYPE_MAP: Record<string, string> = {
+  PARTY_LESSON: '党课',
+  DATE: '主题团日',
+  PARTY_DAY: '主题党日',
+  COMPETITION: '竞赛',
+  VOLUNTEER: '志愿服务',
+  LECTURE: '讲座',
+  MEETING: '会议',
+  OTHER: '其他',
+}
+
+/** 活动类型下拉选项（value=枚举，label=中文） */
+export const ACTIVITY_TYPE_OPTIONS = Object.entries(ACTIVITY_TYPE_MAP).map(([value, label]) => ({ value, label }))

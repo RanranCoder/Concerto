@@ -6,7 +6,7 @@ import dayjs from 'dayjs'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
 import { getActivity, updateActivity } from '@/api/activity'
-import { ACTIVITY_TYPES } from '@/api/activityStatus'
+import { ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
 
 /** getActivity 返回 detail 视图，含 targetAudience/description（列表 VO 未声明） */
 type ActivityEditVO = {
@@ -99,7 +99,7 @@ export default function ActivityEdit() {
             </Form.Item>
             <Form.Item name="theme" label="活动主题"><Input maxLength={200} /></Form.Item>
             <Form.Item name="type" label="类型">
-              <Select options={ACTIVITY_TYPES.map((t) => ({ value: t, label: t }))} />
+              <Select options={ACTIVITY_TYPE_OPTIONS} />
             </Form.Item>
             <Form.Item name="range" label="时间范围"><DatePicker.RangePicker style={{ width: '100%' }} /></Form.Item>
             <Form.Item name="location" label="地点"><Input maxLength={100} /></Form.Item>
