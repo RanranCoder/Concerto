@@ -698,7 +698,13 @@ function SeatTab({ activityId }: { activityId: number }) {
       const cached = localStorage.getItem(`${SEAT_LEGEND_KEY_PREFIX}${activityId}`)
       if (cached) {
         const parsed = JSON.parse(cached)
-        if (parsed && typeof parsed === 'object') return parsed as Record<string, string>
+        if (parsed && typeof parsed === 'object') {
+          const clean: Record<string, string> = {}
+          for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+            if (typeof v === 'string') clean[k] = v // 过滤非字符串值，防 ColorPicker value={123}
+          }
+          return clean
+        }
       }
     } catch {
       /* 缓存损坏时回退默认 */

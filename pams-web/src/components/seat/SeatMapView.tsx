@@ -29,7 +29,9 @@ function groupByZone(seats: SeatMapVO[]): Array<{ zone: string; seats: SeatMapVO
 
 /**
  * 电影选座风格座位矩阵（CSS Grid）：
- * 每个 zone 顶部显示区域名标签，下方按最大 colNo 定列的网格；
+ * 每个 zone 顶部显示区域名标签，下方按最大 colNo 定列、最大 rowNo 定行的网格；
+ * rowNo 对应 grid 行（排），colNo 对应 grid 列（列）；左侧竖栏渲染排号（maxRow 个「n排」），
+ * 顶部横栏渲染列号（maxCol 个「n列」），与 gridTemplateRows/Columns 对齐；
  * 座位为圆角方块，颜色 = legend[seatType] ?? 默认灰；已占座位显示就座人首字并加红描边；
  * 底部图例条展示所有 seatType 的色块。点击座位回调 onSelect。
  */
@@ -54,9 +56,9 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
             </div>
           </div>
           <div style={{ display: 'flex' }}>
-            {/* 左侧列号：每个 grid 列一个「n列」，高度对齐座位格 */}
+            {/* 左侧排号栏：每个 grid 行一个「n排」（共 maxRow 个），高度对齐座位格 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 46 }}>
-              {Array.from({ length: maxCol }, (_, i) => (
+              {Array.from({ length: maxRow }, (_, i) => (
                 <div
                   key={i}
                   style={{
@@ -69,14 +71,14 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                     color: 'var(--color-text-secondary)',
                   }}
                 >
-                  {i + 1}列
+                  {i + 1}排
                 </div>
               ))}
             </div>
             <div style={{ flex: 1 }}>
-              {/* 顶部排号：每个 grid 行一个「n排」，宽对齐座位格 */}
+              {/* 顶部列号栏：每个 grid 列一个「n列」（共 maxCol 个），宽对齐座位格 */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                {Array.from({ length: maxRow }, (_, i) => (
+                {Array.from({ length: maxCol }, (_, i) => (
                   <div
                     key={i}
                     style={{
@@ -86,7 +88,7 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                       color: 'var(--color-text-secondary)',
                     }}
                   >
-                    {i + 1}排
+                    {i + 1}列
                   </div>
                 ))}
               </div>
