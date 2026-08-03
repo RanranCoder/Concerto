@@ -25,3 +25,15 @@ export const ACTIVITY_STATUS_COLOR: Record<string, string> = {
   FINISHED: '#CF1322',
   ARCHIVED: '#8C8C8C',
 }
+
+/** 活动类型枚举（ActivityEdit 独立编辑页复用；与 ActivityDetail/ActivityList 的 TYPE_MAP 键一致） */
+export const ACTIVITY_TYPES = [
+  'PARTY_LESSON',
+  'DATE',
+  'PARTY_DAY',
+  'COMPETITION',
+  'VOLUNTEER',
+  'LECTURE',
+  'MEETING',
+  'OTHER',
+] as const

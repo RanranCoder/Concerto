@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AutoComplete,
   Button,
@@ -30,6 +30,8 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import StatusTag from '@/components/glass/StatusTag'
+import GanttChart from '@/components/gantt/GanttChart'
+import type { GanttTask } from '@/components/gantt/gantt.utils'
 import {
   changeActivityStatus,
   getActivityDetail,
@@ -40,6 +42,8 @@ import {
   type SeatMapVO,
 } from '@/api/activity'
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS } from '@/api/activityStatus'
+import { listMaterials, MATERIAL_BIZ_TYPE_MAP, type MaterialVO } from '@/api/material'
+import { downloadFile } from '@/api/file'
 import {
   createPlan,
   reviewPlan,
@@ -717,6 +721,7 @@ export default function ActivityDetail() {
   const [detail, setDetail] = useState<ActivityDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [changing, setChanging] = useState(false)
+  const [materials, setMaterials] = useState<MaterialVO[]>([])
 
   const fetchDetail = useCallback(async () => {
     if (!activityId) return
@@ -733,6 +738,35 @@ export default function ActivityDetail() {
   useEffect(() => {
     fetchDetail()
   }, [fetchDetail])
+
+  const fetchMaterials = useCallback(async () => {
+    try {
+      const page = await listMaterials({ activityId, page: 1, size: 50 })
+      setMaterials(page.records)
+    } catch {
+      /* http 拦截已提示 */
+    }
+  }, [activityId])
+  useEffect(() => {
+    fetchMaterials()
+  }, [fetchMaterials])
+
+  /** 甘特图只读预览：detail.tasks 为后端 Task 实体（deptId 无 deptName），映射到组件所需形状 */
+  const ganttPreviewTasks = useMemo<GanttTask[]>(() => {
+    return (detail?.tasks ?? [])
+      .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
+      .map((t) => ({
+        id: Number(t.id),
+        name: String(t.name ?? ''),
+        startDate: String(t.startDate ?? ''),
+        endDate: String(t.endDate ?? ''),
+        dependsOn: t.dependsOn != null ? Number(t.dependsOn) : null,
+        deptName: t.deptName != null ? String(t.deptName) : undefined,
+        isMilestone: t.isMilestone === 1,
+        progress: t.progress != null ? Number(t.progress) : 0,
+        assignee: t.assignee != null ? String(t.assignee) : undefined,
+      }))
+  }, [detail?.tasks])
 
   const handleStatusChange = async (target: string) => {
     setChanging(true)
@@ -810,6 +844,34 @@ export default function ActivityDetail() {
             </Space>
           </div>
 
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--glass-border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>
+              任务甘特图预览
+              <Button type="link" size="small" onClick={() => navigate(`/activities/${activityId}/gantt`)}>
+                查看完整甘特图 →
+              </Button>
+            </div>
+            {/* 内嵌只读甘特图：tasks 来自 detail.tasks（聚合接口已返回），onEdit 空操作保持只读 */}
+            <GanttChart tasks={ganttPreviewTasks} onUpdate={() => {}} onEdit={() => {}} />
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>
+              关联文件（{materials.length}）
+            </div>
+            {materials.length === 0 ? (
+              <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>暂无关联文件，可在材料库上传</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {materials.map((m) => (
+                  <Tag key={m.id} color="red" style={{ cursor: 'pointer' }} onClick={() => m.fileId && downloadFile(m.fileId)}>
+                    {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {m.name}
+                  </Tag>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div style={{ marginTop: 16 }}>
             <Space wrap>
               <Button icon={<BarChartOutlined />} onClick={() => navigate(`/activities/${activityId}/gantt`)}>
@@ -862,6 +924,11 @@ export default function ActivityDetail() {
         extra={
           <Space>
             {activity && <StatusTag status={activity.status} />}
+            {activity && (
+              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/activities/${activityId}/edit`)}>
+                编辑
+              </Button>
+            )}
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/activities')}>
               返回列表
             </Button>

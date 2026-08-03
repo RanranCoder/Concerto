@@ -12,6 +12,7 @@ const Activities = lazy(() => import('@/pages/activity/ActivityList'))
 
 // 以下页面在后续 Task 逐一实现，路由先全量配好，未实现前用占位组件保证可访问不白屏
 const ActivityDetail = lazy(() => import('@/pages/activity/ActivityDetail'))
+const ActivityEdit = lazy(() => import('@/pages/activity/ActivityEdit'))
 const Gantt = lazy(() => import('@/pages/activity/Gantt'))
 const Schedules = lazy(() => import('@/pages/routine/ScheduleList'))
 const Attendance = lazy(() => import('@/pages/routine/AttendanceList'))
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
       { path: '/activities', element: <Activities /> },
       { path: '/activities/:id', element: <ActivityDetail /> },
+      { path: '/activities/:id/edit', element: <ActivityEdit /> },
       { path: '/activities/:id/gantt', element: <Gantt /> },
 
       // 排班考勤
