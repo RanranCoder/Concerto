@@ -1,5 +1,6 @@
 package com.pams.module.activity.controller;
 
+import com.pams.common.BizException;
 import com.pams.common.Result;
 import com.pams.module.activity.dto.SigninRequest;
 import com.pams.module.activity.entity.Signin;
@@ -7,7 +8,9 @@ import com.pams.module.activity.service.SigninService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/signins")
@@ -24,6 +27,29 @@ public class SigninController {
     @PostMapping
     public Result<Signin> create(@Valid @RequestBody SigninRequest req) {
         return Result.ok(service.create(req));
+    }
+
+    @PostMapping("/token")
+    public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body) {
+        Long activityId = body.get("activityId");
+        if (activityId == null) throw new BizException(400, "活动ID不能为空");
+        var t = service.generateToken(activityId);
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("token", t.getToken());
+        resp.put("activityId", activityId);
+        resp.put("expiresAt", t.getExpiresAt());
+        return Result.ok(resp);
+    }
+
+    @PostMapping("/scan")
+    public Result<Signin> scan(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        String name = body.get("name");
+        String studentNo = body.get("studentNo");
+        if (token == null || name == null || name.isBlank()) {
+            throw new BizException(400, "签到码或姓名不能为空");
+        }
+        return Result.ok(service.scanSignin(token, name.trim(), studentNo));
     }
 
     @DeleteMapping("/{id}")

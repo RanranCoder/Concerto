@@ -2,6 +2,7 @@ package com.pams.module.activity.service;
 
 import com.pams.common.BizException;
 import com.pams.module.activity.dto.SigninRequest;
+import com.pams.module.activity.dto.SigninTokenDTO;
 import com.pams.module.activity.entity.Signin;
 import com.pams.module.activity.repository.SigninRepository;
 import org.springframework.stereotype.Service;
@@ -9,11 +10,68 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class SigninService {
     private final SigninRepository repository;
+    private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
     public SigninService(SigninRepository repository) { this.repository = repository; }
+
+    public static class TokenEntry {
+        private final Long activityId;
+        private final LocalDateTime expiresAt;
+        public TokenEntry(Long activityId, LocalDateTime expiresAt) {
+            this.activityId = activityId;
+            this.expiresAt = expiresAt;
+        }
+        public Long getActivityId() { return activityId; }
+        public LocalDateTime getExpiresAt() { return expiresAt; }
+    }
+
+    /** 生成一次性签到令牌（24h 有效） */
+    public SigninTokenDTO generateToken(Long activityId) {
+        String token = UUID.randomUUID().toString().replace("-", "");
+        TokenEntry entry = new TokenEntry(activityId, LocalDateTime.now().plusHours(24));
+        tokenStore.put(token, entry);
+        SigninTokenDTO dto = new SigninTokenDTO();
+        dto.setToken(token);
+        dto.setActivityId(activityId);
+        dto.setExpiresAt(entry.getExpiresAt());
+        return dto;
+    }
+
+    /** 测试辅助：将 token 置为已过期 */
+    public void forceExpire(String token) {
+        TokenEntry e = tokenStore.get(token);
+        if (e != null) {
+            tokenStore.put(token, new TokenEntry(e.getActivityId(), LocalDateTime.now().minusSeconds(1)));
+        }
+    }
+
+    public Signin scanSignin(String token, String name, String studentNo) {
+        TokenEntry e = tokenStore.get(token);
+        if (e == null) throw new BizException(2302, "签到码无效或已失效");
+        if (e.getExpiresAt().isBefore(LocalDateTime.now())) {
+            tokenStore.remove(token);
+            throw new BizException(2303, "签到码已过期，请刷新");
+        }
+        // 活动必须存在
+        if (!repository.existsById(e.getActivityId())) {
+            tokenStore.remove(token);
+            throw new BizException(2001, "活动不存在");
+        }
+        Signin s = new Signin();
+        s.setActivityId(e.getActivityId());
+        s.setName(name);
+        s.setStudentNo(studentNo);
+        s.setSignType(Signin.SignType.SCAN);
+        s.setSignTime(LocalDateTime.now());
+        s.setCreatedAt(LocalDateTime.now());
+        return repository.save(s);
+    }
 
     public List<Signin> listByActivity(Long activityId, String keyword) {
         if (keyword != null && !keyword.isBlank()) {
