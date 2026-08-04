@@ -6,6 +6,7 @@ import com.pams.module.activity.dto.SigninTokenDTO;
 import com.pams.module.activity.entity.Signin;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.SigninRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +20,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SigninService {
     private final SigninRepository repository;
     private final ActivityRepository activityRepository;
+    private final SigninRosterService rosterService;
     private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
     public SigninService(SigninRepository repository, ActivityRepository activityRepository) {
+        this(repository, activityRepository, null);
+    }
+    @Autowired
+    public SigninService(SigninRepository repository, ActivityRepository activityRepository,
+                         SigninRosterService rosterService) {
         this.repository = repository;
         this.activityRepository = activityRepository;
+        this.rosterService = rosterService;
     }
 
     public static class TokenEntry {
@@ -59,6 +67,35 @@ public class SigninService {
     }
 
     public Signin scanSignin(String token, String name, String studentNo) {
+        return scanSignin(token, name, studentNo, null);
+    }
+
+    /**
+     * 扫码签到（支持核验字段宽松匹配）：
+     * 校验 token/活动 → 构造 Signin（fields 映射到列）→ 若活动有应签名单且匹配到，remark 追加"（应签名单）"→ save。
+     * 不匹配仍签到（宽松策略），仅不加名单标记。
+     */
+    public Signin scanSignin(String token, String name, String studentNo, Map<String, String> fields) {
+        Long activityId = validateAndResolveActivity(token);
+        Signin s = new Signin();
+        s.setActivityId(activityId);
+        s.setName(name);
+        s.setStudentNo(studentNo);
+        if (fields != null) {
+            s.setPhone(fields.get("手机号"));
+            s.setClassName(fields.get("班级"));
+            s.setIdentityType(fields.get("身份"));
+        }
+        s.setSignType(Signin.SignType.SCAN);
+        s.setSignTime(LocalDateTime.now());
+        s.setCreatedAt(LocalDateTime.now());
+        if (rosterService != null && rosterService.isInRoster(activityId, fields)) {
+            s.setRemark("（应签名单）");
+        }
+        return repository.save(s);
+    }
+
+    private Long validateAndResolveActivity(String token) {
         TokenEntry e = tokenStore.get(token);
         if (e == null) throw new BizException(2302, "签到码无效或已失效");
         if (e.getExpiresAt().isBefore(LocalDateTime.now())) {
@@ -70,14 +107,7 @@ public class SigninService {
             tokenStore.remove(token);
             throw new BizException(2001, "活动不存在");
         }
-        Signin s = new Signin();
-        s.setActivityId(e.getActivityId());
-        s.setName(name);
-        s.setStudentNo(studentNo);
-        s.setSignType(Signin.SignType.SCAN);
-        s.setSignTime(LocalDateTime.now());
-        s.setCreatedAt(LocalDateTime.now());
-        return repository.save(s);
+        return e.getActivityId();
     }
 
     public List<Signin> listByActivity(Long activityId, String keyword) {

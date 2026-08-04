@@ -49,19 +49,49 @@ public class SigninController {
         return Result.ok(resp);
     }
 
+    /**
+     * 扫码签到。兼容两种 body：
+     *   旧格式：{token, name, studentNo}（保持向后兼容）
+     *   新格式：{token, fields: {姓名, 学号, 手机号, 班级, 身份}}（支持核验字段动态校验 + 应签名单宽松匹配）
+     */
     @PostMapping("/scan")
-    public Result<Signin> scan(@RequestBody Map<String, String> body) {
-        String token = body.get("token");
-        String name = body.get("name");
-        String studentNo = body.get("studentNo");
-        if (token == null || name == null || name.isBlank()) {
+    public Result<Signin> scan(@RequestBody Map<String, Object> body) {
+        String token = asString(body.get("token"));
+        if (token == null || token.isBlank()) {
+            throw new BizException(400, "签到码不能为空");
+        }
+        // 从 name/studentNo 或 fields 提取，统一拼成 fields Map 交给 service
+        Map<String, String> fields = new HashMap<>();
+        @SuppressWarnings("unchecked")
+        Object rawFields = body.get("fields");
+        if (rawFields instanceof Map) {
+            for (Map.Entry<?, ?> e : ((Map<?, ?>) rawFields).entrySet()) {
+                Object v = e.getValue();
+                if (v != null) fields.put(String.valueOf(e.getKey()), String.valueOf(v));
+            }
+        }
+        String name = nonNullString(fields.get("姓名"), asString(body.get("name")));
+        String studentNo = nonNullString(fields.get("学号"), asString(body.get("studentNo")));
+        if (name == null || name.isBlank()) {
             throw new BizException(400, "签到码或姓名不能为空");
         }
         String trimmed = name.trim();
         if (trimmed.length() > 50) {
             throw new BizException(400, "姓名长度不能超过50个字符");
         }
-        return Result.ok(service.scanSignin(token, trimmed, studentNo));
+        return Result.ok(service.scanSignin(token, trimmed, studentNo, fields));
+    }
+
+    private static String asString(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    /** 取第一个非空值（新格式优先），全空则返回 null */
+    private static String nonNullString(String... vals) {
+        for (String v : vals) {
+            if (v != null && !v.isBlank()) return v.trim();
+        }
+        return null;
     }
 
     @DeleteMapping("/{id}")

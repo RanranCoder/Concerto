@@ -186,6 +186,27 @@ public class SigninRosterService {
         };
     }
 
+    /**
+     * 宽松匹配：扫码提供的 fields 与某应签名单行的所有非空字段值相等即视为命中。
+     * 供 scan 接口使用——命中则标记（remark 加"应签名单"），不命中不拒绝仍签到。
+     */
+    public boolean isInRoster(Long activityId, Map<String, String> fields) {
+        if (fields == null || fields.isEmpty()) return false;
+        for (SigninRoster r : rosterRepo.findByActivityId(activityId)) {
+            Map<String, String> v = parseJson(r.getFieldsJson());
+            boolean anyExpect = false;
+            boolean allMatch = true;
+            for (Map.Entry<String, String> e : v.entrySet()) {
+                String expect = e.getValue();
+                if (expect == null || expect.isEmpty()) continue;
+                anyExpect = true;
+                if (!expect.equals(fields.get(e.getKey()))) { allMatch = false; break; }
+            }
+            if (anyExpect && allMatch) return true;
+        }
+        return false;
+    }
+
     public SigninSummaryVO summary(Long activityId) {
         List<SigninRosterVO> all = listRoster(activityId, "ALL");
         long expected = all.size();
@@ -204,13 +225,19 @@ public class SigninRosterService {
     }
 
     // ===== 手动补签 =====
+    /**
+     * 手动补签（幂等）：对每个名单行，先按姓名+学号查该活动是否已有匹配签到记录，
+     * 已有则跳过，避免重复补签产生重复签到。返回实际补签条数。
+     */
     @Transactional
     public int backfill(Long activityId, List<Long> rosterIds, Long operatorId) {
         int n = 0;
+        List<Signin> existing = signinRepo.findByActivityId(activityId);
         for (Long id : rosterIds) {
             SigninRoster r = rosterRepo.findById(id).orElseThrow(() -> new BizException(2406, "名单行不存在"));
             if (!r.getActivityId().equals(activityId)) throw new BizException(2407, "名单行不属于该活动");
             Map<String, String> v = parseJson(r.getFieldsJson());
+            if (existsSigninFor(existing, v)) continue; // 幂等：已有匹配签到则跳过
             Signin s = new Signin();
             s.setActivityId(activityId);
             s.setName(v.getOrDefault("姓名", ""));
@@ -226,5 +253,10 @@ public class SigninRosterService {
             n++;
         }
         return n;
+    }
+
+    /** 该活动已有签到记录是否命中名单行（按名单行所有非空字段值匹配，同 matches 规则） */
+    private boolean existsSigninFor(List<Signin> signins, Map<String, String> rosterFields) {
+        return signins.stream().anyMatch(s -> matches(s, rosterFields));
     }
 }
