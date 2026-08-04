@@ -39,6 +39,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/ping").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/signins/scan").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/signins/scan-config").permitAll()
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> {

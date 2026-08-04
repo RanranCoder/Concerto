@@ -3,11 +3,14 @@ package com.pams.module.activity;
 import com.pams.common.BizException;
 import com.pams.module.activity.controller.SigninController;
 import com.pams.module.activity.entity.Signin;
+import com.pams.module.activity.entity.SigninFieldConfig;
+import com.pams.module.activity.service.SigninRosterService;
 import com.pams.module.activity.service.SigninService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,12 +28,14 @@ import static org.mockito.Mockito.*;
 class SigninControllerTest {
 
     SigninService service;
+    SigninRosterService rosterService;
     SigninController controller;
 
     @BeforeEach
     void setup() {
         service = mock(SigninService.class);
-        controller = new SigninController(service);
+        rosterService = mock(SigninRosterService.class);
+        controller = new SigninController(service, rosterService);
     }
 
     @Test
@@ -165,5 +170,55 @@ class SigninControllerTest {
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo(400));
         verify(service, never()).scanSignin(any(), any(), any(), anyMap());
+    }
+
+    // ==================== scan-config（扫码落地页公开配置接口） ====================
+
+    @Test
+    void scanConfig_withConfiguredFields_returnsActivityAndFields() {
+        when(service.resolveActivityByToken("tok-1")).thenReturn(10L);
+        SigninFieldConfig f1 = new SigninFieldConfig();
+        f1.setId(1L); f1.setActivityId(10L); f1.setFieldName("姓名"); f1.setFieldKey("name");
+        f1.setRequired(1); f1.setFieldType("TEXT"); f1.setSortOrder(1);
+        SigninFieldConfig f2 = new SigninFieldConfig();
+        f2.setId(2L); f2.setActivityId(10L); f2.setFieldName("手机号"); f2.setFieldKey("phone");
+        f2.setRequired(1); f2.setFieldType("PHONE"); f2.setSortOrder(2);
+        when(rosterService.getFields(10L)).thenReturn(List.of(f1, f2));
+
+        var result = controller.scanConfig("tok-1");
+        assertThat(result.getCode()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.getData();
+        assertThat(data.get("activityId")).isEqualTo(10L);
+        @SuppressWarnings("unchecked")
+        List<SigninFieldConfig> fields = (List<SigninFieldConfig>) data.get("fields");
+        assertThat(fields).hasSize(2);
+        assertThat(fields.get(0).getFieldName()).isEqualTo("姓名");
+        assertThat(fields.get(1).getFieldType()).isEqualTo("PHONE");
+    }
+
+    @Test
+    void scanConfig_withoutConfiguredFields_returnsEmptyFields() {
+        // 活动未配置核验字段 → fields 空数组，前端据此回退默认「姓名+学号」
+        when(service.resolveActivityByToken("tok-2")).thenReturn(20L);
+        when(rosterService.getFields(20L)).thenReturn(List.of());
+
+        var result = controller.scanConfig("tok-2");
+        assertThat(result.getCode()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.getData();
+        assertThat(data.get("activityId")).isEqualTo(20L);
+        assertThat(data.get("fields")).isEqualTo(List.of());
+    }
+
+    @Test
+    void scanConfig_invalidToken_throws() {
+        // 无效/过期 token 直接抛业务异常（2302/2303），不查字段
+        when(service.resolveActivityByToken("bad-token"))
+                .thenThrow(new BizException(2302, "签到码无效或已失效"));
+        assertThatThrownBy(() -> controller.scanConfig("bad-token"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo(2302));
+        verify(rosterService, never()).getFields(anyLong());
     }
 }

@@ -47,8 +47,25 @@ export const countSignins = (activityId: number) =>
 export const generateSigninToken = (activityId: number) =>
   post<SigninToken>('/signins/token', { activityId })
 /** 扫码签到（免登录）：无效/过期 token 由后端返回业务错误，http 拦截层统一提示 */
-export const scanSignin = (data: { token: string; name: string; studentNo?: string }) =>
+export const scanSignin = (data: { token: string; name?: string; studentNo?: string; fields?: Record<string, string> }) =>
   post<SigninVO>('/signins/scan', data)
+
+export interface ScanConfigVO {
+  activityId: number
+  fields: SigninFieldConfigVO[]
+}
+
+/**
+ * 扫码落地页配置（公开、免登录）：按 token 查活动 + 返回该活动核验字段配置。
+ * 活动未配置核验字段时 fields 为空数组，前端据此回退默认「姓名+学号」表单。
+ */
+export const getScanConfig = async (token: string): Promise<ScanConfigVO> => {
+  const data = await get<{ activityId: number; fields: Array<SigninFieldConfigVO & { required?: boolean | number }> }>(
+    '/signins/scan-config',
+    { token },
+  )
+  return { activityId: data.activityId, fields: (data.fields ?? []).map((f) => ({ ...f, required: !!f.required })) }
+}
 
 // ==================== 应签名单 ====================
 

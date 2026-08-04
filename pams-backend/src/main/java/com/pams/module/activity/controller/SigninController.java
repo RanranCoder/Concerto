@@ -4,9 +4,12 @@ import com.pams.common.BizException;
 import com.pams.common.Result;
 import com.pams.module.activity.dto.SigninRequest;
 import com.pams.module.activity.entity.Signin;
+import com.pams.module.activity.entity.SigninFieldConfig;
+import com.pams.module.activity.service.SigninRosterService;
 import com.pams.module.activity.service.SigninService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -17,7 +20,13 @@ import java.util.Map;
 @RequestMapping("/api/signins")
 public class SigninController {
     private final SigninService service;
-    public SigninController(SigninService service) { this.service = service; }
+    private final SigninRosterService rosterService;
+    public SigninController(SigninService service) { this(service, null); }
+    @Autowired
+    public SigninController(SigninService service, SigninRosterService rosterService) {
+        this.service = service;
+        this.rosterService = rosterService;
+    }
 
     @GetMapping
     public Result<List<Signin>> list(@RequestParam Long activityId,
@@ -84,6 +93,22 @@ public class SigninController {
 
     private static String asString(Object o) {
         return o == null ? null : String.valueOf(o);
+    }
+
+    /**
+     * 扫码落地页配置（公开、免登录）：按 token 查活动 + 返回该活动核验字段配置。
+     * 返回 {activityId, fields:[{fieldName,required,fieldType,...}]}；
+     * 活动未配置核验字段时 fields 为空数组，前端据此回退默认「姓名+学号」表单。
+     */
+    @GetMapping("/scan-config")
+    public Result<Map<String, Object>> scanConfig(@RequestParam String token) {
+        Long activityId = service.resolveActivityByToken(token);
+        if (rosterService == null) throw new BizException(500, "服务不可用");
+        List<SigninFieldConfig> fields = rosterService.getFields(activityId);
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("activityId", activityId);
+        resp.put("fields", fields);
+        return Result.ok(resp);
     }
 
     /** 取第一个非空值（新格式优先），全空则返回 null */

@@ -96,16 +96,22 @@ public class SigninService {
     }
 
     private Long validateAndResolveActivity(String token) {
+        Long activityId = resolveActivityByToken(token);
+        // 活动必须存在（用 ActivityRepository 校验真实活动，而非签到的自增 id）
+        if (!activityRepository.existsById(activityId)) {
+            tokenStore.remove(token);
+            throw new BizException(2001, "活动不存在");
+        }
+        return activityId;
+    }
+
+    /** 校验 token 有效并解析活动 id（供公开接口读取核验字段配置，不校验活动存在，返回原始值） */
+    public Long resolveActivityByToken(String token) {
         TokenEntry e = tokenStore.get(token);
         if (e == null) throw new BizException(2302, "签到码无效或已失效");
         if (e.getExpiresAt().isBefore(LocalDateTime.now())) {
             tokenStore.remove(token);
             throw new BizException(2303, "签到码已过期，请刷新");
-        }
-        // 活动必须存在（用 ActivityRepository 校验真实活动，而非签到的自增 id）
-        if (!activityRepository.existsById(e.getActivityId())) {
-            tokenStore.remove(token);
-            throw new BizException(2001, "活动不存在");
         }
         return e.getActivityId();
     }
