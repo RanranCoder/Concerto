@@ -21,9 +21,9 @@ const DEFAULT_FIELDS: Array<{ fieldName: string; fieldKey: string; required: boo
   { fieldName: '学号', fieldKey: 'studentNo', required: false, fieldType: 'TEXT' },
 ]
 
-/** 字段名是否含「姓名」（后端 scan 以 name 落库，字段配置缺姓名时签到必 400） */
+/** 字段名是否精确为「姓名」（后端 scan 以 fields.get("姓名") 精确取键落库，缺姓名时签到必 400） */
 function hasNameField(configs: Array<{ fieldName: string }>): boolean {
-  return configs.some((f) => f?.fieldName?.includes('姓名'))
+  return configs.some((f) => f?.fieldName === '姓名')
 }
 
 /**
@@ -39,7 +39,7 @@ export default function SigninScan() {
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [configured, setConfigured] = useState<SigninFieldConfigVO[] | null>(null)
-  // 活动核验字段配置里缺「姓名」时置 true：避免可渲染但提交必 400，改为表单顶部明确提示（仍可提交，由后端最终拦截）
+  // 活动配置了核验字段但缺「姓名」时置 true：避免可渲染但提交必 400，改为表单顶部明确提示 + 提交前 message.error 拦截
   const [noNameField, setNoNameField] = useState(false)
   const [form] = Form.useForm<ScanFormValues>()
 
@@ -54,7 +54,8 @@ export default function SigninScan() {
       .then((cfg) => {
         if (cancelled) return
         setConfigured(cfg.fields ?? [])
-        setNoNameField(!hasNameField(cfg.fields ?? []))
+        // 空配置回退默认表单（含姓名），不提示不拦截；仅当配置了字段但缺「姓名」时才提示拦截
+        setNoNameField((cfg.fields ?? []).length > 0 && !hasNameField(cfg.fields ?? []))
       })
       .catch(() => {
         if (cancelled) return
