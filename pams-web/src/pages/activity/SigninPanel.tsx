@@ -7,12 +7,19 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import SigninQR from '@/components/signin/SigninQR'
+import SigninRosterUpload from '@/components/signin/SigninRosterUpload'
+import SigninFieldConfig from '@/components/signin/SigninFieldConfig'
+import SigninRosterList from '@/components/signin/SigninRosterList'
+import { useAuthStore } from '@/stores/auth'
 import {
   countSignins,
   createSignin,
   deleteSignin,
   listSignins,
+  rosterSummary,
+  type RosterStatus,
   type SigninSave,
+  type SigninSummaryVO,
   type SigninVO,
 } from '@/api/signin'
 
@@ -60,6 +67,13 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
   const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [form] = Form.useForm()
 
+  // 应签名单：汇总 / 筛选状态 / 刷新信号（上传、字段配置、补签、扫码、手动签到均 bump）
+  const isMinisterOrAbove = (useAuthStore((s) => s.user?.roleLevel) ?? 0) >= 3
+  const [rosterSummaryData, setRosterSummaryData] = useState<SigninSummaryVO | null>(null)
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>('ALL')
+  const [rosterVersion, setRosterVersion] = useState(0)
+  const bumpRoster = () => setRosterVersion((v) => v + 1)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -75,6 +89,27 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
 
   useEffect(() => {
     fetchData()
+  }, [fetchData])
+
+  const fetchRosterSummary = useCallback(async () => {
+    if (!isMinisterOrAbove) return
+    try {
+      setRosterSummaryData(await rosterSummary(activityId))
+    } catch {
+      /* 干事无名单权限，静默 */
+    }
+  }, [activityId, isMinisterOrAbove])
+
+  useEffect(() => {
+    fetchRosterSummary()
+    // rosterVersion 变化时重拉汇总（上传/补签/扫码后人数变化）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchRosterSummary, rosterVersion])
+
+  /** 全量刷新：签到记录 + 应签汇总 + 名单列表（扫码/手动签到/补签后调用） */
+  const refreshAll = useCallback(() => {
+    fetchData()
+    bumpRoster()
   }, [fetchData])
 
   const openCreate = () => {
@@ -100,7 +135,7 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
       await createSignin(payload)
       message.success('已新增签到')
       setModalOpen(false)
-      fetchData()
+      refreshAll()
     } catch {
       /* http 拦截已提示 */
     } finally {
@@ -112,7 +147,7 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
     try {
       await deleteSignin(id)
       message.success('已删除')
-      fetchData()
+      refreshAll()
     } catch {
       /* http 拦截已提示 */
     }
@@ -154,10 +189,43 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
     [],
   )
 
+  const summary = rosterSummaryData
+
   return (
     <div>
+      {/* 应签名单区（仅部长及以上：后端名单/字段/补签接口 @PreAuthorize 部长及以上） */}
+      {isMinisterOrAbove && (
+        <GlassCard style={{ padding: 16, marginBottom: 12 }}>
+          <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Space wrap>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-red)' }}>应签名单</span>
+              <Tag color="red">应签 {summary?.expected ?? 0}</Tag>
+              <Tag color="green">已签 {summary?.signed ?? 0}</Tag>
+              <Tag color="orange">未签 {summary?.unsigned ?? 0}</Tag>
+            </Space>
+            <Space wrap>
+              <SigninFieldConfig activityId={activityId} onChanged={refreshAll} />
+            </Space>
+          </Space>
+
+          <div style={{ marginTop: 12 }}>
+            <SigninRosterUpload activityId={activityId} onUploaded={refreshAll} />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <SigninRosterList
+              activityId={activityId}
+              status={rosterStatus}
+              onStatusChange={setRosterStatus}
+              reloadKey={rosterVersion}
+              onChanged={refreshAll}
+            />
+          </div>
+        </GlassCard>
+      )}
+
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <SigninQR activityId={activityId} active={active} onSigned={fetchData} />
+        <SigninQR activityId={activityId} active={active} onSigned={refreshAll} />
       </GlassCard>
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
