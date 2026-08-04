@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Form, Input, InputNumber, Typography, message } from 'antd'
+import { Alert, Button, Form, Input, InputNumber, Typography, message } from 'antd'
 import { useParams } from 'react-router-dom'
 import { getScanConfig, scanSignin, type SigninFieldConfigVO } from '@/api/signin'
 
@@ -15,11 +15,16 @@ interface ScanFormValues {
   fields: FieldValue[]
 }
 
-/** 活动未配置核验字段时的默认表单：姓名（必填）+ 学号（选填） */
+// 活动未配置核验字段时的默认表单：姓名（必填）+ 学号（选填）
 const DEFAULT_FIELDS: Array<{ fieldName: string; fieldKey: string; required: boolean; fieldType: string }> = [
   { fieldName: '姓名', fieldKey: 'name', required: true, fieldType: 'TEXT' },
   { fieldName: '学号', fieldKey: 'studentNo', required: false, fieldType: 'TEXT' },
 ]
+
+/** 字段名是否含「姓名」（后端 scan 以 name 落库，字段配置缺姓名时签到必 400） */
+function hasNameField(configs: Array<{ fieldName: string }>): boolean {
+  return configs.some((f) => f?.fieldName?.includes('姓名'))
+}
 
 /**
  * 免登录扫码签到落地页（/signin/:token）。
@@ -34,6 +39,8 @@ export default function SigninScan() {
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const [configured, setConfigured] = useState<SigninFieldConfigVO[] | null>(null)
+  // 活动核验字段配置里缺「姓名」时置 true：避免可渲染但提交必 400，改为表单顶部明确提示（仍可提交，由后端最终拦截）
+  const [noNameField, setNoNameField] = useState(false)
   const [form] = Form.useForm<ScanFormValues>()
 
   // 是否按配置动态渲染：未加载完成时为 null → 渲染加载态；加载完成且配置了字段 → true
@@ -47,11 +54,13 @@ export default function SigninScan() {
       .then((cfg) => {
         if (cancelled) return
         setConfigured(cfg.fields ?? [])
+        setNoNameField(!hasNameField(cfg.fields ?? []))
       })
       .catch(() => {
         if (cancelled) return
         // 无效/过期 token：http 拦截已提示；回退默认表单，提交时后端仍会拦截
         setConfigured([])
+        setNoNameField(false)
       })
     return () => {
       cancelled = true
@@ -60,6 +69,11 @@ export default function SigninScan() {
 
   const handleSubmit = async (values: ScanFormValues) => {
     if (!token) return
+    // 字段配置缺「姓名」时提交必 400：提前明确提示，避免用户填写半天后才发现无法签到
+    if (noNameField) {
+      message.error('活动核验字段配置缺少「姓名」字段，请联系管理员在签到页的核验字段配置中补上「姓名」')
+      return
+    }
     setSaving(true)
     try {
       const fields: Record<string, string> = {}
@@ -121,6 +135,15 @@ export default function SigninScan() {
           <div style={{ textAlign: 'center', padding: '24px 0' }}>加载中…</div>
         ) : (
           <Form form={form} layout="vertical" onFinish={handleSubmit}>
+            {noNameField && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="核验字段未配置「姓名」"
+                description="该活动的核验字段缺少「姓名」，当前表单无法完成签到，请联系管理员在签到页的核验字段配置中补上「姓名」。"
+              />
+            )}
             {formItems.map((item) => (
               <Form.Item key={item.name[1]} name={item.name} label={item.label} rules={item.rules}>
                 {item.control}

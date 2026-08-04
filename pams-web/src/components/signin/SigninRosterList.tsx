@@ -28,11 +28,17 @@ interface SigninRosterListProps {
   onChanged: () => void
 }
 
+const EMPTY_TEXT: Record<RosterStatus, string> = {
+  ALL: '尚未上传应签名单',
+  SIGNED: '暂无已签名单',
+  UNSIGNED: '暂无未签名单',
+}
+
 /**
  * 应签名单列表（GlassTable）。
  * 列 = 当前核验字段名（动态，字段配置变化后刷新）+ 状态列（已签绿/未签红 Tag）+ 操作（删除）。
  * 顶部状态筛选由父级传入（全部/已签/未签），未签行可勾选 + 「补签」批量调 backfillSignins。
- * 空态「尚未上传应签名单」。
+ * 空态按筛选状态区分文案：全部 →「尚未上传应签名单」，已签/未签筛选下 →「暂无已签/未签名单」。
  */
 export default function SigninRosterList({ activityId, status, onStatusChange, reloadKey = 0, onChanged }: SigninRosterListProps) {
   const [rows, setRows] = useState<SigninRosterVO[]>([])
@@ -119,7 +125,7 @@ export default function SigninRosterList({ activityId, status, onStatusChange, r
       },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, rows])
+  }, [fields])
 
   return (
     <div>
@@ -150,7 +156,7 @@ export default function SigninRosterList({ activityId, status, onStatusChange, r
           // 已签行不可勾选（补签仅对未签有意义）
           getCheckboxProps: (r) => ({ disabled: r.signed }),
         }}
-        locale={{ emptyText: <Empty description="尚未上传应签名单" /> }}
+        locale={{ emptyText: <Empty description={EMPTY_TEXT[status]} /> }}
       />
     </div>
   )
