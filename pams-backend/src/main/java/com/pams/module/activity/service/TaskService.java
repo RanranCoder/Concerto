@@ -3,7 +3,10 @@ package com.pams.module.activity.service;
 import com.pams.common.BizException;
 import com.pams.module.activity.dto.TaskRequest;
 import com.pams.module.activity.entity.Task;
+import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.TaskRepository;
+import com.pams.module.notification.event.TaskAssignedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,14 +16,32 @@ import java.util.List;
 @Service
 public class TaskService {
     private final TaskRepository repository;
-    public TaskService(TaskRepository repository) { this.repository = repository; }
+    private final ActivityRepository activityRepository;
+    private final ApplicationEventPublisher eventPublisher;
+
+    public TaskService(TaskRepository repository, ActivityRepository activityRepository,
+                       ApplicationEventPublisher eventPublisher) {
+        this.repository = repository;
+        this.activityRepository = activityRepository;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /** 测试友好构造器：eventPublisher 为 null，create 不发布事件。 */
+    public TaskService(TaskRepository repository, ActivityRepository activityRepository) {
+        this(repository, activityRepository, null);
+    }
 
     public List<Task> listByActivity(Long activityId) {
         return repository.findByActivityIdOrderByStartDateAsc(activityId);
     }
 
     @Transactional
-    public Task create(TaskRequest req) {
+    public Task create(TaskRequest req, Long senderId) {
+        // 校验活动是否存在
+        activityRepository.findById(req.getActivityId())
+                .orElseThrow(() -> new BizException(2001, "关联的活动不存在"));
+        // 日期校验
+        validateDates(req);
         Task t = new Task();
         t.setActivityId(req.getActivityId());
         apply(t, req);
@@ -28,12 +49,20 @@ public class TaskService {
         t.setDeleted(0);
         t.setCreatedAt(LocalDateTime.now());
         t.setUpdatedAt(LocalDateTime.now());
-        return repository.save(t);
+        Task saved = repository.save(t);
+        // 发布任务指派事件
+        if (eventPublisher != null && saved.getDeptId() != null) {
+            eventPublisher.publishEvent(new TaskAssignedEvent(
+                    saved.getId(), saved.getActivityId(), saved.getDeptId(),
+                    saved.getName(), senderId));
+        }
+        return saved;
     }
 
     @Transactional
     public void update(Long id, TaskRequest req) {
         Task t = getEntity(id);
+        validateDates(req);
         apply(t, req);
         repository.save(t);
     }
@@ -79,11 +108,23 @@ public class TaskService {
         } else {
             t.setProgress(req.getProgress());
         }
+        // B6 fix: 捕获非法状态值
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            t.setStatus(Task.TaskStatus.valueOf(req.getStatus()));
+            try {
+                t.setStatus(Task.TaskStatus.valueOf(req.getStatus()));
+            } catch (IllegalArgumentException e) {
+                throw new BizException(2009, "无效的任务状态: " + req.getStatus());
+            }
         }
         t.setPriority(req.getPriority() == null ? 0 : req.getPriority());
         t.setDescription(req.getDescription());
         t.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void validateDates(TaskRequest req) {
+        if (req.getStartDate() != null && req.getEndDate() != null
+                && req.getEndDate().isBefore(req.getStartDate())) {
+            throw new BizException(2007, "结束日期不能早于开始日期");
+        }
     }
 }

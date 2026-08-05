@@ -83,7 +83,7 @@ class PlanServiceTest {
         p.setStatus(ActivityPlan.PlanStatus.DRAFT);
         when(repo.findById(4L)).thenReturn(Optional.of(p));
 
-        service.submit(4L);
+        service.submit(4L, null);
 
         assertThat(p.getStatus()).isEqualTo(ActivityPlan.PlanStatus.PENDING);
         verify(repo).save(p);
@@ -96,7 +96,7 @@ class PlanServiceTest {
         p.setStatus(ActivityPlan.PlanStatus.APPROVED);
         when(repo.findById(8L)).thenReturn(Optional.of(p));
 
-        assertThatThrownBy(() -> service.submit(8L))
+        assertThatThrownBy(() -> service.submit(8L, null))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("不可提交审核");
         verify(repo, never()).save(any());
@@ -143,7 +143,7 @@ class PlanServiceTest {
         ActivityRepository activityRepo = mock(ActivityRepository.class);
         when(activityRepo.findById(20L)).thenReturn(Optional.of(a));
 
-        PlanService linked = new PlanService(repo, activityRepo);
+        PlanService linked = new PlanService(repo, activityRepo, null);
         linked.review(10L, true, "ok", 100L);
 
         assertThat(a.getStatus()).isEqualTo(ActivityStatus.PLAN_REVIEW);
@@ -164,7 +164,7 @@ class PlanServiceTest {
         ActivityRepository activityRepo = mock(ActivityRepository.class);
         when(activityRepo.findById(21L)).thenReturn(Optional.of(a));
 
-        PlanService linked = new PlanService(repo, activityRepo);
+        PlanService linked = new PlanService(repo, activityRepo, null);
         linked.review(11L, true, "ok", 100L);
 
         assertThat(a.getStatus()).isEqualTo(ActivityStatus.EXECUTING);
@@ -184,7 +184,7 @@ class PlanServiceTest {
         a.setStatus(ActivityStatus.PLANNING);
         ActivityRepository activityRepo = mock(ActivityRepository.class);
 
-        PlanService linked = new PlanService(repo, activityRepo);
+        PlanService linked = new PlanService(repo, activityRepo, null);
         linked.review(12L, false, "no", 100L);
 
         assertThat(a.getStatus()).isEqualTo(ActivityStatus.PLANNING);
