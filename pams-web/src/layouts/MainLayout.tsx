@@ -19,6 +19,8 @@ import {
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/auth'
 import ThemeSwitch from '@/components/glass/ThemeSwitch'
+import NotificationBell from '@/components/notification/NotificationBell'
+import { NotificationToast } from '@/components/notification/NotificationToast'
 
 const { Sider, Header, Content } = Layout
 
@@ -82,6 +84,7 @@ export default function MainLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
+      <NotificationToast />
       <Sider
         width={220}
         className="glass-card"
@@ -115,6 +118,7 @@ export default function MainLayout() {
           }}
         >
           <ThemeSwitch />
+          <NotificationBell />
           <Dropdown
             menu={{
               items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
