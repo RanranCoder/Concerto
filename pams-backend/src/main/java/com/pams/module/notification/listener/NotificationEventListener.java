@@ -11,28 +11,50 @@ import com.pams.module.notification.service.NotificationService;
 import com.pams.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
 public class NotificationEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventListener.class);
+    private static final String WS_DESTINATION = "/queue/notifications";
 
     private final NotificationService notificationService;
     private final UserRepository userRepo;
     private final ActivityRepository activityRepo;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public NotificationEventListener(NotificationService notificationService,
                                      UserRepository userRepo,
-                                     ActivityRepository activityRepo) {
+                                     ActivityRepository activityRepo,
+                                     SimpMessagingTemplate messagingTemplate) {
         this.notificationService = notificationService;
         this.userRepo = userRepo;
         this.activityRepo = activityRepo;
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    /**
+     * 向指定用户发送 WebSocket 通知信号。
+     * payload 仅包含类型和未读计数，前端收到后调 REST API 刷新。
+     */
+    private void pushToUser(User user) {
+        try {
+            long unread = notificationService.countUnreadForUser(
+                user.getId(), user.getRole().getCode(), user.getDept().getId());
+            messagingTemplate.convertAndSendToUser(
+                user.getUsername(), WS_DESTINATION,
+                Map.of("type", "NEW_NOTIFICATION", "unreadCount", unread));
+        } catch (Exception e) {
+            log.warn("WebSocket 推送失败: username={}", user.getUsername(), e);
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -48,6 +70,7 @@ public class NotificationEventListener {
                     "TASK", event.getTaskId(), event.getSenderId(),
                     member.getId(), null, null
                 );
+                pushToUser(member);
             }
         }
         log.info("TaskAssigned 通知已发送给部门 {} 的 {} 名成员", event.getDeptId(), members.size());
@@ -76,6 +99,20 @@ public class NotificationEventListener {
                 null, role, null
             );
         }
+
+        // 向每个教师/主任发送 WebSocket 信号（去重）
+        Set<Long> alreadyPushed = new java.util.LinkedHashSet<>();
+        for (User u : teachers) {
+            pushToUser(u);
+            alreadyPushed.add(u.getId());
+        }
+        for (User u : directors) {
+            if (!alreadyPushed.contains(u.getId())) {
+                pushToUser(u);
+                alreadyPushed.add(u.getId());
+            }
+        }
+
         log.info("PlanSubmitted 通知已发送给 {} 个角色", roles.size());
     }
 
@@ -93,6 +130,7 @@ public class NotificationEventListener {
                         "PLAN", event.getPlanId(), event.getReviewerId(),
                         user.getId(), null, null
                     );
+                    pushToUser(user);
                 }
             }
             log.info("PlanApproved 通知已发送给 {} 名用户", allUsers.size() - 1);
@@ -105,6 +143,8 @@ public class NotificationEventListener {
                 "PLAN", event.getPlanId(), event.getReviewerId(),
                 event.getSubmitterId(), null, null
             );
+            // 向提交人推送 WebSocket
+            userRepo.findById(event.getSubmitterId()).ifPresent(this::pushToUser);
             log.info("PlanRejected 通知已发送给提交人 {}", event.getSubmitterId());
         }
     }

@@ -1,5 +1,6 @@
 package com.pams.module.notification;
 
+import com.pams.entity.Department;
 import com.pams.entity.Role;
 import com.pams.entity.User;
 import com.pams.module.activity.entity.Activity;
@@ -13,6 +14,7 @@ import com.pams.module.notification.service.NotificationService;
 import com.pams.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,7 @@ class NotificationEventListenerTest {
     NotificationService notificationService;
     UserRepository userRepo;
     ActivityRepository activityRepo;
+    SimpMessagingTemplate messagingTemplate;
     NotificationEventListener listener;
 
     @BeforeEach
@@ -31,15 +34,22 @@ class NotificationEventListenerTest {
         notificationService = mock(NotificationService.class);
         userRepo = mock(UserRepository.class);
         activityRepo = mock(ActivityRepository.class);
-        listener = new NotificationEventListener(notificationService, userRepo, activityRepo);
+        messagingTemplate = mock(SimpMessagingTemplate.class);
+        // 默认 countUnreadForUser 返回 0，避免 WebSocket 推送 NPE
+        when(notificationService.countUnreadForUser(anyLong(), anyString(), anyLong())).thenReturn(0L);
+        listener = new NotificationEventListener(notificationService, userRepo, activityRepo, messagingTemplate);
     }
 
     private User userWithIdAndRole(Long id, String roleCode) {
         User user = new User();
         user.setId(id);
+        user.setUsername("user" + id);
         Role role = new Role();
         role.setCode(roleCode);
         user.setRole(role);
+        Department dept = new Department();
+        dept.setId(1L);
+        user.setDept(dept);
         return user;
     }
 
@@ -139,6 +149,8 @@ class NotificationEventListenerTest {
 
     @Test
     void handlePlanRejected_notifiesSubmitterOnly() {
+        User submitter = userWithIdAndRole(5L, "MEMBER");
+        when(userRepo.findById(5L)).thenReturn(Optional.of(submitter));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanReviewed(new PlanReviewedEvent(
@@ -148,10 +160,14 @@ class NotificationEventListenerTest {
             eq(NotificationType.PLAN_REJECTED), anyString(), contains("内容不完整"),
             eq("PLAN"), eq(1L), eq(11L), eq(5L), isNull(), isNull()
         );
+        // 验证 WebSocket 推送给提交人
+        verify(messagingTemplate).convertAndSendToUser(eq("user5"), eq("/queue/notifications"), any());
     }
 
     @Test
     void handlePlanRejected_nullComment_noReasonAppended() {
+        User submitter = userWithIdAndRole(5L, "MEMBER");
+        when(userRepo.findById(5L)).thenReturn(Optional.of(submitter));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanReviewed(new PlanReviewedEvent(
