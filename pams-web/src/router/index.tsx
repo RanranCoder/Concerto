@@ -29,6 +29,7 @@ const Credits = lazy(() => import('@/pages/archive/CreditList'))
 const Announcements = lazy(() => import('@/pages/archive/AnnouncementList'))
 const GroupChats = lazy(() => import('@/pages/archive/GroupChatList'))
 const Users = lazy(() => import('@/pages/admin/UserList'))
+const PermissionManage = lazy(() => import('@/pages/admin/PermissionManage'))
 const Settings = lazy(() => import('@/pages/admin/Settings'))
 const NotificationList = lazy(() => import('@/pages/notification/NotificationList'))
 
@@ -90,6 +91,8 @@ export const router = createBrowserRouter([
 
       // 用户管理：简报"主任+额外显示用户管理"，前端仅主任/指导老师可访问
       { path: '/admin/users', element: <RequireRole roles={ADMIN_ROLES}><Users /></RequireRole> },
+      // 权限管理：指导老师（PRD F07.2，后端 @PreAuthorize 仅 TEACHER 可读写）
+      { path: '/admin/permissions', element: <RequireRole roles={ADMIN_ROLES}><PermissionManage /></RequireRole> },
       // 系统设置：仅主任/指导老师可访问
       { path: '/admin/settings', element: <RequireRole roles={ADMIN_ROLES}><Settings /></RequireRole> },
 

@@ -5,6 +5,9 @@ import com.pams.common.PageResult;
 import com.pams.module.content.dto.NewsRequest;
 import com.pams.module.content.entity.News;
 import com.pams.module.content.repository.NewsRepository;
+import com.pams.module.notification.event.ContentUploadedEvent;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,7 +21,17 @@ import java.util.Map;
 @Service
 public class NewsService {
     private final NewsRepository repository;
-    public NewsService(NewsRepository repository) { this.repository = repository; }
+    private final ApplicationEventPublisher eventPublisher;
+
+    public NewsService(NewsRepository repository) {
+        this(repository, null);
+    }
+
+    @Autowired
+    public NewsService(NewsRepository repository, ApplicationEventPublisher eventPublisher) {
+        this.repository = repository;
+        this.eventPublisher = eventPublisher;
+    }
 
     public PageResult<Map<String, Object>> page(String keyword, int page, int size) {
         Page<News> p = repository.findAll((root, q, cb) -> {
@@ -63,7 +76,13 @@ public class NewsService {
         n.setDeleted(0);
         n.setCreatedAt(LocalDateTime.now());
         n.setUpdatedAt(LocalDateTime.now());
-        return repository.save(n);
+        News saved = repository.save(n);
+        // 链路3：新闻稿上传 → 通知各部长（上传者本人除外）
+        if (eventPublisher != null && authorId != null) {
+            eventPublisher.publishEvent(new ContentUploadedEvent(
+                    saved.getId(), saved.getActivityId(), saved.getTitle(), "NEWS", authorId));
+        }
+        return saved;
     }
 
     @Transactional

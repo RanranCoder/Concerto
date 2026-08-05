@@ -198,4 +198,19 @@ public class UserService {
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
     }
+
+    /** 当前用户自行修改密码：校验旧密码 + 新密码长度 */
+    @Transactional
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User u = userRepository.findById(userId).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        if (!passwordEncoder.matches(oldPassword, u.getPassword())) {
+            throw new BizException(1009, "旧密码不正确");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BizException(1010, "新密码长度不能少于 6 位");
+        }
+        u.setPassword(passwordEncoder.encode(newPassword));
+        u.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(u);
+    }
 }

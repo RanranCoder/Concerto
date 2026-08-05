@@ -4,8 +4,12 @@ import com.pams.entity.User;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.notification.entity.NotificationType;
+import com.pams.module.notification.event.ContentUploadedEvent;
+import com.pams.module.notification.event.PlanEditedEvent;
 import com.pams.module.notification.event.PlanReviewedEvent;
 import com.pams.module.notification.event.PlanSubmittedEvent;
+import com.pams.module.notification.event.SigninCompletedEvent;
+import com.pams.module.notification.event.SigninRosterUploadedEvent;
 import com.pams.module.notification.event.TaskAssignedEvent;
 import com.pams.module.notification.service.NotificationService;
 import com.pams.repository.UserRepository;
@@ -25,6 +29,12 @@ public class NotificationEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventListener.class);
     private static final String WS_DESTINATION = "/queue/notifications";
+    /** 链路1「通知所有部门（部长+主任）」的目标角色集合 */
+    private static final Set<String> ALL_LEADER_ROLES = Set.of(
+            "ORG_LEADER", "SECRETARY_LEADER", "MEDIA_LEADER", "TECH_LEADER", "TEACHER", "DIRECTOR");
+    /** 链路3/4「通知所有部长角色」的目标角色集合 */
+    private static final Set<String> DEPT_LEADER_ROLES = Set.of(
+            "ORG_LEADER", "SECRETARY_LEADER", "MEDIA_LEADER", "TECH_LEADER");
 
     private final NotificationService notificationService;
     private final UserRepository userRepo;
@@ -150,6 +160,134 @@ public class NotificationEventListener {
             // 向提交人推送 WebSocket
             userRepo.findById(event.getSubmitterId()).ifPresent(this::pushToUser);
             log.info("PlanRejected 通知已发送给提交人 {}", event.getSubmitterId());
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handlePlanEdited(PlanEditedEvent event) {
+        String activityName = getActivityName(event.getActivityId());
+        java.util.Optional<User> editor = userRepo.findById(event.getEditorId());
+        String editorName = editor.map(User::getRealName).orElse("某用户");
+        boolean isDirector = editor.map(u -> "DIRECTOR".equals(u.getRole().getCode())).orElse(false);
+        if (isDirector) {
+            // 链路2：主任修改策划书 → 通知组织部全员
+            List<User> orgLeaders = userRepo.findByRoleCode("ORG_LEADER");
+            for (User u : orgLeaders) {
+                if (!u.getId().equals(event.getEditorId())) {
+                    notificationService.createAndSave(
+                        NotificationType.PLAN_MODIFIED,
+                        "策划书已修改",
+                        "主任修改了《" + activityName + "》策划书",
+                        "PLAN", event.getPlanId(), event.getEditorId(),
+                        u.getId(), null, null
+                    );
+                    pushToUser(u);
+                }
+            }
+            log.info("PlanEdited(主任) 通知已发送给组织部 {} 名成员", orgLeaders.size());
+        } else {
+            // 链路1：策划书编辑完成 → 通知所有部门（部长+主任），排除编辑者本人
+            Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
+            editor.ifPresent(u -> roles.remove(u.getRole().getCode()));
+            broadcastToRoles(
+                NotificationType.PLAN_MODIFIED,
+                "策划书待审核",
+                editorName + " 已完成《" + activityName + "》策划书编辑，请审核",
+                "PLAN", event.getPlanId(), event.getEditorId(), roles);
+            log.info("PlanEdited 通知已发送给 {} 个角色", roles.size());
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleContentUploaded(ContentUploadedEvent event) {
+        String activityName = getActivityName(event.getActivityId());
+        String label = "NEWS".equals(event.getContentType()) ? "新闻稿" : "推文";
+        Set<String> roles = new java.util.LinkedHashSet<>(DEPT_LEADER_ROLES);
+        userRepo.findById(event.getUploaderId()).ifPresent(u -> roles.remove(u.getRole().getCode()));
+        broadcastToRoles(
+            NotificationType.NEWS_UPLOADED,
+            label + "已上传",
+            label + "「" + event.getTitle() + "」已上传（活动：" + activityName + "），请审核",
+            event.getContentType(), event.getContentId(), event.getUploaderId(), roles);
+        log.info("ContentUploaded 通知已发送给 {} 个角色", roles.size());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleSigninRosterUploaded(SigninRosterUploadedEvent event) {
+        String activityName = getActivityName(event.getActivityId());
+        // 通知活动创建者（排除上传者本人）
+        activityRepo.findById(event.getActivityId())
+            .map(Activity::getCreatedBy)
+            .filter(creatorId -> creatorId != null && !creatorId.equals(event.getUploaderId()))
+            .ifPresent(creatorId -> {
+                notificationService.createAndSave(
+                    NotificationType.SIGNIN_ROSTER_UPLOADED,
+                    "签到表已上传",
+                    "《" + activityName + "》签到表已上传",
+                    "SIGNIN", event.getActivityId(), event.getUploaderId(),
+                    creatorId, null, null
+                );
+                userRepo.findById(creatorId).ifPresent(this::pushToUser);
+            });
+        // 通知各部长
+        Set<String> roles = new java.util.LinkedHashSet<>(DEPT_LEADER_ROLES);
+        userRepo.findById(event.getUploaderId()).ifPresent(u -> roles.remove(u.getRole().getCode()));
+        broadcastToRoles(
+            NotificationType.SIGNIN_ROSTER_UPLOADED,
+            "签到表已上传",
+            "《" + activityName + "》签到表已上传",
+            "SIGNIN", event.getActivityId(), event.getUploaderId(), roles);
+        log.info("SigninRosterUploaded 通知已发送，activityId={}", event.getActivityId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleSigninCompleted(SigninCompletedEvent event) {
+        String activityName = getActivityName(event.getActivityId());
+        String content = "《" + activityName + "》签到已完成，共 " + event.getSigned() + "/" + event.getExpected() + " 人";
+        // 通知活动创建者
+        activityRepo.findById(event.getActivityId())
+            .map(Activity::getCreatedBy)
+            .filter(creatorId -> creatorId != null)
+            .ifPresent(creatorId -> {
+                notificationService.createAndSave(
+                    NotificationType.SIGNIN_COMPLETED,
+                    "签到已完成",
+                    content,
+                    "SIGNIN", event.getActivityId(), null,
+                    creatorId, null, null
+                );
+                userRepo.findById(creatorId).ifPresent(this::pushToUser);
+            });
+        // 通知各部长
+        broadcastToRoles(
+            NotificationType.SIGNIN_COMPLETED,
+            "签到已完成",
+            content,
+            "SIGNIN", event.getActivityId(), null, DEPT_LEADER_ROLES);
+        log.info("SigninCompleted 通知已发送，activityId={}", event.getActivityId());
+    }
+
+    /**
+     * 按角色集合广播：每个角色写一条 recipientRole 通知，并向各角色下的用户推 WebSocket（排除发送者本人）。
+     */
+    private void broadcastToRoles(NotificationType type, String title, String content,
+                                  String entityType, Long entityId, Long senderId,
+                                  Set<String> roles) {
+        for (String role : roles) {
+            notificationService.createAndSave(
+                type, title, content, entityType, entityId, senderId, null, role, null);
+        }
+        Set<Long> pushed = new java.util.LinkedHashSet<>();
+        if (senderId != null) {
+            pushed.add(senderId);
+        }
+        for (String role : roles) {
+            for (User u : userRepo.findByRoleCode(role)) {
+                if (!pushed.contains(u.getId())) {
+                    pushToUser(u);
+                    pushed.add(u.getId());
+                }
+            }
         }
     }
 

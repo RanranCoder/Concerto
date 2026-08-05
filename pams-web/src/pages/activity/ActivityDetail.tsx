@@ -64,6 +64,8 @@ import PagedWordPreview from '@/components/word/PagedWordPreview'
 import { agendaToDocx, docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
+import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'
+import { getActivitySeatLayout, type SeatLayoutVO } from '@/api/seatLayout'
 import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
 
@@ -685,7 +687,9 @@ function AgendaTab({ activityId }: { activityId: number }) {
 
 function SeatTab({ activityId }: { activityId: number }) {
   const [zones, setZones] = useState<Record<string, SeatMapVO[]>>({})
-  const [view, setView] = useState<'matrix' | 'excel'>('matrix')
+  const [view, setView] = useState<'visual' | 'matrix' | 'excel'>('visual')
+  const [layout, setLayout] = useState<SeatLayoutVO | null>(null)
+  const [layoutLoaded, setLayoutLoaded] = useState(false)
   // 图例：localStorage pams_seat_legend_{activityId} 缓存优先；无缓存则等 seats 加载后按现有 seatType 自动分配默认色
   const [legend, setLegend] = useState<Record<string, string>>(() => {
     try {
@@ -719,9 +723,20 @@ function SeatTab({ activityId }: { activityId: number }) {
     }
   }, [activityId])
 
+  const fetchLayout = useCallback(async () => {
+    try {
+      setLayout(await getActivitySeatLayout(activityId))
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setLayoutLoaded(true)
+    }
+  }, [activityId])
+
   useEffect(() => {
     fetchZones()
-  }, [fetchZones])
+    fetchLayout()
+  }, [fetchZones, fetchLayout])
 
   /** 全部座位（跨 zone 展平），供矩阵视图与 Excel 编辑共用 */
   const allSeats = useMemo<SeatMapVO[]>(() => Object.values(zones).flat(), [zones])
@@ -831,12 +846,21 @@ function SeatTab({ activityId }: { activityId: number }) {
           新增座位
         </Button>
         <Radio.Group value={view} onChange={(e) => setView(e.target.value)}>
+          <Radio.Button value="visual">可视化编辑</Radio.Button>
           <Radio.Button value="matrix">图表视图</Radio.Button>
           <Radio.Button value="excel">Excel 编辑</Radio.Button>
         </Radio.Group>
       </Space>
 
-      {view === 'matrix' ? (
+      {view === 'visual' ? (
+        layoutLoaded ? (
+          <SeatLayoutEditor value={layout} activityId={activityId} onSaved={fetchLayout} />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        )
+      ) : view === 'matrix' ? (
         <SeatMapView seats={allSeats} legend={legend} onSelect={openEdit} />
       ) : (
         <SeatExcelEditor seats={allSeats} legend={legend} onChangeLegend={handleLegendChange} onChangeSeats={handleExcelChange} />

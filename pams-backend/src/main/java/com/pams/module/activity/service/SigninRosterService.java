@@ -19,11 +19,14 @@ import com.pams.module.activity.repository.SignInGroupRepository;
 import com.pams.module.activity.repository.SigninFieldConfigRepository;
 import com.pams.module.activity.repository.SigninRepository;
 import com.pams.module.activity.repository.SigninRosterRepository;
+import com.pams.module.notification.event.SigninRosterUploadedEvent;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,18 +43,29 @@ public class SigninRosterService {
     private final ActivityRepository activityRepo;
     private final SignInGroupRepository groupRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ApplicationEventPublisher eventPublisher;
 
     public SigninRosterService(SigninRosterRepository rosterRepo, SigninFieldConfigRepository fieldRepo,
                                SigninRepository signinRepo, ActivityRepository activityRepo) {
-        this(rosterRepo, fieldRepo, signinRepo, activityRepo, null);
+        this(rosterRepo, fieldRepo, signinRepo, activityRepo, null, null);
     }
 
     @Autowired
     public SigninRosterService(SigninRosterRepository rosterRepo, SigninFieldConfigRepository fieldRepo,
                                SigninRepository signinRepo, ActivityRepository activityRepo,
-                               SignInGroupRepository groupRepo) {
+                               SignInGroupRepository groupRepo,
+                               ApplicationEventPublisher eventPublisher) {
         this.rosterRepo = rosterRepo; this.fieldRepo = fieldRepo; this.signinRepo = signinRepo;
         this.activityRepo = activityRepo; this.groupRepo = groupRepo;
+        this.eventPublisher = eventPublisher;
+    }
+
+    private Long currentUserId() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.pams.security.LoginUser loginUser) {
+            return loginUser.getId();
+        }
+        return null;
     }
 
     // ===== 核验字段配置 =====
@@ -149,6 +163,10 @@ public class SigninRosterService {
             throw new BizException(2403, "Excel 解析失败");
         }
         rosterRepo.saveAll(toSave);
+        // 链路4：签到表上传 → 通知活动创建者+各部长（上传者本人除外）
+        if (eventPublisher != null && !toSave.isEmpty()) {
+            eventPublisher.publishEvent(new SigninRosterUploadedEvent(activityId, currentUserId()));
+        }
         Map<String, Integer> res = new HashMap<>();
         res.put("added", toSave.size());
         res.put("skipped", skipped);

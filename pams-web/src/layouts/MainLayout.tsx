@@ -1,7 +1,7 @@
-import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin } from 'antd'
+import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin, Form, Input, Button, message } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Suspense, useMemo, startTransition } from 'react'
+import { Suspense, useMemo, startTransition, useState } from 'react'
 import {
   BellOutlined,
   CalendarOutlined,
@@ -9,6 +9,7 @@ import {
   FileTextOutlined,
   FolderOutlined,
   IdcardOutlined,
+  LockOutlined,
   LogoutOutlined,
   ScheduleOutlined,
   TagsOutlined,
@@ -21,6 +22,8 @@ import { useAuthStore } from '@/stores/auth'
 import ThemeSwitch from '@/components/glass/ThemeSwitch'
 import NotificationBell from '@/components/notification/NotificationBell'
 import { NotificationToast } from '@/components/notification/NotificationToast'
+import GlassModal from '@/components/glass/GlassModal'
+import { changePassword } from '@/api/permission'
 
 const { Sider, Header, Content } = Layout
 
@@ -29,6 +32,27 @@ export default function MainLayout() {
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
   const location = useLocation()
+
+  // 修改密码弹窗
+  const [pwdOpen, setPwdOpen] = useState(false)
+  const [pwdSaving, setPwdSaving] = useState(false)
+  const [pwdForm] = Form.useForm<{ oldPassword: string; newPassword: string; confirm: string }>()
+
+  const handleChangePassword = async () => {
+    const values = await pwdForm.validateFields()
+    setPwdSaving(true)
+    try {
+      await changePassword(values.oldPassword, values.newPassword)
+      message.success('密码已修改，请重新登录')
+      setPwdOpen(false)
+      logout()
+      startTransition(() => navigate('/login', { replace: true }))
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setPwdSaving(false)
+    }
+  }
 
   // 菜单按角色过滤（Task 26）：
   // - 干事：仪表盘 / 活动管理 / 排班考勤 / 材料库
@@ -69,14 +93,24 @@ export default function MainLayout() {
       })
     }
     if (isAdmin) {
-      items.push({ key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> })
+      items.push({
+        key: 'admin',
+        label: '用户与权限',
+        icon: <TeamOutlined />,
+        children: [
+          { key: '/admin/users', label: '用户管理' },
+          // 权限管理仅指导老师（PRD F07.2），主任隐藏入口避免 403
+          ...(roleCode === 'TEACHER' ? [{ key: '/admin/permissions', label: '权限管理' }] : []),
+        ],
+      })
       items.push({ key: '/admin/settings', label: '系统设置', icon: <SettingOutlined /> })
     }
     return items
   }, [user?.roleCode, user?.roleLevel])
 
   // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传子菜单项；
-  // /archive/* → 材料库；/admin/users → 用户管理、/admin/settings → 系统设置；/activities/* → 活动管理。
+  // /archive/* → 材料库；/admin/users → 用户管理、/admin/permissions → 权限管理、
+  // /admin/settings → 系统设置；/activities/* → 活动管理。
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
@@ -89,6 +123,7 @@ export default function MainLayout() {
     if (p.startsWith('/archive/group-chats')) return '/archive/group-chats'
     if (p.startsWith('/archive')) return '/archive/materials'
     if (p === '/admin/users') return '/admin/users'
+    if (p === '/admin/permissions') return '/admin/permissions'
     if (p === '/admin/settings') return '/admin/settings'
     if (p.startsWith('/activities')) return '/activities'
     return p
@@ -133,9 +168,15 @@ export default function MainLayout() {
           <NotificationBell />
           <Dropdown
             menu={{
-              items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
+              items: [
+                { key: 'change-pwd', icon: <LockOutlined />, label: '修改密码' },
+                { type: 'divider' },
+                { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+              ],
               onClick: ({ key }) => {
-                if (key === 'logout') {
+                if (key === 'change-pwd') {
+                  setPwdOpen(true)
+                } else if (key === 'logout') {
                   logout()
                   startTransition(() => navigate('/login', { replace: true }))
                 }
@@ -163,6 +204,57 @@ export default function MainLayout() {
           </Suspense>
         </Content>
       </Layout>
+
+      {/* 修改密码弹窗 */}
+      <GlassModal
+        title="修改密码"
+        open={pwdOpen}
+        onCancel={() => setPwdOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setPwdOpen(false)}>取消</Button>
+            <Button type="primary" loading={pwdSaving} onClick={handleChangePassword}>
+              确认修改
+            </Button>
+          </Space>
+        }
+      >
+        <Form form={pwdForm} layout="vertical">
+          <Form.Item
+            name="oldPassword"
+            label="当前密码"
+            rules={[{ required: true, message: '请输入当前密码' }]}
+          >
+            <Input.Password autoComplete="current-password" placeholder="请输入当前密码" />
+          </Form.Item>
+          <Form.Item
+            name="newPassword"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 6, message: '新密码长度不能少于 6 位' },
+            ]}
+          >
+            <Input.Password autoComplete="new-password" placeholder="至少 6 位" />
+          </Form.Item>
+          <Form.Item
+            name="confirm"
+            label="确认新密码"
+            dependencies={['newPassword']}
+            rules={[
+              { required: true, message: '请再次输入新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('newPassword') === value) return Promise.resolve()
+                  return Promise.reject(new Error('两次输入的新密码不一致'))
+                },
+              }),
+            ]}
+          >
+            <Input.Password autoComplete="new-password" placeholder="再次输入新密码" />
+          </Form.Item>
+        </Form>
+      </GlassModal>
     </Layout>
   )
 }

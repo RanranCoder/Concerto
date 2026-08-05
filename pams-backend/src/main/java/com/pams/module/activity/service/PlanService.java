@@ -7,6 +7,7 @@ import com.pams.module.activity.entity.ActivityPlan;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.repository.ActivityPlanRepository;
 import com.pams.module.activity.repository.ActivityRepository;
+import com.pams.module.notification.event.PlanEditedEvent;
 import com.pams.module.notification.event.PlanReviewedEvent;
 import com.pams.module.notification.event.PlanSubmittedEvent;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,11 @@ public class PlanService {
 
     @Transactional
     public void update(Long id, PlanRequest req) {
+        update(id, req, null);
+    }
+
+    @Transactional
+    public void update(Long id, PlanRequest req, Long editorId) {
         ActivityPlan p = getEntity(id);
         // L4 fix: PENDING 状态也不可修改（TOCTOU），加上 APPROVED
         if (p.getStatus() == ActivityPlan.PlanStatus.APPROVED
@@ -77,6 +83,15 @@ public class PlanService {
         }
         apply(p, req);
         repository.save(p);
+        // 发布策划书编辑事件（链路1：通知各部门；链路2：主任修改时通知组织部）
+        if (eventPublisher != null && editorId != null) {
+            String planTitle = activityRepository != null
+                    ? activityRepository.findById(p.getActivityId())
+                        .map(Activity::getName).orElse("未知活动")
+                    : "未知活动";
+            eventPublisher.publishEvent(new PlanEditedEvent(
+                    p.getId(), p.getActivityId(), planTitle, editorId));
+        }
     }
 
     @Transactional

@@ -1,7 +1,9 @@
 package com.pams.module.user;
 
+import com.pams.common.BizException;
 import com.pams.common.Result;
 import com.pams.entity.Role;
+import com.pams.module.user.dto.ChangePasswordRequest;
 import com.pams.module.user.dto.UserSaveRequest;
 import com.pams.repository.RoleRepository;
 import com.pams.security.LoginUser;
@@ -72,6 +74,17 @@ public class UserController {
     @PostMapping("/{id}/reset-password")
     public Result<Void> resetPassword(@PathVariable Long id) {
         userService.resetPassword(id);
+        return Result.ok();
+    }
+
+    /** 当前登录用户自行修改密码（头像下拉入口） */
+    @PostMapping("/change-password")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest req,
+                                       @AuthenticationPrincipal LoginUser current) {
+        if (current == null) {
+            throw new BizException(401, "未登录");
+        }
+        userService.changePassword(current.getId(), req.getOldPassword(), req.getNewPassword());
         return Result.ok();
     }
 }

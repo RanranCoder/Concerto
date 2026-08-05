@@ -5,6 +5,9 @@ import com.pams.common.PageResult;
 import com.pams.module.content.dto.ArticleRequest;
 import com.pams.module.content.entity.Article;
 import com.pams.module.content.repository.ArticleRepository;
+import com.pams.module.notification.event.ContentUploadedEvent;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,7 +21,17 @@ import java.util.Map;
 @Service
 public class ArticleService {
     private final ArticleRepository repository;
-    public ArticleService(ArticleRepository repository) { this.repository = repository; }
+    private final ApplicationEventPublisher eventPublisher;
+
+    public ArticleService(ArticleRepository repository) {
+        this(repository, null);
+    }
+
+    @Autowired
+    public ArticleService(ArticleRepository repository, ApplicationEventPublisher eventPublisher) {
+        this.repository = repository;
+        this.eventPublisher = eventPublisher;
+    }
 
     public PageResult<Map<String, Object>> page(String status, String type, String keyword, int page, int size) {
         Page<Article> p = repository.findAll((root, q, cb) -> {
@@ -78,7 +91,13 @@ public class ArticleService {
         a.setDeleted(0);
         a.setCreatedAt(LocalDateTime.now());
         a.setUpdatedAt(LocalDateTime.now());
-        return repository.save(a);
+        Article saved = repository.save(a);
+        // 链路3：推文上传 → 通知各部长（上传者本人除外）
+        if (eventPublisher != null && authorId != null) {
+            eventPublisher.publishEvent(new ContentUploadedEvent(
+                    saved.getId(), saved.getActivityId(), saved.getTitle(), "ARTICLE", authorId));
+        }
+        return saved;
     }
 
     @Transactional

@@ -38,8 +38,9 @@ public class PlanController {
 
     @PreAuthorize(LEADER)
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PlanRequest req) {
-        service.update(id, req);
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PlanRequest req,
+                               @AuthenticationPrincipal LoginUser current) {
+        service.update(id, req, current == null ? null : current.getId());
         return Result.ok();
     }
 

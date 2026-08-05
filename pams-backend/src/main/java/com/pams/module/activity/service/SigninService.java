@@ -2,17 +2,21 @@ package com.pams.module.activity.service;
 
 import com.pams.common.BizException;
 import com.pams.module.activity.dto.SigninRequest;
+import com.pams.module.activity.dto.SigninSummaryVO;
 import com.pams.module.activity.dto.SigninTokenDTO;
 import com.pams.module.activity.entity.Signin;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.SigninRepository;
+import com.pams.module.notification.event.SigninCompletedEvent;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,14 +25,23 @@ public class SigninService {
     private final SigninRepository repository;
     private final ActivityRepository activityRepository;
     private final SigninRosterService rosterService;
+    private final ApplicationEventPublisher eventPublisher;
     private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
+    /** 已发"签到完成"通知的活动（内存去重，重启即清空） */
+    private final Set<Long> completedNotified = ConcurrentHashMap.newKeySet();
+
+    public SigninService(SigninRepository repository, ActivityRepository activityRepository,
+                         SigninRosterService rosterService) {
+        this(repository, activityRepository, rosterService, null);
+    }
 
     @Autowired
     public SigninService(SigninRepository repository, ActivityRepository activityRepository,
-                         SigninRosterService rosterService) {
+                         SigninRosterService rosterService, ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.activityRepository = activityRepository;
         this.rosterService = rosterService;
+        this.eventPublisher = eventPublisher;
     }
 
     public static class TokenEntry {
@@ -90,7 +103,25 @@ public class SigninService {
         if (rosterService != null && rosterService.isInRoster(activityId, fields)) {
             s.setRemark("（应签名单）");
         }
-        return repository.save(s);
+        Signin saved = repository.save(s);
+        maybeNotifyCompleted(activityId);
+        return saved;
+    }
+
+    /**
+     * 签到完成后通知（链路4）：有应签名单且实到达到应签人数时，发一次 SIGNIN_COMPLETED 事件。
+     * 用内存 Set 去重，避免后续超额扫码重复触发。无名单/未达人数时不发。
+     */
+    private void maybeNotifyCompleted(Long activityId) {
+        if (eventPublisher == null || rosterService == null) {
+            return;
+        }
+        SigninSummaryVO summary = rosterService.summary(activityId);
+        long expected = summary.getExpected();
+        long signed = summary.getSigned();
+        if (expected > 0 && signed >= expected && completedNotified.add(activityId)) {
+            eventPublisher.publishEvent(new SigninCompletedEvent(activityId, signed, expected));
+        }
     }
 
     private Long validateAndResolveActivity(String token) {
