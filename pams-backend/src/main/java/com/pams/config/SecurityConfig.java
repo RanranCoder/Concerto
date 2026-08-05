@@ -13,6 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.core.annotation.Order;
 
 @Configuration
 @EnableMethodSecurity
@@ -31,6 +32,17 @@ public class SecurityConfig {
         return cfg.getAuthenticationManager();
     }
 
+    /** WebSocket 路径完全跳过 Spring Security 过滤链 */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain wsFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatchers(m -> m.requestMatchers("/ws", "/ws/**"))
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .csrf(c -> c.disable())
+            .cors(c -> c.disable());
+        return http.build();
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(c -> c.disable())
@@ -38,7 +50,6 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/ping").permitAll()
-                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/signins/scan").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/signins/scan-config").permitAll()
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
