@@ -1,6 +1,6 @@
 # 批次 D 设计文档：策划书在线 Word 编辑器（wangEditor 5）改造
 
-日期：2026-08-05 · 状态：待评审 · 关联 PRD：策划书编辑器（既有能力）、F09 消息通知触发点 #1/#4
+日期：2026-08-05 · 状态：**已确认（用户 2026-08-05 拍板：含章节增删重排；只读章节可编辑且回显到活动基本信息；图片用现有文件上传）** · 关联 PRD：策划书编辑器（既有能力）、F09 消息通知触发点 #1/#4
 
 ## 1. 背景与目标
 
@@ -33,12 +33,14 @@
 
 ### 2.2 章节模板与自由编辑的平衡
 
-用户要求「给足自由度」，但既有 12 节模板是业务惯例（参考真实策划书 docx）。方案：
+用户要求「给足自由度」，且已确认**本期做完整版**：
 
 1. **默认仍按 12 节骨架渲染**，但每节正文是自由富文本（wangEditor 实例）。
-2. **放开节名编辑**：保留现有「双击节名重命名」交互，并新增「新增章节」「删除章节」「上移/下移章节」能力。
-3. **只读章节（活动名称/主题/时间/地点/组织单位/对象）改为可覆盖**：默认显示 meta 填充值，用户可改为自由编辑文本（存 planFields 对应新字段或并入 content）。
-   - **简化决策**：为避免数据模型大改，只读章节改为「可编辑但默认预填 meta 值」，编辑结果存回对应新字段（新增 6 个可选列，见 §3 数据模型）。
+2. **章节可增删重排**：支持「新增章节」「删除章节」「上移/下移章节」，章节顺序与自定义节名存 `section_order` 列。
+3. **只读章节（活动名称/主题/时间/地点/组织单位/对象）改为可编辑**：默认预填 meta 值，用户可改。
+4. **编辑回显**：只读章节的编辑结果**自动回写活动基本信息**——即用户改策划书里的活动名称/主题/时间/地点/组织单位/对象，保存后同步更新 `activity` 表对应字段（name/theme/startDate/endDate/location/organizer/targetAudience），并持久化 override 值（避免活动信息变更覆盖用户已编辑内容）。**回写需用户确认**：保存策划书时若检测到这些字段被改动，弹窗提示「是否同步更新活动基本信息？」（确认→更新 activity；取消→仅存 override 到策划书）。
+
+> 边界说明：时间字段编辑为文本（如「2026-08-05 上午 9:00」）无法直接映射 `activity.startDate/endDate`（日期类型）。处理：时间章节改为「日期 + 时间段」两个可编辑小字段（meta 填充 activity.startDate/endDate），回显时写回 activity.startDate/endDate。
 
 ### 2.3 页面结构（目标）
 
@@ -69,15 +71,17 @@
 
 | 列 | 类型 | 说明 |
 |----|------|------|
-| name_override | TEXT | 活动名称可覆盖值（meta 优先，覆盖时非空） |
+| name_override | TEXT | 活动名称可覆盖值 |
 | theme_override | TEXT | 活动主题可覆盖值 |
-| time_override | TEXT | 活动时间可覆盖值 |
+| time_override | TEXT | 活动时间可覆盖值（文本，回显时映射 activity.startDate/endDate） |
 | location_override | TEXT | 活动地点可覆盖值 |
 | organizer_override | TEXT | 组织单位可覆盖值 |
 | target_override | TEXT | 活动对象可覆盖值 |
-| section_order | TEXT | 章节顺序 + 自定义节名 JSON（如 `[{"label":"三、活动背景","field":"background","customLabel":"活动背景"}]`，默认 NULL = 用默认模板） |
+| section_order | TEXT | 章节顺序 + 自定义节名 JSON（如 `[{"label":"三、活动背景","field":"background","customLabel":"活动背景"},{"label":"新章节","field":null,"customLabel":"..."}]`，默认 NULL = 用默认模板） |
 
 现有 7 字段（background/purpose/content/flow/notice/emergency/budget）**不变**，编辑内容仍存其中。`flow` 字段保留 JSON 数组或纯文本兼容。
+
+**活动基本信息回写**：策划书保存时，若 name/theme/time/location/organizer/target 章节被用户编辑（override 非空），且用户确认「同步更新活动基本信息」，则同步写 `activity` 表：name→name、theme→theme、time→startDate/endDate、location→location、organizer→organizer、target→targetAudience。override 值同时持久化（保证后续即使 activity 信息被别处修改，策划书内仍显示用户编辑值）。
 
 > 简化取舍：第 2.2 节的「新增/删除/重排章节」能力归入 `section_order` 列承载；若评审认为该能力超出本期范围，可先只做「自由富文本 + 节名可改 + 只读章节可覆盖」，`section_order` 列为空即可（默认模板渲染）。此取舍见 §6 待定。
 
@@ -112,18 +116,16 @@
 
 - `ActivityPlan` 实体新增 7 列（nameOverride/themeOverride/timeOverride/locationOverride/organizerOverride/targetOverride/sectionOrder）。
 - `PlanRequest`/`PlanFields` DTO 同步新增字段；`PlanController`/`PlanService` 读写新列。
+- **活动信息回写**：`PlanService` 保存时若 `syncActivity` 标志为 true（前端弹窗用户确认），则调用 `ActivityService.update` 同步写 activity 表（name/theme/startDate/endDate/location/organizer/targetAudience），同时仍持久化 override 列。保存接口 `PlanRequest` 增加 `syncActivity` 布尔字段（默认 false）。
 - **V7 迁移**：`ALTER TABLE activity_plan ADD COLUMN ...`（7 列，均 TEXT NULL）。若无其他 V7，脚本编号 `V7__plan_editor.sql`（现有到 V6；若批次 C 已建 V7，则顺延）。
 - 图片上传复用 `/api/files/upload`，无需新接口。
 - 通知触发点：批次 C 已为「策划书编辑完成」「主任修改」建事件；本批确保 `updatePlan`（保存）触发对应通知（若批次 C 尚未做，则在本批补上）。
 
-## 6. 待确认取舍（评审时请选）
+## 6. 已确认取舍（用户 2026-08-05 拍板）
 
-1. **章节可增删重排**：本期是否做？
-   - 方案 A（推荐，先做核心）：自由富文本 + 节名可改 + 只读章节可覆盖；不做增删重排（`section_order` 列留空，默认模板）。
-   - 方案 B（完整）：含新增/删除/上移/下移章节，`section_order` 列承载。
-2. **只读章节可覆盖**：是否改为可编辑（默认预填 meta 值）？还是保持只读（仅 meta 填充）？
-   - 推荐改为可编辑（「给足自由度」精神，且新增 override 列成本低）。
-3. **图片处理**：编辑器图片上传走 `/api/files/upload`，文档引用其 URL（当前端导出时拉二进制）。是否接受「图片在活动详情编辑可见、导出 docx 需前端拉取」的形态？
+1. **章节可增删重排**：**做完整版**（新增/删除/上移/下移），`section_order` 列承载章节顺序与自定义节名。
+2. **只读章节可覆盖**：**改为可编辑**（默认预填 meta 值），且**编辑后自动回显到活动基本信息**（保存策划书时弹窗确认「是否同步更新活动基本信息」；确认→更新 activity 表，取消→仅存 override）。时间字段拆为「日期 + 时间段」小字段以支持回显。
+3. **图片处理**：**用现有文件上传**（`/api/files/upload`），文档存图片 URL；导出 docx 时前端拉取二进制嵌入。
 
 ## 7. 验证计划
 
