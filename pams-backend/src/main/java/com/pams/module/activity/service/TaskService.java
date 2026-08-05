@@ -6,6 +6,7 @@ import com.pams.module.activity.entity.Task;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.TaskRepository;
 import com.pams.module.notification.event.TaskAssignedEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ public class TaskService {
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
 
+    @Autowired
     public TaskService(TaskRepository repository, ActivityRepository activityRepository,
                        ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
