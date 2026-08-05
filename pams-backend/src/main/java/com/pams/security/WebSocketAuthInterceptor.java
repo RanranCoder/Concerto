@@ -40,7 +40,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                     accessor.setUser(auth);
                 } catch (Exception e) {
                     log.warn("WebSocket 认证失败: {}", e.getMessage());
+                    return null; // 无效令牌，拒绝连接
                 }
+            } else {
+                return null; // 令牌缺失或格式错误，拒绝连接
             }
         }
         return message;
