@@ -47,8 +47,9 @@ public class NotificationEventListener {
      */
     private void pushToUser(User user) {
         try {
+            Long deptId = user.getDept() != null ? user.getDept().getId() : null;
             long unread = notificationService.countUnreadForUser(
-                user.getId(), user.getRole().getCode(), user.getDept().getId());
+                user.getId(), user.getRole().getCode(), deptId);
             messagingTemplate.convertAndSendToUser(
                 user.getUsername(), WS_DESTINATION,
                 Map.of("type", "NEW_NOTIFICATION", "unreadCount", unread));
@@ -100,11 +101,14 @@ public class NotificationEventListener {
             );
         }
 
-        // 向每个教师/主任发送 WebSocket 信号（去重）
+        // 向每个教师/主任发送 WebSocket 信号（去重，排除提交人自己）
         Set<Long> alreadyPushed = new java.util.LinkedHashSet<>();
+        alreadyPushed.add(event.getSubmitterId()); // 排除提交人
         for (User u : teachers) {
-            pushToUser(u);
-            alreadyPushed.add(u.getId());
+            if (!alreadyPushed.contains(u.getId())) {
+                pushToUser(u);
+                alreadyPushed.add(u.getId());
+            }
         }
         for (User u : directors) {
             if (!alreadyPushed.contains(u.getId())) {
