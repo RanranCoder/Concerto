@@ -6,9 +6,12 @@ import com.pams.module.activity.dto.ActivityRequest;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.repository.ActivityRepository;
+import com.pams.security.LoginUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,14 +23,34 @@ public class ActivityService {
     private final ActivityRepository repository;
     public ActivityService(ActivityRepository repository) { this.repository = repository; }
 
+    /** 从 SecurityContext 取当前登录用户 ID，未登录返回 null */
+    private Long currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof LoginUser u) {
+            return u.getId();
+        }
+        return null;
+    }
+
     public PageResult<Map<String, Object>> page(String keyword, String status, String type, int page, int size) {
+        // B3 fix: 兜底 page <= 0
+        page = Math.max(page, 1);
+        size = Math.min(Math.max(size, 1), 100); // EDGE-1: size 上限 100
+
         Page<Activity> p = repository.findAll((root, q, cb) -> {
             var preds = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
             if (keyword != null && !keyword.isBlank()) {
                 String like = "%" + keyword.trim() + "%";
                 preds.add(cb.or(cb.like(root.get("name"), like), cb.like(root.get("theme"), like)));
             }
-            if (status != null && !status.isBlank()) preds.add(cb.equal(root.get("status"), status));
+            // B1 fix: String → Enum 转换，防止 Hibernate 报错
+            if (status != null && !status.isBlank()) {
+                try {
+                    preds.add(cb.equal(root.get("status"), ActivityStatus.valueOf(status)));
+                } catch (IllegalArgumentException ignored) {
+                    // 非法状态值直接跳过该筛选条件
+                }
+            }
             if (type != null && !type.isBlank()) preds.add(cb.equal(root.get("type"), type));
             return cb.and(preds.toArray(new jakarta.persistence.criteria.Predicate[0]));
         }, PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "id")));
@@ -71,6 +94,8 @@ public class ActivityService {
         a.setStatus(ActivityStatus.ASSIGNED);
         apply(a, req);
         a.setDeleted(0);
+        // B4 fix: 记录创建人
+        a.setCreatedBy(currentUserId());
         a.setCreatedAt(LocalDateTime.now());
         a.setUpdatedAt(LocalDateTime.now());
         return repository.save(a).getId();
@@ -79,6 +104,10 @@ public class ActivityService {
     @Transactional
     public void update(Long id, ActivityRequest req) {
         Activity a = getEntity(id);
+        // LOGIC-2 fix: FINISHED / ARCHIVED 状态禁止编辑
+        if (a.getStatus() == ActivityStatus.FINISHED || a.getStatus() == ActivityStatus.ARCHIVED) {
+            throw new BizException(2008, "已结束或已归档的活动不可编辑");
+        }
         apply(a, req);
         repository.save(a);
     }
@@ -103,6 +132,10 @@ public class ActivityService {
     }
 
     private void apply(Activity a, ActivityRequest req) {
+        // EDGE-3: 校验日期先后关系
+        if (req.getStartDate() != null && req.getEndDate() != null && req.getEndDate().isBefore(req.getStartDate())) {
+            throw new BizException(2007, "结束日期不能早于开始日期");
+        }
         a.setName(req.getName()); a.setTheme(req.getTheme()); a.setType(req.getType());
         a.setStartDate(req.getStartDate()); a.setEndDate(req.getEndDate()); a.setLocation(req.getLocation());
         a.setOrganizer(req.getOrganizer()); a.setTargetAudience(req.getTargetAudience());

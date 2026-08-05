@@ -10,6 +10,7 @@ import com.pams.module.activity.service.SigninService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -21,6 +22,8 @@ import java.util.Map;
 public class SigninController {
     private final SigninService service;
     private final SigninRosterService rosterService;
+    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','SECRETARY_LEADER','ORG_LEADER','MEDIA_LEADER','TECH_LEADER')";
+
     public SigninController(SigninService service) { this(service, null); }
     @Autowired
     public SigninController(SigninService service, SigninRosterService rosterService) {
@@ -34,11 +37,13 @@ public class SigninController {
         return Result.ok(service.listByActivity(activityId, keyword));
     }
 
+    @PreAuthorize(LEADER)
     @PostMapping
     public Result<Signin> create(@Valid @RequestBody SigninRequest req) {
         return Result.ok(service.create(req));
     }
 
+    @PreAuthorize(LEADER)
     @PostMapping("/token")
     public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body,
                                                      HttpServletRequest request) {
@@ -59,9 +64,9 @@ public class SigninController {
     }
 
     /**
-     * 扫码签到。兼容两种 body：
-     *   旧格式：{token, name, studentNo}（保持向后兼容）
-     *   新格式：{token, fields: {姓名, 学号, 手机号, 班级, 身份}}（支持核验字段动态校验 + 应签名单宽松匹配）
+     * 扫码签到（公开接口，免登录）。兼容两种 body：
+     *   旧格式：{token, name, studentNo}
+     *   新格式：{token, fields: {姓名, 学号, 手机号, 班级, 身份}}
      */
     @PostMapping("/scan")
     public Result<Signin> scan(@RequestBody Map<String, Object> body) {
@@ -97,8 +102,6 @@ public class SigninController {
 
     /**
      * 扫码落地页配置（公开、免登录）：按 token 查活动 + 返回该活动核验字段配置。
-     * 返回 {activityId, fields:[{fieldName,required,fieldType,...}]}；
-     * 活动未配置核验字段时 fields 为空数组，前端据此回退默认「姓名+学号」表单。
      */
     @GetMapping("/scan-config")
     public Result<Map<String, Object>> scanConfig(@RequestParam String token) {
@@ -119,6 +122,7 @@ public class SigninController {
         return null;
     }
 
+    @PreAuthorize(LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

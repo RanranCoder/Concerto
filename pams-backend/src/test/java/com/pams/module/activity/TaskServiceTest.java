@@ -2,6 +2,7 @@ package com.pams.module.activity;
 
 import com.pams.common.BizException;
 import com.pams.module.activity.entity.Task;
+import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.TaskRepository;
 import com.pams.module.activity.service.TaskService;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,12 +17,14 @@ import static org.mockito.Mockito.*;
 class TaskServiceTest {
 
     TaskRepository repo;
+    ActivityRepository activityRepo;
     TaskService service;
 
     @BeforeEach
     void setup() {
         repo = mock(TaskRepository.class);
-        service = new TaskService(repo);
+        activityRepo = mock(ActivityRepository.class);
+        service = new TaskService(repo, activityRepo);
     }
 
     @Test

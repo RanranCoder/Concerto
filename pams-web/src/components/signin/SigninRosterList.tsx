@@ -6,7 +6,7 @@ import GlassTable from '@/components/glass/GlassTable'
 import {
   backfillSignins,
   deleteRoster,
-  getSigninFields,
+  getRosterHeaders,
   listRoster,
   type RosterStatus,
   type SigninRosterVO,
@@ -50,9 +50,9 @@ export default function SigninRosterList({ activityId, status, onStatusChange, r
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [roster, configs] = await Promise.all([listRoster(activityId, status), getSigninFields(activityId)])
+      const [roster, headers] = await Promise.all([listRoster(activityId, status), getRosterHeaders(activityId)])
       setRows(roster ?? [])
-      setFields((configs ?? []).map((c) => c.fieldName))
+      setFields(headers ?? [])
     } catch {
       /* http 拦截已提示 */
     } finally {

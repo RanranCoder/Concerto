@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input, DatePicker, Slider, Empty, Button } from 'antd'
 import dayjs from 'dayjs'
 import GlassModal from '@/components/glass/GlassModal'
@@ -26,8 +26,36 @@ function barFill(deptName?: string): string {
   return `rgb(${v}, ${v + 8}, ${v + 20})`
 }
 
-export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: GanttChartProps) {
+export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 24, onEdit }: GanttChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
   const [editing, setEditing] = useState<GanttTask | null>(null)
+
+  // 监听容器宽度变化
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width)
+      }
+    })
+    observer.observe(el)
+    setContainerWidth(el.clientWidth)
+    return () => observer.disconnect()
+  }, [])
+
+  // 动态计算pxPerDay：确保甘特图至少填满容器宽度
+  const pxPerDay = useMemo(() => {
+    if (!tasks.length || !containerWidth) return pxPerDayProp
+    const start = tasks.reduce((a, t) => (t.startDate < a ? t.startDate : a), tasks[0].startDate)
+    const end = tasks.reduce((a, t) => (t.endDate > a ? t.endDate : a), tasks[0].endDate)
+    const days = Math.max(dayRange(start, end), 1)
+    const gridWidth = containerWidth - LABEL_W
+    // 计算需要的pxPerDay来填满容器，但不超过原值的3倍
+    const fitPxPerDay = Math.max(gridWidth / days, pxPerDayProp)
+    return Math.min(fitPxPerDay, pxPerDayProp * 3)
+  }, [tasks, containerWidth, pxPerDayProp])
 
   const range = useMemo(() => {
     if (!tasks.length) return { start: todayStr(), days: 30 }
@@ -47,7 +75,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: G
       const offset = Math.max(dayjs(t.startDate).diff(dayjs(range.start), 'day'), 0)
       const px = taskToPixels(t, pxPerDay, offset)
       const y = HEADER_H + i * ROW_HEIGHT + (ROW_HEIGHT - BAR_H) / 2
-      return { t, y, px }
+      return { t, y, px: { left: px.left + LABEL_W, width: px.width } }
     })
   }, [tasks, range, pxPerDay])
 
@@ -79,8 +107,13 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: G
   }
 
   return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
+    <div ref={containerRef} style={{ overflowX: 'auto', width: '100%' }}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <defs>
+          <clipPath id="label-clip">
+            <rect x={0} y={0} width={LABEL_W - 8} height={height} />
+          </clipPath>
+        </defs>
         {/* 背景棋盘格（按天） */}
         {Array.from({ length: range.days }, (_, d) => (
           <rect
@@ -168,9 +201,11 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay = 24, onEdit }: G
             style={{ cursor: 'pointer' }}
             onClick={() => (onEdit ? onEdit(t) : setEditing(t))}
           >
-            <text x={8} y={y + 16} fill="var(--color-text)" fontSize={12} style={{ userSelect: 'none' }}>
-              {t.name}
-            </text>
+            <g clipPath="url(#label-clip)">
+              <text x={8} y={y + 16} fill="var(--color-text)" fontSize={12} style={{ userSelect: 'none' }}>
+                {t.name}
+              </text>
+            </g>
             <rect
               x={px.left}
               y={y}

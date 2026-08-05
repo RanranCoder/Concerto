@@ -126,10 +126,11 @@ export default function ActivityList() {
       } else {
         await createActivity(payload)
         message.success('创建成功')
-        setPage(1)
+        setPage(1)  // useEffect 会触发 fetchList，无需手动调
       }
       setModalOpen(false)
-      fetchList()
+      // B13 fix: 编辑后手动刷新；创建时 setPage(1) 触发 useEffect 刷新，避免双重请求
+      if (editing) fetchList()
     } catch {
       /* 校验失败或 http 拦截已提示 */
     } finally {
@@ -153,7 +154,12 @@ export default function ActivityList() {
     try {
       await deleteActivity(id)
       message.success('已删除')
-      fetchList()
+      // L9 fix: 若当前页只剩一条且非第一页，回退到上一页
+      if (data.length === 1 && page > 1) {
+        setPage(page - 1)  // useEffect 触发 fetchList
+      } else {
+        fetchList()
+      }
     } catch {
       /* http 拦截已提示 */
     }

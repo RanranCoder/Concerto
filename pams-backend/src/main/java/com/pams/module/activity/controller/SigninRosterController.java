@@ -1,5 +1,6 @@
 package com.pams.module.activity.controller;
 
+import com.pams.common.BizException;
 import com.pams.common.Result;
 import com.pams.module.activity.dto.SigninFieldConfigRequest;
 import com.pams.module.activity.dto.SigninRosterVO;
@@ -49,6 +50,12 @@ public class SigninRosterController {
         return Result.ok(service.summary(activityId));
     }
 
+    /** 获取名单表头字段列表（从已上传的名单中提取） */
+    @GetMapping("/roster/headers")
+    public Result<List<String>> rosterHeaders(@RequestParam Long activityId) {
+        return Result.ok(service.getRosterHeaders(activityId));
+    }
+
     /** 核验字段配置列表 */
     @GetMapping("/fields")
     public Result<List<SigninFieldConfig>> fields(@RequestParam Long activityId) {
@@ -67,9 +74,13 @@ public class SigninRosterController {
     @PostMapping("/backfill")
     public Result<Integer> backfill(@RequestBody Map<String, Object> body,
                                     @AuthenticationPrincipal LoginUser current) {
-        Long activityId = Long.valueOf(body.get("activityId").toString());
+        // B7 fix: null 守卫，防止 NPE
+        Object rawActivityId = body.get("activityId");
+        if (rawActivityId == null) throw new BizException(400, "activityId 不能为空");
+        Long activityId = Long.valueOf(rawActivityId.toString());
         @SuppressWarnings("unchecked")
         List<Number> ids = (List<Number>) body.get("rosterIds");
+        if (ids == null || ids.isEmpty()) throw new BizException(400, "rosterIds 不能为空");
         List<Long> rosterIds = ids.stream().map(Number::longValue).toList();
         Long operatorId = current == null ? null : current.getId();
         return Result.ok(service.backfill(activityId, rosterIds, operatorId));

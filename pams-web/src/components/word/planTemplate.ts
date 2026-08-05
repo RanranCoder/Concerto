@@ -16,6 +16,8 @@ export interface PlanSection {
   label: string
   field: keyof PlanFields | null
   hint?: string
+  /** 用户自定义的章节名称（为空时使用label） */
+  customLabel?: string
 }
 
 /** 12 章模板（以参考策划书「策划书新模板(终)1.docx」为骨架） */
@@ -33,6 +35,11 @@ export const PLAN_TEMPLATE_SECTIONS: PlanSection[] = [
   { label: '十一、应急预案', field: 'emergency' },
   { label: '十二、经费预算', field: 'budget', hint: '表格：物品/数量/单价(元)/总价(元)' },
 ]
+
+/** 获取章节显示名称（优先使用自定义名称） */
+export function getSectionDisplayName(sec: PlanSection): string {
+  return sec.customLabel || sec.label
+}
 
 /** 从活动信息生成的策划书 meta（抬头与大标题） */
 export interface PlanMeta {

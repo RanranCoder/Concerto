@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -17,11 +18,11 @@ public class SeatService {
     private final SeatMapRepository repository;
     public SeatService(SeatMapRepository repository) { this.repository = repository; }
 
-    /** 按 zone 分组返回：{"zone": [座位...]} */
+    /** 按 zone 分组返回：{"zone": [座位...]}，保持 zone 出现顺序 */
     public Map<String, List<SeatMap>> listByActivity(Long activityId) {
         List<SeatMap> seats = repository.findByActivityIdOrderByZoneAscRowNoAscColNoAsc(activityId);
         return seats.stream().collect(Collectors.groupingBy(SeatMap::getZone,
-                Collectors.toList()));
+                LinkedHashMap::new, Collectors.toList()));
     }
 
     @Transactional

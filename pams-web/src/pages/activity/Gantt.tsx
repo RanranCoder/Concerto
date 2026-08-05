@@ -25,10 +25,14 @@ export default function Gantt() {
   const [form] = Form.useForm()
 
   // 部门列表：后端 Task 只返回 deptId，需映射 deptName 供甘特图着色（Task 12 minor）
+  const [deptsLoaded, setDeptsLoaded] = useState(false)
   useEffect(() => {
     listDepts()
-      .then((rows) => setDepts(rows ?? []))
-      .catch(() => {})
+      .then((rows) => {
+        setDepts(rows ?? [])
+        setDeptsLoaded(true)
+      })
+      .catch(() => setDeptsLoaded(true))
   }, [])
 
   const deptNameById = useMemo(() => {
@@ -49,10 +53,11 @@ export default function Gantt() {
     }
   }
 
+  // B11 fix: 等 depts 加载完再拉取任务，避免首次 deptNameById 为空导致任务条无颜色的闪烁
   useEffect(() => {
-    fetchTasks()
+    if (deptsLoaded) fetchTasks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityId, deptNameById])
+  }, [activityId, deptsLoaded, deptNameById])
 
   const openCreate = () => {
     setEditing(null)

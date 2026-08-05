@@ -203,9 +203,6 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
               <Tag color="green">已签 {summary?.signed ?? 0}</Tag>
               <Tag color="orange">未签 {summary?.unsigned ?? 0}</Tag>
             </Space>
-            <Space wrap>
-              <SigninFieldConfig activityId={activityId} onChanged={refreshAll} />
-            </Space>
           </Space>
 
           <div style={{ marginTop: 12 }}>
@@ -225,6 +222,10 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
       )}
 
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>
+        <Space wrap style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>扫码签到</span>
+          <SigninFieldConfig activityId={activityId} onChanged={refreshAll} />
+        </Space>
         <SigninQR activityId={activityId} active={active} onSigned={refreshAll} />
       </GlassCard>
       <GlassCard style={{ padding: 16, marginBottom: 12 }}>

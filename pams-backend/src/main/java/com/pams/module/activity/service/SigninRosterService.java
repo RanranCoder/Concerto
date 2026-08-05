@@ -43,6 +43,17 @@ public class SigninRosterService {
         return fieldRepo.findByActivityIdOrderBySortOrderAsc(activityId);
     }
 
+    /**
+     * 获取某个活动的名单表头字段列表（从已上传的名单中提取）
+     */
+    public List<String> getRosterHeaders(Long activityId) {
+        List<SigninRoster> rosterList = rosterRepo.findByActivityId(activityId);
+        if (rosterList.isEmpty()) return new ArrayList<>();
+        // 从第一条记录中提取字段名作为表头
+        Map<String, String> firstRecord = parseJson(rosterList.get(0).getFieldsJson());
+        return new ArrayList<>(firstRecord.keySet());
+    }
+
     @Transactional
     public void saveFields(Long activityId, List<SigninFieldConfigRequest> fields) {
         if (!activityRepo.existsById(activityId)) throw new BizException(2001, "活动不存在");
@@ -65,11 +76,12 @@ public class SigninRosterService {
     @Transactional
     public Map<String, Integer> uploadFromXlsx(Long activityId, MultipartFile file) {
         if (!activityRepo.existsById(activityId)) throw new BizException(2001, "活动不存在");
-        List<SigninFieldConfig> fields = getFields(activityId);
-        if (fields.isEmpty()) throw new BizException(2401, "请先配置核验字段再上传名单");
+        // B9 fix: 空文件守卫
+        if (file == null || file.isEmpty()) throw new BizException(2403, "上传文件不能为空");
 
         List<SigninRoster> toSave = new ArrayList<>();
         Set<String> seen = new HashSet<>();
+        int skipped = 0;
         try (InputStream in = file.getInputStream(); Workbook wb = WorkbookFactory.create(in)) {
             Sheet sheet = wb.getSheetAt(0);
             Row header = findHeaderRow(sheet);
@@ -78,10 +90,12 @@ public class SigninRosterService {
                 String name = cellStr(header.getCell(c)).trim();
                 if (!name.isEmpty()) col.put(name, c);
             }
-            // 必须能定位到必填字段的表头
-            for (SigninFieldConfig f : fields) {
-                if (f.getRequired() != null && f.getRequired() == 1 && !col.containsKey(f.getFieldName())) {
-                    throw new BizException(2402, "Excel 缺少必填列「" + f.getFieldName() + "」");
+            if (col.isEmpty()) throw new BizException(2403, "Excel 表头为空");
+            // 校验必填字段配置在 Excel 表头中是否齐全
+            List<SigninFieldConfig> fieldConfigs = fieldRepo.findByActivityIdOrderBySortOrderAsc(activityId);
+            for (SigninFieldConfig fc : fieldConfigs) {
+                if (fc.getRequired() != null && fc.getRequired() == 1 && !col.containsKey(fc.getFieldName())) {
+                    throw new BizException(2402, "缺少必填列: " + fc.getFieldName());
                 }
             }
             for (int i = header.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
@@ -89,18 +103,19 @@ public class SigninRosterService {
                 if (r == null) continue;
                 Map<String, String> values = new LinkedHashMap<>();
                 boolean any = false;
-                for (SigninFieldConfig f : fields) {
-                    Integer ci = col.get(f.getFieldName());
+                for (Map.Entry<String, Integer> entry : col.entrySet()) {
+                    String fieldName = entry.getKey();
+                    Integer ci = entry.getValue();
                     String v = ci == null ? "" : cellStr(r.getCell(ci)).trim();
                     if (!v.isEmpty()) any = true;
-                    values.put(f.getFieldName(), v);
+                    values.put(fieldName, v);
                 }
                 if (!any) continue; // 全空行跳过
                 String key = values.entrySet().stream()
                         .filter(e -> !e.getValue().isEmpty())
                         .map(e -> e.getKey() + "=" + e.getValue())
                         .reduce("", (a, b) -> a + "|" + b);
-                if (!seen.add(key)) continue; // 行内去重
+                if (!seen.add(key)) { skipped++; continue; } // B8 fix: 计数跳过的重复行
                 SigninRoster rr = new SigninRoster();
                 rr.setActivityId(activityId);
                 rr.setFieldsJson(toJson(values));
@@ -113,7 +128,7 @@ public class SigninRosterService {
         rosterRepo.saveAll(toSave);
         Map<String, Integer> res = new HashMap<>();
         res.put("added", toSave.size());
-        res.put("skipped", 0);
+        res.put("skipped", skipped);
         return res;
     }
 

@@ -22,9 +22,7 @@ public class SigninService {
     private final ActivityRepository activityRepository;
     private final SigninRosterService rosterService;
     private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
-    public SigninService(SigninRepository repository, ActivityRepository activityRepository) {
-        this(repository, activityRepository, null);
-    }
+
     @Autowired
     public SigninService(SigninRepository repository, ActivityRepository activityRepository,
                          SigninRosterService rosterService) {

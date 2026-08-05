@@ -4,6 +4,7 @@ import { Button, Space, Tooltip } from 'antd'
 import { BoldOutlined, OrderedListOutlined, TableOutlined } from '@ant-design/icons'
 import {
   PLAN_TEMPLATE_SECTIONS,
+  getSectionDisplayName,
   sanitizeEditableHtml,
   sectionMetaValue,
   toEditableHtml,
@@ -16,6 +17,10 @@ interface WordEditorProps {
   value: PlanFields
   onChange: (v: PlanFields) => void
   meta?: PlanMeta
+  /** 自定义章节名称映射（fieldName -> customLabel） */
+  customLabels?: Record<string, string>
+  /** 自定义章节名称变化回调 */
+  onCustomLabelChange?: (fieldName: string, label: string) => void
 }
 
 /** 每章可编辑区块（contenteditable），含章节标题与正文 */
@@ -25,18 +30,22 @@ function EditorSection({
   html,
   meta,
   active,
+  customLabel,
   onFocus,
   onInput,
   onPaste,
+  onLabelChange,
 }: {
   sec: PlanSection
   index: number
   html: string
   meta?: PlanMeta
   active: boolean
+  customLabel?: string
   onFocus: () => void
   onInput: (html: string) => void
   onPaste: (e: ClipboardEvent<HTMLDivElement>) => void
+  onLabelChange?: (label: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const bodyHtml = sanitizeEditableHtml(toEditableHtml(html))
@@ -48,6 +57,8 @@ function EditorSection({
 
   const fixedVal = sec.field ? '' : sectionMetaValue(sec, meta)
 
+  const displayLabel = customLabel || getSectionDisplayName(sec)
+
   return (
     <div
       id={`word-sec-${index}`}
@@ -56,7 +67,14 @@ function EditorSection({
     >
       {sec.field ? (
         <>
-          <div className="word-sec-label">{sec.label}</div>
+          <div className="word-sec-label" title="双击可编辑章节名称" onDoubleClick={() => {
+            const newLabel = prompt('请输入新的章节名称：', displayLabel)
+            if (newLabel !== null && newLabel.trim()) {
+              onLabelChange?.(newLabel.trim())
+            }
+          }}>
+            {displayLabel}
+          </div>
           <div
             ref={ref}
             className="word-sec-body"
@@ -88,7 +106,7 @@ function EditorSection({
   )
 }
 
-export default function WordEditor({ value, onChange, meta }: WordEditorProps) {
+export default function WordEditor({ value, onChange, meta, customLabels, onCustomLabelChange }: WordEditorProps) {
   const [activeSec, setActiveSec] = useState(0)
   const [editorKey, setEditorKey] = useState(0) // 触发 execCommand 后重绘
 
@@ -241,9 +259,11 @@ export default function WordEditor({ value, onChange, meta }: WordEditorProps) {
                   html={html}
                   meta={meta}
                   active={i === activeSec}
+                  customLabel={sec.field ? customLabels?.[sec.field] : undefined}
                   onFocus={() => setActiveSec(i)}
                   onInput={(h) => handleSectionInput(i, h)}
                   onPaste={handlePaste}
+                  onLabelChange={sec.field ? (label) => onCustomLabelChange?.(sec.field!, label) : undefined}
                 />
               )
             })}

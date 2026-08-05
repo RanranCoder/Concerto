@@ -2,6 +2,7 @@ package com.pams.module.activity;
 
 import com.pams.module.activity.entity.ScoreRecord;
 import com.pams.module.activity.repository.ScoreRecordRepository;
+import com.pams.module.activity.repository.ScoreRuleRepository;
 import com.pams.module.activity.service.ScoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ class ScoreServiceTest {
     @BeforeEach
     void setup() {
         repo = mock(ScoreRecordRepository.class);
-        service = new ScoreService(repo);
+        service = new ScoreService(repo, mock(ScoreRuleRepository.class));
     }
 
     @Test

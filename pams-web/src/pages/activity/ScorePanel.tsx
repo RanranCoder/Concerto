@@ -58,7 +58,8 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   const [loading, setLoading] = useState(false)
   const [ruleModal, setRuleModal] = useState(false)
   const [recordModal, setRecordModal] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [ruleSaving, setRuleSaving] = useState(false)
+  const [recordSaving, setRecordSaving] = useState(false)
   const [ruleForm] = Form.useForm()
   const [recordForm] = Form.useForm()
   const [ruleInit, setRuleInit] = useState<Record<string, unknown>>()
@@ -90,7 +91,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
 
   const handleSaveRule = async () => {
     const values = await ruleForm.validateFields()
-    setSaving(true)
+    setRuleSaving(true)
     try {
       const payload: ScoreRuleSave = {
         activityId,
@@ -105,7 +106,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
     } catch {
       /* http 拦截已提示 */
     } finally {
-      setSaving(false)
+      setRuleSaving(false)
     }
   }
 
@@ -128,7 +129,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
 
   const handleSaveRecord = async () => {
     const values = await recordForm.validateFields()
-    setSaving(true)
+    setRecordSaving(true)
     try {
       // 维度边界校验兜底：维度必须是有效规则 id，且分值落在 0~满分 之间
       const dims: Record<string, number> = {}
@@ -166,7 +167,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
     } catch {
       /* http 拦截已提示 */
     } finally {
-      setSaving(false)
+      setRecordSaving(false)
     }
   }
 
@@ -324,7 +325,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         footer={
           <Space>
             <Button onClick={() => setRuleModal(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSaveRule}>
+            <Button type="primary" loading={ruleSaving} onClick={handleSaveRule}>
               保存
             </Button>
           </Space>
@@ -358,7 +359,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         footer={
           <Space>
             <Button onClick={() => setRecordModal(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSaveRecord}>
+            <Button type="primary" loading={recordSaving} onClick={handleSaveRecord}>
               提交（自动计算总分）
             </Button>
           </Space>

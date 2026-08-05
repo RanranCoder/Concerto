@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { notification } from 'antd'
@@ -10,15 +10,13 @@ export function useWebSocket() {
   const token = useAuthStore((s) => s.token)
   const addRealtime = useNotificationStore((s) => s.addRealtimeNotification)
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount)
-  const clientRef = useRef<Client | null>(null)
-
   useEffect(() => {
     if (!token) return
 
     const client = new Client({
       webSocketFactory: () => new SockJS('/ws'),
       connectHeaders: { Authorization: `Bearer ${token}` },
-      reconnectDelay: 5000,
+      reconnectDelay: ((attempt: number) => Math.min(5000 * Math.pow(2, attempt), 60_000)) as unknown as number,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       onConnect: () => {
@@ -59,11 +57,9 @@ export function useWebSocket() {
     })
 
     client.activate()
-    clientRef.current = client
 
     return () => {
       client.deactivate()
-      clientRef.current = null
     }
   }, [token, addRealtime, setUnreadCount])
 }

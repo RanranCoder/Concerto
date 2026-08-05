@@ -6,6 +6,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   message,
   Popconfirm,
   Radio,
@@ -59,7 +60,7 @@ import { createAgenda, deleteAgenda, listAgendas, updateAgenda } from '@/api/age
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
 import WordEditor from '@/components/word/WordEditor'
-import WordPreview from '@/components/word/WordPreview'
+import PagedWordPreview from '@/components/word/PagedWordPreview'
 import { agendaToDocx, docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
@@ -438,7 +439,7 @@ function PlanTab({
         {mode === 'edit' ? (
           <WordEditor value={fields} onChange={setPlanFields} meta={planMeta} />
         ) : (
-          <WordPreview plan={fields} meta={planMeta} />
+          <PagedWordPreview plan={fields} meta={planMeta} />
         )}
 
         {/* 活动流程字段不在 12 章模板中，Word 预览/导出不含流程，引导用字段编辑 */}
@@ -666,7 +667,7 @@ function AgendaTab({ activityId }: { activityId: number }) {
           initialValues={formInit}
         >
           <Form.Item name="stepNo" label="步骤序号" rules={[{ required: true, message: '请输入步骤序号' }]}>
-            <Input type="number" min={1} />
+            <InputNumber min={1} precision={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
             <Input maxLength={200} />
@@ -885,10 +886,10 @@ function SeatTab({ activityId }: { activityId: number }) {
           </Form.Item>
           <Space size={12} style={{ display: 'flex' }}>
             <Form.Item name="rowNo" label="排" style={{ flex: 1 }}>
-              <Input type="number" min={1} />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="colNo" label="列" style={{ flex: 1 }}>
-              <Input type="number" min={1} />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
             </Form.Item>
           </Space>
           <Form.Item name="personName" label="就座人">
@@ -1031,23 +1032,29 @@ export default function ActivityDetail() {
             <Space wrap>
               <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>状态操作：</span>
               {prevStatus && (
-                <Button
-                  loading={changing}
-                  icon={<ArrowLeftOutlined />}
-                  onClick={() => handleStatusChange(prevStatus)}
+                <Popconfirm
+                  title={`确认回退到「${ACTIVITY_STATUS_LABEL[prevStatus]}」？`}
+                  description="回退可能影响已有数据（签到、评分等），请谨慎操作"
+                  onConfirm={() => handleStatusChange(prevStatus)}
+                  okText="确认回退"
+                  cancelText="取消"
                 >
-                  回退到「{ACTIVITY_STATUS_LABEL[prevStatus]}」
-                </Button>
+                  <Button loading={changing} icon={<ArrowLeftOutlined />}>
+                    回退到「{ACTIVITY_STATUS_LABEL[prevStatus]}」
+                  </Button>
+                </Popconfirm>
               )}
               {nextStatus && (
-                <Button
-                  loading={changing}
-                  type="primary"
-                  icon={<ArrowRightOutlined />}
-                  onClick={() => handleStatusChange(nextStatus)}
+                <Popconfirm
+                  title={`确认推进到「${ACTIVITY_STATUS_LABEL[nextStatus]}」？`}
+                  onConfirm={() => handleStatusChange(nextStatus)}
+                  okText="确认推进"
+                  cancelText="取消"
                 >
-                  推进到「{ACTIVITY_STATUS_LABEL[nextStatus]}」
-                </Button>
+                  <Button loading={changing} type="primary" icon={<ArrowRightOutlined />}>
+                    推进到「{ACTIVITY_STATUS_LABEL[nextStatus]}」
+                  </Button>
+                </Popconfirm>
               )}
               {!prevStatus && !nextStatus && <Tag>已归档，无后续状态</Tag>}
             </Space>

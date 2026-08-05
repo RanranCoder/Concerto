@@ -119,6 +119,10 @@ export const deleteRoster = (id: number) => del<void>(`/signins/roster/${id}`)
 export const rosterSummary = (activityId: number) =>
   get<SigninSummaryVO>('/signins/roster/summary', { activityId })
 
+/** 获取名单表头字段列表（从已上传的名单中提取） */
+export const getRosterHeaders = (activityId: number) =>
+  get<string[]>('/signins/roster/headers', { activityId })
+
 /** 核验字段配置列表（后端实体 required 为 Integer 0/1，此处归一为 boolean） */
 export const getSigninFields = async (activityId: number): Promise<SigninFieldConfigVO[]> => {
   const rows = await get<Array<SigninFieldConfigVO & { required?: boolean | number }>>('/signins/fields', { activityId })

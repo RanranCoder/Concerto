@@ -166,12 +166,11 @@ class PermissionGuardIntegrationTest {
 
     @Test
     void changeStatus_invalidEnum_returns400() throws Exception {
-        // 非法枚举：原来是 500，Task 27 统一 IllegalArgumentException → 400
+        // 非法枚举：BizException(2009) 由全局异常处理返回 HTTP 200 + JSON code=2009
         mvc.perform(put("/api/activities/1/status")
                 .header("Authorization", bearer("orgleader"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"BOGUS\"}"))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value(400));
+            .andExpect(jsonPath("$.code").value(2009));
     }
 }

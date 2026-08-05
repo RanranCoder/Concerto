@@ -24,9 +24,6 @@ public class ScoreService {
         this.recordRepo = recordRepo;
         this.ruleRepo = ruleRepo;
     }
-    public ScoreService(ScoreRecordRepository recordRepo) {
-        this(recordRepo, null);
-    }
 
     public int computeTotal(String dimensionScores) {
         try {

@@ -44,7 +44,7 @@ export default function ActivityEdit() {
           name: vo.name,
           theme: vo.theme ?? undefined,
           type: vo.type ?? 'OTHER',
-          range: vo.startDate ? [dayjs(vo.startDate), vo.endDate ? dayjs(vo.endDate) : undefined] : undefined,
+          range: vo.startDate ? [dayjs(vo.startDate), vo.endDate ? dayjs(vo.endDate) : dayjs(vo.startDate)] : undefined,
           location: vo.location ?? undefined,
           organizer: vo.organizer ?? undefined,
           targetAudience: vo.targetAudience ?? undefined,

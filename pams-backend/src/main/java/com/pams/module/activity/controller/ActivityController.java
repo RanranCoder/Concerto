@@ -1,8 +1,10 @@
 package com.pams.module.activity.controller;
 
+import com.pams.common.BizException;
 import com.pams.common.PageResult;
 import com.pams.common.Result;
 import com.pams.module.activity.dto.ActivityRequest;
+import com.pams.module.activity.dto.StatusChangeRequest;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.service.ActivityService;
 import jakarta.validation.Valid;
@@ -17,7 +19,7 @@ public class ActivityController {
     private final ActivityService service;
     public ActivityController(ActivityService service) { this.service = service; }
 
-    /** 部长及以上角色，用于 delete / status 等写操作的 @PreAuthorize。干事（STAFF）不可删除活动或变更状态。 */
+    /** 部长及以上角色，用于写操作的 @PreAuthorize。干事（STAFF）不可执行。 */
     public static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     @GetMapping
@@ -35,11 +37,13 @@ public class ActivityController {
         return Result.ok(service.detail(id));
     }
 
+    @PreAuthorize(LEADER)
     @PostMapping
     public Result<Long> create(@Valid @RequestBody ActivityRequest req) {
         return Result.ok(service.create(req));
     }
 
+    @PreAuthorize(LEADER)
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ActivityRequest req) {
         service.update(id, req);
@@ -48,8 +52,15 @@ public class ActivityController {
 
     @PreAuthorize(LEADER)
     @PutMapping("/{id}/status")
-    public Result<Void> changeStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        service.changeStatus(id, ActivityStatus.valueOf(body.get("status")));
+    public Result<Void> changeStatus(@PathVariable Long id, @Valid @RequestBody StatusChangeRequest req) {
+        // B2 fix: 用 DTO + @NotBlank + try-catch 替代裸 Map，消除 NPE
+        ActivityStatus target;
+        try {
+            target = ActivityStatus.valueOf(req.getStatus());
+        } catch (IllegalArgumentException e) {
+            throw new BizException(2009, "无效的目标状态: " + req.getStatus());
+        }
+        service.changeStatus(id, target);
         return Result.ok();
     }
 

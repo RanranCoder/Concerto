@@ -247,3 +247,32 @@ body::before {
   margin-bottom: 4px;
 }
 
+/* 分页容器 */
+.word-page {
+  background: #ffffff;
+  color: #111111;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 分页导航 */
+.word-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 0;
+  margin-top: 16px;
+}
+
+.word-pagination-info {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  min-width: 60px;
+  text-align: center;
+}
+

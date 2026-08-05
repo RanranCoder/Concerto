@@ -22,7 +22,7 @@ class SigninTokenTest {
     void setup() {
         repo = mock(SigninRepository.class);
         activityRepo = mock(ActivityRepository.class);
-        service = new SigninService(repo, activityRepo);
+        service = new SigninService(repo, activityRepo, null);
     }
 
     @Test
