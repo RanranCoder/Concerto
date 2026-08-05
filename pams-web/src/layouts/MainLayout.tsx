@@ -1,7 +1,7 @@
 import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, startTransition } from 'react'
 import {
   BellOutlined,
   CalendarOutlined,
@@ -125,7 +125,7 @@ export default function MainLayout() {
               onClick: ({ key }) => {
                 if (key === 'logout') {
                   logout()
-                  navigate('/login', { replace: true })
+                  startTransition(() => navigate('/login', { replace: true }))
                 }
               },
             }}
