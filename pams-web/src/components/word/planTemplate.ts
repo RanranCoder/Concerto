@@ -1,5 +1,5 @@
-// 策划书 Word 模板：12 章章节骨架 + 导出 docx + 导入 docx（粗粒度）
-// 数据模型不变：仍存 PlanFields 7 字段，Word 只是编辑/展示形态
+// 策划书 Word 模板：12 章章节骨架 + 导出 docx + 导入 docx
+// 数据模型不变：仍存 PlanFields 7 字段；wangEditor 富文本 HTML 直接落库，导出 docx 时逐元素保真
 import DOMPurify from 'dompurify'
 
 export interface PlanFields {
@@ -10,6 +10,26 @@ export interface PlanFields {
   notice: string
   emergency: string
   budget: string
+}
+
+/** 只读章节（活动基本信息）的可覆盖值：无值回退活动 meta */
+export interface PlanOverrides {
+  nameOverride?: string
+  themeOverride?: string
+  timeOverride?: string
+  locationOverride?: string
+  organizerOverride?: string
+  targetOverride?: string
+}
+
+/** 章节顺序条目：label 默认节名，field 对应 7 字段（新增章节为 null），customLabel 用户自定义节名 */
+export interface PlanSectionOrderItem {
+  label: string
+  field: keyof PlanFields | null
+  customLabel?: string
+  hint?: string
+  /** 新增章节（field=null 且非只读 meta 章节）的富文本正文，存 section_order 一并持久化 */
+  contentHtml?: string
 }
 
 export interface PlanSection {
@@ -166,6 +186,117 @@ export function sectionMetaValue(sec: PlanSection, meta?: PlanMeta): string {
   }
 }
 
+/** 只读章节的可覆盖展示值：override 非空优先，否则回退 meta（预览/导出用） */
+export function sectionOverrideValue(
+  label: string,
+  overrides: PlanOverrides | undefined,
+  meta?: PlanMeta,
+): string {
+  const o = overrides ?? {}
+  const metaVal = meta ? sectionMetaValue({ label, field: null } as PlanSection, meta) : ''
+  switch (label) {
+    case '一、活动名称':
+      return o.nameOverride?.trim() || metaVal
+    case '二、活动主题':
+      return o.themeOverride?.trim() || metaVal
+    case '五、活动时间':
+      return o.timeOverride?.trim() || metaVal
+    case '六、活动地点':
+      return o.locationOverride?.trim() || metaVal
+    case '七、活动组织单位':
+      return o.organizerOverride?.trim() || metaVal
+    case '八、活动对象':
+      return o.targetOverride?.trim() || metaVal
+    default:
+      return ''
+  }
+}
+
+/** 默认模板 → 章节顺序 JSON 数组（字段章节 + 只读章节） */
+export function defaultSectionOrder(): PlanSectionOrderItem[] {
+  return PLAN_TEMPLATE_SECTIONS.map((s) => ({
+    label: s.label,
+    field: s.field,
+    hint: s.hint,
+  }))
+}
+
+/** 组装整篇策划书预览 HTML（抬头 + 各章节 override||meta 只读值/富文本正文），供 PagedWordPreview 使用 */
+export function buildPlanPreviewHtml(
+  plan: PlanFields,
+  overrides: PlanOverrides | undefined,
+  meta?: PlanMeta,
+  sectionOrder?: PlanSectionOrderItem[],
+): string {
+  const orgName = meta?.orgName || '信息工程学院党建办公室'
+  const title = meta?.name || '活动策划书'
+  const theme = meta?.theme || ''
+  const sections = sectionOrder && sectionOrder.length > 0 ? sectionOrder : defaultSectionOrder()
+
+  const head = [
+    `<div class="word-header-center">${escapeHtml(orgName)}</div>`,
+    `<div class="word-header-title">${escapeHtml(title)}</div>`,
+    theme ? `<div class="word-header-sub">（主题：${escapeHtml(theme)}）</div>` : '',
+  ].join('')
+
+  const body = sections
+    .map((sec) => {
+      const label = escapeHtml(sec.customLabel || sec.label)
+      let content = ''
+      if (sec.field) {
+        content = plan[sec.field] ?? ''
+      } else if (isCustomSection(sec)) {
+        content = sec.contentHtml ?? ''
+      } else {
+        const fixed = sectionOverrideValue(sec.label, overrides, meta).trim()
+        if (fixed) content = `<div>${escapeHtml(fixed)}</div>`
+      }
+      if (!content.trim()) return ''
+      return `<div class="word-sec"><div class="word-sec-label">${label}</div><div class="word-sec-body">${content}</div></div>`
+    })
+    .join('')
+
+  return `${head}${body}`
+}
+
+/** 解析后端 section_order JSON；非数组/损坏则回退默认模板 */
+export function parseSectionOrder(raw: string | null | undefined): PlanSectionOrderItem[] {
+  if (raw) {
+    try {
+      const v = JSON.parse(raw)
+      if (Array.isArray(v) && v.length > 0) {
+        return v.map((it: Partial<PlanSectionOrderItem>) => ({
+          label: typeof it?.label === 'string' ? it.label : '新章节',
+          field: (it?.field as keyof PlanFields | null) ?? null,
+          customLabel: typeof it?.customLabel === 'string' ? it.customLabel : undefined,
+          hint: typeof it?.hint === 'string' ? it.hint : undefined,
+          contentHtml: typeof it?.contentHtml === 'string' ? it.contentHtml : undefined,
+        }))
+      }
+    } catch {
+      /* 损坏 JSON 回退默认 */
+    }
+  }
+  return defaultSectionOrder()
+}
+
+/** 只读活动信息章节 label 集合 */
+const META_SECTION_LABELS = new Set(['一、活动名称', '二、活动主题', '五、活动时间', '六、活动地点', '七、活动组织单位', '八、活动对象'])
+
+export function isMetaSectionLabel(label: string): boolean {
+  return META_SECTION_LABELS.has(label)
+}
+
+/** 判断是否为用户新增的自定义章节（正文走富文本，存 section_order.contentHtml） */
+export function isCustomSection(sec: PlanSectionOrderItem): boolean {
+  return !sec.field && !isMetaSectionLabel(sec.label)
+}
+
+/** 章节顺序 → 存储 JSON 字符串 */
+export function serializeSectionOrder(items: PlanSectionOrderItem[]): string {
+  return JSON.stringify(items)
+}
+
 /** 预算字符串可能为 JSON 数组：[{item,quantity,unitPrice,totalPrice}]，否则视为纯文本 */
 export function parseBudgetArray(s: string | null | undefined): Array<Record<string, unknown>> | null {
   if (!s) return null
@@ -210,22 +341,23 @@ function splitSections(lines: string[]): { label: string; body: string }[] {
   return result
 }
 
-/** 导出：把 7 字段组装成标准策划书 docx（docx 库动态 import） */
-export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blob> {
-  const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType, BorderStyle } = await import('docx')
+/** 导出：把 7 字段 + 覆盖值组装成标准策划书 docx（docx 库动态 import）。
+ * 正文为 wangEditor 富文本 HTML → htmlToDocx 逐元素保真（加粗/列表/表格/图片/颜色）。
+ * 只读章节用 override || meta。章节顺序取自 sectionOrder（缺省默认模板）。 */
+export async function planToDocx(
+  plan: PlanFields,
+  meta?: PlanMeta,
+  overrides?: PlanOverrides,
+  sectionOrder?: PlanSectionOrderItem[],
+): Promise<Blob> {
+  const mod = await import('docx')
+  const { Document, Packer, Paragraph, Table, TextRun, AlignmentType } = mod
+  const { htmlToDocx } = await import('./htmlToDocx')
 
   const orgName = meta?.orgName || '信息工程学院党建办公室'
   const title = meta?.name || '活动策划书'
   const theme = meta?.theme || ''
-  const budgetRows = parseBudgetMatrix(plan.budget)
-
-  const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
-  const cellBorders = {
-    top: border,
-    bottom: border,
-    left: border,
-    right: border,
-  }
+  const ctx = { mod }
 
   type DocChild = InstanceType<typeof Paragraph> | InstanceType<typeof Table>
   const children: DocChild[] = []
@@ -256,61 +388,62 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
     )
   }
 
-  for (const sec of PLAN_TEMPLATE_SECTIONS) {
-    const fixedVal = sectionMetaValue(sec, meta).trim()
-    const fieldVal = sec.field ? stripHtml(plan[sec.field] ?? '').trim() : ''
-    const value = fieldVal || fixedVal
-    if (!value) continue
+  const sections = sectionOrder && sectionOrder.length > 0 ? sectionOrder : defaultSectionOrder()
+
+  for (const sec of sections) {
+    const label = sec.customLabel || sec.label
+    // 字段章节：富文本 HTML 保真；自定义章节：section_order.contentHtml；只读章节：override || meta
+    let html = ''
+    if (sec.field) {
+      html = plan[sec.field] ?? ''
+    } else if (isCustomSection(sec)) {
+      html = sec.contentHtml ?? ''
+    } else {
+      const fixedVal = sectionOverrideValue(sec.label, overrides, meta).trim()
+      html = fixedVal ? `<div>${escapeHtml(fixedVal)}</div>` : ''
+    }
+    if (!html.trim()) continue
 
     children.push(
       new Paragraph({
         spacing: { before: 160, after: 80 },
-        children: [new TextRun({ text: sec.label, font: '宋体', size: 28, bold: true })],
+        children: [new TextRun({ text: label, font: '宋体', size: 28, bold: true })],
       }),
     )
 
-    // 预算：JSON 数组或 HTML 表格 → 表格（首行表头）
-    if (sec.field === 'budget' && budgetRows) {
-      const table = new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: budgetRows.map((cells, ri) =>
-          new TableRow({
-            tableHeader: ri === 0,
-            children: cells.map((c) =>
-              new TableCell({
-                borders: cellBorders,
-                verticalAlign: 'center',
-                children: [
-                  new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    spacing: { before: 40, after: 40 },
-                    children: [new TextRun({ text: c, font: '宋体', size: 24, bold: ri === 0 })],
-                  }),
-                ],
-              }),
-            ),
-          }),
-        ),
-      })
-      children.push(table)
-      continue
-    }
-
-    // 普通字段：多行正文，每行一段 12pt
-    for (const line of String(value).split('\n')) {
-      const t = line.replace(/\s+$/, '')
-      if (!t.trim()) {
-        children.push(new Paragraph({ children: [] }))
+    // 预算：JSON 数组 → 表格；HTML 表格 → htmlToDocx 内建 Table 转换（fallback 纯文本）
+    if (sec.field === 'budget' && !isBudgetHtmlTable(plan.budget)) {
+      const budgetRows = parseBudgetMatrix(plan.budget)
+      if (budgetRows) {
+        const border = { style: mod.BorderStyle.SINGLE, size: 4, color: '000000' }
+        const table = new mod.Table({
+          width: { size: 100, type: mod.WidthType.PERCENTAGE },
+          rows: budgetRows.map((cells, ri) =>
+            new mod.TableRow({
+              tableHeader: ri === 0,
+              children: cells.map((c) =>
+                new mod.TableCell({
+                  borders: { top: border, bottom: border, left: border, right: border },
+                  verticalAlign: 'center',
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 40 },
+                      children: [new TextRun({ text: c, font: '宋体', size: 24, bold: ri === 0 })],
+                    }),
+                  ],
+                }),
+              ),
+            }),
+          ),
+        })
+        children.push(table)
         continue
       }
-      children.push(
-        new Paragraph({
-          spacing: { after: 60 },
-          indent: { firstLine: 480 },
-          children: [new TextRun({ text: t, font: '宋体', size: 24 })],
-        }),
-      )
     }
+
+    const body = await htmlToDocx(html, ctx)
+    children.push(...body)
   }
 
   // 落款：右对齐；年份取活动 endDate 年份，拿不到再回退当前年
@@ -336,6 +469,14 @@ export async function planToDocx(plan: PlanFields, meta?: PlanMeta): Promise<Blo
   return Packer.toBlob(doc)
 }
 
+/** HTML 转义（只读章节纯文本 → 富文本段落） */
+function escapeHtml(s: string): string {
+  return (s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 /** 把 mammoth 提取出的纯文本按章节标题切分，粗粒度填充字段 */
 export function planFromDocxText(text: string): Partial<PlanFields> {
   const sections = splitSections((text || '').split('\n'))
@@ -348,12 +489,54 @@ export function planFromDocxText(text: string): Partial<PlanFields> {
   return out
 }
 
-/** 导入：mammoth 动态 import 提取文本，按章节标题粗粒度填充字段 */
+/** 把 mammoth HTML 按章节标题切分，返回 {label, bodyHtml}[]（正文保留 HTML 结构） */
+export function splitSectionsHtml(html: string): { label: string; bodyHtml: string }[] {
+  const result: { label: string; bodyHtml: string }[] = []
+  let current: { label: string; bodyHtml: string } | null = null
+
+  // node（vitest）环境无 document：退化为纯文本切分
+  if (typeof document === 'undefined') {
+    return splitSections((stripHtml(html) || '').split('\n')).map((s) => ({ label: s.label, bodyHtml: escapeHtml(s.body) }))
+  }
+
+  const fragment = document.createElement('div')
+  fragment.innerHTML = html || ''
+  const children = Array.from(fragment.childNodes)
+
+  for (const node of children) {
+    const text = (node.textContent ?? '').replace(/[ \t ]+/g, '').trim()
+    if (!text) continue
+    const tag = (node as Element).tagName?.toLowerCase() ?? ''
+    const title = tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' ? normalizeSectionTitle(text) : null
+    if (title) {
+      current = { label: title, bodyHtml: '' }
+      result.push(current)
+    } else if (current) {
+      const h = node instanceof Element ? node.outerHTML : escapeHtml(node.textContent ?? '')
+      current.bodyHtml = current.bodyHtml ? `${current.bodyHtml}${h}` : h
+    }
+  }
+  return result
+}
+
+/** 把 mammoth 提取的 HTML 按章节标题粗粒度填充字段（正文保留 HTML，budget 表格也保留） */
+export function planFromDocxHtml(html: string): Partial<PlanFields> {
+  const sections = splitSectionsHtml(html || '')
+  const out: Partial<PlanFields> = {}
+  for (const sec of PLAN_TEMPLATE_SECTIONS) {
+    if (!sec.field) continue
+    const hit = sections.find((s) => s.label === sec.label)
+    if (hit && hit.bodyHtml.trim()) out[sec.field] = hit.bodyHtml.trim()
+  }
+  return out
+}
+
+/** 导入：mammoth convertToHtml 保留富文本结构，按章节标题切分回填各字段 */
 export async function docxToPlan(file: File): Promise<Partial<PlanFields>> {
   const mammoth = await import('mammoth')
   const arrayBuffer = await file.arrayBuffer()
-  const result = await mammoth.extractRawText({ arrayBuffer })
-  return planFromDocxText(result.value || '')
+  const result = await mammoth.convertToHtml({ arrayBuffer })
+  return planFromDocxHtml(result.value || '')
 }
 
 /** 导出议程表：docx 编号列表（标题「活动议程表」居中 + 每步编号项，docx 库动态 import 分包） */

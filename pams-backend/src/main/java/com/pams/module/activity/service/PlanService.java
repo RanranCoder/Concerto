@@ -15,7 +15,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -62,6 +64,7 @@ public class PlanService {
                 .map(ActivityPlan::getVersion).orElse(0) + 1;
         p.setVersion(ver);
         apply(p, req);
+        syncActivityIfNeeded(req.getActivityId(), req);
         p.setStatus(ActivityPlan.PlanStatus.DRAFT);
         p.setCreatedAt(LocalDateTime.now());
         p.setUpdatedAt(LocalDateTime.now());
@@ -82,6 +85,7 @@ public class PlanService {
             throw new BizException(2003, "当前状态不可修改，请新建版本");
         }
         apply(p, req);
+        syncActivityIfNeeded(p.getActivityId(), req);
         repository.save(p);
         // 发布策划书编辑事件（链路1：通知各部门；链路2：主任修改时通知组织部）
         if (eventPublisher != null && editorId != null) {
@@ -160,7 +164,73 @@ public class PlanService {
         p.setNotice(req.getNotice());
         p.setEmergency(req.getEmergency());
         p.setBudget(req.getBudget());
+        p.setNameOverride(req.getNameOverride());
+        p.setThemeOverride(req.getThemeOverride());
+        p.setTimeOverride(req.getTimeOverride());
+        p.setLocationOverride(req.getLocationOverride());
+        p.setOrganizerOverride(req.getOrganizerOverride());
+        p.setTargetOverride(req.getTargetOverride());
+        p.setSectionOrder(req.getSectionOrder());
         p.setUpdatedAt(LocalDateTime.now());
+    }
+
+    /**
+     * 用户确认「同步更新活动基本信息」时，把 override 值回写到 activity 表。
+     * 仅当对应 override 非空才写；time_override 为 "YYYY-MM-DD|时间段" 形式，日期部分映射 startDate/endDate。
+     */
+    private void syncActivityIfNeeded(Long activityId, PlanRequest req) {
+        if (!req.isSyncActivity() || activityRepository == null) return;
+        Activity a = activityRepository.findById(activityId).orElse(null);
+        if (a == null) return;
+        boolean dirty = false;
+        if (req.getNameOverride() != null && !req.getNameOverride().trim().isEmpty()) {
+            a.setName(req.getNameOverride().trim());
+            dirty = true;
+        }
+        if (req.getThemeOverride() != null && !req.getThemeOverride().trim().isEmpty()) {
+            a.setTheme(req.getThemeOverride().trim());
+            dirty = true;
+        }
+        if (req.getLocationOverride() != null && !req.getLocationOverride().trim().isEmpty()) {
+            a.setLocation(req.getLocationOverride().trim());
+            dirty = true;
+        }
+        if (req.getOrganizerOverride() != null && !req.getOrganizerOverride().trim().isEmpty()) {
+            a.setOrganizer(req.getOrganizerOverride().trim());
+            dirty = true;
+        }
+        if (req.getTargetOverride() != null && !req.getTargetOverride().trim().isEmpty()) {
+            a.setTargetAudience(req.getTargetOverride().trim());
+            dirty = true;
+        }
+        if (req.getTimeOverride() != null && !req.getTimeOverride().trim().isEmpty()) {
+            String[] parts = req.getTimeOverride().split("\\|", 2);
+            LocalDate date = parseDate(parts[0].trim());
+            if (date != null) {
+                a.setStartDate(date);
+                a.setEndDate(null);
+                if (parts.length > 1) {
+                    String seg = parts[1] == null ? "" : parts[1];
+                    String[] range = seg.split("[~至]");
+                    LocalDate end = range.length > 1 ? parseDate(range[1].trim()) : null;
+                    a.setEndDate(end);
+                }
+                dirty = true;
+            }
+        }
+        if (dirty) {
+            a.setUpdatedAt(LocalDateTime.now());
+            activityRepository.save(a);
+        }
+    }
+
+    private LocalDate parseDate(String s) {
+        if (s == null || s.trim().isEmpty()) return null;
+        try {
+            return LocalDate.parse(s.trim());
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     public ActivityPlan getEntity(Long id) {

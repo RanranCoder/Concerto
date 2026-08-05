@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ClipboardEvent, CSSProperties, KeyboardEvent } from 'react'
-import { Button, Space, Tooltip } from 'antd'
-import { BoldOutlined, OrderedListOutlined, TableOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useState, Suspense, lazy } from 'react'
+import { Button, Input, Tooltip } from 'antd'
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import {
-  PLAN_TEMPLATE_SECTIONS,
+  defaultSectionOrder,
   getSectionDisplayName,
-  sanitizeEditableHtml,
-  sectionMetaValue,
-  toEditableHtml,
+  isCustomSection,
   type PlanFields,
   type PlanMeta,
+  type PlanOverrides,
   type PlanSection,
+  type PlanSectionOrderItem,
 } from './planTemplate'
+
+// wangEditor 体积较大，按需加载（进入编辑模式才拉取）
+const PlanRichEditor = lazy(() => import('./PlanRichEditor'))
 
 interface WordEditorProps {
   value: PlanFields
@@ -21,256 +23,269 @@ interface WordEditorProps {
   customLabels?: Record<string, string>
   /** 自定义章节名称变化回调 */
   onCustomLabelChange?: (fieldName: string, label: string) => void
+  /** 只读章节（活动基本信息）的可覆盖值 */
+  overrides?: PlanOverrides
+  onOverridesChange?: (o: PlanOverrides) => void
+  /** 章节顺序 + 自定义节名 */
+  sectionOrder?: PlanSectionOrderItem[]
+  onSectionOrderChange?: (items: PlanSectionOrderItem[]) => void
 }
 
-/** 每章可编辑区块（contenteditable），含章节标题与正文 */
-function EditorSection({
-  sec,
-  index,
-  html,
+/** 只读章节（活动基本信息）label → override 字段映射 */
+const FIXED_OVERRIDE_MAP: Record<string, keyof PlanOverrides> = {
+  '一、活动名称': 'nameOverride',
+  '二、活动主题': 'themeOverride',
+  '五、活动时间': 'timeOverride',
+  '六、活动地点': 'locationOverride',
+  '七、活动组织单位': 'organizerOverride',
+  '八、活动对象': 'targetOverride',
+}
+
+/** 只读章节展示值：override || meta */
+function fixedDisplayValue(label: string, overrides: PlanOverrides | undefined, meta?: PlanMeta): string {
+  const key = FIXED_OVERRIDE_MAP[label]
+  if (key && overrides?.[key]?.trim()) return overrides[key]!
+  switch (label) {
+    case '一、活动名称':
+      return meta?.name ?? ''
+    case '二、活动主题':
+      return meta?.theme ?? ''
+    case '五、活动时间':
+      return meta?.time ?? ''
+    case '六、活动地点':
+      return meta?.location ?? ''
+    case '七、活动组织单位':
+      return meta?.organizer ?? ''
+    case '八、活动对象':
+      return meta?.target ?? ''
+    default:
+      return ''
+  }
+}
+
+/** 时间 override 拆「日期|时间段」 */
+function splitTimeOverride(v: string | undefined): { date: string; period: string } {
+  const s = v || ''
+  const idx = s.indexOf('|')
+  return idx >= 0 ? { date: s.slice(0, idx), period: s.slice(idx + 1) } : { date: s, period: '' }
+}
+
+export default function WordEditor({
+  value,
+  onChange,
   meta,
-  active,
-  customLabel,
-  onFocus,
-  onInput,
-  onPaste,
-  onLabelChange,
-}: {
-  sec: PlanSection
-  index: number
-  html: string
-  meta?: PlanMeta
-  active: boolean
-  customLabel?: string
-  onFocus: () => void
-  onInput: (html: string) => void
-  onPaste: (e: ClipboardEvent<HTMLDivElement>) => void
-  onLabelChange?: (label: string) => void
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  const bodyHtml = sanitizeEditableHtml(toEditableHtml(html))
-  // 编辑内容跟随外部 value（导入/初始化）同步；用户输入时仅 onInput 回写，避免光标跳动
+  overrides,
+  onOverridesChange,
+  sectionOrder,
+  onSectionOrderChange,
+}: WordEditorProps) {
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [order, setOrder] = useState<PlanSectionOrderItem[]>(sectionOrder?.length ? sectionOrder : defaultSectionOrder())
+
+  // 外部 sectionOrder 变化（保存后重载）时同步
   useEffect(() => {
-    const el = ref.current
-    if (el && el.innerHTML !== bodyHtml) el.innerHTML = bodyHtml
-  }, [bodyHtml])
+    if (sectionOrder && sectionOrder.length > 0) {
+      setOrder(sectionOrder)
+    }
+  }, [sectionOrder])
 
-  const fixedVal = sec.field ? '' : sectionMetaValue(sec, meta)
+  const ov = overrides ?? {}
 
-  const displayLabel = customLabel || getSectionDisplayName(sec)
-
-  return (
-    <div
-      id={`word-sec-${index}`}
-      className={`word-sec${active ? ' word-sec-active' : ''}`}
-      onClick={onFocus}
-    >
-      {sec.field ? (
-        <>
-          <div className="word-sec-label" title="双击可编辑章节名称" onDoubleClick={() => {
-            const newLabel = prompt('请输入新的章节名称：', displayLabel)
-            if (newLabel !== null && newLabel.trim()) {
-              onLabelChange?.(newLabel.trim())
-            }
-          }}>
-            {displayLabel}
-          </div>
-          <div
-            ref={ref}
-            className="word-sec-body"
-            contentEditable
-            suppressContentEditableWarning
-            data-placeholder={sec.hint ?? '（点击填写）'}
-            onInput={(e) => onInput((e.target as HTMLDivElement).innerHTML)}
-            onFocus={onFocus}
-            onPaste={onPaste}
-            onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-              if (e.key === 'Tab') {
-                e.preventDefault()
-                document.execCommand('insertText', false, '    ')
-              }
-            }}
-          />
-        </>
-      ) : (
-        <>
-          <div className="word-sec-label">{sec.label}</div>
-          {fixedVal ? (
-            <div className="word-sec-body word-sec-static">{fixedVal}</div>
-          ) : (
-            <div className="word-sec-body word-sec-static word-sec-empty" data-placeholder={sec.hint ?? '（自动按活动信息填充）'} />
-          )}
-        </>
-      )}
-    </div>
+  const sections: PlanSection[] = useMemo(
+    () =>
+      order.map((it) => ({
+        label: it.customLabel || it.label,
+        field: it.field,
+        hint: it.hint,
+        customLabel: it.customLabel,
+      })),
+    [order],
   )
-}
 
-export default function WordEditor({ value, onChange, meta, customLabels, onCustomLabelChange }: WordEditorProps) {
-  const [activeSec, setActiveSec] = useState(0)
-  const [editorKey, setEditorKey] = useState(0) // 触发 execCommand 后重绘
+  const active = sections[activeIdx] ?? sections[0]
+  const activeField = active?.field
+  const activeItem = order[activeIdx] ?? order[0]
+  const activeIsCustom = activeItem ? isCustomSection(activeItem) : false
 
-  const selectSection = (i: number) => {
-    setActiveSec(i)
-    requestAnimationFrame(() => {
-      document.getElementById(`word-sec-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
+  const emitOrder = (next: PlanSectionOrderItem[]) => {
+    setOrder(next)
+    onSectionOrderChange?.(next)
   }
 
-  const runCmd = (cmd: string, val?: string) => {
-    document.execCommand(cmd, false, val)
-    setEditorKey((k) => k + 1)
+  /** 新增章节：field=null 自定义章节，正文存 section_order.contentHtml */
+  const addSection = () => {
+    const next = [...order, { label: '新章节', field: null, hint: '自定义章节', contentHtml: '' }]
+    emitOrder(next)
+    setActiveIdx(next.length - 1)
   }
 
-  /** 字号：在选区外包 <span style="font-size:XXpt"> 实现真实 12/14/22pt（execCommand fontSize 的 '3'/'5'/'6' 是 12/18/24pt，无法精确到 14/22pt）。
-   * 无选区时不做操作（需先选中文字再点字号）。insertHTML 会触发 input 事件，onInput 自动回写 value。 */
-  const applyFontSize = (pt: number) => {
-    const sel = window.getSelection()
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0)
-      if (!range.collapsed) {
-        const tmp = document.createElement('div')
-        tmp.appendChild(range.cloneContents())
-        document.execCommand('insertHTML', false, `<span style="font-size:${pt}pt">${tmp.innerHTML}</span>`)
-      }
-    }
-    setEditorKey((k) => k + 1)
+  const removeSection = (idx: number) => {
+    const next = order.filter((_, i) => i !== idx)
+    emitOrder(next)
+    if (activeIdx >= next.length) setActiveIdx(Math.max(0, next.length - 1))
   }
 
-  const insertTable = () => {
-    const html = `<table class="word-table"><tr><th>物品</th><th>数量</th><th>单价（元）</th><th>总价（元）</th></tr><tr><td>　</td><td>　</td><td>　</td><td>　</td></tr></table><div><br/></div>`
-    document.execCommand('insertHTML', false, html)
-    setEditorKey((k) => k + 1)
+  const moveSection = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir
+    if (target < 0 || target >= order.length) return
+    const next = [...order]
+    const [item] = next.splice(idx, 1)
+    next.splice(target, 0, item)
+    emitOrder(next)
+    setActiveIdx(target)
   }
 
-  const handleSectionInput = (index: number, html: string) => {
-    const sec = PLAN_TEMPLATE_SECTIONS[index]
-    if (!sec.field) return
-    const next: PlanFields = { ...value }
-    // 存内 HTML（Word 富文本），导出时 stripHtml 还原
-    next[sec.field] = html
-    onChange(next)
-  }
-
-  const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const text = e.clipboardData.getData('text/plain')
-    document.execCommand('insertText', false, text)
-  }
-
-  // 章节导航点击：聚焦到对应区块
-  const navClick = (index: number) => {
-    setActiveSec(index)
-    const el = document.getElementById(`word-sec-${index}`)
-    const body = el?.querySelector('.word-sec-body')
-    if (body && body instanceof HTMLElement) {
-      requestAnimationFrame(() => body.focus())
-      selectSection(index)
-    } else {
-      selectSection(index)
+  /** 双击重命名章节 */
+  const renameSection = (idx: number) => {
+    const it = order[idx]
+    const current = it.customLabel || it.label
+    const newLabel = window.prompt('请输入新的章节名称：', current)
+    if (newLabel !== null && newLabel.trim()) {
+      const next = order.map((s, i) => (i === idx ? { ...s, customLabel: newLabel.trim() } : s))
+      emitOrder(next)
     }
   }
 
-  const toolbarStyle: CSSProperties = {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 8,
-    alignItems: 'center',
-    marginBottom: 12,
-    padding: '8px 12px',
-    border: '1px solid var(--glass-border)',
-    borderRadius: 10,
-    background: 'var(--glass-bg-strong)',
+  const setOverride = (key: keyof PlanOverrides, val: string) => {
+    onOverridesChange?.({ ...ov, [key]: val })
   }
+
+  /** 可编辑章节正文写入对应字段；自定义章节正文存 section_order.contentHtml */
+  const handleBodyChange = (html: string) => {
+    if (activeIsCustom && activeItem) {
+      emitOrder(order.map((s, i) => (i === activeIdx ? { ...s, contentHtml: html } : s)))
+      return
+    }
+    if (!activeField) return
+    onChange({ ...value, [activeField]: html })
+  }
+
+  const timeParts = splitTimeOverride(ov.timeOverride)
+  const isTimeSection = active?.label === '五、活动时间'
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-      {/* 左侧章节导航 */}
-      <div style={{ width: 150, flexShrink: 0, position: 'sticky', top: 0 }}>
+      {/* 左侧章节导航：增删/上下移 + 双击重命名 */}
+      <div style={{ width: 200, flexShrink: 0, position: 'sticky', top: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 8 }}>章节导航</div>
-        {PLAN_TEMPLATE_SECTIONS.map((s, i) => (
+        {sections.map((s, i) => (
           <div
-            key={i}
-            onClick={() => navClick(i)}
-            className={`word-nav-item${i === activeSec ? ' word-nav-item-active' : ''}`}
+            key={`${s.label}-${i}`}
+            onClick={() => setActiveIdx(i)}
+            title="双击可重命名章节"
+            onDoubleClick={() => renameSection(i)}
+            className={`word-nav-item${i === activeIdx ? ' word-nav-item-active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 2 }}
           >
-            {s.label}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getSectionDisplayName(s)}</span>
+            {i > 0 && (
+              <Tooltip title="上移">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ArrowUpOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    moveSection(i, -1)
+                  }}
+                />
+              </Tooltip>
+            )}
+            {i < sections.length - 1 && (
+              <Tooltip title="下移">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ArrowDownOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    moveSection(i, 1)
+                  }}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title="删除章节">
+              <Button
+                size="small"
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  removeSection(i)
+                }}
+              />
+            </Tooltip>
           </div>
         ))}
+        <Button block icon={<PlusOutlined />} style={{ marginTop: 8 }} onClick={addSection}>
+          新增章节
+        </Button>
       </div>
 
-      {/* 右侧编辑区 */}
+      {/* 右侧单个 wangEditor 实例 */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={toolbarStyle}>
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>编辑：</span>
-          <Tooltip title="加粗">
-            <Button
-              size="small"
-              icon={<BoldOutlined />}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => runCmd('bold')}
-            />
-          </Tooltip>
-          <Tooltip title="编号列表">
-            <Button
-              size="small"
-              icon={<OrderedListOutlined />}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => runCmd('insertOrderedList')}
-            />
-          </Tooltip>
-          <Tooltip title="插入表格">
-            <Button
-              size="small"
-              icon={<TableOutlined />}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={insertTable}
-            />
-          </Tooltip>
-          <span style={{ width: 1, height: 18, background: 'var(--glass-border)', margin: '0 4px' }} />
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>字号：</span>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(12)}>
-            12pt 正文
-          </Button>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(14)}>
-            14pt 章节
-          </Button>
-          <Button size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFontSize(22)}>
-            22pt 标题
-          </Button>
-          <Space size={4} style={{ marginLeft: 'auto' }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Tab 插入空格 · 粘贴自动去格式</span>
-          </Space>
+        <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+          {active ? getSectionDisplayName(active) : ''}
         </div>
 
-        <div className="word-paper">
-          <div className="word-paper-padding">
-            <div className="word-header-center">{meta?.orgName || '信息工程学院党建办公室'}</div>
-            <div className="word-header-title">{meta?.name || '活动策划书'}</div>
-            {meta?.theme ? <div className="word-header-sub">（主题：{meta.theme}）</div> : null}
-
-            {PLAN_TEMPLATE_SECTIONS.map((sec, i) => {
-              const html = sec.field ? (value[sec.field] ?? '') : ''
-              return (
-                <EditorSection
-                  key={`${i}-${sec.field ?? 'fixed'}`}
-                  sec={sec}
-                  index={i}
-                  html={html}
-                  meta={meta}
-                  active={i === activeSec}
-                  customLabel={sec.field ? customLabels?.[sec.field] : undefined}
-                  onFocus={() => setActiveSec(i)}
-                  onInput={(h) => handleSectionInput(i, h)}
-                  onPaste={handlePaste}
-                  onLabelChange={sec.field ? (label) => onCustomLabelChange?.(sec.field!, label) : undefined}
-                />
-              )
-            })}
+        {activeField || activeIsCustom ? (
+          <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>编辑器加载中...</div>}>
+            <PlanRichEditor
+              key={activeField || `custom-${activeIdx}`}
+              value={activeIsCustom ? activeItem?.contentHtml ?? '' : (value[activeField!] ?? '')}
+              onChange={handleBodyChange}
+              placeholder={active?.hint ?? '（点击填写）'}
+            />
+          </Suspense>
+        ) : isTimeSection ? (
+          <div className="word-paper" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>日期：</span>
+              <Input
+                style={{ width: 200 }}
+                placeholder="YYYY-MM-DD"
+                value={timeParts.date}
+                onChange={(e) => setOverride('timeOverride', e.target.value ? `${e.target.value}|${timeParts.period}` : timeParts.period)}
+              />
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>时间段：</span>
+              <Input
+                style={{ width: 280 }}
+                placeholder="如 9:00-11:00"
+                value={timeParts.period}
+                onChange={(e) => setOverride('timeOverride', timeParts.date ? `${timeParts.date}|${e.target.value}` : e.target.value)}
+              />
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              当前活动信息：{fixedDisplayValue(active.label, overrides, meta)}
+            </div>
           </div>
+        ) : (
+          <div className="word-paper" style={{ padding: 24 }}>
+            <Input.TextArea
+              rows={3}
+              placeholder="（点击填写）"
+              value={fixedDisplayValue(active?.label ?? '', overrides, meta)}
+              onChange={(e) => {
+                const key = FIXED_OVERRIDE_MAP[active?.label ?? '']
+                if (key) setOverride(key, e.target.value)
+              }}
+            />
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              当前活动信息：{fixedDisplayValue(active?.label ?? '', undefined, meta)}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          提示：修改章节名称请双击导航中的章节标题；活动名称/主题/时间/地点/组织单位/对象保存后可同步更新活动基本信息。
         </div>
       </div>
-      <span hidden>{editorKey}</span>
     </div>
   )
+}
+
+/** 序列化章节顺序 JSON（供父级保存） */
+export function toSectionOrderJson(items: PlanSectionOrderItem[]): string {
+  return JSON.stringify(items)
 }

@@ -13,6 +13,17 @@ export interface PlanSave {
   emergency?: string | null
   /** JSON 字符串，如 [{item,quantity,unitPrice,totalPrice}] */
   budget?: string | null
+  /** 只读章节可覆盖值（活动基本信息） */
+  nameOverride?: string | null
+  themeOverride?: string | null
+  timeOverride?: string | null
+  locationOverride?: string | null
+  organizerOverride?: string | null
+  targetOverride?: string | null
+  /** 章节顺序 + 自定义节名 JSON */
+  sectionOrder?: string | null
+  /** 是否同步更新活动基本信息（用户弹窗确认） */
+  syncActivity?: boolean
 }
 
 export const latestPlan = (activityId: number) =>

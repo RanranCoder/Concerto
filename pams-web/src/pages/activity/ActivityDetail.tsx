@@ -8,6 +8,7 @@ import {
   Input,
   InputNumber,
   message,
+  Modal,
   Popconfirm,
   Radio,
   Space,
@@ -61,7 +62,7 @@ import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
 import WordEditor from '@/components/word/WordEditor'
 import PagedWordPreview from '@/components/word/PagedWordPreview'
-import { agendaToDocx, docxToPlan, planToDocx, type PlanFields, type PlanMeta } from '@/components/word/planTemplate'
+import { agendaToDocx, buildPlanPreviewHtml, docxToPlan, parseSectionOrder, planToDocx, type PlanFields, type PlanMeta, type PlanOverrides, type PlanSectionOrderItem } from '@/components/word/planTemplate'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
 import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'
@@ -143,6 +144,8 @@ function PlanTab({
   const [importing, setImporting] = useState(false)
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
   const [planFields, setPlanFields] = useState<PlanFields | null>(null)
+  const [overrides, setOverrides] = useState<PlanOverrides | null>(null)
+  const [sectionOrder, setSectionOrder] = useState<PlanSectionOrderItem[] | null>(null)
   const [formInit, setFormInit] = useState<Record<string, string>>()
   const [form] = Form.useForm()
   const [reviewForm] = Form.useForm()
@@ -158,8 +161,21 @@ function PlanTab({
     budget: vo.budget ?? '',
   })
 
+  const toOverrides = (vo: ActivityPlanVO): PlanOverrides => ({
+    nameOverride: vo.nameOverride ?? undefined,
+    themeOverride: vo.themeOverride ?? undefined,
+    timeOverride: vo.timeOverride ?? undefined,
+    locationOverride: vo.locationOverride ?? undefined,
+    organizerOverride: vo.organizerOverride ?? undefined,
+    targetOverride: vo.targetOverride ?? undefined,
+  })
+
   /** 当前可用的 7 字段：编辑态 planFields 优先，否则回退到后端 latest */
   const fields: PlanFields = planFields ?? (latest ? toPlanFields(latest) : { background: '', purpose: '', content: '', flow: '', notice: '', emergency: '', budget: '' })
+  /** 当前可用的 override：编辑态优先，否则回退后端 latest */
+  const curOverrides: PlanOverrides = overrides ?? (latest ? toOverrides(latest) : {})
+  /** 当前章节顺序：编辑态优先，否则回退后端 latest 的 section_order（缺省默认模板） */
+  const curSectionOrder: PlanSectionOrderItem[] = sectionOrder ?? (latest ? parseSectionOrder(latest.sectionOrder) : [])
 
   const planMeta: PlanMeta = useMemo(
     () => ({
@@ -235,6 +251,13 @@ function PlanTab({
       notice: latest?.notice ?? null,
       emergency: latest?.emergency ?? null,
       budget: latest?.budget ?? null,
+      nameOverride: latest?.nameOverride ?? null,
+      themeOverride: latest?.themeOverride ?? null,
+      timeOverride: latest?.timeOverride ?? null,
+      locationOverride: latest?.locationOverride ?? null,
+      organizerOverride: latest?.organizerOverride ?? null,
+      targetOverride: latest?.targetOverride ?? null,
+      sectionOrder: latest?.sectionOrder ?? null,
     }
     try {
       await createPlan(next)
@@ -273,10 +296,10 @@ function PlanTab({
     }
   }
 
-  /** 导出 docx：planToDocx 动态 import docx 库，下载标准策划书 */
+  /** 导出 docx：planToDocx 动态 import docx 库，下载标准策划书（保留富文本/覆盖值/章节顺序） */
   const handleExport = async () => {
     try {
-      const blob = await planToDocx(fields, planMeta)
+      const blob = await planToDocx(fields, planMeta, curOverrides, curSectionOrder)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -298,6 +321,8 @@ function PlanTab({
       const parsed = await docxToPlan(file)
       const next = { ...fields, ...parsed }
       setPlanFields(next)
+      setOverrides({})
+      setSectionOrder(null)
       setMode('edit')
       message.success(`已导入，填充 ${Object.keys(parsed).length} 个章节字段`)
     } catch {
@@ -307,8 +332,25 @@ function PlanTab({
     }
   }
 
-  /** 保存：把 planFields 写入后端（updatePlan/createPlan），已审核通过则新建版本，成功后刷新并回到预览 */
-  const handleSaveFields = async () => {
+  /** 检测 override 是否被用户改动（相对 meta 原始值） */
+  const overridesChanged = (): boolean => {
+    const metaMap: Record<keyof PlanOverrides, string | undefined> = {
+      nameOverride: planMeta.name,
+      themeOverride: planMeta.theme,
+      timeOverride: planMeta.time,
+      locationOverride: planMeta.location,
+      organizerOverride: planMeta.organizer,
+      targetOverride: planMeta.target,
+    }
+    return (Object.keys(metaMap) as Array<keyof PlanOverrides>).some((k) => {
+      const v = (curOverrides[k] ?? '').trim()
+      return v !== '' && v !== (metaMap[k] ?? '')
+    })
+  }
+
+  /** 保存：把 planFields + override + section_order 写入后端，已审核通过则新建版本，成功后刷新并回到预览。
+   * 检测 override 被改动则弹窗确认是否同步更新活动基本信息。 */
+  const handleSaveFields = async (syncActivity = false) => {
     if (!fields) return
     setSaving(true)
     try {
@@ -321,6 +363,14 @@ function PlanTab({
         notice: fields.notice?.trim() ? fields.notice : null,
         emergency: fields.emergency?.trim() ? fields.emergency : null,
         budget: fields.budget?.trim() ? fields.budget : null,
+        nameOverride: curOverrides.nameOverride?.trim() ? curOverrides.nameOverride : null,
+        themeOverride: curOverrides.themeOverride?.trim() ? curOverrides.themeOverride : null,
+        timeOverride: curOverrides.timeOverride?.trim() ? curOverrides.timeOverride : null,
+        locationOverride: curOverrides.locationOverride?.trim() ? curOverrides.locationOverride : null,
+        organizerOverride: curOverrides.organizerOverride?.trim() ? curOverrides.organizerOverride : null,
+        targetOverride: curOverrides.targetOverride?.trim() ? curOverrides.targetOverride : null,
+        sectionOrder: curSectionOrder.length > 0 ? JSON.stringify(curSectionOrder) : null,
+        syncActivity,
       }
       // 已审核通过的策划书后端不允许修改，编辑保存时自动升为新版本
       if (latest && latest.status === 'APPROVED') {
@@ -334,12 +384,30 @@ function PlanTab({
         message.success('策划书已创建')
       }
       setPlanFields(null) // 清空编辑缓冲，避免旧内容残留
+      setOverrides(null)
+      setSectionOrder(null)
       setMode('preview')
       onChanged()
     } catch {
       /* http 拦截已提示 */
     } finally {
       setSaving(false)
+    }
+  }
+
+  /** 保存按钮：若 override 被改动先弹确认，否则直接保存 */
+  const onSaveClick = () => {
+    if (overridesChanged()) {
+      Modal.confirm({
+        title: '是否同步更新活动基本信息？',
+        content: '已修改活动名称/主题/时间/地点/组织单位/对象，是否同步更新到活动基本信息？取消则仅保存在策划书中。',
+        okText: '同步更新',
+        cancelText: '仅保存策划书',
+        onOk: () => handleSaveFields(true),
+        onCancel: () => handleSaveFields(false),
+      })
+    } else {
+      handleSaveFields(false)
     }
   }
 
@@ -426,7 +494,7 @@ function PlanTab({
               <Button icon={<DownloadOutlined />} onClick={handleExport}>
                 导出 docx
               </Button>
-              <Button type="primary" loading={saving} onClick={handleSaveFields}>
+              <Button type="primary" loading={saving} onClick={onSaveClick}>
                 保存
               </Button>
             </>
@@ -437,11 +505,19 @@ function PlanTab({
           )}
         </Space>
 
-        {/* Word 形态：预览（A4 只读渲染）/ 编辑（contenteditable） */}
+        {/* Word 形态：预览（A4 只读渲染）/ 编辑（章节导航 + wangEditor 单编辑器） */}
         {mode === 'edit' ? (
-          <WordEditor value={fields} onChange={setPlanFields} meta={planMeta} />
+          <WordEditor
+            value={fields}
+            onChange={setPlanFields}
+            meta={planMeta}
+            overrides={curOverrides}
+            onOverridesChange={setOverrides}
+            sectionOrder={curSectionOrder.length > 0 ? curSectionOrder : undefined}
+            onSectionOrderChange={setSectionOrder}
+          />
         ) : (
-          <PagedWordPreview plan={fields} meta={planMeta} />
+          <PagedWordPreview content={buildPlanPreviewHtml(fields, curOverrides, planMeta, curSectionOrder)} meta={planMeta} />
         )}
 
         {/* 活动流程字段不在 12 章模板中，Word 预览/导出不含流程，引导用字段编辑 */}

@@ -29,6 +29,20 @@ public class ActivityPlan {
     private String emergency;
     @Column(columnDefinition = "TEXT")
     private String budget;
+    @Column(columnDefinition = "TEXT")
+    private String nameOverride;
+    @Column(columnDefinition = "TEXT")
+    private String themeOverride;
+    @Column(columnDefinition = "TEXT")
+    private String timeOverride;
+    @Column(columnDefinition = "TEXT")
+    private String locationOverride;
+    @Column(columnDefinition = "TEXT")
+    private String organizerOverride;
+    @Column(columnDefinition = "TEXT")
+    private String targetOverride;
+    @Column(columnDefinition = "TEXT")
+    private String sectionOrder;
     @Enumerated(EnumType.STRING)
     private PlanStatus status;
     private Long submitterId;

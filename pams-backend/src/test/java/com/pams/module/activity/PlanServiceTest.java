@@ -191,4 +191,62 @@ class PlanServiceTest {
         verify(activityRepo, never()).findById(anyLong());
         verify(activityRepo, never()).save(any());
     }
+
+    @Test
+    void update_withSyncActivity_writesBackOverrides() {
+        ActivityPlan p = new ActivityPlan();
+        p.setId(13L);
+        p.setActivityId(23L);
+        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
+        when(repo.findById(13L)).thenReturn(Optional.of(p));
+
+        Activity a = new Activity();
+        a.setId(23L);
+        a.setName("旧名");
+        a.setTheme("旧主题");
+        ActivityRepository activityRepo = mock(ActivityRepository.class);
+        when(activityRepo.findById(23L)).thenReturn(Optional.of(a));
+
+        PlanService linked = new PlanService(repo, activityRepo, null);
+        com.pams.module.activity.dto.PlanRequest req = new com.pams.module.activity.dto.PlanRequest();
+        req.setNameOverride("新活动名");
+        req.setThemeOverride("新主题");
+        req.setTimeOverride("2026-08-05|9:00-11:00");
+        req.setLocationOverride("图书馆报告厅");
+        req.setSyncActivity(true);
+        linked.update(13L, req);
+
+        assertThat(a.getName()).isEqualTo("新活动名");
+        assertThat(a.getTheme()).isEqualTo("新主题");
+        assertThat(a.getLocation()).isEqualTo("图书馆报告厅");
+        assertThat(a.getStartDate()).isEqualTo(java.time.LocalDate.parse("2026-08-05"));
+        assertThat(p.getNameOverride()).isEqualTo("新活动名");
+        verify(activityRepo).save(a);
+        verify(repo).save(p);
+    }
+
+    @Test
+    void update_withoutSyncActivity_keepsActivityUntouched() {
+        ActivityPlan p = new ActivityPlan();
+        p.setId(14L);
+        p.setActivityId(24L);
+        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
+        when(repo.findById(14L)).thenReturn(Optional.of(p));
+
+        Activity a = new Activity();
+        a.setId(24L);
+        a.setName("旧名");
+        ActivityRepository activityRepo = mock(ActivityRepository.class);
+        when(activityRepo.findById(24L)).thenReturn(Optional.of(a));
+
+        PlanService linked = new PlanService(repo, activityRepo, null);
+        com.pams.module.activity.dto.PlanRequest req = new com.pams.module.activity.dto.PlanRequest();
+        req.setNameOverride("新活动名");
+        req.setSyncActivity(false);
+        linked.update(14L, req);
+
+        assertThat(a.getName()).isEqualTo("旧名");
+        verify(activityRepo, never()).save(any());
+        assertThat(p.getNameOverride()).isEqualTo("新活动名");
+    }
 }

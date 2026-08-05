@@ -56,6 +56,13 @@ export interface ActivityPlanVO {
   notice: string | null
   emergency: string | null
   budget: string | null
+  nameOverride: string | null
+  themeOverride: string | null
+  timeOverride: string | null
+  locationOverride: string | null
+  organizerOverride: string | null
+  targetOverride: string | null
+  sectionOrder: string | null
   status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
   submitterId: number | null
   reviewerId: number | null
