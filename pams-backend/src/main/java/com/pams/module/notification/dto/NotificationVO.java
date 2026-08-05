@@ -12,6 +12,7 @@ public class NotificationVO {
     private String entityType;
     private Long entityId;
     private String senderName;
+    private String priority;
     private boolean read;
     private LocalDateTime createdAt;
 }

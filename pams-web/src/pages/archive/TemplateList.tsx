@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Form, Input, message, Popconfirm, Select, Space, Tabs } from 'antd'
-import { DeleteOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import UploadFile from '@/components/glass/UploadFile'
+import FilePreviewModal from '@/components/file/FilePreviewModal'
 import {
   createTemplate,
   deleteTemplate,
@@ -33,6 +34,7 @@ export default function TemplateList() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [fileId, setFileId] = useState<number | null>(null)
+  const [preview, setPreview] = useState<TemplateVO | null>(null)
   const [form] = Form.useForm<TemplateFormValues>()
 
   // 一次拉全量（模板数量级小），前端按分类筛选，Tabs 计数始终准确
@@ -110,7 +112,26 @@ export default function TemplateList() {
   }
 
   const columns = [
-    { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
+    {
+      title: '名称',
+      dataIndex: 'name',
+      key: 'name',
+      ellipsis: true,
+      render: (name: string, r: TemplateVO) =>
+        r.fileId ? (
+          <Button
+            type="link"
+            size="small"
+            className="template-name-link"
+            style={{ padding: 0, height: 'auto' }}
+            onClick={() => setPreview(r)}
+          >
+            {name}
+          </Button>
+        ) : (
+          name
+        ),
+    },
     {
       title: '分类',
       dataIndex: 'category',
@@ -136,6 +157,11 @@ export default function TemplateList() {
       width: 160,
       render: (_: unknown, r: TemplateVO) => (
         <Space size="small" wrap>
+          {r.fileId && (
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreview(r)}>
+              预览
+            </Button>
+          )}
           {r.fileId && (
             <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(r.fileId as number, r.name)}>
               下载
@@ -217,6 +243,15 @@ export default function TemplateList() {
           </Form.Item>
         </Form>
       </GlassModal>
+
+      {preview?.fileId != null && (
+        <FilePreviewModal
+          open
+          onClose={() => setPreview(null)}
+          fileId={preview.fileId}
+          fileName={preview.originFilename || preview.name}
+        />
+      )}
     </div>
   )
 }

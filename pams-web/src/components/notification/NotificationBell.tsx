@@ -28,6 +28,11 @@ export default function NotificationBell() {
     [fetchNotifications],
   )
 
+  const goToAll = useCallback(() => {
+    setOpen(false)
+    navigate('/notifications')
+  }, [navigate])
+
   const handleClick = useCallback(
     async (n: NotificationVO) => {
       if (!n.read) {
@@ -61,11 +66,16 @@ export default function NotificationBell() {
     <div style={{ width: 360, maxHeight: 400, overflow: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, padding: '0 4px' }}>
         <Text strong>通知</Text>
-        {unreadCount > 0 && (
-          <Button type="link" size="small" icon={<CheckOutlined />} onClick={handleMarkAll}>
-            全部已读
+        <Space size={0}>
+          {unreadCount > 0 && (
+            <Button type="link" size="small" icon={<CheckOutlined />} onClick={handleMarkAll}>
+              全部已读
+            </Button>
+          )}
+          <Button type="link" size="small" onClick={goToAll}>
+            查看全部
           </Button>
-        )}
+        </Space>
       </div>
       {loading ? (
         <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>

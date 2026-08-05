@@ -2,26 +2,57 @@ package com.pams.module.archive.service;
 
 import com.pams.common.BizException;
 import com.pams.module.archive.dto.TemplateRequest;
+import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.entity.TemplateAsset;
+import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.repository.TemplateAssetRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TemplateService {
     private final TemplateAssetRepository repository;
-    public TemplateService(TemplateAssetRepository repository) { this.repository = repository; }
+    private final FileRecordRepository fileRecordRepository;
+    public TemplateService(TemplateAssetRepository repository, FileRecordRepository fileRecordRepository) {
+        this.repository = repository;
+        this.fileRecordRepository = fileRecordRepository;
+    }
 
-    public List<TemplateAsset> list(String category) {
+    public List<Map<String, Object>> list(String category) {
         Sort sort = Sort.by(Sort.Direction.DESC, "id");
+        List<TemplateAsset> all;
         if (category != null && !category.isBlank()) {
-            return repository.findAll((root, q, cb) -> cb.equal(root.get("category"), category), sort);
+            all = repository.findAll((root, q, cb) -> cb.equal(root.get("category"), category), sort);
+        } else {
+            all = repository.findAll(sort);
         }
-        return repository.findAll(sort);
+        Set<Long> ids = all.stream().map(TemplateAsset::getFileId).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> filenameById = ids.isEmpty()
+                ? Map.of()
+                : fileRecordRepository.findAllByIdIn(ids).stream()
+                        .collect(Collectors.toMap(FileRecord::getId, FileRecord::getFilename));
+        return all.stream().map(t -> toVo(t, filenameById)).toList();
+    }
+
+    private Map<String, Object> toVo(TemplateAsset t, Map<Long, String> filenameById) {
+        Map<String, Object> vo = new LinkedHashMap<>();
+        vo.put("id", t.getId());
+        vo.put("name", t.getName());
+        vo.put("category", t.getCategory());
+        vo.put("description", t.getDescription());
+        vo.put("fileId", t.getFileId());
+        vo.put("originFilename", t.getFileId() == null ? null : filenameById.get(t.getFileId()));
+        vo.put("createdBy", t.getCreatedBy());
+        vo.put("createdAt", t.getCreatedAt());
+        return vo;
     }
 
     public TemplateAsset getEntity(Long id) {

@@ -3,7 +3,9 @@ package com.pams.module.archive.service;
 import com.pams.common.BizException;
 import com.pams.common.PageResult;
 import com.pams.module.archive.dto.MaterialRequest;
+import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.entity.Material;
+import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.repository.MaterialRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +24,11 @@ import java.util.Map;
 @Service
 public class MaterialService {
     private final MaterialRepository repository;
-    public MaterialService(MaterialRepository repository) { this.repository = repository; }
+    private final FileRecordRepository fileRecordRepository;
+    public MaterialService(MaterialRepository repository, FileRecordRepository fileRecordRepository) {
+        this.repository = repository;
+        this.fileRecordRepository = fileRecordRepository;
+    }
 
     public PageResult<Map<String, Object>> page(String keyword, String bizType, Long activityId, Long deptId,
                                                 int page, int size) {
@@ -41,13 +47,24 @@ public class MaterialService {
         };
         Page<Material> p = repository.findAll(spec, PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "id")));
 
+        List<Material> content = p.getContent();
+        Map<Long, String> filenames = filenamesOf(content);
         PageResult<Map<String, Object>> r = new PageResult<>();
-        r.setRecords(p.getContent().stream().map(this::toVo).toList());
+        r.setRecords(content.stream().map(m -> toVo(m, filenames)).toList());
         r.setTotal(p.getTotalElements()); r.setCurrent(page); r.setSize(size);
         return r;
     }
 
-    public Map<String, Object> toVo(Material m) {
+    /** 批量取 fileId -> file_record.filename，避免逐个查询 N+1 */
+    private Map<Long, String> filenamesOf(List<Material> materials) {
+        List<Long> fileIds = materials.stream().map(Material::getFileId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (fileIds.isEmpty()) return Map.of();
+        return fileRecordRepository.findAllById(fileIds).stream()
+                .collect(java.util.stream.Collectors.toMap(FileRecord::getId, FileRecord::getFilename, (a, b) -> a));
+    }
+
+    public Map<String, Object> toVo(Material m, Map<Long, String> filenames) {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", m.getId());
         vo.put("name", m.getName());
@@ -58,6 +75,7 @@ public class MaterialService {
         vo.put("tag", m.getTag() == null ? "" : m.getTag());
         vo.put("description", m.getDescription() == null ? "" : m.getDescription());
         vo.put("fileId", m.getFileId());
+        vo.put("originFilename", m.getFileId() == null ? null : filenames.get(m.getFileId()));
         vo.put("createdAt", m.getCreatedAt());
         return vo;
     }
@@ -111,11 +129,12 @@ public class MaterialService {
         for (Material m : all) {
             byActivity.computeIfAbsent(m.getActivityId(), k -> new ArrayList<>()).add(m);
         }
+        Map<Long, String> filenames = filenamesOf(all);
         List<Map<String, Object>> result = new ArrayList<>();
         byActivity.forEach((aid, list) -> {
             Map<String, List<Map<String, Object>>> byType = new LinkedHashMap<>();
             for (Material m : list) {
-                byType.computeIfAbsent(m.getBizType(), k -> new ArrayList<>()).add(toVo(m));
+                byType.computeIfAbsent(m.getBizType(), k -> new ArrayList<>()).add(toVo(m, filenames));
             }
             List<Map<String, Object>> types = new ArrayList<>();
             byType.forEach((t, materials) -> {

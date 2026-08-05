@@ -51,6 +51,13 @@ body::before {
   backdrop-filter: blur(28px) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
 }
+/* 弹窗标题栏衬底：默认实心白块 + 只圆上方两角的直角矩形会从圆角玻璃衬底底部穿出，
+   这里仅作用于本应用 GlassModal（.glass-modal），让它透明并跟随内容衬底圆角，融入玻璃底。 */
+.glass-modal .ant-modal-header {
+  background: transparent;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+}
 
 /* ============ 页面切换过渡动画 ============ */
 /* 每个路由页挂载时淡入 + 上移 + 轻微缩放，克制不花哨，符合 liquid glass 调性 */
@@ -93,6 +100,11 @@ body::before {
   .page-transition, .glass-card {
     animation: none !important;
   }
+}
+
+/* 模板库名称链接：hover 加下划线（默认 antd link 按钮无下划线） */
+.template-name-link:hover {
+  text-decoration: underline;
 }
 
 /* ============ 策划书 Word 纸张 ============ */

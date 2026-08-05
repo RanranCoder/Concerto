@@ -10,6 +10,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/templates")
@@ -18,7 +19,7 @@ public class TemplateController {
     public TemplateController(TemplateService service) { this.service = service; }
 
     @GetMapping
-    public Result<List<TemplateAsset>> list(@RequestParam(required = false) String category) {
+    public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String category) {
         return Result.ok(service.list(category));
     }
 

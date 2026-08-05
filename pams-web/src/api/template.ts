@@ -7,6 +7,8 @@ export interface TemplateVO {
   category: string
   description: string | null
   fileId: number | null
+  /** 原始文件名（file_record.filename），模板名可能不带扩展名，用于预览类型判断 */
+  originFilename: string | null
   createdBy: number | null
   createdAt: string
 }

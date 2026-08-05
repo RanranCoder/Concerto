@@ -3,6 +3,7 @@ import { Button, Empty, Form, Input, message, Popconfirm, Select, Space, Spin, T
 import {
   DeleteOutlined,
   DownloadOutlined,
+  EyeOutlined,
   FileOutlined,
   FolderOutlined,
   FolderOpenOutlined,
@@ -14,6 +15,7 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import PageHeader from '@/components/glass/PageHeader'
 import UploadFile from '@/components/glass/UploadFile'
+import FilePreviewModal from '@/components/file/FilePreviewModal'
 import {
   createMaterial,
   deleteMaterial,
@@ -44,6 +46,7 @@ export default function MaterialList() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fileId, setFileId] = useState<number | null>(null)
+  const [preview, setPreview] = useState<{ fileId: number; fileName: string } | null>(null)
   const [form] = Form.useForm<MaterialFormValues>()
 
   const activityNameOf = (id: number | null): string => {
@@ -179,6 +182,14 @@ export default function MaterialList() {
                   <Button
                     type="link"
                     size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => setPreview({ fileId: m.fileId as number, fileName: m.originFilename || m.name })}
+                  />
+                )}
+                {m.fileId && (
+                  <Button
+                    type="link"
+                    size="small"
                     icon={<DownloadOutlined />}
                     onClick={() => downloadFile(m.fileId as number, m.name)}
                   />
@@ -237,6 +248,16 @@ export default function MaterialList() {
                       {m.tag ? ` · #${m.tag}` : ''} · {dayjs(m.createdAt).format('YYYY-MM-DD')}
                     </div>
                   </div>
+                  {m.fileId && (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => setPreview({ fileId: m.fileId as number, fileName: m.originFilename || m.name })}
+                    >
+                      预览
+                    </Button>
+                  )}
                   {m.fileId && (
                     <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(m.fileId as number, m.name)}>
                       下载
@@ -304,6 +325,13 @@ export default function MaterialList() {
           </Form.Item>
         </Form>
       </GlassModal>
+
+      <FilePreviewModal
+        open={preview != null}
+        onClose={() => setPreview(null)}
+        fileId={preview?.fileId ?? 0}
+        fileName={preview?.fileName ?? ''}
+      />
     </div>
   )
 }

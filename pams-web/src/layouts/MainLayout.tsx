@@ -58,7 +58,15 @@ export default function MainLayout() {
       })
       items.push({ key: '/archive/templates', label: '模板库', icon: <TagsOutlined /> })
       items.push({ key: '/archive/credits', label: '素拓加分', icon: <TrophyOutlined /> })
-      items.push({ key: '/archive/announcements', label: '通知公告', icon: <BellOutlined /> })
+      items.push({
+        key: 'archive',
+        label: '通知公告',
+        icon: <BellOutlined />,
+        children: [
+          { key: '/archive/announcements', label: '公告' },
+          { key: '/archive/group-chats', label: '群聊管理' },
+        ],
+      })
     }
     if (isAdmin) {
       items.push({ key: '/admin/users', label: '用户管理', icon: <TeamOutlined /> })
@@ -75,6 +83,10 @@ export default function MainLayout() {
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
     if (p.startsWith('/content')) return p.startsWith('/content/news') ? '/content/news' : '/content/articles'
+    if (p.startsWith('/archive/templates')) return '/archive/templates'
+    if (p.startsWith('/archive/credits')) return '/archive/credits'
+    if (p.startsWith('/archive/announcements')) return '/archive/announcements'
+    if (p.startsWith('/archive/group-chats')) return '/archive/group-chats'
     if (p.startsWith('/archive')) return '/archive/materials'
     if (p === '/admin/users') return '/admin/users'
     if (p === '/admin/settings') return '/admin/settings'

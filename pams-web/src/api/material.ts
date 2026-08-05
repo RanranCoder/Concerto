@@ -12,6 +12,8 @@ export interface MaterialVO {
   tag: string
   description: string
   fileId: number | null
+  /** 原始文件名（file_record.filename，含扩展名），用于预览类型识别 */
+  originFilename: string | null
   createdAt: string
 }
 

@@ -27,8 +27,10 @@ const Materials = lazy(() => import('@/pages/archive/MaterialList'))
 const Templates = lazy(() => import('@/pages/archive/TemplateList'))
 const Credits = lazy(() => import('@/pages/archive/CreditList'))
 const Announcements = lazy(() => import('@/pages/archive/AnnouncementList'))
+const GroupChats = lazy(() => import('@/pages/archive/GroupChatList'))
 const Users = lazy(() => import('@/pages/admin/UserList'))
 const Settings = lazy(() => import('@/pages/admin/Settings'))
+const NotificationList = lazy(() => import('@/pages/notification/NotificationList'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -81,6 +83,10 @@ export const router = createBrowserRouter([
       { path: '/archive/templates', element: <Templates /> },
       { path: '/archive/credits', element: <Credits /> },
       { path: '/archive/announcements', element: <Announcements /> },
+      { path: '/archive/group-chats', element: <GroupChats /> },
+
+      // 通知中心
+      { path: '/notifications', element: <NotificationList /> },
 
       // 用户管理：简报"主任+额外显示用户管理"，前端仅主任/指导老师可访问
       { path: '/admin/users', element: <RequireRole roles={ADMIN_ROLES}><Users /></RequireRole> },
