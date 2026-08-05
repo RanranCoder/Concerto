@@ -91,10 +91,15 @@ class NotificationEventListenerTest {
 
         listener.handlePlanSubmitted(new PlanSubmittedEvent(1L, 100L, "策划书", 5L));
 
-        // one notification for TEACHER role, one for DIRECTOR role
-        verify(notificationService, times(2)).createAndSave(
+        // one notification for TEACHER role
+        verify(notificationService, times(1)).createAndSave(
             eq(NotificationType.PLAN_SUBMITTED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(5L), isNull(), anyString(), isNull()
+            eq("PLAN"), eq(1L), eq(5L), isNull(), eq("TEACHER"), isNull()
+        );
+        // one notification for DIRECTOR role
+        verify(notificationService, times(1)).createAndSave(
+            eq(NotificationType.PLAN_SUBMITTED), anyString(), anyString(),
+            eq("PLAN"), eq(1L), eq(5L), isNull(), eq("DIRECTOR"), isNull()
         );
     }
 
