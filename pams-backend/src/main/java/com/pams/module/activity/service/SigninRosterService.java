@@ -3,13 +3,19 @@ package com.pams.module.activity.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
+import com.pams.module.activity.dto.GroupPersonVO;
+import com.pams.module.activity.dto.GroupUploadResultVO;
+import com.pams.module.activity.dto.SignInGroupSummaryVO;
+import com.pams.module.activity.dto.SignInGroupVO;
 import com.pams.module.activity.dto.SigninFieldConfigRequest;
 import com.pams.module.activity.dto.SigninRosterVO;
 import com.pams.module.activity.dto.SigninSummaryVO;
+import com.pams.module.activity.entity.SignInGroup;
 import com.pams.module.activity.entity.Signin;
 import com.pams.module.activity.entity.SigninFieldConfig;
 import com.pams.module.activity.entity.SigninRoster;
 import com.pams.module.activity.repository.ActivityRepository;
+import com.pams.module.activity.repository.SignInGroupRepository;
 import com.pams.module.activity.repository.SigninFieldConfigRepository;
 import com.pams.module.activity.repository.SigninRepository;
 import com.pams.module.activity.repository.SigninRosterRepository;
@@ -17,6 +23,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,11 +38,20 @@ public class SigninRosterService {
     private final SigninFieldConfigRepository fieldRepo;
     private final SigninRepository signinRepo;
     private final ActivityRepository activityRepo;
+    private final SignInGroupRepository groupRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SigninRosterService(SigninRosterRepository rosterRepo, SigninFieldConfigRepository fieldRepo,
                                SigninRepository signinRepo, ActivityRepository activityRepo) {
-        this.rosterRepo = rosterRepo; this.fieldRepo = fieldRepo; this.signinRepo = signinRepo; this.activityRepo = activityRepo;
+        this(rosterRepo, fieldRepo, signinRepo, activityRepo, null);
+    }
+
+    @Autowired
+    public SigninRosterService(SigninRosterRepository rosterRepo, SigninFieldConfigRepository fieldRepo,
+                               SigninRepository signinRepo, ActivityRepository activityRepo,
+                               SignInGroupRepository groupRepo) {
+        this.rosterRepo = rosterRepo; this.fieldRepo = fieldRepo; this.signinRepo = signinRepo;
+        this.activityRepo = activityRepo; this.groupRepo = groupRepo;
     }
 
     // ===== 核验字段配置 =====
@@ -75,12 +91,21 @@ public class SigninRosterService {
     // ===== Excel 上传 =====
     @Transactional
     public Map<String, Integer> uploadFromXlsx(Long activityId, MultipartFile file) {
+        return uploadRows(activityId, file, null);
+    }
+
+    private Map<String, Integer> uploadRows(Long activityId, MultipartFile file, Long groupId) {
         if (!activityRepo.existsById(activityId)) throw new BizException(2001, "活动不存在");
         // B9 fix: 空文件守卫
         if (file == null || file.isEmpty()) throw new BizException(2403, "上传文件不能为空");
 
         List<SigninRoster> toSave = new ArrayList<>();
         Set<String> seen = new HashSet<>();
+        if (groupId != null) {
+            for (SigninRoster existing : rosterRepo.findByGroupId(groupId)) {
+                seen.add(rowKey(parseJson(existing.getFieldsJson())));
+            }
+        }
         int skipped = 0;
         try (InputStream in = file.getInputStream(); Workbook wb = WorkbookFactory.create(in)) {
             Sheet sheet = wb.getSheetAt(0);
@@ -111,13 +136,11 @@ public class SigninRosterService {
                     values.put(fieldName, v);
                 }
                 if (!any) continue; // 全空行跳过
-                String key = values.entrySet().stream()
-                        .filter(e -> !e.getValue().isEmpty())
-                        .map(e -> e.getKey() + "=" + e.getValue())
-                        .reduce("", (a, b) -> a + "|" + b);
+                String key = rowKey(values);
                 if (!seen.add(key)) { skipped++; continue; } // B8 fix: 计数跳过的重复行
                 SigninRoster rr = new SigninRoster();
                 rr.setActivityId(activityId);
+                rr.setGroupId(groupId);
                 rr.setFieldsJson(toJson(values));
                 rr.setCreatedAt(LocalDateTime.now());
                 toSave.add(rr);
@@ -130,6 +153,13 @@ public class SigninRosterService {
         res.put("added", toSave.size());
         res.put("skipped", skipped);
         return res;
+    }
+
+    private String rowKey(Map<String, String> values) {
+        return values.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .reduce("", (a, b) -> a + "|" + b);
     }
 
     private String toJson(Map<String, String> m) {
@@ -273,5 +303,154 @@ public class SigninRosterService {
     /** 该活动已有签到记录是否命中名单行（按名单行所有非空字段值匹配，同 matches 规则） */
     private boolean existsSigninFor(List<Signin> signins, Map<String, String> rosterFields) {
         return signins.stream().anyMatch(s -> matches(s, rosterFields));
+    }
+
+    // ===== 名单分组 =====
+
+    public List<SignInGroupVO> listGroups(Long activityId, String keyword) {
+        if (!activityRepo.existsById(activityId)) throw new BizException(2001, "活动不存在");
+        List<SignInGroup> groups = groupRepo.findByActivityIdOrderBySortOrderAsc(activityId);
+        List<Signin> signins = signinRepo.findByActivityId(activityId);
+        boolean kwFilter = keyword != null && !keyword.isBlank();
+        String kw = kwFilter ? keyword.trim() : null;
+        List<SignInGroupVO> vos = new ArrayList<>();
+        for (SignInGroup g : groups) {
+            List<GroupPersonVO> people = new ArrayList<>();
+            for (SigninRoster r : rosterRepo.findByGroupId(g.getId())) {
+                Map<String, String> fields = parseJson(r.getFieldsJson());
+                if (kwFilter && !matchesKeyword(fields, kw)) continue;
+                GroupPersonVO p = new GroupPersonVO();
+                p.setId(r.getId());
+                p.setGroupId(g.getId());
+                p.setFields(fields);
+                p.setSigned(signins.stream().anyMatch(s -> matches(s, fields)));
+                people.add(p);
+            }
+            SignInGroupVO vo = new SignInGroupVO();
+            vo.setId(g.getId());
+            vo.setActivityId(activityId);
+            vo.setGroupName(g.getGroupName());
+            vo.setSourceFilename(g.getSourceFilename());
+            vo.setSortOrder(g.getSortOrder());
+            vo.setCreatedAt(g.getCreatedAt());
+            vo.setPeople(people);
+            vo.setSignedCount(people.stream().filter(GroupPersonVO::isSigned).count());
+            vo.setUnsignedCount(people.size() - vo.getSignedCount());
+            vo.setCount(people.size());
+            vos.add(vo);
+        }
+        return vos;
+    }
+
+    /** 跨分组搜索：按姓名/学号模糊匹配 */
+    private boolean matchesKeyword(Map<String, String> fields, String kw) {
+        String name = fields.getOrDefault("姓名", "");
+        String no = fields.getOrDefault("学号", "");
+        return name.contains(kw) || no.contains(kw);
+    }
+
+    public SignInGroupSummaryVO groupSummary(Long activityId) {
+        SignInGroupSummaryVO vo = new SignInGroupSummaryVO();
+        List<Signin> signins = signinRepo.findByActivityId(activityId);
+        long total = 0, signed = 0, groupCount = 0;
+        for (SignInGroup g : groupRepo.findByActivityIdOrderBySortOrderAsc(activityId)) {
+            List<SigninRoster> rows = rosterRepo.findByGroupId(g.getId());
+            if (rows.isEmpty()) continue;
+            long s = rows.stream().filter(r -> signins.stream().anyMatch(sn -> matches(sn, parseJson(r.getFieldsJson())))).count();
+            total += rows.size();
+            signed += s;
+            groupCount++;
+        }
+        vo.setTotal(total);
+        vo.setSigned(signed);
+        vo.setUnsigned(total - signed);
+        vo.setGroupCount(groupCount);
+        return vo;
+    }
+
+    @Transactional
+    public GroupUploadResultVO uploadGroupXlsx(Long activityId, MultipartFile file, Long groupId) {
+        if (!activityRepo.existsById(activityId)) throw new BizException(2001, "活动不存在");
+        if (file == null || file.isEmpty()) throw new BizException(2403, "上传文件不能为空");
+        SignInGroup group;
+        if (groupId != null) {
+            group = groupRepo.findById(groupId).orElseThrow(() -> new BizException(2406, "分组不存在"));
+            if (!group.getActivityId().equals(activityId)) throw new BizException(2407, "分组不属于该活动");
+        } else {
+            String name = file.getOriginalFilename();
+            String groupName = name == null ? "未命名分组" : name.replaceFirst("(?i)\\.(xlsx|xls)$", "");
+            if (groupName.isBlank()) groupName = "未命名分组";
+            group = new SignInGroup();
+            group.setActivityId(activityId);
+            group.setGroupName(groupName);
+            group.setSourceFilename(name);
+            int next = groupRepo.findByActivityId(activityId).stream()
+                    .mapToInt(g -> g.getSortOrder() == null ? 0 : g.getSortOrder()).max().orElse(0) + 1;
+            group.setSortOrder(next);
+            group.setCreatedAt(LocalDateTime.now());
+            group = groupRepo.save(group);
+        }
+        Map<String, Integer> res = uploadRows(activityId, file, group.getId());
+        GroupUploadResultVO vo = new GroupUploadResultVO();
+        vo.setGroupId(group.getId());
+        vo.setGroupName(group.getGroupName());
+        vo.setAdded(res.get("added"));
+        vo.setSkipped(res.get("skipped"));
+        return vo;
+    }
+
+    @Transactional
+    public void renameGroup(Long id, String groupName) {
+        if (groupName == null || groupName.isBlank()) throw new BizException(400, "分组名不能为空");
+        SignInGroup g = groupRepo.findById(id).orElseThrow(() -> new BizException(2406, "分组不存在"));
+        g.setGroupName(groupName.trim());
+    }
+
+    @Transactional
+    public void sortGroups(List<Long> ids) {
+        int order = 0;
+        for (Long id : ids) {
+            SignInGroup g = groupRepo.findById(id).orElse(null);
+            if (g != null) {
+                g.setSortOrder(++order);
+                groupRepo.save(g);
+            }
+        }
+    }
+
+    @Transactional
+    public void deleteGroup(Long id) {
+        SignInGroup g = groupRepo.findById(id).orElseThrow(() -> new BizException(2406, "分组不存在"));
+        rosterRepo.deleteByGroupId(g.getId());
+        groupRepo.delete(g);
+    }
+
+    @Transactional
+    public int deleteGroups(List<Long> ids) {
+        int n = 0;
+        for (Long id : ids) {
+            if (groupRepo.findById(id).isEmpty()) continue;
+            rosterRepo.deleteByGroupId(id);
+            groupRepo.deleteById(id);
+            n++;
+        }
+        return n;
+    }
+
+    @Transactional
+    public void deletePerson(Long rosterId) {
+        deleteRoster(rosterId);
+    }
+
+    @Transactional
+    public int deletePersons(List<Long> rosterIds) {
+        int n = 0;
+        for (Long id : rosterIds) {
+            if (rosterRepo.existsById(id)) {
+                rosterRepo.deleteById(id);
+                n++;
+            }
+        }
+        return n;
     }
 }

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Form, Input, InputNumber, message, Popconfirm, Select, Space, Statistic } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
+import ActivityCreditModal from '@/components/credit/ActivityCreditModal'
 import {
   createCredit,
   deleteCredit,
@@ -34,6 +35,7 @@ export default function CreditList() {
   const [size, setSize] = useState(10)
   const [activities, setActivities] = useState<ActivityVO[]>([])
   const [addOpen, setAddOpen] = useState(false)
+  const [activityCreditOpen, setActivityCreditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<CreditFormValues>()
   // 顶部总分值汇总：一次性拉当前搜索条件下全部记录求和（忽略分页，素拓记录量级小）
@@ -186,10 +188,24 @@ export default function CreditList() {
         title="素拓加分"
         description="活动素拓加分台账：记录参与 / 答题等加分，汇总人次与总分值"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-            新增加分
-          </Button>
+          <Space>
+            <Button icon={<ThunderboltOutlined />} onClick={() => setActivityCreditOpen(true)}>
+              活动加分
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+              新增加分
+            </Button>
+          </Space>
         }
+      />
+
+      <ActivityCreditModal
+        open={activityCreditOpen}
+        onClose={() => setActivityCreditOpen(false)}
+        onSuccess={() => {
+          fetchList()
+          refreshSummary()
+        }}
       />
 
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>

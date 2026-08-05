@@ -2,6 +2,9 @@ package com.pams.module.activity.controller;
 
 import com.pams.common.BizException;
 import com.pams.common.Result;
+import com.pams.module.activity.dto.GroupUploadResultVO;
+import com.pams.module.activity.dto.SignInGroupSummaryVO;
+import com.pams.module.activity.dto.SignInGroupVO;
 import com.pams.module.activity.dto.SigninFieldConfigRequest;
 import com.pams.module.activity.dto.SigninRosterVO;
 import com.pams.module.activity.dto.SigninSummaryVO;
@@ -84,5 +87,77 @@ public class SigninRosterController {
         List<Long> rosterIds = ids.stream().map(Number::longValue).toList();
         Long operatorId = current == null ? null : current.getId();
         return Result.ok(service.backfill(activityId, rosterIds, operatorId));
+    }
+
+    // ===== 名单分组 =====
+
+    /** 分组列表，keyword 跨分组按姓名/学号过滤人员 */
+    @GetMapping("/groups")
+    public Result<List<SignInGroupVO>> groups(@RequestParam Long activityId,
+                                              @RequestParam(required = false) String keyword) {
+        return Result.ok(service.listGroups(activityId, keyword));
+    }
+
+    /** 分组汇总：total/signed/unsigned/groupCount */
+    @GetMapping("/groups/summary")
+    public Result<SignInGroupSummaryVO> groupSummary(@RequestParam Long activityId) {
+        return Result.ok(service.groupSummary(activityId));
+    }
+
+    /** 上传名单（新建分组或并入已有分组）：multipart activityId + file + 可选 groupId */
+    @PostMapping("/groups/upload")
+    public Result<GroupUploadResultVO> uploadGroup(@RequestParam Long activityId,
+                                                   @RequestParam("file") MultipartFile file,
+                                                   @RequestParam(required = false) Long groupId) {
+        return Result.ok(service.uploadGroupXlsx(activityId, file, groupId));
+    }
+
+    /** 分组重命名 */
+    @PutMapping("/groups/{id}/rename")
+    public Result<Void> renameGroup(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        service.renameGroup(id, body.get("groupName"));
+        return Result.ok();
+    }
+
+    /** 分组排序，body {ids:[]} */
+    @PutMapping("/groups/sort")
+    public Result<Void> sortGroups(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Number> ids = (List<Number>) body.get("ids");
+        if (ids == null || ids.isEmpty()) throw new BizException(400, "ids 不能为空");
+        service.sortGroups(ids.stream().map(Number::longValue).toList());
+        return Result.ok();
+    }
+
+    /** 删除分组及其名单行 */
+    @DeleteMapping("/groups/{id}")
+    public Result<Void> deleteGroup(@PathVariable Long id) {
+        service.deleteGroup(id);
+        return Result.ok();
+    }
+
+    /** 批量删除分组，body {ids:[]} */
+    @DeleteMapping("/groups/batch")
+    public Result<Integer> deleteGroups(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Number> ids = (List<Number>) body.get("ids");
+        if (ids == null || ids.isEmpty()) throw new BizException(400, "ids 不能为空");
+        return Result.ok(service.deleteGroups(ids.stream().map(Number::longValue).toList()));
+    }
+
+    /** 删除单个名单行（人员） */
+    @DeleteMapping("/groups/persons/{rosterId}")
+    public Result<Void> deletePerson(@PathVariable Long rosterId) {
+        service.deletePerson(rosterId);
+        return Result.ok();
+    }
+
+    /** 批量删除名单行，body {ids:[]} */
+    @DeleteMapping("/groups/persons/batch")
+    public Result<Integer> deletePersons(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Number> ids = (List<Number>) body.get("ids");
+        if (ids == null || ids.isEmpty()) throw new BizException(400, "ids 不能为空");
+        return Result.ok(service.deletePersons(ids.stream().map(Number::longValue).toList()));
     }
 }

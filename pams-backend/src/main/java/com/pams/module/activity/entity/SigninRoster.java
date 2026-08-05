@@ -13,6 +13,7 @@ public class SigninRoster {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long activityId;
+    private Long groupId;
     @Column(columnDefinition = "TEXT")
     private String fieldsJson;
     private LocalDateTime createdAt;

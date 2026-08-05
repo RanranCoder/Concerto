@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class CreditService {
@@ -54,6 +55,8 @@ public class CreditService {
         vo.put("personName", c.getPersonName());
         vo.put("studentNo", c.getStudentNo() == null ? "" : c.getStudentNo());
         vo.put("activityId", c.getActivityId());
+        vo.put("sourceActivityId", c.getSourceActivityId());
+        vo.put("batchId", c.getBatchId());
         vo.put("project", c.getProject());
         vo.put("credit", c.getCredit());
         vo.put("basis", c.getBasis() == null ? "" : c.getBasis());
@@ -97,5 +100,53 @@ public class CreditService {
         c.setCredit(req.getCredit() == null ? null : req.getCredit().setScale(2, RoundingMode.HALF_UP));
         c.setBasis(req.getBasis());
         c.setRemark(req.getRemark());
+    }
+
+    // ===== 活动批量加分 =====
+
+    @Transactional
+    public Map<String, Integer> batchAddFromActivity(Long sourceActivityId, String project, BigDecimal credit,
+                                                     String remark, List<Map<String, String>> people, Long operatorId) {
+        if (sourceActivityId == null) throw new BizException(400, "来源活动不能为空");
+        if (project == null || project.isBlank()) throw new BizException(400, "加分原因不能为空");
+        if (people == null || people.isEmpty()) throw new BizException(400, "人员不能为空");
+        String batchId = UUID.randomUUID().toString();
+        List<CreditRecord> existing = repository.findBySourceActivityId(sourceActivityId);
+        int added = 0, skipped = 0;
+        BigDecimal scaleCredit = credit == null ? null : credit.setScale(2, RoundingMode.HALF_UP);
+        for (Map<String, String> p : people) {
+            String name = p.get("personName");
+            String no = p.get("studentNo");
+            if (name == null || name.isBlank()) { skipped++; continue; }
+            boolean dup = existing.stream().anyMatch(c ->
+                    name.equals(c.getPersonName()) && (no == null ? c.getStudentNo() == null : no.equals(c.getStudentNo())));
+            if (dup) { skipped++; continue; }
+            CreditRecord c = new CreditRecord();
+            c.setUserId(null);
+            c.setPersonName(name.trim());
+            c.setStudentNo(no == null || no.isBlank() ? null : no.trim());
+            c.setActivityId(sourceActivityId);
+            c.setSourceActivityId(sourceActivityId);
+            c.setBatchId(batchId);
+            c.setProject(project.trim());
+            c.setCredit(scaleCredit);
+            c.setBasis("PARTICIPATE");
+            c.setRemark(remark == null || remark.isBlank() ? null : remark.trim());
+            c.setRecordBy(operatorId);
+            c.setCreatedAt(LocalDateTime.now());
+            repository.save(c);
+            added++;
+        }
+        Map<String, Integer> res = new LinkedHashMap<>();
+        res.put("added", added);
+        res.put("skipped", skipped);
+        return res;
+    }
+
+    @Transactional
+    public int batchRollback(String batchId) {
+        List<CreditRecord> rows = repository.findByBatchId(batchId);
+        repository.deleteAll(rows);
+        return rows.size();
     }
 }

@@ -7,9 +7,8 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import SigninQR from '@/components/signin/SigninQR'
-import SigninRosterUpload from '@/components/signin/SigninRosterUpload'
+import SignInGroupList from '@/components/signin/SignInGroupList'
 import SigninFieldConfig from '@/components/signin/SigninFieldConfig'
-import SigninRosterList from '@/components/signin/SigninRosterList'
 import { useAuthStore } from '@/stores/auth'
 import {
   countSignins,
@@ -17,7 +16,6 @@ import {
   deleteSignin,
   listSignins,
   rosterSummary,
-  type RosterStatus,
   type SigninSave,
   type SigninSummaryVO,
   type SigninVO,
@@ -67,10 +65,9 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
   const [formInit, setFormInit] = useState<Record<string, unknown>>()
   const [form] = Form.useForm()
 
-  // 应签名单：汇总 / 筛选状态 / 刷新信号（上传、字段配置、补签、扫码、手动签到均 bump）
+  // 应签名单：汇总 / 刷新信号（上传、字段配置、补签、扫码、手动签到均 bump）
   const isMinisterOrAbove = (useAuthStore((s) => s.user?.roleLevel) ?? 0) >= 3
   const [rosterSummaryData, setRosterSummaryData] = useState<SigninSummaryVO | null>(null)
-  const [rosterStatus, setRosterStatus] = useState<RosterStatus>('ALL')
   const [rosterVersion, setRosterVersion] = useState(0)
   const bumpRoster = () => setRosterVersion((v) => v + 1)
 
@@ -206,17 +203,7 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
           </Space>
 
           <div style={{ marginTop: 12 }}>
-            <SigninRosterUpload activityId={activityId} onUploaded={refreshAll} />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <SigninRosterList
-              activityId={activityId}
-              status={rosterStatus}
-              onStatusChange={setRosterStatus}
-              reloadKey={rosterVersion}
-              onChanged={refreshAll}
-            />
+            <SignInGroupList activityId={activityId} reloadKey={rosterVersion} onChanged={refreshAll} />
           </div>
         </GlassCard>
       )}

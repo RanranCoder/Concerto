@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface SigninRosterRepository extends JpaRepository<SigninRoster, Long> {
     List<SigninRoster> findByActivityId(Long activityId);
+    List<SigninRoster> findByGroupId(Long groupId);
     void deleteByActivityId(Long activityId);
+    void deleteByGroupId(Long groupId);
     long countByActivityId(Long activityId);
+    long countByGroupId(Long groupId);
 }

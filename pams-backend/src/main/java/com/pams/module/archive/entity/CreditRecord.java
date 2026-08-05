@@ -18,6 +18,8 @@ public class CreditRecord {
     @Column(length = 20)
     private String studentNo;
     private Long activityId;
+    private Long sourceActivityId;
+    private String batchId;
     @Column(nullable = false, length = 100)
     private String project;
     @Column(nullable = false, precision = 4, scale = 2)

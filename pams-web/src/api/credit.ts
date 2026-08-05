@@ -7,6 +7,8 @@ export interface CreditVO {
   personName: string
   studentNo: string
   activityId: number | null
+  sourceActivityId?: number | null
+  batchId?: string | null
   project: string
   /** 分值（0 ~ 99.99，两位小数） */
   credit: number
@@ -38,3 +40,22 @@ export const listCredits = (params: { keyword?: string; page?: number; size?: nu
 export const createCredit = (data: CreditSave) => post<CreditVO>('/credits', data)
 export const updateCredit = (id: number, data: CreditSave) => put<void>(`/credits/${id}`, data)
 export const deleteCredit = (id: number) => del<void>(`/credits/${id}`)
+
+/** 活动批量加分 payload */
+export interface ActivityBatchCreditPayload {
+  sourceActivityId: number
+  project: string
+  credit: number
+  remark: string | null
+  people: { personName: string; studentNo?: string | null }[]
+}
+
+/** 活动批量加分结果 */
+export interface ActivityBatchCreditResult {
+  added: number
+  skipped: number
+}
+
+export const activityBatchCredit = (data: ActivityBatchCreditPayload) =>
+  post<ActivityBatchCreditResult>('/credits/activity-batch', data)
+export const batchRollbackCredit = (batchId: string) => del<number>(`/credits/batch/${batchId}`)
