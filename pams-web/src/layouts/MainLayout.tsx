@@ -130,12 +130,17 @@ export default function MainLayout() {
   }, [location.pathname])
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <NotificationToast />
       <Sider
         width={220}
         className="glass-card"
-        style={{ margin: 12, borderRadius: 16, overflow: 'hidden' }}
+        style={{
+          height: '100vh',
+          margin: 12,
+          borderRadius: 16,
+          overflowY: 'auto',
+        }}
       >
         <div style={{ padding: '20px 16px' }}>
           <Typography.Title level={5} style={{ color: 'var(--color-text)', margin: 0 }}>
@@ -153,7 +158,7 @@ export default function MainLayout() {
           style={{ background: 'transparent', borderInlineEnd: 'none' }}
         />
       </Sider>
-      <Layout>
+      <Layout style={{ height: '100vh', minWidth: 0 }}>
         <Header
           style={{
             background: 'transparent',
@@ -189,7 +194,13 @@ export default function MainLayout() {
             </Space>
           </Dropdown>
         </Header>
-        <Content style={{ padding: '0 24px 24px' }}>
+        <Content
+          style={{
+            minHeight: 0,
+            overflowY: 'auto',
+            padding: '0 24px 24px',
+          }}
+        >
           <Suspense
             fallback={
               <div style={{ textAlign: 'center', padding: 80 }}>
