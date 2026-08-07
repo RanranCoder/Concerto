@@ -136,7 +136,7 @@ export default function MainLayout() {
         width={220}
         className="glass-card"
         style={{
-          height: '100vh',
+          height: 'calc(100vh - 24px)',
           margin: 12,
           borderRadius: 16,
           overflowY: 'auto',
