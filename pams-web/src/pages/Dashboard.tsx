@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<ActivityVO[]>([])
   const [schedules, setSchedules] = useState<ScheduleVO[]>([])
   const [loading, setLoading] = useState(true)
+  const [cleared, setCleared] = useState(false)
 
   const today = dayjs()
   const todayWeekday = today.day() === 0 ? 7 : today.day() // 周一=1 … 周日=7
@@ -292,14 +293,21 @@ export default function Dashboard() {
                 <CalendarOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
                 活动动态
               </Typography.Title>
-              <Button type="link" onClick={() => navigate('/activities')}>
-                全部活动
-              </Button>
+              <Space size={4}>
+                {!cleared && (
+                  <Button type="link" size="small" onClick={() => setCleared(true)}>
+                    清除
+                  </Button>
+                )}
+                <Button type="link" onClick={() => navigate('/activities')}>
+                  全部活动
+                </Button>
+              </Space>
             </div>
-            {upcomingActivities.length === 0 ? (
-              <Empty description="暂无进行中的活动" style={{ padding: 24 }} />
+            {cleared || upcomingActivities.length === 0 ? (
+              <Empty description={cleared ? '已清除活动动态' : '暂无进行中的活动'} style={{ padding: 24 }} />
             ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gap: 8, maxHeight: 194, overflowY: 'auto', paddingRight: 6 }}>
                 {upcomingActivities.map((a) => {
                   return (
                     <div
