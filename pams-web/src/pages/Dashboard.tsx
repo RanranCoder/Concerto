@@ -173,7 +173,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <Masonry gap={16} minColWidth={340}>
+      <Masonry gap={16} minColWidth={300}>
         <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
