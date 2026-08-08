@@ -7,7 +7,6 @@ import {
   ClockCircleOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
-  LinkOutlined,
   PlayCircleOutlined,
   ScheduleOutlined,
   TrophyOutlined,
@@ -487,13 +486,6 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-          </GlassCard>
-
-          <GlassCard style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-            <Space direction="vertical" size={4}>
-              <LinkOutlined style={{ fontSize: 20, color: 'var(--color-red)' }} />
-              <span style={{ fontSize: 12 }}>信息与智能工程学院党建办公室</span>
-            </Space>
           </GlassCard>
       </Masonry>
 
