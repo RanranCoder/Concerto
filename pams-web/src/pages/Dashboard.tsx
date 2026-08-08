@@ -307,7 +307,7 @@ export default function Dashboard() {
             {cleared || upcomingActivities.length === 0 ? (
               <Empty description={cleared ? '已清除活动动态' : '暂无进行中的活动'} style={{ padding: 24 }} />
             ) : (
-              <div style={{ display: 'grid', gap: 8, maxHeight: 194, overflowY: 'auto', paddingRight: 6 }}>
+              <div className="hide-scrollbar" style={{ display: 'grid', gap: 8, maxHeight: 194, overflowY: 'auto', paddingRight: 6 }}>
                 {upcomingActivities.map((a) => {
                   return (
                     <div

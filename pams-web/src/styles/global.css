@@ -295,6 +295,13 @@ body::before {
 }
 .ant-layout-sider::-webkit-scrollbar { display: none; }
 
+/* 通用：隐藏滚动条但保留滚动（活动动态卡片等小区域） */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
 /* 去掉侧边栏悬停时的白色遮罩：移除左上角白色高光渐变与白色内发光，只保留红边/阴影加深 */
 .ant-layout-sider.glass-card::before { content: none; }
 .ant-layout-sider.glass-card:hover {
