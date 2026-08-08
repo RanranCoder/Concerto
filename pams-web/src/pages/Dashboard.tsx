@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
+import Masonry from '@/components/glass/Masonry'
 import PageHeader from '@/components/glass/PageHeader'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { listActivities, type ActivityVO } from '@/api/activity'
@@ -172,10 +173,8 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.9fr) minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
-        {/* 左列：本周排班 + 活动动态 */}
-        <div style={{ display: 'grid', gap: 16 }}>
-          <GlassCard style={{ padding: 20 }}>
+      <Masonry gap={16} minColWidth={340}>
+        <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
                 <ScheduleOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
@@ -386,11 +385,7 @@ export default function Dashboard() {
               </div>
             )}
           </GlassCard>
-        </div>
-
-        {/* 侧栏：最新推文 / 最新材料 / 最新公告 */}
-        <div style={{ display: 'grid', gap: 16 }}>
-          <GlassCard style={{ padding: 20 }}>
+        <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
                 <FileTextOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
@@ -492,8 +487,7 @@ export default function Dashboard() {
               <span style={{ fontSize: 12 }}>信息与智能工程学院党建办公室</span>
             </Space>
           </GlassCard>
-        </div>
-      </div>
+      </Masonry>
 
       <style>{`
         .dash-activity-item:hover { border-color: rgba(222,41,16,0.4); }
