@@ -288,3 +288,16 @@ body::before {
   text-align: center;
 }
 
+/* ============ 侧边栏：隐藏滚动条但保留滚动 ============ */
+.ant-layout-sider {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ant-layout-sider::-webkit-scrollbar { display: none; }
+
+/* 去掉侧边栏悬停时的白色遮罩：移除左上角白色高光渐变与白色内发光，只保留红边/阴影加深 */
+.ant-layout-sider.glass-card::before { content: none; }
+.ant-layout-sider.glass-card:hover {
+  box-shadow: 0 16px 48px rgba(31, 38, 60, 0.18);
+}
+
