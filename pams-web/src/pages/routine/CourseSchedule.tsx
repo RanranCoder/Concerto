@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Empty, message, Select, Space, Spin, Tabs, Tag, Tooltip } from 'antd'
-import { CalendarOutlined, DownloadOutlined, FireOutlined } from '@ant-design/icons'
+import { Button, Empty, message, Select, Space, Spin, Tabs, Tag, Tooltip, Upload } from 'antd'
+import { CalendarOutlined, CopyOutlined, DownloadOutlined, FireOutlined, UploadOutlined } from '@ant-design/icons'
+import type { UploadFile } from 'antd'
 import GlassCard from '@/components/glass/GlassCard'
 import PageHeader from '@/components/glass/PageHeader'
+import { listDepts, type DeptVO } from '@/api/dept'
 import {
   analyzeFreeTime,
   getMySchedule,
   saveMySchedule,
   getScheduleConfigs,
+  importNoClassSchedules,
+  downloadNoClassScheduleXlsx,
+  type NoClassScheduleImportVO,
   type FreeTimeAnalysisVO,
   type ScheduleConfigVO,
 } from '@/api/courseSchedule'
@@ -54,6 +59,14 @@ export default function CourseSchedulePage() {
   const [userIds, setUserIds] = useState<number[]>([])
   const [users, setUsers] = useState<UserVO[]>([])
 
+  const isMinister = (user?.roleLevel ?? 0) >= 3
+  const [depts, setDepts] = useState<DeptVO[]>([])
+  const [impDeptId, setImpDeptId] = useState<number | undefined>(user?.deptId ?? undefined)
+  const [impSemester, setImpSemester] = useState('2025-2026-2')
+  const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<NoClassScheduleImportVO | null>(null)
+
   const loadConfigs = useCallback(() => {
     getScheduleConfigs()
       .then((res) => setConfigs(res ?? []))
@@ -66,6 +79,11 @@ export default function CourseSchedulePage() {
     loadConfigs()
     listUsers({ size: 1000 })
       .then((res) => setUsers(res.records ?? []))
+      .catch(() => {
+        /* 拦截已提示 */
+      })
+    listDepts()
+      .then((res) => setDepts(res ?? []))
       .catch(() => {
         /* 拦截已提示 */
       })
@@ -159,6 +177,48 @@ export default function CourseSchedulePage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  }
+
+  const runImport = async () => {
+    if (fileList.length === 0) {
+      message.warning('请先选择课表文件')
+      return
+    }
+    const formData = new FormData()
+    fileList.forEach((f) => {
+      if (f.originFileObj) formData.append('files', f.originFileObj, f.name)
+    })
+    if (impDeptId) formData.append('deptId', String(impDeptId))
+    formData.append('semester', impSemester)
+    setImporting(true)
+    try {
+      const res = await importNoClassSchedules(formData)
+      setImportResult(res)
+      message.success(`成功生成 ${res.successCount}/${res.totalFiles} 份课表`)
+    } catch {
+      /* 拦截已提示 */
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleDownloadXlsx = async () => {
+    if (!importResult?.downloadUrl) return
+    const res = await downloadNoClassScheduleXlsx(importResult.downloadUrl)
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `无课表_${importResult.deptName}_${importResult.semester}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const copyMarkdown = async () => {
+    if (!importResult) return
+    await navigator.clipboard.writeText(importResult.markdown)
+    message.success('已复制 Markdown')
   }
 
   const maxFree = useMemo(() => {
@@ -365,6 +425,110 @@ export default function CourseSchedulePage() {
     </div>
   )
 
+  const importTab = (
+    <div>
+      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+        <Space wrap>
+          <span style={{ fontWeight: 600 }}>批量导入课表</span>
+          <Select
+            placeholder="部门"
+            style={{ width: 180 }}
+            value={impDeptId}
+            onChange={setImpDeptId}
+            options={depts.map((d) => ({ value: d.id, label: d.name }))}
+          />
+          <Select
+            value={impSemester}
+            onChange={setImpSemester}
+            style={{ width: 180 }}
+            options={SEMESTERS.map((s) => ({ value: s, label: s }))}
+          />
+          <Upload
+            multiple
+            accept=".xlsx,.xls"
+            fileList={fileList}
+            beforeUpload={(file) => {
+              setFileList((prev) => [...prev, file])
+              return false
+            }}
+            onRemove={(file) => setFileList((prev) => prev.filter((f) => f.uid !== file.uid))}
+          >
+            <Button icon={<UploadOutlined />}>选择课表文件（可多选）</Button>
+          </Upload>
+          <Button type="primary" icon={<FireOutlined />} onClick={runImport} loading={importing}>
+            生成无课表
+          </Button>
+          {importResult && (
+            <>
+              <Button icon={<DownloadOutlined />} onClick={handleDownloadXlsx}>
+                下载 Excel
+              </Button>
+              <Button icon={<CopyOutlined />} onClick={copyMarkdown}>
+                复制 Markdown
+              </Button>
+            </>
+          )}
+        </Space>
+        {fileList.length > 0 && (
+          <div style={{ marginTop: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+            已选 {fileList.length} 个文件，文件名为「姓名-班级-班级课表.xlsx」时自动识别姓名
+          </div>
+        )}
+      </GlassCard>
+
+      {importResult && (
+        <GlassCard style={{ padding: 16 }}>
+          <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            {importResult.deptName} · {importResult.semester} · 成功 {importResult.successCount}/{importResult.totalFiles}
+            {importResult.failed.length > 0 && (
+              <span style={{ color: 'var(--color-red)', marginLeft: 8 }}>
+                失败 {importResult.failed.length}：
+                {importResult.failed.map((f) => `${f.fileName}（${f.reason}）`).join('；')}
+              </span>
+            )}
+          </div>
+          {importResult.warnings.map((w) => (
+            <div key={w} style={{ fontSize: 12, color: '#d48806', marginBottom: 4 }}>
+              {w}
+            </div>
+          ))}
+          <div style={{ overflow: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>节次</th>
+                  {WEEKDAYS.slice(0, 5).map((d) => (
+                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
+                      {d}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {importResult.rows.map((row) => (
+                  <tr key={row.period}>
+                    <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+                      {row.label}
+                    </td>
+                    {[1, 2, 3, 4, 5].map((day) => (
+                      <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', verticalAlign: 'top', minWidth: 140 }}>
+                        {(row.days[String(day)] ?? []).map((c) => (
+                          <div key={c.name}>
+                            {c.name}（{c.freeWeeks}）
+                          </div>
+                        ))}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
+    </div>
+  )
+
   return (
     <div>
       <PageHeader
@@ -385,6 +549,7 @@ export default function CourseSchedulePage() {
         items={[
           { key: 'edit', label: '我的课程表', children: editTab },
           { key: 'analyze', label: '共同空闲分析', children: analyzeTab },
+          ...(isMinister ? [{ key: 'import', label: '批量导入', children: importTab }] : []),
         ]}
       />
     </div>
