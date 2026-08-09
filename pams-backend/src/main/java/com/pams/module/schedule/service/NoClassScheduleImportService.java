@@ -31,12 +31,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** 批量导入班级课表生成无课表：解析 -> 计算 -> 写 xlsx/markdown 到统一输出目录 -> 组装结果 VO。 */
 @Service
 public class NoClassScheduleImportService {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    /** 学期参数格式：如 2025-2026-2。用于阻断把非法 semester 拼进输出文件名造成的路径穿越写入。 */
+    private static final Pattern SEMESTER_PATTERN = Pattern.compile("\\d{4}-\\d{4}-\\d");
 
     private final DepartmentRepository departmentRepository;
     private String uploadDir;
@@ -54,6 +57,9 @@ public class NoClassScheduleImportService {
         int max = maxWeek == null || maxWeek < 1 || maxWeek > 30 ? 18 : maxWeek;
         String deptName = deptName(deptId);
         if (files == null || files.isEmpty()) throw new BizException(2702, "请至少上传一个课表文件");
+        if (semester != null && !semester.isBlank() && !SEMESTER_PATTERN.matcher(semester).matches()) {
+            throw new BizException(2703, "学期格式非法");
+        }
 
         List<PersonTimetable> people = new ArrayList<>();
         List<ImportFileFailureVO> failed = new ArrayList<>();
@@ -85,8 +91,9 @@ public class NoClassScheduleImportService {
                 people.add(new PersonTimetable(name, tt));
             } catch (IllegalArgumentException e) {
                 failed.add(failure(filename, e.getMessage()));
-            } catch (IOException e) {
-                failed.add(failure(filename, "文件解析失败"));
+            } catch (Exception e) {
+                // 单个文件解析异常（损坏 zip、数字解析失败等）只记失败，不中断整批导入
+                failed.add(failure(filename, "文件解析失败: " + e.getMessage()));
             }
         }
 
@@ -115,6 +122,7 @@ public class NoClassScheduleImportService {
 
     /** 校验下载路径归一化后位于 uploadDir 内，返回绝对路径。 */
     public Path resolveDownload(String path) {
+        if (path == null || path.isBlank()) throw new BizException(2705, "非法路径");
         Path root = Path.of(uploadDir == null ? "uploads" : uploadDir).toAbsolutePath().normalize();
         Path target = root.resolve(path).normalize();
         if (!target.startsWith(root)) throw new BizException(2705, "非法路径");

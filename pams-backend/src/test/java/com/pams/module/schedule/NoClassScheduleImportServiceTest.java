@@ -1,5 +1,6 @@
 package com.pams.module.schedule;
 
+import com.pams.common.BizException;
 import com.pams.entity.Department;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
 import com.pams.module.schedule.service.NoClassScheduleImportService;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -55,5 +57,32 @@ class NoClassScheduleImportServiceTest {
         assertThat(vo.getSuccessCount()).isZero();
         assertThat(vo.getFailed()).hasSize(1);
         assertThat(vo.getFailed().get(0).getReason()).contains("姓名");
+    }
+
+    @Test
+    void resolveDownload_rejectsTraversalAndNullOrBlank() {
+        NoClassScheduleImportService service = new NoClassScheduleImportService(mock(DepartmentRepository.class));
+        assertThatThrownBy(() -> service.resolveDownload("../escape"))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2705));
+        assertThatThrownBy(() -> service.resolveDownload("..\\..\\escape"))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2705));
+        assertThatThrownBy(() -> service.resolveDownload(null))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2705));
+        assertThatThrownBy(() -> service.resolveDownload("   "))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2705));
+    }
+
+    @Test
+    void malformedSemester_rejectedBeforeAnyWrite(@TempDir Path tempDir) throws Exception {
+        NoClassScheduleImportService service = new NoClassScheduleImportService(mock(DepartmentRepository.class));
+        service.setUploadDir(tempDir.toString());
+
+        MockMultipartFile f = new MockMultipartFile("files", "张三-文件-2025物联网3班-班级课表.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ClassTimetableParserTest.buildTimetable());
+
+        assertThatThrownBy(() -> service.importTimetables(List.of(f), null, "..\\..\\..\\..\\temp\\pwn", null))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2703));
+        assertThat(tempDir.resolve("无课表")).doesNotExist();
     }
 }
