@@ -73,7 +73,7 @@ body::before {
 .glass-card:nth-child(4) { animation-delay: 0.15s; }
 
 @keyframes card-fade-in {
-  /* 只动画 opacity：带 translateY 会占用 transform，压掉 .glass-card:hover 的悬停上浮；且 translate 动画期间帧级重采样背板 */
+  /* 只动画 opacity：克制不花哨，避免占用 transform */
   from { opacity: 0; }
   to { opacity: 1; }
 }
