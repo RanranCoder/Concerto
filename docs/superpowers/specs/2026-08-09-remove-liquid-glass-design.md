@@ -74,7 +74,8 @@
 
 ### 4. App.tsx — antd token 实底化
 
-- `colorBgContainer`: 亮 `#f7f8fa` / 暗 `#1b1e26`（与 `--surface` 同值，作用于 Table/输入框/下拉等所有容器，含弹窗/抽屉）。
+- `colorBgContainer`: 亮 `#f7f8fa` / 暗 `#1b1e26`（与 `--surface` 同值，作用于 Table/输入框等页面内容器）。
+- `colorBgElevated`: 亮 `#fbfcfe` / 暗 `#23262f`（与 `--surface-strong` 同值，作用于弹窗/抽屉/下拉等浮层——antd 浮层背景用 `colorBgElevated` 而非 `colorBgContainer`，删除玻璃覆盖后必须显式设置，否则回落到 antd 默认 `#fff`/`#1f1f1f`）。
 - `colorBorder`: 亮 `#e4e8ef` / 暗 `#2e313a`（与 `--surface-border` 同值）。
 - Menu 红系选中 token 保留（`itemSelectedBg`/`itemSelectedColor`/`itemColor`，无 blur、廉价）。
 - `colorPrimary: '#DE2910'` 不变。
