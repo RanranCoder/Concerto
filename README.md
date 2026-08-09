@@ -33,8 +33,8 @@ cmd //c start.bat
 2. 等待 Maven 依赖导入完成（右下角进度条结束；首次需下载依赖，耗时较长）
 3. 运行配置里找到 **`PartyAffairsManagementSystemApplication`** 主类，点击 Run/Debug 一键启动后端（端口 8080）
    - 若没有自动生成，可手动创建：`Run → Edit Configurations → + → Spring Boot → Main class` 选 `com.pams.PartyAffairsManagementSystemApplication`
-4. 前端另开终端启动：`cd pams-web && npm run dev`（端口 3000）
-5. 浏览器访问 `http://localhost:3000`（后端需已启动，MySQL 需已运行）
+4. 前端另开终端启动：`cd pams-web && npm run dev`（端口 5173）
+5. 浏览器访问 `http://localhost:5173`（后端需已启动，MySQL 需已运行）
 
 > 提示：后端启动前确认 MySQL 服务已运行（默认账号 `root / root`），首次启动会自动建表并注入演示数据。
 

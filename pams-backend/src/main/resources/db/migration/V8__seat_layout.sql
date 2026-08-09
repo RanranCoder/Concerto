@@ -17,9 +17,19 @@ CREATE TABLE IF NOT EXISTS seat_layout (
   INDEX idx_seat_layout_activity (activity_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='座位表布局';
 
--- 预设模板种子（大教室/报告厅/会议室/多功能厅）
-INSERT INTO seat_layout (name, rows, cols, aisle_cols, aisle_width_ratio, is_template, template_category, created_at, updated_at) VALUES
-('标准大教室', 12, 10, '5', 1.5, 1, 'CLASSROOM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('报告厅', 20, 24, '11,14', 1.5, 1, 'HALL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('会议室', 8, 12, '6', 1.5, 1, 'MEETINGROOM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('多功能厅', 16, 18, '8,11', 1.5, 1, 'MULTIFUNCTION', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- 预设模板种子（大教室/报告厅/会议室/多功能厅，幂等：按名称防重复）
+INSERT INTO seat_layout (name, `rows`, `cols`, aisle_cols, aisle_width_ratio, is_template, template_category, created_at, updated_at)
+SELECT '标准大教室', 12, 10, '5', 1.5, 1, 'CLASSROOM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM seat_layout WHERE name = '标准大教室');
+
+INSERT INTO seat_layout (name, `rows`, `cols`, aisle_cols, aisle_width_ratio, is_template, template_category, created_at, updated_at)
+SELECT '报告厅', 20, 24, '11,14', 1.5, 1, 'HALL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM seat_layout WHERE name = '报告厅');
+
+INSERT INTO seat_layout (name, `rows`, `cols`, aisle_cols, aisle_width_ratio, is_template, template_category, created_at, updated_at)
+SELECT '会议室', 8, 12, '6', 1.5, 1, 'MEETINGROOM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM seat_layout WHERE name = '会议室');
+
+INSERT INTO seat_layout (name, `rows`, `cols`, aisle_cols, aisle_width_ratio, is_template, template_category, created_at, updated_at)
+SELECT '多功能厅', 16, 18, '8,11', 1.5, 1, 'MULTIFUNCTION', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM seat_layout WHERE name = '多功能厅');

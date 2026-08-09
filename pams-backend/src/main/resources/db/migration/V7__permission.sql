@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS role_permission (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-权限关联';
 
 -- ===================== 权限点种子（附录B.1 共 43 项） =====================
-INSERT INTO permission (code, name, module, sort_order) VALUES
+INSERT IGNORE INTO permission (code, name, module, sort_order) VALUES
 ('activity:view', '查看活动', 'activity', 1),
 ('activity:create', '创建活动', 'activity', 2),
 ('activity:edit', '编辑活动', 'activity', 3),
@@ -69,15 +69,15 @@ INSERT INTO permission (code, name, module, sort_order) VALUES
 -- ===================== 角色默认映射（附录B.2，与 PermissionService.restoreDefault 一致） =====================
 
 -- TEACHER（指导老师）：全部权限
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'TEACHER', id FROM permission;
 
 -- DIRECTOR（主任）：除 user:permission 外全部
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'DIRECTOR', id FROM permission WHERE code <> 'user:permission';
 
 -- 四部长（组织/文秘/新媒体/青年科技）：部长级操作集（不含删除/分配/分类/用户管理）
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'ORG_LEADER', id FROM permission WHERE code IN (
   'activity:view','activity:create','activity:edit','activity:review',
   'checkin:view','checkin:manage','checkin:export',
@@ -90,7 +90,7 @@ SELECT 'ORG_LEADER', id FROM permission WHERE code IN (
   'schedule:view','schedule:manage','schedule:check','schedule:free_table',
   'party:view','party:manage','party:letter','party:entry',
   'notification:view','notification:preference');
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'SECRETARY_LEADER', id FROM permission WHERE code IN (
   'activity:view','activity:create','activity:edit','activity:review',
   'checkin:view','checkin:manage','checkin:export',
@@ -103,7 +103,7 @@ SELECT 'SECRETARY_LEADER', id FROM permission WHERE code IN (
   'schedule:view','schedule:manage','schedule:check','schedule:free_table',
   'party:view','party:manage','party:letter','party:entry',
   'notification:view','notification:preference');
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'MEDIA_LEADER', id FROM permission WHERE code IN (
   'activity:view','activity:create','activity:edit','activity:review',
   'checkin:view','checkin:manage','checkin:export',
@@ -116,7 +116,7 @@ SELECT 'MEDIA_LEADER', id FROM permission WHERE code IN (
   'schedule:view','schedule:manage','schedule:check','schedule:free_table',
   'party:view','party:manage','party:letter','party:entry',
   'notification:view','notification:preference');
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'TECH_LEADER', id FROM permission WHERE code IN (
   'activity:view','activity:create','activity:edit','activity:review',
   'checkin:view','checkin:manage','checkin:export',
@@ -131,7 +131,7 @@ SELECT 'TECH_LEADER', id FROM permission WHERE code IN (
   'notification:view','notification:preference');
 
 -- STAFF（干事）：基础操作集
-INSERT INTO role_permission (role, permission_id)
+INSERT IGNORE INTO role_permission (role, permission_id)
 SELECT 'STAFF', id FROM permission WHERE code IN (
   'activity:view',
   'checkin:view','checkin:manage','checkin:export',
