@@ -186,7 +186,8 @@ export default function CourseSchedulePage() {
     }
     const formData = new FormData()
     fileList.forEach((f) => {
-      if (f.originFileObj) formData.append('files', f.originFileObj, f.name)
+      // beforeUpload 收到的是原始 RcFile（File+uid，无 originFileObj），直接追加文件本身
+      if (f) formData.append('files', f as unknown as Blob, f.name)
     })
     if (impDeptId) formData.append('deptId', String(impDeptId))
     formData.append('semester', impSemester)
@@ -217,8 +218,37 @@ export default function CourseSchedulePage() {
 
   const copyMarkdown = async () => {
     if (!importResult) return
-    await navigator.clipboard.writeText(importResult.markdown)
-    message.success('已复制 Markdown')
+    const text = importResult.markdown
+    let copied = false
+    try {
+      // 非安全上下文（http 非 localhost）下 navigator.clipboard 可能为 undefined
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        copied = true
+      }
+    } catch {
+      copied = false
+    }
+    if (!copied) {
+      // 降级：textarea + execCommand('copy')
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        copied = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        copied = false
+      }
+    }
+    if (copied) {
+      message.success('已复制 Markdown')
+    } else {
+      message.error('复制失败，请手动复制')
+    }
   }
 
   const maxFree = useMemo(() => {
