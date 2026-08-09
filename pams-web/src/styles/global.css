@@ -85,14 +85,9 @@ body::before {
 .glass-card:nth-child(4) { animation-delay: 0.15s; }
 
 @keyframes card-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  /* 只动画 opacity：带 translateY 会占用 transform，压掉 .glass-card:hover 的悬停上浮；且 translate 动画期间帧级重采样背板 */
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* 尊重系统"减少动态效果"偏好：关闭所有动效 */
@@ -305,6 +300,7 @@ body::before {
 /* 去掉侧边栏悬停时的白色遮罩：移除左上角白色高光渐变与白色内发光，只保留红边/阴影加深 */
 .ant-layout-sider.glass-card::before { content: none; }
 .ant-layout-sider.glass-card:hover {
+  transform: none;
   box-shadow: 0 16px 48px rgba(31, 38, 60, 0.18);
 }
 

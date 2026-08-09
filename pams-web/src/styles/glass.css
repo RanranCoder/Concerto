@@ -6,12 +6,14 @@
   box-shadow: var(--glass-shadow);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  transition: box-shadow 0.35s var(--easing), border-color 0.35s var(--easing), transform 0.35s var(--easing);
+  /* 玻璃元素禁止动画重绘属性：逐帧动画 box-shadow/border-color 会反复重采样背板，被 saturate 放大成悬停毛刺。悬停反馈只走 transform（合成器） */
+  transition: transform 0.35s var(--easing);
 }
 
 .glass-card:hover {
+  transform: translateY(-2px);
   border-color: rgba(222, 41, 16, 0.35);
-  box-shadow: 0 16px 48px rgba(31, 38, 60, 0.18), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  box-shadow: 0 16px 48px rgba(31, 38, 60, 0.18);
 }
 
 /* 悬浮辉光（顶部高光条） */
@@ -21,7 +23,7 @@
   inset: 0;
   border-radius: inherit;
   background: linear-gradient(135deg, var(--glass-highlight) 0%, transparent 42%);
-  opacity: 0.55;
+  opacity: 0.35;
   pointer-events: none;
 }
 
