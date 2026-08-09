@@ -155,8 +155,8 @@ export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChang
               gap: 4,
               padding: '2px 8px 2px 4px',
               borderRadius: 8,
-              border: '1px solid var(--glass-border)',
-              background: 'var(--glass-bg-strong)',
+              border: '1px solid var(--surface-border)',
+              background: 'var(--surface-strong)',
             }}
           >
             <ColorPicker

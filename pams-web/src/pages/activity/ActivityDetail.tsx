@@ -1128,7 +1128,7 @@ export default function ActivityDetail() {
             </div>
           </div>
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--glass-border)' }}>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface-border)' }}>
             <Space wrap>
               <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>状态操作：</span>
               {prevStatus && (
@@ -1160,7 +1160,7 @@ export default function ActivityDetail() {
             </Space>
           </div>
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--glass-border)' }}>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface-border)' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>
               任务甘特图预览
               <Button type="link" size="small" onClick={() => navigate(`/activities/${activityId}/gantt`)}>

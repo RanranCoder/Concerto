@@ -318,8 +318,8 @@ export default function Dashboard() {
                         gap: 12,
                         padding: '10px 12px',
                         borderRadius: 10,
-                        border: '1px solid var(--glass-border)',
-                        background: 'var(--glass-bg)',
+                        border: '1px solid var(--surface-border)',
+                        background: 'var(--surface)',
                         cursor: 'pointer',
                         transition: 'border-color 0.2s var(--easing)',
                       }}
@@ -370,8 +370,8 @@ export default function Dashboard() {
                       gap: 12,
                       padding: '10px 12px',
                       borderRadius: 10,
-                      border: '1px solid var(--glass-border)',
-                      background: 'var(--glass-bg)',
+                      border: '1px solid var(--surface-border)',
+                      background: 'var(--surface)',
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -495,8 +495,8 @@ export default function Dashboard() {
           display: block;
           padding: 8px 10px;
           border-radius: 8px;
-          border: 1px solid var(--glass-border);
-          background: var(--glass-bg);
+          border: 1px solid var(--surface-border);
+          background: var(--surface);
           cursor: pointer;
           transition: border-color 0.2s var(--easing);
         }

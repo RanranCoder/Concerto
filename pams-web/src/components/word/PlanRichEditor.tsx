@@ -84,7 +84,7 @@ export default function PlanRichEditor({ value, onChange, placeholder }: PlanRic
           editor={editor}
           defaultConfig={toolbarConfig}
           mode="default"
-          style={{ borderBottom: '1px solid var(--glass-border)', borderRadius: '8px 8px 0 0', background: 'var(--glass-bg-strong)' }}
+          style={{ borderBottom: '1px solid var(--surface-border)', borderRadius: '8px 8px 0 0', background: 'var(--surface-strong)' }}
         />
       ) : null}
       {/* value 由 editor-for-react 内置 effect 与编辑器内容比对后 setHtml（避免光标跳动）；
@@ -98,7 +98,7 @@ export default function PlanRichEditor({ value, onChange, placeholder }: PlanRic
           setEditor(ed)
           setReady(true)
         }}
-        style={{ height: 480, overflowY: 'hidden', borderRadius: '0 0 8px 8px', background: 'var(--glass-bg)' }}
+        style={{ height: 480, overflowY: 'hidden', borderRadius: '0 0 8px 8px', background: 'var(--surface)' }}
       />
     </div>
   )

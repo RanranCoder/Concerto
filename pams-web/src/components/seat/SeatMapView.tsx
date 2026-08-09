@@ -116,7 +116,7 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                         gridRow: s.rowNo ?? 'auto',
                         gridColumn: s.colNo ?? 'auto',
                         borderRadius: 8,
-                        border: taken ? '2px solid var(--color-red)' : '1px solid var(--glass-border)',
+                        border: taken ? '2px solid var(--color-red)' : '1px solid var(--surface-border)',
                         background: color || 'rgba(148, 158, 175, 0.55)',
                         color: '#fff',
                         cursor: 'pointer',
@@ -163,12 +163,12 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
             gap: 12,
             marginTop: 8,
             paddingTop: 12,
-            borderTop: '1px solid var(--glass-border)',
+            borderTop: '1px solid var(--surface-border)',
           }}
         >
           {legendEntries.map(([type, color]) => (
             <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: color, border: '1px solid var(--glass-border)' }} />
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: color, border: '1px solid var(--surface-border)' }} />
               {type}
             </span>
           ))}
