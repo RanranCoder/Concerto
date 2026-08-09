@@ -62,7 +62,7 @@ jobs:
           username: ${{ secrets.SERVER_USER || 'root' }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || '22' }}
-          script_stop: true
+          command_timeout: 10m
           # 用 bash 直接解释，不依赖服务器的 deploy.sh 执行位
           # （旧副本 pull 到 7b92420 之前是 0644）
           script: |
