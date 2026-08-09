@@ -51,9 +51,9 @@ body::before {
   backdrop-filter: blur(28px) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
 }
-/* 弹窗标题栏衬底：默认实心白块 + 只圆上方两角的直角矩形会从圆角玻璃衬底底部穿出，
-   这里仅作用于本应用 GlassModal（.glass-modal），让它透明并跟随内容衬底圆角，融入玻璃底。 */
-.glass-modal .ant-modal-header {
+/* 弹窗标题栏衬底：默认实心白块（--ant-modal-header-bg）+ 只圆上方两角的直角矩形会从圆角玻璃衬底底部穿出，
+   这里让所有 antd 弹窗的标题栏透明并跟随内容衬底圆角，融入玻璃底。 */
+.ant-modal .ant-modal-header {
   background: transparent;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   overflow: hidden;
