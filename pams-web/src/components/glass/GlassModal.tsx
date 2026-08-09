@@ -12,7 +12,7 @@ interface GlassModalProps extends ModalProps {
 export default function GlassModal({ className, children, ...props }: GlassModalProps) {
   return (
     <Modal
-      className={`glass-modal${className ? ` ${className}` : ''}`}
+      className={className}
       destroyOnHidden
       footer={null}
       {...props}
