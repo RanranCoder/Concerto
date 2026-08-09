@@ -7,8 +7,15 @@ cd "$(dirname "$0")"
 echo "==> [1/3] git pull"
 git pull --ff-only
 
-echo "==> [2/3] docker compose up -d --build"
-docker compose up -d --build
+echo "==> [2/3] docker compose up"
+if [ -n "${PAMS_IMAGE_PREFIX:-}" ] && [ "$PAMS_IMAGE_PREFIX" != "pams" ]; then
+  # 生产：镜像从仓库拉取，不构建
+  docker compose pull
+  docker compose up -d --no-build
+else
+  # 本地：构建并启动
+  docker compose up -d --build
+fi
 
 echo "==> [3/3] 清理悬空镜像"
 docker image prune -f

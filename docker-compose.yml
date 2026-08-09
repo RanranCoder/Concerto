@@ -26,7 +26,9 @@ services:
   backend:
     build:
       context: ./pams-backend
-    image: pams-backend:latest
+    # PAMS_IMAGE_PREFIX 指向镜像仓库时，本地 build 出带仓库前缀的镜像，
+    # 服务器则用 --no-build 直接从仓库拉取（见 deploy.sh）
+    image: ${PAMS_IMAGE_PREFIX:-pams}-backend:${PAMS_IMAGE_TAG:-latest}
     container_name: pams-backend
     restart: unless-stopped
     depends_on:
@@ -47,7 +49,7 @@ services:
   web:
     build:
       context: ./pams-web
-    image: pams-web:latest
+    image: ${PAMS_IMAGE_PREFIX:-pams}-web:${PAMS_IMAGE_TAG:-latest}
     container_name: pams-web
     restart: unless-stopped
     depends_on:
