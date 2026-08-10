@@ -107,12 +107,35 @@ class NoClassScheduleImportServiceTest {
         NoClassScheduleImportService service = new NoClassScheduleImportService(deptRepo, recordRepo);
         service.setUploadDir(tempDir.toString());
 
+        // 预置已存在的旧记录，验证覆盖式删除分支
+        NoClassScheduleRecord existing = new NoClassScheduleRecord();
+        existing.setId(99L); existing.setDeptId(1L); existing.setDeptName("文秘部"); existing.setSemester("2025-2026-2");
+        existing.setGridJson("[]");
+        existing.setCreatedAt(java.time.LocalDateTime.now());
+        when(recordRepo.findByDeptIdAndSemester(1L, "2025-2026-2")).thenReturn(Optional.of(existing));
+
         MockMultipartFile f = new MockMultipartFile("files", "张三-文件-2025物联网3班-班级课表.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 ClassTimetableParserTest.buildTimetable());
         service.importTimetables(List.of(f), 1L, "2025-2026-2", null);
 
+        verify(recordRepo).delete(existing);
         verify(recordRepo).save(any(NoClassScheduleRecord.class));
+    }
+
+    @Test
+    void importWithNullDeptId_rejectsBeforePersist(@TempDir Path tempDir) throws Exception {
+        DepartmentRepository deptRepo = mock(DepartmentRepository.class);
+        NoClassScheduleImportService service = new NoClassScheduleImportService(deptRepo, recordRepo);
+        service.setUploadDir(tempDir.toString());
+
+        MockMultipartFile f = new MockMultipartFile("files", "张三-文件-2025物联网3班-班级课表.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ClassTimetableParserTest.buildTimetable());
+
+        assertThatThrownBy(() -> service.importTimetables(List.of(f), null, "2025-2026-2", null))
+                .isInstanceOfSatisfying(BizException.class, e -> assertThat(e.getCode()).isEqualTo(2703));
+        verify(recordRepo, org.mockito.Mockito.never()).save(any(NoClassScheduleRecord.class));
     }
 
     @Test

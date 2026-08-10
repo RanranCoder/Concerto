@@ -26,6 +26,7 @@ export default function FreeScheduleList() {
 
   const load = () => {
     setLoading(true)
+    setData(null)
     getGeneratedNoClassSchedule(deptId, semester)
       .then((res) => setData(res ?? null))
       .catch(() => setData(null))
@@ -41,7 +42,6 @@ export default function FreeScheduleList() {
         <Space wrap>
           <Select
             placeholder="部门"
-            allowClear
             style={{ width: 180 }}
             options={depts.map((d) => ({ value: d.id, label: d.name }))}
             value={deptId}
@@ -78,8 +78,8 @@ export default function FreeScheduleList() {
                       <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{row.label}</td>
                       {[1, 2, 3, 4, 5].map((day) => (
                         <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', verticalAlign: 'top', minWidth: 140 }}>
-                          {(row.days[String(day)] ?? []).map((c) => (
-                            <div key={c.name}>{c.name}（{c.freeWeeks}）</div>
+                          {(row.days[String(day)] ?? []).map((c, idx) => (
+                            <div key={`${row.period}-${day}-${idx}`}>{c.name}（{c.freeWeeks}）</div>
                           ))}
                         </td>
                       ))}

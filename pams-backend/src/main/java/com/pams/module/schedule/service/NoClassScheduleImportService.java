@@ -24,6 +24,7 @@ import com.pams.repository.DepartmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -63,6 +64,7 @@ public class NoClassScheduleImportService {
         this.uploadDir = uploadDir;
     }
 
+    @Transactional
     public NoClassScheduleImportVO importTimetables(List<MultipartFile> files, Long deptId, String semester, Integer maxWeek) {
         int max = maxWeek == null || maxWeek < 1 || maxWeek > 30 ? 18 : maxWeek;
         String deptName = deptName(deptId);
@@ -133,6 +135,7 @@ public class NoClassScheduleImportService {
 
     /** 生成后覆盖式持久化：同部门+学期只保留最新一份。 */
     private void persistRecord(Long deptId, String deptName, String semester, List<NoClassScheduleRow> rows) {
+        if (deptId == null) throw new BizException(2703, "请选择部门");
         try {
             recordRepository.findByDeptIdAndSemester(deptId, semester).ifPresent(recordRepository::delete);
             NoClassScheduleRecord rec = new NoClassScheduleRecord();
