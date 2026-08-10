@@ -137,7 +137,7 @@ public class NoClassScheduleImportService {
     private void persistRecord(Long deptId, String deptName, String semester, List<NoClassScheduleRow> rows) {
         if (deptId == null) throw new BizException(2703, "请选择部门");
         try {
-            recordRepository.findByDeptIdAndSemester(deptId, semester).ifPresent(recordRepository::delete);
+            recordRepository.deleteByDeptIdAndSemester(deptId, semester);
             NoClassScheduleRecord rec = new NoClassScheduleRecord();
             rec.setDeptId(deptId);
             rec.setDeptName(deptName);
