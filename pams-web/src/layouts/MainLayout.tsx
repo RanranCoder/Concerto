@@ -66,7 +66,17 @@ export default function MainLayout() {
     const items: MenuProps['items'] = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
       { key: '/activities', label: '活动管理', icon: <CalendarOutlined /> },
-      { key: '/routine/schedules', label: '排班考勤', icon: <ScheduleOutlined /> },
+      {
+        key: 'routine',
+        label: '排班考勤',
+        icon: <ScheduleOutlined />,
+        children: [
+          { key: '/routine/schedules', label: '排班' },
+          { key: '/routine/attendance', label: '考勤' },
+          { key: '/routine/course-schedule', label: '无课表制作' },
+          { key: '/routine/free-schedules', label: '无课表' },
+        ],
+      },
       { key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> },
     ]
     if (isMinisterOrAbove) {
@@ -114,6 +124,9 @@ export default function MainLayout() {
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
+    if (p.startsWith('/routine/attendance')) return '/routine/attendance'
+    if (p.startsWith('/routine/course-schedule')) return '/routine/course-schedule'
+    if (p.startsWith('/routine/free-schedules')) return '/routine/free-schedules'
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
     if (p.startsWith('/content')) return p.startsWith('/content/news') ? '/content/news' : '/content/articles'

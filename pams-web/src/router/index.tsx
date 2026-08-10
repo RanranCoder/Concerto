@@ -18,6 +18,7 @@ const Gantt = lazy(() => import('@/pages/activity/Gantt'))
 const Schedules = lazy(() => import('@/pages/routine/ScheduleList'))
 const Attendance = lazy(() => import('@/pages/routine/AttendanceList'))
 const FreeSchedules = lazy(() => import('@/pages/routine/FreeScheduleList'))
+const CourseSchedule = lazy(() => import('@/pages/routine/CourseSchedule'))
 const PartyMembers = lazy(() => import('@/pages/party/PartyMemberList'))
 const PartyMemberDetail = lazy(() => import('@/pages/party/PartyMemberDetail'))
 const PartyRosters = lazy(() => import('@/pages/party/PartyRosterList'))
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       // 排班考勤
       { path: '/routine/schedules', element: <Schedules /> },
       { path: '/routine/attendance', element: <Attendance /> },
+      { path: '/routine/course-schedule', element: <CourseSchedule /> },
       { path: '/routine/free-schedules', element: <FreeSchedules /> },
 
       // 党务台账（敏感，部长及以上；干事读已脱敏，仍隐藏入口）
