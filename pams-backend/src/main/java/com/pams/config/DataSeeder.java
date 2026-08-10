@@ -29,8 +29,6 @@ import com.pams.module.party.entity.PartyStage;
 import com.pams.module.party.entity.PartyStageType;
 import com.pams.module.party.repository.PartyMemberRepository;
 import com.pams.module.party.repository.PartyStageRepository;
-import com.pams.module.routine.entity.FreeSchedule;
-import com.pams.module.routine.repository.FreeScheduleRepository;
 import com.pams.repository.DepartmentRepository;
 import com.pams.repository.RoleRepository;
 import com.pams.repository.UserRepository;
@@ -66,7 +64,6 @@ public class DataSeeder implements ApplicationRunner {
     private final AnnouncementRepository announcementRepository;
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStageRepository partyStageRepository;
-    private final FreeScheduleRepository freeScheduleRepository;
     private final CreditRecordRepository creditRecordRepository;
 
     public DataSeeder(DepartmentRepository d, RoleRepository r, UserRepository u, PasswordEncoder p,
@@ -82,7 +79,6 @@ public class DataSeeder implements ApplicationRunner {
                       AnnouncementRepository announcementRepository,
                       PartyMemberRepository partyMemberRepository,
                       PartyStageRepository partyStageRepository,
-                      FreeScheduleRepository freeScheduleRepository,
                       CreditRecordRepository creditRecordRepository) {
         this.departmentRepository = d;
         this.roleRepository = r;
@@ -100,7 +96,6 @@ public class DataSeeder implements ApplicationRunner {
         this.announcementRepository = announcementRepository;
         this.partyMemberRepository = partyMemberRepository;
         this.partyStageRepository = partyStageRepository;
-        this.freeScheduleRepository = freeScheduleRepository;
         this.creditRecordRepository = creditRecordRepository;
     }
 
@@ -144,7 +139,7 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     /**
-     * Task 30 演示数据：1 个示例活动全流程 + 若干党务成员 + 无课表 + 素拓加分。
+     * Task 30 演示数据：1 个示例活动全流程 + 若干党务成员 + 素拓加分。
      * 只对空库生效（activityRepository.count()>0 跳过），不污染已有 dev 库。
      */
     private void seedDemoData() {
@@ -289,19 +284,7 @@ public class DataSeeder implements ApplicationRunner {
         partyMember("张伟", "男", "24软件技术1班", "预备党员", "2435101020103", now);
         partyMember("陈静", "女", "23电子信息工程班", "正式党员", "2435101020104", now);
 
-        // ---------- 10. 无课表（一条） ----------
-        // 李想为培训班学员（非系统账号），不挂接 sys_user 用户；deptId 指向其真实所在部门（文秘部）。
-        FreeSchedule fs = new FreeSchedule();
-        fs.setUserId(null);
-        fs.setPersonName("李想");
-        fs.setClassName("24物联网班");
-        fs.setDeptId(deptId("文秘部"));
-        fs.setFreeWeeks("[2,4,6]");
-        fs.setNote("周二/周四/周六下午可值班");
-        fs.setCreatedAt(now);
-        freeScheduleRepository.save(fs);
-
-        // ---------- 11. 素拓加分（一条） ----------
+        // ---------- 10. 素拓加分（一条） ----------
         // 李想为培训班学员（非系统账号），不挂接 sys_user 用户。
         CreditRecord cr = new CreditRecord();
         cr.setUserId(null);

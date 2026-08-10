@@ -2,14 +2,11 @@ package com.pams.module.routine.service;
 
 import com.pams.common.BizException;
 import com.pams.module.routine.dto.AttendanceRequest;
-import com.pams.module.routine.dto.FreeScheduleRequest;
 import com.pams.module.routine.dto.ScheduleRequest;
 import com.pams.module.routine.entity.Attendance;
-import com.pams.module.routine.entity.FreeSchedule;
 import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.entity.SchedulePerson;
 import com.pams.module.routine.repository.AttendanceRepository;
-import com.pams.module.routine.repository.FreeScheduleRepository;
 import com.pams.module.routine.repository.SchedulePersonRepository;
 import com.pams.module.routine.repository.ScheduleRepository;
 import org.apache.poi.ss.usermodel.Cell;
@@ -36,37 +33,34 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * 例行事务：排班 / 考勤 / 无课表。
- * 生产用全参构造器注入 4 个 repo；1 参构造器仅用于测试（其余 repo 为 null）。
+ * 例行事务：排班 / 考勤。
+ * 生产用全参构造器注入 3 个 repo；1 参构造器仅用于测试（其余 repo 为 null）。
  */
 @Service
 public class RoutineService {
     private final ScheduleRepository scheduleRepository;
     private final SchedulePersonRepository schedulePersonRepository;
     private final AttendanceRepository attendanceRepository;
-    private final FreeScheduleRepository freeScheduleRepository;
 
     private String uploadDir;
 
     @Autowired
     public RoutineService(ScheduleRepository scheduleRepository,
                           SchedulePersonRepository schedulePersonRepository,
-                          AttendanceRepository attendanceRepository,
-                          FreeScheduleRepository freeScheduleRepository) {
+                          AttendanceRepository attendanceRepository) {
         this.scheduleRepository = scheduleRepository;
         this.schedulePersonRepository = schedulePersonRepository;
         this.attendanceRepository = attendanceRepository;
-        this.freeScheduleRepository = freeScheduleRepository;
     }
 
     /** 测试用：仅注入 AttendanceRepository，其余为 null */
     public RoutineService(AttendanceRepository attendanceRepository) {
-        this(null, null, attendanceRepository, null);
+        this(null, null, attendanceRepository);
     }
 
     /** 测试用：仅注入排班与考勤 repo，其余为 null（测 summary 的 weekNo/type 过滤需走排班关联） */
     public RoutineService(ScheduleRepository scheduleRepository, AttendanceRepository attendanceRepository) {
-        this(scheduleRepository, null, attendanceRepository, null);
+        this(scheduleRepository, null, attendanceRepository);
     }
 
     @Autowired
@@ -283,45 +277,5 @@ public class RoutineService {
 
     private static String statusOf(Attendance a) {
         return a.getStatus() == null ? "ABSENT" : a.getStatus();
-    }
-
-    // ==================== 无课表 ====================
-
-    public List<FreeSchedule> listFreeSchedules(Long deptId) {
-        List<FreeSchedule> all = freeScheduleRepository.findAll();
-        return all.stream()
-                .filter(f -> deptId == null || deptId.equals(f.getDeptId()))
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public Long createFreeSchedule(FreeScheduleRequest req) {
-        FreeSchedule f = new FreeSchedule();
-        applyFreeSchedule(f, req);
-        f.setCreatedAt(LocalDateTime.now());
-        return freeScheduleRepository.save(f).getId();
-    }
-
-    @Transactional
-    public void updateFreeSchedule(Long id, FreeScheduleRequest req) {
-        FreeSchedule f = freeScheduleRepository.findById(id)
-                .orElseThrow(() -> new BizException(2403, "无课表记录不存在"));
-        applyFreeSchedule(f, req);
-        freeScheduleRepository.save(f);
-    }
-
-    @Transactional
-    public void deleteFreeSchedule(Long id) {
-        freeScheduleRepository.findById(id).orElseThrow(() -> new BizException(2403, "无课表记录不存在"));
-        freeScheduleRepository.deleteById(id);
-    }
-
-    private void applyFreeSchedule(FreeSchedule f, FreeScheduleRequest req) {
-        f.setUserId(req.getUserId());
-        f.setPersonName(req.getPersonName());
-        f.setClassName(req.getClassName());
-        f.setDeptId(req.getDeptId());
-        f.setFreeWeeks(req.getFreeWeeks());
-        f.setNote(req.getNote());
     }
 }
