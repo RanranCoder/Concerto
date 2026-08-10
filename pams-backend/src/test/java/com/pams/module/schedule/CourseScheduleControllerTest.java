@@ -3,6 +3,7 @@ package com.pams.module.schedule;
 import com.pams.common.GlobalExceptionHandler;
 import com.pams.module.schedule.controller.CourseScheduleController;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
+import com.pams.module.schedule.repository.NoClassScheduleRecordRepository;
 import com.pams.module.schedule.service.CourseScheduleService;
 import com.pams.module.schedule.service.NoClassScheduleImportService;
 import com.pams.repository.DepartmentRepository;
@@ -46,7 +47,8 @@ class CourseScheduleControllerTest {
 
     @Test
     void downloadEndpointRejectsTraversalPath() throws Exception {
-        NoClassScheduleImportService importService = new NoClassScheduleImportService(mock(DepartmentRepository.class));
+        NoClassScheduleImportService importService = new NoClassScheduleImportService(
+                mock(DepartmentRepository.class), mock(NoClassScheduleRecordRepository.class));
         CourseScheduleService scheduleService = mock(CourseScheduleService.class);
         CourseScheduleController ctl = new CourseScheduleController(scheduleService, importService);
 

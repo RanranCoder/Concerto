@@ -1,11 +1,15 @@
 package com.pams.module.schedule.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
 import com.pams.entity.Department;
 import com.pams.module.schedule.dto.ImportFileFailureVO;
 import com.pams.module.schedule.dto.NoClassScheduleCellVO;
+import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
 import com.pams.module.schedule.dto.NoClassScheduleRowVO;
+import com.pams.module.schedule.entity.NoClassScheduleRecord;
 import com.pams.module.schedule.generator.ClassTimetableParser;
 import com.pams.module.schedule.generator.Course;
 import com.pams.module.schedule.generator.NoClassScheduleExcelWriter;
@@ -15,6 +19,7 @@ import com.pams.module.schedule.generator.NoClassScheduleRow;
 import com.pams.module.schedule.generator.PersonTimetable;
 import com.pams.module.schedule.generator.SlotKey;
 import com.pams.module.schedule.generator.TimetableNameExtractor;
+import com.pams.module.schedule.repository.NoClassScheduleRecordRepository;
 import com.pams.repository.DepartmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +36,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /** 批量导入班级课表生成无课表：解析 -> 计算 -> 写 xlsx/markdown 到统一输出目录 -> 组装结果 VO。 */
@@ -42,10 +48,14 @@ public class NoClassScheduleImportService {
     private static final Pattern SEMESTER_PATTERN = Pattern.compile("\\d{4}-\\d{4}-\\d");
 
     private final DepartmentRepository departmentRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final NoClassScheduleRecordRepository recordRepository;
     private String uploadDir;
 
-    public NoClassScheduleImportService(DepartmentRepository departmentRepository) {
+    public NoClassScheduleImportService(DepartmentRepository departmentRepository,
+                                        NoClassScheduleRecordRepository recordRepository) {
         this.departmentRepository = departmentRepository;
+        this.recordRepository = recordRepository;
     }
 
     @Autowired
@@ -114,10 +124,46 @@ public class NoClassScheduleImportService {
                 throw new BizException(2704, "生成 Excel 失败");
             }
             markdown = NoClassScheduleMarkdownWriter.write(rows, deptName + " 无课表");
+            persistRecord(deptId, deptName, safeSem, rows);
             downloadUrl = "无课表/" + xlsxPath.getFileName().toString();
         }
 
         return toVO(deptName, semester, rows, markdown, downloadUrl, files.size(), people.size(), failed, warnings);
+    }
+
+    /** 生成后覆盖式持久化：同部门+学期只保留最新一份。 */
+    private void persistRecord(Long deptId, String deptName, String semester, List<NoClassScheduleRow> rows) {
+        try {
+            recordRepository.findByDeptIdAndSemester(deptId, semester).ifPresent(recordRepository::delete);
+            NoClassScheduleRecord rec = new NoClassScheduleRecord();
+            rec.setDeptId(deptId);
+            rec.setDeptName(deptName);
+            rec.setSemester(semester);
+            rec.setGridJson(objectMapper.writeValueAsString(toRowVOs(rows)));
+            rec.setCreatedAt(LocalDateTime.now());
+            recordRepository.save(rec);
+        } catch (Exception e) {
+            throw new BizException(2704, "无课表保存失败: " + e.getMessage());
+        }
+    }
+
+    /** 读取某部门+学期最新生成的无课表；无记录或 semester 为空返回 null。 */
+    public NoClassScheduleGeneratedVO getGenerated(Long deptId, String semester) {
+        if (semester == null || semester.isBlank()) return null;
+        Optional<NoClassScheduleRecord> opt = recordRepository.findByDeptIdAndSemester(deptId, semester);
+        if (opt.isEmpty()) return null;
+        NoClassScheduleRecord rec = opt.get();
+        try {
+            List<NoClassScheduleRowVO> rows = objectMapper.readValue(rec.getGridJson(), new TypeReference<>() {});
+            NoClassScheduleGeneratedVO vo = new NoClassScheduleGeneratedVO();
+            vo.setDeptName(rec.getDeptName());
+            vo.setSemester(rec.getSemester());
+            vo.setRows(rows);
+            vo.setCreatedAt(rec.getCreatedAt());
+            return vo;
+        } catch (Exception e) {
+            throw new BizException(2704, "无课表读取失败: " + e.getMessage());
+        }
     }
 
     /** 校验下载路径归一化后位于 uploadDir 内，返回绝对路径。 */
@@ -135,7 +181,18 @@ public class NoClassScheduleImportService {
         NoClassScheduleImportVO vo = new NoClassScheduleImportVO();
         vo.setDeptName(deptName);
         vo.setSemester(semester);
-        vo.setRows(rows.stream().map(r -> {
+        vo.setRows(toRowVOs(rows));
+        vo.setMarkdown(markdown);
+        vo.setDownloadUrl(downloadUrl);
+        vo.setTotalFiles(total);
+        vo.setSuccessCount(success);
+        vo.setFailed(failed);
+        vo.setWarnings(warnings);
+        return vo;
+    }
+
+    private List<NoClassScheduleRowVO> toRowVOs(List<NoClassScheduleRow> rows) {
+        return rows.stream().map(r -> {
             NoClassScheduleRowVO rv = new NoClassScheduleRowVO();
             rv.setPeriod(r.period());
             rv.setLabel(r.label());
@@ -150,14 +207,7 @@ public class NoClassScheduleImportService {
                     }).toList()));
             rv.setDays(days);
             return rv;
-        }).toList());
-        vo.setMarkdown(markdown);
-        vo.setDownloadUrl(downloadUrl);
-        vo.setTotalFiles(total);
-        vo.setSuccessCount(success);
-        vo.setFailed(failed);
-        vo.setWarnings(warnings);
-        return vo;
+        }).toList();
     }
 
     private String deptName(Long deptId) {
