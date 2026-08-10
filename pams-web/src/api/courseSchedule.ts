@@ -96,3 +96,14 @@ export const downloadNoClassScheduleXlsx = (downloadUrl: string) =>
     params: { path: downloadUrl },
     responseType: 'blob',
   }) as unknown as Promise<AxiosResponse<Blob>>
+
+export interface NoClassScheduleGeneratedVO {
+  deptName: string
+  semester: string
+  rows: NoClassScheduleRowVO[]
+  createdAt: string
+}
+
+/** 读取某部门+学期最新生成的无课表（无记录返回 null） */
+export const getGeneratedNoClassSchedule = (deptId?: number, semester?: string) =>
+  get<NoClassScheduleGeneratedVO | null>('/course-schedules/generated', { deptId, semester })
