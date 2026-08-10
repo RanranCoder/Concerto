@@ -2,6 +2,7 @@ package com.pams.module.schedule.controller;
 
 import com.pams.common.BizException;
 import com.pams.common.Result;
+import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
 import com.pams.module.schedule.entity.ScheduleConfig;
 import com.pams.module.schedule.service.CourseScheduleService;
@@ -114,5 +115,12 @@ public class CourseScheduleController {
         } catch (Exception e) {
             throw new BizException(2705, "文件读取失败");
         }
+    }
+
+    /** 读取某部门+学期最新生成的无课表（无记录 data=null）。 */
+    @GetMapping("/generated")
+    public Result<NoClassScheduleGeneratedVO> generated(@RequestParam(required = false) Long deptId,
+                                                        @RequestParam(required = false) String semester) {
+        return Result.ok(importService.getGenerated(deptId, semester));
     }
 }

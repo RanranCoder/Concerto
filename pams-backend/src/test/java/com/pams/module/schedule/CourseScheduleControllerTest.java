@@ -2,6 +2,7 @@ package com.pams.module.schedule;
 
 import com.pams.common.GlobalExceptionHandler;
 import com.pams.module.schedule.controller.CourseScheduleController;
+import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
 import com.pams.module.schedule.repository.NoClassScheduleRecordRepository;
 import com.pams.module.schedule.service.CourseScheduleService;
@@ -58,5 +59,18 @@ class CourseScheduleControllerTest {
         mvc.perform(get("/api/course-schedules/import/download").param("path", "../x.xlsx"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(2705));
+    }
+
+    @Test
+    void generatedEndpointDelegatesToService() throws Exception {
+        NoClassScheduleImportService importService = mock(NoClassScheduleImportService.class);
+        NoClassScheduleGeneratedVO vo = new NoClassScheduleGeneratedVO();
+        vo.setDeptName("文秘部");
+        when(importService.getGenerated(1L, "2025-2026-2")).thenReturn(vo);
+        CourseScheduleController ctl = new CourseScheduleController(mock(CourseScheduleService.class), importService);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(ctl).build();
+        mvc.perform(get("/api/course-schedules/generated").param("deptId", "1").param("semester", "2025-2026-2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.deptName").value("文秘部"));
     }
 }
