@@ -35,6 +35,14 @@ export default function FreeScheduleList() {
 
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [deptId, semester])
 
+  // 窗口重新聚焦时自动重新拉取：在别的标签页生成后切回本页也能看到最新数据
+  useEffect(() => {
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div>
       <PageHeader title="无课表" description="批量导入课表自动生成的无课表，按部门+学期查看" />
