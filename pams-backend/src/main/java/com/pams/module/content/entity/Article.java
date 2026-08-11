@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(name = "article")
 @SQLRestriction("deleted = 0")
 public class Article {
-    public enum ArticleStatus { DRAFT, PENDING, PUBLISHED, REJECTED }
+    public enum ArticleStatus { DRAFT, PENDING, APPROVED, PUBLISHED, REJECTED }
     public enum ArticleType { PREHEAT, REPORT, VIDEO }
 
     @Id
@@ -33,6 +33,13 @@ public class Article {
     @Column(columnDefinition = "TEXT")
     private String reviewComment;
     private LocalDateTime publishTime;
+    @Column(columnDefinition = "TEXT")
+    private String imageUrls;
+    private LocalDateTime deadline;
+    private String wxUrl;
+    private Integer readCount;
+    private Integer likeCount;
+    private LocalDateTime deadlineRemindedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
