@@ -3,7 +3,9 @@ package com.pams.module.content.controller;
 import com.pams.common.PageResult;
 import com.pams.common.Result;
 import com.pams.module.content.dto.ArticleRequest;
+import com.pams.module.content.dto.PublishRequest;
 import com.pams.module.content.dto.ReviewRequest;
+import com.pams.module.content.dto.StatsRequest;
 import com.pams.module.content.entity.Article;
 import com.pams.module.content.service.ArticleService;
 import com.pams.security.LoginUser;
@@ -25,11 +27,13 @@ public class ArticleController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long activityId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return Result.ok(service.page(status, type, keyword, page, size));
+        return Result.ok(service.page(status, type, keyword, activityId, page, size));
     }
 
+    @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
     @PostMapping
     public Result<Article> create(@Valid @RequestBody ArticleRequest req,
                                   @AuthenticationPrincipal LoginUser current) {
@@ -37,14 +41,15 @@ public class ArticleController {
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ArticleRequest req) {
-        service.update(id, req);
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ArticleRequest req,
+                               @AuthenticationPrincipal LoginUser current) {
+        service.update(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
     @PutMapping("/{id}/submit")
-    public Result<Void> submit(@PathVariable Long id) {
-        service.submit(id);
+    public Result<Void> submit(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
+        service.submit(id, current == null ? null : current.getId());
         return Result.ok();
     }
 
@@ -54,6 +59,20 @@ public class ArticleController {
                                @AuthenticationPrincipal LoginUser current) {
         boolean approved = req.getApproved() != null && req.getApproved();
         service.review(id, approved, req.getComment(), current == null ? null : current.getId());
+        return Result.ok();
+    }
+
+    @PutMapping("/{id}/publish")
+    public Result<Void> publish(@PathVariable Long id, @Valid @RequestBody PublishRequest req,
+                                @AuthenticationPrincipal LoginUser current) {
+        service.publish(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
+        return Result.ok();
+    }
+
+    @PutMapping("/{id}/stats")
+    public Result<Void> updateStats(@PathVariable Long id, @Valid @RequestBody StatsRequest req,
+                                    @AuthenticationPrincipal LoginUser current) {
+        service.updateStats(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
