@@ -69,6 +69,7 @@ import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'
 import { getActivitySeatLayout, type SeatLayoutVO } from '@/api/seatLayout'
 import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
+import ActivityArticlesTab from './ActivityArticlesTab'
 
 // 活动状态机顺序（与 @/api/activityStatus 的 label 对应）
 const STATUS_ORDER = ACTIVITY_STATUS_OPTIONS.map((o) => o.value)
@@ -1225,6 +1226,11 @@ export default function ActivityDetail() {
       key: 'signin',
       label: '签到',
       children: <SigninPanel activityId={activityId} active={activeTab === 'signin'} />,
+    },
+    {
+      key: 'articles',
+      label: '推文',
+      children: <ActivityArticlesTab activityId={activityId} activity={activity} />,
     },
   ]
 
