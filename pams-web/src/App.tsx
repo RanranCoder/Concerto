@@ -28,10 +28,13 @@ function ThemeConfigProvider() {
         hashed: false,
         token: {
           colorPrimary: '#DE2910',
+          colorInfo: '#2b6cb8',
+          colorLink: '#DE2910',
           colorBgContainer: mode === 'dark' ? '#1b1e26' : '#f7f8fa',
           colorBgElevated: mode === 'dark' ? '#23262f' : '#fbfcfe',
           colorBorder: mode === 'dark' ? '#2e313a' : '#e4e8ef',
           borderRadius: 12,
+          controlHeight: 30,
           fontFamily: "'PingFang SC','Microsoft YaHei','HarmonyOS Sans SC','Noto Sans SC',sans-serif",
         },
         components: {
@@ -41,6 +44,20 @@ function ThemeConfigProvider() {
             itemSelectedBg: mode === 'dark' ? 'rgba(222,41,16,0.28)' : 'rgba(222,41,16,0.14)',
             itemSelectedColor: '#DE2910',
             itemColor: mode === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.92)',
+          },
+          Button: {
+            fontWeight: 500,
+          },
+          Form: {
+            itemMarginBottom: 16,
+            labelColor: mode === 'dark' ? 'rgba(240,244,250,0.55)' : 'rgba(17,24,39,0.6)',
+          },
+          Select: {
+            optionSelectedFontWeight: 600,
+            optionSelectedBg: 'rgba(222,41,16,0.14)',
+          },
+          Input: {
+            activeShadow: '0 0 0 3px rgba(222,41,16,0.12)',
           },
         },
       }}
