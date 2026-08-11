@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnsType } from 'antd/es/table'
-import { Button, DatePicker, Empty, Form, Input, Popconfirm, Select, Space, Tag, message } from 'antd'
+import { App, Button, DatePicker, Empty, Form, Input, Popconfirm, Select, Space, Tag } from 'antd'
 import { DeleteOutlined, DownloadOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -57,6 +57,7 @@ function exportCsv(rows: SigninVO[]) {
 }
 
 export default function SigninPanel({ activityId, active = true }: { activityId: number; active?: boolean }) {
+  const { message } = App.useApp()
   const [list, setList] = useState<SigninVO[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(false)

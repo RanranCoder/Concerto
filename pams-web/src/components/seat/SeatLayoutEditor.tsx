@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ColorPicker, Input, InputNumber, message, Modal, Popover, Slider, Space, Tag } from 'antd'
+import { App, Button, ColorPicker, Input, InputNumber, Modal, Popover, Slider, Space, Tag } from 'antd'
 import {
   BorderOutlined,
   CheckOutlined,
@@ -40,6 +40,7 @@ interface SeatLayoutEditorProps {
 }
 
 export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved }: SeatLayoutEditorProps) {
+  const { message } = App.useApp()
   const [rows, setRows] = useState(10)
   const [cols, setCols] = useState(10)
   const [aisleCols, setAisleCols] = useState<Set<number>>(new Set())

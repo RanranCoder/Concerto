@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Select, Space, Tabs } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Select, Space, Tabs } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -27,6 +27,7 @@ interface TemplateFormValues {
 }
 
 export default function TemplateList() {
+  const { message } = App.useApp()
   const [all, setAll] = useState<TemplateVO[]>([])
   const [loading, setLoading] = useState(false)
   const [category, setCategory] = useState<string>()

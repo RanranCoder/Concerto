@@ -4,6 +4,7 @@ import zhCN from 'antd/locale/zh_CN'
 import { RouterProvider } from 'react-router-dom'
 import { useThemeStore, getAntdTheme } from '@/stores/theme'
 import { router } from '@/router'
+import { FeedbackBridge } from '@/utils/feedback'
 
 function ThemeConfigProvider() {
   const [mode, setMode] = useState(useThemeStore.getState().mode)
@@ -45,6 +46,7 @@ function ThemeConfigProvider() {
       }}
     >
       <AntApp>
+        <FeedbackBridge />
         <RouterProvider router={router} />
       </AntApp>
     </ConfigProvider>

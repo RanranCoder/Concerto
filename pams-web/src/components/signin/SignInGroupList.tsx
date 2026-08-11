@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Checkbox, Collapse, Empty, Input, message, Popconfirm, Space, Tag } from 'antd'
+import { App, Button, Checkbox, Collapse, Empty, Input, Popconfirm, Space, Tag } from 'antd'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -36,6 +36,7 @@ interface SignInGroupListProps {
  * - 支持分组级删除 / 批量删除 / 人员级删除 / 分组重命名 / 跨分组搜索
  */
 export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }: SignInGroupListProps) {
+  const { message } = App.useApp()
   const [groups, setGroups] = useState<SignInGroupVO[]>([])
   const [summary, setSummary] = useState<SignInGroupSummary | null>(null)
   const [keyword, setKeyword] = useState('')

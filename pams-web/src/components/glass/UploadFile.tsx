@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, message } from 'antd'
+import { App, Upload } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import { uploadFile } from '@/api/file'
 
@@ -11,6 +11,7 @@ interface UploadFileProps {
 
 /** 拖拽上传组件：antd Upload.Dragger + 进度，成功后回调 fileId */
 export default function UploadFile({ bizType, onUploaded }: UploadFileProps) {
+  const { message } = App.useApp()
   const [uploading, setUploading] = useState(false)
   const [percent, setPercent] = useState(0)
 

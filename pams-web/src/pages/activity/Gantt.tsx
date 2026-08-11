@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, DatePicker, Form, Input, message, Popconfirm, Select, Slider, Space, Switch } from 'antd'
+import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Slider, Space, Switch } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -12,6 +12,7 @@ import { listTasks, createTask, updateTask, deleteTask, toGanttTask, type TaskSa
 import { listDepts, type DeptVO } from '@/api/dept'
 
 export default function Gantt() {
+  const { message } = App.useApp()
   const { id } = useParams()
   const activityId = Number(id)
   const navigate = useNavigate()

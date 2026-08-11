@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Popconfirm, Select, Space, Tag, message } from 'antd'
+import { App, Button, Empty, Popconfirm, Select, Space, Tag } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import GlassTable from '@/components/glass/GlassTable'
@@ -41,6 +41,7 @@ const EMPTY_TEXT: Record<RosterStatus, string> = {
  * 空态按筛选状态区分文案：全部 →「尚未上传应签名单」，已签/未签筛选下 →「暂无已签/未签名单」。
  */
 export default function SigninRosterList({ activityId, status, onStatusChange, reloadKey = 0, onChanged }: SigninRosterListProps) {
+  const { message } = App.useApp()
   const [rows, setRows] = useState<SigninRosterVO[]>([])
   const [fields, setFields] = useState<string[]>([])
   const [loading, setLoading] = useState(false)

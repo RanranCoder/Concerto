@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, message } from 'antd'
+import { App, Upload } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import { uploadRoster } from '@/api/signin'
 
@@ -15,6 +15,7 @@ interface SigninRosterUploadProps {
  * 成功提示「导入 N 人」并回调 onUploaded 触发父级刷新。
  */
 export default function SigninRosterUpload({ activityId, onUploaded }: SigninRosterUploadProps) {
+  const { message } = App.useApp()
   const [uploading, setUploading] = useState(false)
 
   return (

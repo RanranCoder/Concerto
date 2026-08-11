@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, DatePicker, Form, Input, InputNumber, message, Popconfirm, Select, Space, Spin } from 'antd'
+import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Spin } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -60,6 +60,7 @@ function buildGrid(list: ScheduleVO[]): { rows: { key: string; sessionName: stri
 }
 
 export default function ScheduleList() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
 

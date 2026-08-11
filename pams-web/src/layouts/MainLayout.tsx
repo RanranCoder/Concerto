@@ -1,4 +1,4 @@
-import { Layout, Menu, Dropdown, Space, Avatar, Typography, Spin, Form, Input, Button, message } from 'antd'
+import { App, Layout, Menu, Dropdown, Space, Avatar, Typography, Spin, Form, Input, Button } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, useMemo, startTransition, useState } from 'react'
@@ -28,6 +28,7 @@ import { changePassword } from '@/api/permission'
 const { Sider, Header, Content } = Layout
 
 export default function MainLayout() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()

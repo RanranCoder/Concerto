@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, DatePicker, Form, Input, Select, Space, Spin, message } from 'antd'
+import { App, Button, DatePicker, Form, Input, Select, Space, Spin } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -27,6 +27,7 @@ type ActivityEditVO = {
 }
 
 export default function ActivityEdit() {
+  const { message } = App.useApp()
   const { id } = useParams()
   const activityId = Number(id)
   const navigate = useNavigate()

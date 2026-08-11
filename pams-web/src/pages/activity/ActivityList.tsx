@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, DatePicker, Form, Input, message, Popconfirm, Select, Space } from 'antd'
+import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -49,6 +49,7 @@ function toFormValues(detail?: ActivityVO & { description?: string }): FormValue
 }
 
 export default function ActivityList() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3

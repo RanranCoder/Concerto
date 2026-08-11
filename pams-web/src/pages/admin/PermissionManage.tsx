@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Empty, message, Popconfirm, Space, Spin, Tree } from 'antd'
+import { App, Button, Empty, Popconfirm, Space, Spin, Tree } from 'antd'
 import type { DataNode } from 'antd/es/tree'
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
@@ -27,6 +27,7 @@ const ROLE_LABEL: Record<string, string> = {
  * 左侧角色列表 + 右侧权限树（模块 → 功能点勾选），支持恢复默认
  */
 export default function PermissionManage() {
+  const { message } = App.useApp()
   const [roles, setRoles] = useState<RolePermissionVO[]>([])
   const [tree, setTree] = useState<PermissionModuleNode[]>([])
   const [currentRole, setCurrentRole] = useState<string>('TEACHER')

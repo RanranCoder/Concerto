@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  App,
   Button,
   Form,
   Input,
-  message,
   Popconfirm,
   Select,
   Space,
@@ -67,6 +67,7 @@ interface StageFormValues {
 const STATUS_OPTIONS = PARTY_STAGES.map((s) => ({ value: s.label, label: s.label }))
 
 export default function PartyMemberList() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3

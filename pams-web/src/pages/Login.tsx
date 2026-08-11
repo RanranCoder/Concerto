@@ -1,10 +1,11 @@
-import { Form, Input, Button, Typography, message } from 'antd'
+import { App, Form, Input, Button, Typography } from 'antd'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { loginApi } from '@/api/auth'
 
 export default function Login() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const setLogin = useAuthStore((s) => s.setLogin)
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { BellOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -25,6 +25,7 @@ interface AnnouncementFormValues {
 const READ_KEY = 'pams_announcement_read'
 
 export default function AnnouncementList() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   // 部长以上（roleLevel >= 3）可发布/删除
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3

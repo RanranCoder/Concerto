@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Form, Input, message, Popconfirm, Select, Space, Spin, Tree } from 'antd'
+import { App, Button, Empty, Form, Input, Popconfirm, Select, Space, Spin, Tree } from 'antd'
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -37,6 +37,7 @@ interface MaterialFormValues {
 }
 
 export default function MaterialList() {
+  const { message } = App.useApp()
   const [keyword, setKeyword] = useState('')
   const [tree, setTree] = useState<MaterialTreeActivityNode[]>([])
   const [flat, setFlat] = useState<MaterialVO[]>([])

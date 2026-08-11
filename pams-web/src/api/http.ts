@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios'
 import type { AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { message } from 'antd'
+import { message } from '@/utils/feedback'
 
 export class ApiError extends Error {
   code: number

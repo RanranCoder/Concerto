@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Form, Input, InputNumber, message, Popconfirm, Select, Space, Statistic } from 'antd'
+import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Space, Statistic } from 'antd'
 import { DeleteOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -27,6 +27,7 @@ interface CreditFormValues {
 }
 
 export default function CreditList() {
+  const { message } = App.useApp()
   const [data, setData] = useState<CreditVO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)

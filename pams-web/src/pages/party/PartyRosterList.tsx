@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Select, Space } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -31,6 +31,7 @@ interface RosterFormValues {
 }
 
 export default function PartyRosterList() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
 

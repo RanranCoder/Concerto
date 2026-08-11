@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Form, Input, InputNumber, Typography, message } from 'antd'
+import { Alert, App, Button, Form, Input, InputNumber, Typography } from 'antd'
 import { useParams } from 'react-router-dom'
 import { getScanConfig, scanSignin, type SigninFieldConfigVO } from '@/api/signin'
 
@@ -35,6 +35,7 @@ function hasNameField(configs: Array<{ fieldName: string }>): boolean {
  * 无效/过期 token 由后端返回业务错误，http 拦截层统一 message 提示（本页无需额外错误态）。
  */
 export default function SigninScan() {
+  const { message } = App.useApp()
   const { token } = useParams()
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)

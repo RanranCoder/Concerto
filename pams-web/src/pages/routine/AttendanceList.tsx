@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { InputNumber, message, Select, Space, Table } from 'antd'
+import { App, InputNumber, Select, Space, Table } from 'antd'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
@@ -27,6 +27,7 @@ interface ScheduleRow {
 }
 
 export default function AttendanceList() {
+  const { message } = App.useApp()
   const [weekNo, setWeekNo] = useState<number | undefined>()
   const [summaryType, setSummaryType] = useState<string | undefined>()
   const [schedules, setSchedules] = useState<ScheduleVO[]>([])

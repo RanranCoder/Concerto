@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
-import { notification } from 'antd'
+import { App } from 'antd'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationVO } from '@/api/notification'
 
 export function useWebSocket() {
+  const { notification } = App.useApp()
   const token = useAuthStore((s) => s.token)
   const addRealtime = useNotificationStore((s) => s.addRealtimeNotification)
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount)

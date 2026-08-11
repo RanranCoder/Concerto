@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  App,
   Button,
   Card,
   Empty,
   Form,
   Input,
-  message,
   Modal,
   Popconfirm,
   Radio,
@@ -64,6 +64,7 @@ interface ChatFormValues {
 }
 
 export default function GroupChatList() {
+  const { message } = App.useApp()
   const [chats, setChats] = useState<GroupChatVO[]>([])
   const [categories, setCategories] = useState<GroupChatCategoryVO[]>([])
   const [keyword, setKeyword] = useState('')

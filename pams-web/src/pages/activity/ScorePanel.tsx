@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnsType } from 'antd/es/table'
-import { Button, Empty, Form, Input, InputNumber, Popconfirm, Space, Tag, Tooltip, message } from 'antd'
+import { App, Button, Empty, Form, Input, InputNumber, Popconfirm, Space, Tag, Tooltip } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -53,6 +53,7 @@ function parseDims(json: string | null): Record<string, number> {
 }
 
 export default function ScorePanel({ activityId }: { activityId: number }) {
+  const { message } = App.useApp()
   const [rules, setRules] = useState<ScoreRuleVO[]>([])
   const [records, setRecords] = useState<ScoreRecordVO[]>([])
   const [loading, setLoading] = useState(false)

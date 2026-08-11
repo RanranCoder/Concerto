@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Empty, message, Select, Space, Spin, Switch, Tag } from 'antd'
+import { App, Button, Empty, Select, Space, Spin, Switch, Tag } from 'antd'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -48,6 +48,7 @@ interface NotificationRow {
 }
 
 export default function NotificationList() {
+  const { message } = App.useApp()
   const [typeFilter, setTypeFilter] = useState<string>()
   const [data, setData] = useState<NotificationRow[]>([])
   const [total, setTotal] = useState(0)

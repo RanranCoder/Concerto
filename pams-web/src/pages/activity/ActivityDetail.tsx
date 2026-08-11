@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  App,
   AutoComplete,
   Button,
   Descriptions,
@@ -7,8 +8,6 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
-  Modal,
   Popconfirm,
   Radio,
   Space,
@@ -135,6 +134,7 @@ function PlanTab({
   plan: { latest: ActivityPlanVO | null; status: string | null } | null
   onChanged: () => void
 }) {
+  const { message, modal } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
   const latest = plan?.latest ?? null
@@ -398,7 +398,7 @@ function PlanTab({
   /** 保存按钮：若 override 被改动先弹确认，否则直接保存 */
   const onSaveClick = () => {
     if (overridesChanged()) {
-      Modal.confirm({
+      modal.confirm({
         title: '是否同步更新活动基本信息？',
         content: '已修改活动名称/主题/时间/地点/组织单位/对象，是否同步更新到活动基本信息？取消则仅保存在策划书中。',
         okText: '同步更新',
@@ -598,6 +598,7 @@ function PlanTab({
 // ==================== 议程 Tab ====================
 
 function AgendaTab({ activityId }: { activityId: number }) {
+  const { message } = App.useApp()
   const [list, setList] = useState<ActivityAgendaVO[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ActivityAgendaVO | null>(null)
@@ -762,6 +763,7 @@ function AgendaTab({ activityId }: { activityId: number }) {
 // ==================== 座位表 Tab ====================
 
 function SeatTab({ activityId }: { activityId: number }) {
+  const { message } = App.useApp()
   const [zones, setZones] = useState<Record<string, SeatMapVO[]>>({})
   const [view, setView] = useState<'visual' | 'matrix' | 'excel'>('visual')
   const [layout, setLayout] = useState<SeatLayoutVO | null>(null)
@@ -1007,6 +1009,7 @@ function SeatTab({ activityId }: { activityId: number }) {
 // ==================== 页面 ====================
 
 export default function ActivityDetail() {
+  const { message } = App.useApp()
   const { id } = useParams()
   const activityId = Number(id)
   const navigate = useNavigate()

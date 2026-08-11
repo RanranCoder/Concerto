@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Empty, message, Select, Space, Spin, Tabs, Tag, Tooltip, Upload } from 'antd'
+import { App, Button, Empty, Select, Space, Spin, Tabs, Tag, Tooltip, Upload } from 'antd'
 import { CalendarOutlined, CopyOutlined, DownloadOutlined, FireOutlined, UploadOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import GlassCard from '@/components/glass/GlassCard'
@@ -46,6 +46,7 @@ function exportMatrixText(analysis: FreeTimeAnalysisVO): string {
 }
 
 export default function CourseSchedulePage() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const [tab, setTab] = useState('edit')
   const [semester, setSemester] = useState(SEMESTERS[0])
@@ -477,6 +478,7 @@ export default function CourseSchedulePage() {
             multiple
             accept=".xlsx,.xls"
             fileList={fileList}
+            onChange={({ fileList: fl }) => setFileList(fl)}
             beforeUpload={(file) => {
               setFileList((prev) => [...prev, file])
               return false

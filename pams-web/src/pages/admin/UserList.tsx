@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
@@ -42,6 +42,7 @@ const LEADER_DEPT_MAP: Record<string, string> = {
 }
 
 export default function UserList() {
+  const { message } = App.useApp()
   const currentUser = useAuthStore((s) => s.user)
   // 用户管理页仅部长及以上可见（roleLevel >= 3）；本页本就被菜单隐藏，此处兜底隐藏操作
   const isMinisterOrAbove = (currentUser?.roleLevel ?? 0) >= 3

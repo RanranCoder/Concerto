@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, ColorPicker, Input, Space, message } from 'antd'
+import { App, Button, ColorPicker, Input, Space } from 'antd'
 import { RevoGrid, type BeforeSaveDataDetails, type ColumnRegular } from '@revolist/react-datagrid'
 import type { SeatMapVO } from '@/api/activity'
 import { updateSeat, type SeatSave } from '@/api/seat'
@@ -39,6 +39,7 @@ function toNum(v: unknown): number | null {
  * 图例配置面板：ColorPicker 改色 + Input/Button 新增 seatType。
  */
 export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChangeSeats }: SeatExcelEditorProps) {
+  const { message } = App.useApp()
   const [newType, setNewType] = useState('')
 
   const rows = useMemo<RowModel[]>(

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Select, Space, Typography } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Select, Space, Typography } from 'antd'
 import {
   AuditOutlined,
   CheckOutlined,
@@ -46,6 +46,7 @@ interface ReviewFormValues {
 }
 
 export default function ArticleList() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   // 审核按钮对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
   const canReview = user?.roleCode === 'MEDIA_LEADER' || (user?.roleLevel ?? 0) >= 4

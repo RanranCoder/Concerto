@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Space, Typography } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Space, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -26,6 +26,7 @@ interface NewsFormValues {
 }
 
 export default function NewsList() {
+  const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
 

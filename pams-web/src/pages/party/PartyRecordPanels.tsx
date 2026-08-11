@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, DatePicker, Form, Input, message, Popconfirm, Select, Space } from 'antd'
+import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassModal from '@/components/glass/GlassModal'
@@ -41,6 +41,7 @@ interface InvFormValues {
 }
 
 export function InvestigationPanel({ memberId }: { memberId: number }) {
+  const { message } = App.useApp()
   const [list, setList] = useState<PartyInvestigationVO[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -249,6 +250,7 @@ interface RegFormValues {
 }
 
 export function RegisterPanel({ memberId }: { memberId: number }) {
+  const { message } = App.useApp()
   const [list, setList] = useState<PartyRegisterVO[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -489,6 +491,7 @@ interface TraFormValues {
 }
 
 export function TransferPanel({ memberId }: { memberId: number }) {
+  const { message } = App.useApp()
   const [list, setList] = useState<PartyTransferVO[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)

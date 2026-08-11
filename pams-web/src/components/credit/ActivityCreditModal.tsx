@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Checkbox, Collapse, Empty, Form, Input, InputNumber, Select, Space, Spin, Steps, message } from 'antd'
+import { App, Button, Checkbox, Collapse, Empty, Form, Input, InputNumber, Select, Space, Spin, Steps } from 'antd'
 import GlassModal from '@/components/glass/GlassModal'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listSignInGroups, type SignInGroupVO } from '@/api/signinGroup'
@@ -22,6 +22,7 @@ interface ActivityCreditModalProps {
  * 步骤：①选择活动 → ②选择名单分组 → ③选择人员 → ④设置加分 → ⑤预览确认
  */
 export default function ActivityCreditModal({ open, onClose, onSuccess }: ActivityCreditModalProps) {
+  const { message } = App.useApp()
   const [step, setStep] = useState(0)
   const [activities, setActivities] = useState<ActivityVO[]>([])
   const [groups, setGroups] = useState<SignInGroupVO[]>([])

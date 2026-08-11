@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Checkbox, Form, Space, message } from 'antd'
+import { App, Button, Checkbox, Form, Space } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import GlassModal from '@/components/glass/GlassModal'
 import { getRosterHeaders, saveSigninFields, getSigninFields } from '@/api/signin'
@@ -17,6 +17,7 @@ export default function SigninFieldConfig({
   /** 保存成功回调，父级刷新 */
   onChanged?: () => void
 }) {
+  const { message } = App.useApp()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
