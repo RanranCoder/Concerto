@@ -8,6 +8,7 @@ import com.pams.module.notification.event.ArticleAssignedEvent;
 import com.pams.module.notification.event.ArticleDeadlineReminderEvent;
 import com.pams.module.notification.event.ArticlePublishedEvent;
 import com.pams.module.notification.event.ArticleReviewedEvent;
+import com.pams.module.notification.event.ArticleSubmittedEvent;
 import com.pams.module.notification.event.ContentUploadedEvent;
 import com.pams.module.notification.event.PlanEditedEvent;
 import com.pams.module.notification.event.PlanReviewedEvent;
@@ -281,6 +282,17 @@ public class NotificationEventListener {
                 "ARTICLE", e.getArticleId(), e.getCreatorId(), u.getId(), null, null);
             pushToUser(u);
         });
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleArticleSubmitted(ArticleSubmittedEvent e) {
+        String activityName = getActivityName(e.getActivityId());
+        // 推文提交审核 → 通知审核人（新媒体部长 + 老师/主任），排除提交人本人
+        Set<String> roles = new java.util.LinkedHashSet<>(Set.of("MEDIA_LEADER", "TEACHER", "DIRECTOR"));
+        userRepo.findById(e.getSubmitterId()).ifPresent(u -> roles.remove(u.getRole().getCode()));
+        broadcastToRoles(NotificationType.ARTICLE_SUBMITTED, "推文待审核",
+            "推文《" + e.getTitle() + "》（活动：" + activityName + "）已提交审核",
+            "ARTICLE", e.getArticleId(), e.getSubmitterId(), roles);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

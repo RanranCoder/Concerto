@@ -37,19 +37,19 @@ public class ArticleController {
     @PostMapping
     public Result<Article> create(@Valid @RequestBody ArticleRequest req,
                                   @AuthenticationPrincipal LoginUser current) {
-        return Result.ok(service.create(current == null ? null : current.getId(), req));
+        return Result.ok(service.create(current.getId(), req));
     }
 
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ArticleRequest req,
                                @AuthenticationPrincipal LoginUser current) {
-        service.update(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
+        service.update(id, req, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
     @PutMapping("/{id}/submit")
     public Result<Void> submit(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
-        service.submit(id, current == null ? null : current.getId());
+        service.submit(id, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
@@ -58,27 +58,27 @@ public class ArticleController {
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody ReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {
         boolean approved = req.getApproved() != null && req.getApproved();
-        service.review(id, approved, req.getComment(), current == null ? null : current.getId());
+        service.review(id, approved, req.getComment(), current.getId());
         return Result.ok();
     }
 
     @PutMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id, @Valid @RequestBody PublishRequest req,
                                 @AuthenticationPrincipal LoginUser current) {
-        service.publish(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
+        service.publish(id, req, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
     @PutMapping("/{id}/stats")
     public Result<Void> updateStats(@PathVariable Long id, @Valid @RequestBody StatsRequest req,
                                     @AuthenticationPrincipal LoginUser current) {
-        service.updateStats(id, req, current.getId(), current != null && ArticleService.isLeader(current.getRoleCode()));
+        service.updateStats(id, req, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        service.delete(id);
+    public Result<Void> delete(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
+        service.delete(id, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 }

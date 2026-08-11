@@ -13,7 +13,7 @@ import com.pams.module.content.repository.ArticleRepository;
 import com.pams.module.notification.event.ArticleAssignedEvent;
 import com.pams.module.notification.event.ArticlePublishedEvent;
 import com.pams.module.notification.event.ArticleReviewedEvent;
-import com.pams.module.notification.event.ContentUploadedEvent;
+import com.pams.module.notification.event.ArticleSubmittedEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -131,6 +131,9 @@ public class ArticleService {
         if (req.getAuthorId() == null) {
             throw new BizException(2004, "请指定推文负责人");
         }
+        if (activityRepository != null && activityRepository.findById(req.getActivityId()).isEmpty()) {
+            throw new BizException(2001, "关联的活动不存在");
+        }
         Article a = new Article();
         a.setStatus(Article.ArticleStatus.DRAFT);
         a.setAuthorId(req.getAuthorId());       // 负责人由创建者指定
@@ -168,18 +171,21 @@ public class ArticleService {
     }
 
     @Transactional
-    public void submit(Long id, Long submitterId) {
+    public void submit(Long id, Long currentUserId, boolean leader) {
         Article a = getEntity(id);
         if (a.getStatus() != Article.ArticleStatus.DRAFT
                 && a.getStatus() != Article.ArticleStatus.REJECTED) {
             throw new BizException(2005, "当前状态不可提交审核");
         }
+        if (!leader && (a.getAuthorId() == null || !a.getAuthorId().equals(currentUserId))) {
+            throw new BizException(2002, "无权提交该推文");
+        }
         a.setStatus(Article.ArticleStatus.PENDING);
         a.setUpdatedAt(LocalDateTime.now());
         repository.save(a);
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new ContentUploadedEvent(
-                    a.getId(), a.getActivityId(), a.getTitle(), "ARTICLE", submitterId));
+            eventPublisher.publishEvent(new ArticleSubmittedEvent(
+                    a.getId(), a.getActivityId(), a.getTitle(), currentUserId));
         }
     }
 
@@ -206,7 +212,7 @@ public class ArticleService {
         if (a.getStatus() != Article.ArticleStatus.APPROVED) {
             throw new BizException(2007, "仅审核通过（待发布）的推文可标记发布");
         }
-        if (!leader && !a.getAuthorId().equals(currentUserId)) {
+        if (!leader && (a.getAuthorId() == null || !a.getAuthorId().equals(currentUserId))) {
             throw new BizException(2002, "无权发布该推文");
         }
         a.setStatus(Article.ArticleStatus.PUBLISHED);
@@ -226,7 +232,7 @@ public class ArticleService {
         if (a.getStatus() != Article.ArticleStatus.PUBLISHED) {
             throw new BizException(2008, "仅已发布的推文可更新阅读数据");
         }
-        if (!leader && !a.getAuthorId().equals(currentUserId)) {
+        if (!leader && (a.getAuthorId() == null || !a.getAuthorId().equals(currentUserId))) {
             throw new BizException(2002, "无权更新该推文数据");
         }
         if (req.getReadCount() != null) a.setReadCount(req.getReadCount());
@@ -236,8 +242,15 @@ public class ArticleService {
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Long currentUserId, boolean leader) {
         Article a = getEntity(id);
+        if (a.getStatus() != Article.ArticleStatus.DRAFT
+                && a.getStatus() != Article.ArticleStatus.REJECTED) {
+            throw new BizException(2009, "仅草稿或驳回状态的推文可删除");
+        }
+        if (!leader && (a.getAuthorId() == null || !a.getAuthorId().equals(currentUserId))) {
+            throw new BizException(2002, "无权删除该推文");
+        }
         a.setDeleted(1);
         a.setUpdatedAt(LocalDateTime.now());
         repository.save(a);

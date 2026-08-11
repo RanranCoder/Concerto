@@ -120,4 +120,63 @@ class ArticleServiceTest {
                 .isInstanceOf(BizException.class);
         verify(repo, never()).save(any());
     }
+
+    @Test
+    void submit_denies_non_author_non_leader() {
+        Article a = new Article();
+        a.setId(10L);
+        a.setStatus(Article.ArticleStatus.DRAFT);
+        a.setAuthorId(50L);
+        when(repo.findById(10L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.submit(10L, 99L, false))
+                .isInstanceOf(BizException.class);
+        assertThat(a.getStatus()).isEqualTo(Article.ArticleStatus.DRAFT);
+    }
+
+    @Test
+    void submit_allows_author() {
+        Article a = new Article();
+        a.setId(11L);
+        a.setStatus(Article.ArticleStatus.DRAFT);
+        a.setAuthorId(50L);
+        when(repo.findById(11L)).thenReturn(Optional.of(a));
+        service.submit(11L, 50L, false);
+        assertThat(a.getStatus()).isEqualTo(Article.ArticleStatus.PENDING);
+    }
+
+    @Test
+    void delete_denies_non_author_non_leader() {
+        Article a = new Article();
+        a.setId(12L);
+        a.setStatus(Article.ArticleStatus.DRAFT);
+        a.setAuthorId(50L);
+        when(repo.findById(12L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.delete(12L, 99L, false))
+                .isInstanceOf(BizException.class);
+        verify(repo, never()).save(a);
+    }
+
+    @Test
+    void delete_denies_published() {
+        Article a = new Article();
+        a.setId(13L);
+        a.setStatus(Article.ArticleStatus.PUBLISHED);
+        a.setAuthorId(50L);
+        when(repo.findById(13L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.delete(13L, 50L, false))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void publish_denies_null_author_for_non_leader() {
+        Article a = new Article();
+        a.setId(14L);
+        a.setStatus(Article.ArticleStatus.APPROVED);
+        a.setAuthorId(null); // 存量数据无负责人：应走权限拒绝而非 NPE
+        when(repo.findById(14L)).thenReturn(Optional.of(a));
+        com.pams.module.content.dto.PublishRequest req = new com.pams.module.content.dto.PublishRequest();
+        req.setWxUrl("https://mp.weixin.qq.com/s/abc");
+        assertThatThrownBy(() -> service.publish(14L, req, 99L, false))
+                .isInstanceOf(BizException.class);
+    }
 }
