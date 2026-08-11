@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Typography, Upload } from 'antd'
+import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Typography } from 'antd'
 import {
   AuditOutlined,
   BarChartOutlined,
@@ -14,6 +14,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
+import LongImageUpload from '@/components/glass/LongImageUpload'
 import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
 import {
@@ -31,7 +32,6 @@ import {
   type ArticleSave,
   type ArticleVO,
 } from '@/api/article'
-import { uploadFile, downloadUrl } from '@/api/file'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listUsers, type UserVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
@@ -52,44 +52,6 @@ interface ArticleFormValues {
 
 interface ReviewFormValues {
   comment?: string
-}
-
-/** 长图上传：手动上传拿 FileRec，回填 /api/files/{id}/download；受控 Form.Item value/onChange */
-function LongImageUpload({ value, onChange }: { value?: string[]; onChange?: (urls: string[]) => void }) {
-  const { message } = App.useApp()
-  const list = (value ?? []).map((url, i) => ({
-    uid: `long-${i}-${Date.now()}`,
-    name: `长图${i + 1}`,
-    status: 'done' as const,
-    url,
-  }))
-  return (
-    <Upload
-      listType="picture-card"
-      accept="image/*"
-      fileList={list}
-      beforeUpload={(file) => {
-        uploadFile(file as unknown as File, 'article')
-          .then((rec) => {
-            onChange?.([...(value ?? []), downloadUrl(rec.id)])
-            message.success('长图已上传')
-          })
-          .catch(() => message.error('长图上传失败'))
-        return false
-      }}
-      onRemove={(file) => {
-        onChange?.((value ?? []).filter((u) => u !== file.url))
-        return true
-      }}
-    >
-      {(value?.length ?? 0) < 9 ? (
-        <div>
-          <PlusOutlined />
-          <div style={{ marginTop: 8 }}>上传长图</div>
-        </div>
-      ) : null}
-    </Upload>
-  )
 }
 
 export default function ArticleList() {
@@ -363,12 +325,12 @@ export default function ArticleList() {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreview(r)}>
             预览
           </Button>
-          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (
+          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (canReview || r.authorId === user?.id) && (
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
               {r.status === 'REJECTED' ? '改后重提' : '编辑'}
             </Button>
           )}
-          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (
+          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (canReview || r.authorId === user?.id) && (
             <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(r)}>
               提交
             </Button>
@@ -378,17 +340,17 @@ export default function ArticleList() {
               审核
             </Button>
           )}
-          {r.status === 'APPROVED' && (
+          {r.status === 'APPROVED' && (canReview || r.authorId === user?.id) && (
             <Button type="link" size="small" icon={<SendOutlined />} onClick={() => setPublishTarget(r)}>
               标记发布
             </Button>
           )}
-          {r.status === 'PUBLISHED' && (
+          {r.status === 'PUBLISHED' && (canReview || r.authorId === user?.id) && (
             <Button type="link" size="small" icon={<BarChartOutlined />} onClick={() => setStatsTarget(r)}>
               更新数据
             </Button>
           )}
-          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (
+          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (canReview || r.authorId === user?.id) && (
             <Popconfirm title="确认删除该推文？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 删除

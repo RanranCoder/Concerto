@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  App,
   Button,
   Col,
   DatePicker,
@@ -7,7 +8,6 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
   Popconfirm,
   Row,
   Select,
@@ -15,7 +15,6 @@ import {
   Spin,
   Tag,
   Typography,
-  Upload,
 } from 'antd'
 import {
   AuditOutlined,
@@ -30,6 +29,7 @@ import {
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
+import LongImageUpload from '@/components/glass/LongImageUpload'
 import {
   listArticles,
   createArticle,
@@ -45,7 +45,6 @@ import {
   type ArticleSave,
   type ArticleVO,
 } from '@/api/article'
-import { uploadFile, downloadUrl } from '@/api/file'
 import { listUsers, type UserVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import type { ActivityVO } from '@/api/activity'
@@ -68,42 +67,7 @@ interface ArticleFormValues {
   imageUrls?: string[]
 }
 
-/** 长图上传：手动上传拿 FileRec，回填 /api/files/{id}/download；受控 Form.Item value/onChange */
-function LongImageUpload({ value, onChange }: { value?: string[]; onChange?: (urls: string[]) => void }) {
-  const list = (value ?? []).map((url, i) => ({
-    uid: `long-${i}-${Date.now()}`,
-    name: `长图${i + 1}`,
-    status: 'done' as const,
-    url,
-  }))
-  return (
-    <Upload
-      listType="picture-card"
-      accept="image/*"
-      fileList={list}
-      beforeUpload={(file) => {
-        uploadFile(file as unknown as File, 'article')
-          .then((rec) => {
-            onChange?.([...(value ?? []), downloadUrl(rec.id)])
-            message.success('长图已上传')
-          })
-          .catch(() => message.error('长图上传失败'))
-        return false
-      }}
-      onRemove={(file) => {
-        onChange?.((value ?? []).filter((u) => u !== file.url))
-        return true
-      }}
-    >
-      {(value?.length ?? 0) < 9 ? (
-        <div>
-          <PlusOutlined />
-          <div style={{ marginTop: 8 }}>上传长图</div>
-        </div>
-      ) : null}
-    </Upload>
-  )
-}
+/** 长图上传：使用共享 LongImageUpload 组件（手动上传回填 URL，并发不丢） */
 
 export default function ActivityArticlesTab({
   activityId,
@@ -113,6 +77,7 @@ export default function ActivityArticlesTab({
   activity?: ActivityVO
 }) {
   const user = useAuthStore((s) => s.user)
+  const { message } = App.useApp()
   // 管理/审核权限对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
   const canManage = user?.roleCode === 'MEDIA_LEADER' || (user?.roleLevel ?? 0) >= 4
 
@@ -186,6 +151,10 @@ export default function ActivityArticlesTab({
 
   /** 快捷创建：预热默认活动开始前 3 天 / 报道默认结束后 2 天（负责人默认当前用户，可后续编辑改派） */
   const quickCreate = async (type: 'PREHEAT' | 'REPORT') => {
+    if (!user?.id) {
+      message.warning('用户信息未加载，请稍后再试')
+      return
+    }
     const base =
       type === 'PREHEAT'
         ? activity?.startDate
