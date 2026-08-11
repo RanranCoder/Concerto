@@ -4,6 +4,10 @@ import com.pams.entity.User;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.notification.entity.NotificationType;
+import com.pams.module.notification.event.ArticleAssignedEvent;
+import com.pams.module.notification.event.ArticleDeadlineReminderEvent;
+import com.pams.module.notification.event.ArticlePublishedEvent;
+import com.pams.module.notification.event.ArticleReviewedEvent;
 import com.pams.module.notification.event.ContentUploadedEvent;
 import com.pams.module.notification.event.PlanEditedEvent;
 import com.pams.module.notification.event.PlanReviewedEvent;
@@ -265,6 +269,52 @@ public class NotificationEventListener {
             content,
             "SIGNIN", event.getActivityId(), null, DEPT_LEADER_ROLES);
         log.info("SigninCompleted 通知已发送，activityId={}", event.getActivityId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleArticleAssigned(ArticleAssignedEvent e) {
+        String activityName = getActivityName(e.getActivityId());
+        userRepo.findById(e.getAssigneeId()).ifPresent(u -> {
+            notificationService.createAndSave(NotificationType.ARTICLE_ASSIGNED,
+                "推文任务已指派",
+                "你负责撰写推文《" + e.getTitle() + "》（活动：" + activityName + "），请按时完成",
+                "ARTICLE", e.getArticleId(), e.getCreatorId(), u.getId(), null, null);
+            pushToUser(u);
+        });
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleArticleReviewed(ArticleReviewedEvent e) {
+        String activityName = getActivityName(e.getActivityId());
+        NotificationType type = e.isApproved() ? NotificationType.ARTICLE_APPROVED : NotificationType.ARTICLE_REJECTED;
+        String title = e.isApproved() ? "推文审核通过" : "推文被驳回";
+        String content = "推文《" + e.getTitle() + "》（活动：" + activityName + "）"
+            + (e.isApproved() ? "已通过审核，请发布" : "被驳回" + (e.getComment() != null ? "，原因：" + e.getComment() : ""));
+        userRepo.findById(e.getAuthorId()).ifPresent(u -> {
+            notificationService.createAndSave(type, title, content, "ARTICLE", e.getArticleId(),
+                e.getReviewerId(), u.getId(), null, null);
+            pushToUser(u);
+        });
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleArticlePublished(ArticlePublishedEvent e) {
+        String activityName = getActivityName(e.getActivityId());
+        broadcastToRoles(NotificationType.ARTICLE_PUBLISHED, "推文已发布",
+            "推文《" + e.getTitle() + "》（活动：" + activityName + "）已发布",
+            "ARTICLE", e.getArticleId(), e.getPublisherId(), ALL_LEADER_ROLES);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleArticleDeadlineReminder(ArticleDeadlineReminderEvent e) {
+        String activityName = getActivityName(e.getActivityId());
+        userRepo.findById(e.getAuthorId()).ifPresent(u -> {
+            notificationService.createAndSave(NotificationType.ARTICLE_DEADLINE_REMINDER,
+                "推文截止提醒",
+                "推文《" + e.getTitle() + "》截止时间 " + e.getDeadline() + "（活动：" + activityName + "），请尽快完成",
+                "ARTICLE", e.getArticleId(), null, u.getId(), null, null);
+            pushToUser(u);
+        });
     }
 
     /**
