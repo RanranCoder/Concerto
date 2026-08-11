@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Form, Input, message, Popconfirm, Select, Space, Typography } from 'antd'
+import { Button, DatePicker, Form, Input, InputNumber, message, Popconfirm, Select, Space, Typography, Upload } from 'antd'
 import {
   AuditOutlined,
+  BarChartOutlined,
   CheckOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -9,7 +10,7 @@ import {
   PlusOutlined,
   SendOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
@@ -21,6 +22,8 @@ import {
   updateArticle,
   submitArticle,
   reviewArticle,
+  publishArticle,
+  updateArticleStats,
   deleteArticle,
   ARTICLE_STATUS_OPTIONS,
   ARTICLE_TYPE_MAP,
@@ -28,6 +31,8 @@ import {
   type ArticleSave,
   type ArticleVO,
 } from '@/api/article'
+import { uploadFile, downloadUrl } from '@/api/file'
+import { listActivities, type ActivityVO } from '@/api/activity'
 import { listUsers, type UserVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 
@@ -39,10 +44,51 @@ interface ArticleFormValues {
   content?: string
   coverUrl?: string
   articleType: string
+  activityId: number
+  authorId: number
+  deadline: Dayjs
+  imageUrls?: string[]
 }
 
 interface ReviewFormValues {
   comment?: string
+}
+
+/** 长图上传：手动上传拿 FileRec，回填 /api/files/{id}/download；受控 Form.Item value/onChange */
+function LongImageUpload({ value, onChange }: { value?: string[]; onChange?: (urls: string[]) => void }) {
+  const list = (value ?? []).map((url, i) => ({
+    uid: `long-${i}-${Date.now()}`,
+    name: `长图${i + 1}`,
+    status: 'done' as const,
+    url,
+  }))
+  return (
+    <Upload
+      listType="picture-card"
+      accept="image/*"
+      fileList={list}
+      beforeUpload={(file) => {
+        uploadFile(file as unknown as File, 'article')
+          .then((rec) => {
+            onChange?.([...(value ?? []), downloadUrl(rec.id)])
+            message.success('长图已上传')
+          })
+          .catch(() => message.error('长图上传失败'))
+        return false
+      }}
+      onRemove={(file) => {
+        onChange?.((value ?? []).filter((u) => u !== file.url))
+        return true
+      }}
+    >
+      {(value?.length ?? 0) < 9 ? (
+        <div>
+          <PlusOutlined />
+          <div style={{ marginTop: 8 }}>上传长图</div>
+        </div>
+      ) : null}
+    </Upload>
+  )
 }
 
 export default function ArticleList() {
@@ -58,7 +104,9 @@ export default function ArticleList() {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState<string | undefined>()
   const [type, setType] = useState<string | undefined>()
+  const [activityId, setActivityId] = useState<number | undefined>()
   const [users, setUsers] = useState<UserVO[]>([])
+  const [activities, setActivities] = useState<ActivityVO[]>([])
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<ArticleVO | null>(null)
@@ -70,10 +118,18 @@ export default function ArticleList() {
   const [reviewing, setReviewing] = useState(false)
   const [reviewForm] = Form.useForm<ReviewFormValues>()
 
+  const [publishTarget, setPublishTarget] = useState<ArticleVO | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [publishForm] = Form.useForm<{ wxUrl: string }>()
+
+  const [statsTarget, setStatsTarget] = useState<ArticleVO | null>(null)
+  const [updating, setUpdating] = useState(false)
+  const [statsForm] = Form.useForm<{ readCount: number; likeCount: number }>()
+
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await listArticles({ status, type, keyword: keyword || undefined, page, size })
+      const res = await listArticles({ status, type, keyword: keyword || undefined, activityId, page, size })
       setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
       setTotal(res.total)
     } catch {
@@ -81,7 +137,7 @@ export default function ArticleList() {
     } finally {
       setLoading(false)
     }
-  }, [status, type, keyword, page, size])
+  }, [status, type, keyword, activityId, page, size])
 
   useEffect(() => {
     fetchList()
@@ -96,14 +152,27 @@ export default function ArticleList() {
       })
   }, [])
 
+  // 活动下拉：聚合视图「按活动」筛选 + 撰写表单必填 activityId
+  useEffect(() => {
+    listActivities({ page: 1, size: 1000 })
+      .then((res) => setActivities(res.records ?? []))
+      .catch(() => {
+        /* http 拦截已提示 */
+      })
+  }, [])
+
   const userNameOf = (id: number | null): string => {
     if (id == null) return '-'
     return users.find((u) => u.id === id)?.realName ?? `#${id}`
   }
 
+  const isOverdue = (r: ArticleVO): boolean => {
+    if (r.status === 'PUBLISHED' || !r.deadline) return false
+    return dayjs(r.deadline).isBefore(dayjs())
+  }
+
   const openCreate = () => {
     setEditing(null)
-    form.resetFields()
     setEditorOpen(true)
   }
 
@@ -122,6 +191,10 @@ export default function ArticleList() {
         content: values.content?.trim() || undefined,
         coverUrl: values.coverUrl?.trim() || undefined,
         articleType: values.articleType,
+        activityId: values.activityId,
+        authorId: values.authorId,
+        deadline: dayjs(values.deadline).format('YYYY-MM-DDTHH:mm:ss'),
+        imageUrls: values.imageUrls ?? [],
       }
       if (editing) {
         await updateArticle(editing.id, payload)
@@ -161,7 +234,7 @@ export default function ArticleList() {
     setReviewing(true)
     try {
       await reviewArticle(reviewTarget.id, approved, values.comment?.trim() || undefined)
-      message.success(approved ? '审核通过，已发布' : '已驳回')
+      message.success(approved ? '审核通过，待发布' : '已驳回')
       setReviewTarget(null)
       reviewForm.resetFields()
       fetchList()
@@ -169,6 +242,50 @@ export default function ArticleList() {
       /* http 拦截已提示 */
     } finally {
       setReviewing(false)
+    }
+  }
+
+  const handlePublish = async () => {
+    if (!publishTarget) return
+    let values: { wxUrl: string }
+    try {
+      values = await publishForm.validateFields()
+    } catch {
+      return
+    }
+    setPublishing(true)
+    try {
+      await publishArticle(publishTarget.id, { wxUrl: values.wxUrl.trim() })
+      message.success('已标记发布')
+      setPublishTarget(null)
+      publishForm.resetFields()
+      fetchList()
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const handleStats = async () => {
+    if (!statsTarget) return
+    let values: { readCount: number; likeCount: number }
+    try {
+      values = await statsForm.validateFields()
+    } catch {
+      return
+    }
+    setUpdating(true)
+    try {
+      await updateArticleStats(statsTarget.id, { readCount: values.readCount ?? 0, likeCount: values.likeCount ?? 0 })
+      message.success('数据已更新')
+      setStatsTarget(null)
+      statsForm.resetFields()
+      fetchList()
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -184,12 +301,49 @@ export default function ArticleList() {
 
   const columns = [
     { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
-    { title: '类型', dataIndex: 'articleType', key: 'articleType', render: (t: string) => ARTICLE_TYPE_MAP[t] ?? t },
-    { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <StatusTag status={s} /> },
     {
-      title: '作者',
+      title: '所属活动',
+      dataIndex: 'activityName',
+      key: 'activityName',
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    { title: '类型', dataIndex: 'articleType', key: 'articleType', width: 90, render: (t: string) => ARTICLE_TYPE_MAP[t] ?? t },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 90, render: (s: string) => <StatusTag status={s} /> },
+    {
+      title: '负责人',
       key: 'author',
+      width: 110,
       render: (_: unknown, r: ArticleRecord) => userNameOf(r.authorId),
+    },
+    {
+      title: '截止时间',
+      key: 'deadline',
+      width: 110,
+      render: (_: unknown, r: ArticleRecord) => (
+        <span style={{ color: isOverdue(r) ? 'var(--color-red)' : undefined }}>
+          {r.deadline ? dayjs(r.deadline).format('YYYY-MM-DD') : '-'}
+        </span>
+      ),
+    },
+    {
+      title: '公众号',
+      key: 'wxUrl',
+      width: 80,
+      render: (_: unknown, r: ArticleRecord) =>
+        r.wxUrl ? (
+          <a href={r.wxUrl} target="_blank" rel="noreferrer">
+            打开
+          </a>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: '数据',
+      key: 'stats',
+      width: 110,
+      render: (_: unknown, r: ArticleRecord) => `阅读 ${r.readCount ?? 0} / 在看 ${r.likeCount ?? 0}`,
     },
     {
       title: '发布时间',
@@ -201,7 +355,7 @@ export default function ArticleList() {
     {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: 260,
       render: (_: unknown, r: ArticleRecord) => (
         <Space size="small" wrap>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreview(r)}>
@@ -212,12 +366,7 @@ export default function ArticleList() {
               {r.status === 'REJECTED' ? '改后重提' : '编辑'}
             </Button>
           )}
-          {r.status === 'DRAFT' && (
-            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(r)}>
-              提交
-            </Button>
-          )}
-          {r.status === 'REJECTED' && (
+          {(r.status === 'DRAFT' || r.status === 'REJECTED') && (
             <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(r)}>
               提交
             </Button>
@@ -225,6 +374,16 @@ export default function ArticleList() {
           {r.status === 'PENDING' && canReview && (
             <Button type="link" size="small" icon={<AuditOutlined />} onClick={() => setReviewTarget(r)}>
               审核
+            </Button>
+          )}
+          {r.status === 'APPROVED' && (
+            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => setPublishTarget(r)}>
+              标记发布
+            </Button>
+          )}
+          {r.status === 'PUBLISHED' && (
+            <Button type="link" size="small" icon={<BarChartOutlined />} onClick={() => setStatsTarget(r)}>
+              更新数据
             </Button>
           )}
           {(r.status === 'DRAFT' || r.status === 'REJECTED') && (
@@ -243,11 +402,13 @@ export default function ArticleList() {
     <div>
       <PageHeader
         title="推文管理"
-        description="新媒体中心撰写推送：活动预热 / 活动报道 / 宣传视频"
+        description="新媒体中心推送全流程：预热 / 报道 / 宣传视频，长图审核、发布归档、阅读数据回填"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            撰写推文
-          </Button>
+          canReview ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              撰写推文
+            </Button>
+          ) : null
         }
       />
 
@@ -256,9 +417,22 @@ export default function ArticleList() {
           <Input.Search
             placeholder="搜索标题 / 摘要"
             allowClear
-            style={{ width: 240 }}
+            style={{ width: 200 }}
             onSearch={(v) => {
               setKeyword(v)
+              setPage(1)
+            }}
+          />
+          <Select
+            placeholder="按活动"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={activities.map((a) => ({ value: a.id, label: a.name }))}
+            style={{ width: 200 }}
+            value={activityId}
+            onChange={(v) => {
+              setActivityId(v)
               setPage(1)
             }}
           />
@@ -323,29 +497,57 @@ export default function ArticleList() {
           form={form}
           layout="vertical"
           preserve={false}
+          key={editing ? `article-edit-${editing.id}` : 'article-create'}
           initialValues={
             editing
               ? {
                   title: editing.title,
                   articleType: editing.articleType,
+                  activityId: editing.activityId ?? undefined,
+                  authorId: editing.authorId ?? undefined,
+                  deadline: editing.deadline ? dayjs(editing.deadline) : undefined,
                   summary: editing.summary ?? undefined,
                   content: editing.content ?? undefined,
                   coverUrl: editing.coverUrl || undefined,
+                  imageUrls: editing.imageUrls ?? [],
                 }
-              : { articleType: 'REPORT' }
+              : { articleType: 'REPORT', deadline: dayjs().endOf('day') }
           }
         >
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入推文标题' }]}>
             <Input maxLength={150} placeholder="推文标题" />
           </Form.Item>
+          <Form.Item name="activityId" label="所属活动" rules={[{ required: true, message: '请选择所属活动' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={activities.map((a) => ({ value: a.id, label: a.name }))}
+              placeholder="选择活动"
+            />
+          </Form.Item>
           <Form.Item name="articleType" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
             <Select options={ARTICLE_TYPE_OPTIONS} placeholder="预热 / 报道 / 宣传视频" />
+          </Form.Item>
+          <Form.Item name="authorId" label="负责人" rules={[{ required: true, message: '请指定负责人' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={users.map((u) => ({ value: u.id, label: u.realName }))}
+              placeholder="选择负责人"
+              disabled={!!editing && !canReview}
+            />
+          </Form.Item>
+          <Form.Item name="deadline" label="截止时间" rules={[{ required: true, message: '请设置截止时间' }]}>
+            <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="summary" label="摘要">
             <Input.TextArea rows={3} maxLength={500} placeholder="一句话摘要，列表与预览中展示" />
           </Form.Item>
-          <Form.Item name="content" label="正文" rules={[{ required: true, message: '请输入正文' }]}>
-            <Input.TextArea rows={12} maxLength={20000} placeholder="推文正文（支持换行，预览按原文换行展示）" />
+          <Form.Item name="content" label="正文（可选底稿）" rules={[{ required: false }]}>
+            <Input.TextArea rows={8} maxLength={20000} placeholder="可选文字底稿；排版以秀米长图截图为准" />
+          </Form.Item>
+          <Form.Item name="imageUrls" label="长图截图">
+            <LongImageUpload />
           </Form.Item>
           <Form.Item name="coverUrl" label="封面 URL">
             <Input maxLength={255} placeholder="https:// 封面图片地址（可选）" />
@@ -363,15 +565,11 @@ export default function ArticleList() {
         }}
         footer={
           <Space>
-            <Button
-              danger
-              loading={reviewing}
-              onClick={() => handleReview(false)}
-            >
+            <Button danger loading={reviewing} onClick={() => handleReview(false)}>
               驳回
             </Button>
             <Button type="primary" loading={reviewing} icon={<CheckOutlined />} onClick={() => handleReview(true)}>
-              通过并发布
+              通过（待发布）
             </Button>
           </Space>
         }
@@ -384,11 +582,21 @@ export default function ArticleList() {
             <Typography.Paragraph type="secondary" style={{ whiteSpace: 'pre-wrap' }}>
               {reviewTarget.summary}
             </Typography.Paragraph>
-            <div style={{ maxHeight: 320, overflow: 'auto', marginBottom: 16 }}>
-              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
-                {reviewTarget.content}
-              </Typography.Paragraph>
-            </div>
+            {reviewTarget.imageUrls?.map((u) => (
+              <img
+                key={u}
+                src={u}
+                alt="长图"
+                style={{ width: '100%', borderRadius: 8, marginBottom: 8, display: 'block' }}
+              />
+            ))}
+            {reviewTarget.content ? (
+              <div style={{ maxHeight: 200, overflow: 'auto', marginBottom: 16 }}>
+                <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>
+                  {reviewTarget.content}
+                </Typography.Paragraph>
+              </div>
+            ) : null}
             <Form form={reviewForm} layout="vertical" preserve={false}>
               <Form.Item name="comment" label="审核意见">
                 <Input.TextArea rows={3} maxLength={500} placeholder="选填，驳回时建议填写原因" />
@@ -398,15 +606,73 @@ export default function ArticleList() {
         )}
       </GlassModal>
 
-      {/* 预览 */}
+      {/* 标记发布 */}
       <GlassModal
-        title="推文预览"
-        open={!!preview}
-        onCancel={() => setPreview(null)}
+        title="标记发布"
+        open={!!publishTarget}
+        onCancel={() => {
+          setPublishTarget(null)
+          publishForm.resetFields()
+        }}
         footer={
-          <Button onClick={() => setPreview(null)}>关闭</Button>
+          <Space>
+            <Button onClick={() => setPublishTarget(null)}>取消</Button>
+            <Button type="primary" loading={publishing} onClick={handlePublish}>
+              确认发布
+            </Button>
+          </Space>
         }
       >
+        {publishTarget && (
+          <>
+            <Typography.Paragraph type="secondary">
+              「{publishTarget.title}」已通过审核，填公众号发布链接后完成发布归档。
+            </Typography.Paragraph>
+            <Form form={publishForm} layout="vertical" preserve={false}>
+              <Form.Item name="wxUrl" label="公众号链接" rules={[{ required: true, message: '请输入公众号链接' }]}>
+                <Input maxLength={500} placeholder="https://mp.weixin.qq.com/s/..." />
+              </Form.Item>
+            </Form>
+          </>
+        )}
+      </GlassModal>
+
+      {/* 更新数据 */}
+      <GlassModal
+        title="更新阅读数据"
+        open={!!statsTarget}
+        onCancel={() => {
+          setStatsTarget(null)
+          statsForm.resetFields()
+        }}
+        footer={
+          <Space>
+            <Button onClick={() => setStatsTarget(null)}>取消</Button>
+            <Button type="primary" loading={updating} onClick={handleStats}>
+              保存
+            </Button>
+          </Space>
+        }
+      >
+        {statsTarget && (
+          <Form
+            form={statsForm}
+            layout="vertical"
+            preserve={false}
+            initialValues={{ readCount: statsTarget.readCount ?? 0, likeCount: statsTarget.likeCount ?? 0 }}
+          >
+            <Form.Item name="readCount" label="阅读量" rules={[{ required: true, message: '请输入阅读量' }]}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="likeCount" label="在看数" rules={[{ required: true, message: '请输入在看数' }]}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Form>
+        )}
+      </GlassModal>
+
+      {/* 预览 */}
+      <GlassModal title="推文预览" open={!!preview} onCancel={() => setPreview(null)} footer={<Button onClick={() => setPreview(null)}>关闭</Button>}>
         {preview && (
           <>
             <div style={{ marginBottom: 8 }}>
@@ -421,7 +687,14 @@ export default function ArticleList() {
             </Typography.Title>
             {preview.coverUrl && (
               <div style={{ marginBottom: 12 }}>
-                <img src={preview.coverUrl} alt="封面" style={{ maxWidth: '100%', borderRadius: 8 }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                <img
+                  src={preview.coverUrl}
+                  alt="封面"
+                  style={{ maxWidth: '100%', borderRadius: 8 }}
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).style.display = 'none'
+                  }}
+                />
               </div>
             )}
             {preview.summary && (
@@ -429,9 +702,19 @@ export default function ArticleList() {
                 {preview.summary}
               </Typography.Paragraph>
             )}
-            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-              {preview.content}
-            </Typography.Paragraph>
+            {preview.imageUrls?.map((u) => (
+              <img
+                key={u}
+                src={u}
+                alt="长图"
+                style={{ width: '100%', borderRadius: 8, marginBottom: 8, display: 'block' }}
+              />
+            ))}
+            {preview.content && (
+              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                {preview.content}
+              </Typography.Paragraph>
+            )}
           </>
         )}
       </GlassModal>
