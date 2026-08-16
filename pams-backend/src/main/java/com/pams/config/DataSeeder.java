@@ -24,6 +24,8 @@ import com.pams.module.content.entity.Article;
 import com.pams.module.content.entity.News;
 import com.pams.module.content.repository.ArticleRepository;
 import com.pams.module.content.repository.NewsRepository;
+import com.pams.module.member.entity.MemberSession;
+import com.pams.module.member.repository.MemberSessionRepository;
 import com.pams.module.party.entity.PartyMember;
 import com.pams.module.party.entity.PartyStage;
 import com.pams.module.party.entity.PartyStageType;
@@ -65,6 +67,7 @@ public class DataSeeder implements ApplicationRunner {
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStageRepository partyStageRepository;
     private final CreditRecordRepository creditRecordRepository;
+    private final MemberSessionRepository memberSessionRepository;
 
     public DataSeeder(DepartmentRepository d, RoleRepository r, UserRepository u, PasswordEncoder p,
                       Environment environment,
@@ -79,7 +82,8 @@ public class DataSeeder implements ApplicationRunner {
                       AnnouncementRepository announcementRepository,
                       PartyMemberRepository partyMemberRepository,
                       PartyStageRepository partyStageRepository,
-                      CreditRecordRepository creditRecordRepository) {
+                      CreditRecordRepository creditRecordRepository,
+                      MemberSessionRepository memberSessionRepository) {
         this.departmentRepository = d;
         this.roleRepository = r;
         this.userRepository = u;
@@ -97,15 +101,26 @@ public class DataSeeder implements ApplicationRunner {
         this.partyMemberRepository = partyMemberRepository;
         this.partyStageRepository = partyStageRepository;
         this.creditRecordRepository = creditRecordRepository;
+        this.memberSessionRepository = memberSessionRepository;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
         seedOrg();
+        seedMemberSessions();   // 届别种子独立于部门种子（dev 库部门已存在时也能补种）
         // 演示业务数据只在非测试环境注入，避免影响 H2 集成测试断言。
         if (isTestProfile()) return;
         seedDemoData();
+    }
+
+    /** 种子届别：只建「第九届」为当前届，便于直接导入真实登记表。 */
+    private void seedMemberSessions() {
+        if (memberSessionRepository.count() > 0) return;
+        MemberSession s9 = new MemberSession();
+        s9.setName("第九届"); s9.setIsCurrent(1); s9.setSortOrder(1);
+        s9.setCreatedAt(LocalDateTime.now()); s9.setUpdatedAt(LocalDateTime.now());
+        memberSessionRepository.save(s9);
     }
 
     /** Task 4 建的基础数据：部门 / 角色 / 账号（空库才建，幂等）。 */
