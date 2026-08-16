@@ -10,4 +10,5 @@ public interface CreditRecordRepository extends JpaRepository<CreditRecord, Long
         JpaSpecificationExecutor<CreditRecord> {
     List<CreditRecord> findBySourceActivityId(Long sourceActivityId);
     List<CreditRecord> findByBatchId(String batchId);
+    List<CreditRecord> findByStudentNoOrderByCreatedAtDesc(String studentNo);
 }
