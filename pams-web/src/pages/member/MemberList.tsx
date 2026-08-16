@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App, Button, Form, Input, Modal, Popconfirm, Segmented, Select, Space, Table, Tag,
 } from 'antd'
-import type { TableColumnsType, UploadFile } from 'antd'
+import type { TableColumnsType } from 'antd'
 import {
   DeleteOutlined, DownloadOutlined, EditOutlined, ExportOutlined, PlusOutlined, ReloadOutlined, UploadOutlined,
 } from '@ant-design/icons'
@@ -49,7 +49,6 @@ export default function MemberList() {
   const [sessionForm] = Form.useForm<{ name: string; remark?: string }>()
 
   const [importing, setImporting] = useState(false)
-  const [importFileList, setImportFileList] = useState<UploadFile[]>([])
   const [importResult, setImportResult] = useState<MemberImportResult | null>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
@@ -89,7 +88,9 @@ export default function MemberList() {
   useEffect(() => { fetchSessions() }, [fetchSessions])
   useEffect(() => { fetchList() }, [fetchList])
   useEffect(() => { fetchStats() }, [fetchStats])
-  useEffect(() => { setDepts; listDepts().then(setDepts).catch(() => {}) }, [])
+  useEffect(() => { listDepts().then(setDepts).catch(() => {}) }, [])
+  // 届别/筛选/关键词变化时清空已选行，防止跨届批量删除误删
+  useEffect(() => { setSelectedRowKeys([]) }, [sessionId, deptFilter, positionFilter, statusFilter, keyword])
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (r: MemberVO) => { setEditing(r); setModalOpen(true) }
@@ -133,16 +134,15 @@ export default function MemberList() {
     })
   }
 
-  const handleImport = async () => {
-    if (!importFileList.length || activeSessionId == null) return
+  const handleImport = async (file?: File) => {
+    if (!file || activeSessionId == null) return
     setImporting(true)
     try {
       const fd = new FormData()
       fd.append('sessionId', String(activeSessionId))
-      fd.append('file', importFileList[0].originFileObj as Blob, importFileList[0].name)
+      fd.append('file', file, file.name)
       const r = await importMembers(fd)
       setImportResult(r)
-      setImportFileList([])
       fetchList(); fetchStats()
     } catch { /* 已提示 */ } finally { setImporting(false) }
   }
@@ -161,12 +161,15 @@ export default function MemberList() {
     })
   }
 
-  const handleExport = async () => {
-    const res = await downloadMemberExport({ sessionId: activeSessionId, deptId: deptFilter, position: positionFilter, status: statusFilter, keyword: keyword || undefined })
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url; a.download = `成员花名册_${currentSession?.name ?? ''}.xlsx`; a.click()
-    URL.revokeObjectURL(url)
+  const handleExport = () => {
+    downloadMemberExport({ sessionId: activeSessionId, deptId: deptFilter, position: positionFilter, status: statusFilter, keyword: keyword || undefined })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data)
+        const a = document.createElement('a')
+        a.href = url; a.download = `成员花名册_${currentSession?.name ?? ''}.xlsx`; a.click()
+        URL.revokeObjectURL(url)
+      })
+      .catch(() => { /* http 拦截已提示 */ })
   }
 
   const handleSessionSave = async () => {
@@ -217,7 +220,7 @@ export default function MemberList() {
             <Button icon={<DownloadOutlined />} onClick={() => downloadImportTemplate().then((res) => {
               const url = URL.createObjectURL(res.data); const a = document.createElement('a')
               a.href = url; a.download = '成员导入模板.xlsx'; a.click(); URL.revokeObjectURL(url)
-            })}>下载模板</Button>
+            }).catch(() => { /* http 拦截已提示 */ })}>下载模板</Button>
             <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
             <Button icon={<ReloadOutlined />} onClick={handleArchive}>换届归档</Button>
           </Space>
@@ -268,8 +271,7 @@ export default function MemberList() {
 
       <input id="member-import" type="file" accept=".xlsx,.xls" hidden
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) { setImportFileList([{ uid: '-1', name: f.name, originFileObj: f } as UploadFile]) ; handleImport() }
+          handleImport(e.target.files?.[0])
           e.target.value = ''
         }} />
 
