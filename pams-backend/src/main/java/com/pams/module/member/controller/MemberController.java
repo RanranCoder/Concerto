@@ -1,17 +1,31 @@
 package com.pams.module.member.controller;
 
+import com.pams.common.BizException;
 import com.pams.common.PageResult;
 import com.pams.common.Result;
 import com.pams.module.member.dto.MemberDetailVO;
+import com.pams.module.member.dto.MemberImportResultVO;
 import com.pams.module.member.dto.MemberRequest;
 import com.pams.module.member.dto.MemberStatsVO;
 import com.pams.module.member.dto.MemberVO;
+import com.pams.module.member.service.MemberImportService;
 import com.pams.module.member.service.MemberService;
 import com.pams.security.LoginUser;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +34,10 @@ import java.util.Map;
 @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
 public class MemberController {
     private final MemberService service;
-    public MemberController(MemberService service) { this.service = service; }
+    private final MemberImportService importService;
+    public MemberController(MemberService service, MemberImportService importService) {
+        this.service = service; this.importService = importService;
+    }
 
     @GetMapping
     public Result<PageResult<MemberVO>> page(
@@ -62,8 +79,40 @@ public class MemberController {
         service.batchDelete(body.get("ids")); return Result.ok();
     }
 
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<MemberImportResultVO> importMembers(@RequestParam("sessionId") Long sessionId,
+                                                      @RequestParam("file") MultipartFile file) {
+        try (InputStream in = new ByteArrayInputStream(file.getBytes())) {
+            return Result.ok(importService.importFromXlsx(in, sessionId));
+        } catch (IOException e) { throw new BizException(4001, "名单文件解析失败"); }
+    }
+
+    @GetMapping("/import/template")
+    public ResponseEntity<Resource> template() throws IOException {
+        byte[] data = importService.buildTemplate();
+        return xlsxResponse(data, "成员导入模板.xlsx");
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<Resource> export(@RequestParam(required = false) Long sessionId,
+                                           @RequestParam(required = false) Long deptId,
+                                           @RequestParam(required = false) String position,
+                                           @RequestParam(required = false) String status,
+                                           @RequestParam(required = false) String keyword) throws IOException {
+        byte[] data = importService.exportXlsx(sessionId, deptId, position, status, keyword);
+        return xlsxResponse(data, "成员花名册.xlsx");
+    }
+
     @PostMapping("/{sessionId}/archive")
     public Result<Map<String, Integer>> archive(@PathVariable Long sessionId) {
         return Result.ok(Map.of("count", service.archive(sessionId)));
+    }
+
+    private ResponseEntity<Resource> xlsxResponse(byte[] data, String filename) {
+        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
+                .body(new ByteArrayResource(data));
     }
 }
