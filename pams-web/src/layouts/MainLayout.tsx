@@ -82,6 +82,8 @@ export default function MainLayout() {
     ]
     if (isMinisterOrAbove) {
       items.push({ key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> })
+      // 成员管理（仅干部可见）
+      items.push({ key: '/members', label: '成员管理', icon: <IdcardOutlined /> })
       items.push({
         key: 'content',
         label: '内容宣传',
@@ -130,6 +132,7 @@ export default function MainLayout() {
     if (p.startsWith('/routine/free-schedules')) return '/routine/free-schedules'
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
+    if (p.startsWith('/members')) return '/members'
     if (p.startsWith('/content')) return p.startsWith('/content/news') ? '/content/news' : '/content/articles'
     if (p.startsWith('/archive/templates')) return '/archive/templates'
     if (p.startsWith('/archive/credits')) return '/archive/credits'

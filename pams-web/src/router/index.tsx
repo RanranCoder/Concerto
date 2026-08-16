@@ -33,6 +33,8 @@ const Users = lazy(() => import('@/pages/admin/UserList'))
 const PermissionManage = lazy(() => import('@/pages/admin/PermissionManage'))
 const Settings = lazy(() => import('@/pages/admin/Settings'))
 const NotificationList = lazy(() => import('@/pages/notification/NotificationList'))
+const MemberList = lazy(() => import('@/pages/member/MemberList'))
+const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -65,6 +67,16 @@ export const router = createBrowserRouter([
       { path: '/routine/attendance', element: <Attendance /> },
       { path: '/routine/course-schedule', element: <CourseSchedule /> },
       { path: '/routine/free-schedules', element: <FreeSchedules /> },
+
+      // 成员管理（敏感名单，仅干部可见）
+      {
+        path: '/members',
+        element: <RequireRole roles={LEADER_ROLES}><Outlet /></RequireRole>,
+        children: [
+          { path: '', element: <MemberList /> },
+          { path: ':id', element: <MemberDetail /> },
+        ],
+      },
 
       // 党务台账（敏感，部长及以上；干事读已脱敏，仍隐藏入口）
       {
