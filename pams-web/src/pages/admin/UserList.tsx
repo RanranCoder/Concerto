@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
+import { App, Button, Form, Input, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
@@ -8,6 +8,7 @@ import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import { useAuthStore } from '@/stores/auth'
 import { listDepts, type DeptVO } from '@/api/dept'
+import { importAccounts, listMemberSessions, listUnregisteredMembers, type UnregisteredMember } from '@/api/member'
 import {
   createUser,
   deleteUser,
@@ -62,6 +63,14 @@ export default function UserList() {
   const [editing, setEditing] = useState<UserVO | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<UserFormValues>()
+
+  // 从花名册导入账号：届别/未注册成员/选中/提交中
+  const [accountModalOpen, setAccountModalOpen] = useState(false)
+  const [accSessions, setAccSessions] = useState<{ id: number; name: string; isCurrent: number }[]>([])
+  const [accSessionId, setAccSessionId] = useState<number>()
+  const [unregistered, setUnregistered] = useState<UnregisteredMember[]>([])
+  const [accSelected, setAccSelected] = useState<number[]>([])
+  const [importingAccounts, setImportingAccounts] = useState(false)
 
   // 当前选中角色的 code（联动判断用）
   const roleId = Form.useWatch('roleId', form)
@@ -221,6 +230,22 @@ export default function UserList() {
     }
   }
 
+  // 选届别后加载未注册成员（弹窗内 Select onChange 调用）
+  const loadUnregistered = (sid?: number) => {
+    if (!sid) { setUnregistered([]); return }
+    listUnregisteredMembers(sid).then(setUnregistered).catch(() => {})
+  }
+
+  const handleImportAccounts = async () => {
+    if (!accSessionId || !accSelected.length) return
+    setImportingAccounts(true)
+    try {
+      const r = await importAccounts({ sessionId: accSessionId, memberIds: accSelected })
+      message.success(`创建 ${r.created} 个账号${r.skipped ? `，跳过 ${r.skipped}` : ''}`)
+      setAccountModalOpen(false); setAccSelected([]); fetchList()
+    } catch { /* http 拦截已提示 */ } finally { setImportingAccounts(false) }
+  }
+
   const columns: TableColumnsType<UserRecord> = [
     { title: '用户名', dataIndex: 'username', key: 'username', width: 130 },
     { title: '姓名', dataIndex: 'realName', key: 'realName', width: 110 },
@@ -277,9 +302,14 @@ export default function UserList() {
         description="党建办公室成员账号管理（部长及以上），新增 / 编辑 / 重置密码 / 删除"
         extra={
           isMinisterOrAbove ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增用户
-            </Button>
+            <Space>
+              <Button onClick={() => { setAccountModalOpen(true); listMemberSessions().then((s) => { setAccSessions(s); setAccSessionId(s.find((x) => x.isCurrent === 1)?.id ?? s[0]?.id) }).catch(() => {}) }}>
+                从花名册导入账号
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新增用户
+              </Button>
+            </Space>
           ) : null
         }
       />
@@ -326,6 +356,43 @@ export default function UserList() {
           showTotal: (t) => `共 ${t} 条`,
         }}
       />
+
+      {/* 从花名册导入账号 */}
+      <GlassModal
+        title="从花名册导入注册账号"
+        open={accountModalOpen}
+        onCancel={() => setAccountModalOpen(false)}
+        footer={<Space>
+          <Button onClick={() => setAccountModalOpen(false)}>取消</Button>
+          <Button type="primary" loading={importingAccounts} disabled={!accSelected.length} onClick={handleImportAccounts}>
+            导入选中账号（{accSelected.length}）
+          </Button>
+        </Space>}>
+        <Form layout="vertical">
+          <Form.Item label="选择届别">
+            <Select
+              style={{ width: 220 }}
+              value={accSessionId}
+              options={accSessions.map((s) => ({ value: s.id, label: s.isCurrent === 1 ? `${s.name}（当前）` : s.name }))}
+              onChange={(v) => { setAccSessionId(v); setAccSelected([]); loadUnregistered(v) }}
+            />
+          </Form.Item>
+        </Form>
+        <p style={{ color: '#999', fontSize: 12 }}>
+          仅显示「学号」且未注册账号的成员；用户名 = 学号，默认密码 123456，角色按职位自动映射（可后续在用户管理中调整）。
+        </p>
+        <Table
+          size="small" rowKey="id" pagination={false}
+          dataSource={unregistered}
+          rowSelection={{ selectedRowKeys: accSelected, onChange: (keys) => setAccSelected(keys.map(Number)) }}
+          columns={[
+            { title: '姓名', dataIndex: 'name', width: 120 },
+            { title: '学号', dataIndex: 'studentNo', width: 150 },
+            { title: '部门', dataIndex: 'deptName', width: 120 },
+            { title: '职位', dataIndex: 'positionLabel', width: 100 },
+          ]}
+        />
+      </GlassModal>
 
       {/* 新增 / 编辑用户 */}
       <GlassModal
