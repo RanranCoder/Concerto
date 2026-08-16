@@ -3,11 +3,15 @@ package com.pams.module.member.controller;
 import com.pams.common.BizException;
 import com.pams.common.PageResult;
 import com.pams.common.Result;
+import com.pams.module.member.dto.AccountImportRequest;
+import com.pams.module.member.dto.AccountImportResultVO;
 import com.pams.module.member.dto.MemberDetailVO;
 import com.pams.module.member.dto.MemberImportResultVO;
 import com.pams.module.member.dto.MemberRequest;
 import com.pams.module.member.dto.MemberStatsVO;
 import com.pams.module.member.dto.MemberVO;
+import com.pams.module.member.dto.UnregisteredMemberVO;
+import com.pams.module.member.service.MemberAccountImportService;
 import com.pams.module.member.service.MemberImportService;
 import com.pams.module.member.service.MemberService;
 import com.pams.security.LoginUser;
@@ -33,10 +37,14 @@ import java.util.Map;
 @RequestMapping("/api/members")
 @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
 public class MemberController {
+    private static final String ADMIN = "hasAnyRole('TEACHER','DIRECTOR')";
     private final MemberService service;
     private final MemberImportService importService;
-    public MemberController(MemberService service, MemberImportService importService) {
+    private final MemberAccountImportService accountImportService;
+    public MemberController(MemberService service, MemberImportService importService,
+                            MemberAccountImportService accountImportService) {
         this.service = service; this.importService = importService;
+        this.accountImportService = accountImportService;
     }
 
     @GetMapping
@@ -106,6 +114,18 @@ public class MemberController {
     @PostMapping("/{sessionId}/archive")
     public Result<Map<String, Integer>> archive(@PathVariable Long sessionId) {
         return Result.ok(Map.of("count", service.archive(sessionId)));
+    }
+
+    @GetMapping("/unregistered")
+    @PreAuthorize(ADMIN)
+    public Result<List<UnregisteredMemberVO>> unregistered(@RequestParam(required = false) Long sessionId) {
+        return Result.ok(accountImportService.unregistered(sessionId));
+    }
+
+    @PostMapping("/import-accounts")
+    @PreAuthorize(ADMIN)
+    public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req) {
+        return Result.ok(accountImportService.importAccounts(req, null));
     }
 
     private ResponseEntity<Resource> xlsxResponse(byte[] data, String filename) {
