@@ -20,6 +20,8 @@ Thumbs.db
 database/materials.csv
 # 工具工作区
 .superpowers/
+.claude/worktrees/
+.claude/tmp/
 # 部署密钥（docker compose 用，勿提交）
 .env
 .env.local
