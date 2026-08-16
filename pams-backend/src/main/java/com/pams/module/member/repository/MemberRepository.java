@@ -14,6 +14,7 @@ import java.util.List;
 public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecificationExecutor<Member> {
     List<Member> findBySessionId(Long sessionId);
     boolean existsBySessionIdAndStudentNo(Long sessionId, String studentNo);
+    boolean existsBySessionIdAndStudentNoAndIdNot(Long sessionId, String studentNo, Long id);
     long countBySessionId(Long sessionId);
 
     @Modifying

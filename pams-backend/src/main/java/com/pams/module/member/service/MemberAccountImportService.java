@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class MemberAccountImportService {
@@ -47,6 +48,10 @@ public class MemberAccountImportService {
             "组织部", "ORG_LEADER", "文秘部", "SECRETARY_LEADER",
             "新媒体中心", "MEDIA_LEADER", "青年科技部", "TECH_LEADER");
 
+    /** 可覆盖授予的角色白名单（不含 TEACHER，防提权）。 */
+    private static final Set<String> ALLOWED_ROLE_CODES = Set.of(
+            "DIRECTOR", "ORG_LEADER", "SECRETARY_LEADER", "MEDIA_LEADER", "TECH_LEADER", "STAFF");
+
     /** 该届未注册成员：有学号且学号在 sys_user 无匹配。 */
     public List<UnregisteredMemberVO> unregistered(Long sessionId) {
         return memberRepo.findBySessionId(sessionId).stream()
@@ -59,9 +64,17 @@ public class MemberAccountImportService {
     }
 
     @Transactional
-    public AccountImportResultVO importAccounts(AccountImportRequest req, Long currentUserId) {
+    public AccountImportResultVO importAccounts(AccountImportRequest req, Long currentUserId, Integer currentRoleLevel) {
         if (req.sessionId() == null || req.memberIds() == null || req.memberIds().isEmpty()) {
             throw new BizException(2811, "请选择要导入的成员");
+        }
+        // 覆盖角色必须先过白名单（TEACHER 等不允许授予）
+        if (req.roleCodes() != null) {
+            for (String code : req.roleCodes().values()) {
+                if (code == null || !ALLOWED_ROLE_CODES.contains(code)) {
+                    throw new BizException(2812, "不允许授予该角色");
+                }
+            }
         }
         int created = 0, skipped = 0;
         Map<Long, String> overrides = req.roleCodes() == null ? Map.of() : req.roleCodes();
@@ -77,6 +90,11 @@ public class MemberAccountImportService {
             String roleCode = overrides.getOrDefault(memberId, defaultRoleCode(m));
             Role role = roleRepo.findByCode(roleCode).orElse(null);
             if (role == null) { skipped++; continue; }
+            // 防提权：不能授予高于自己级别的角色（与 UserService.checkAssignableLevel 同规则）
+            int targetLevel = role.getLevel() == null ? 0 : role.getLevel();
+            if (currentRoleLevel != null && targetLevel > currentRoleLevel) {
+                throw new BizException(2813, "不能授予高于自己级别的角色");
+            }
 
             User u = new User();
             u.setUsername(username);

@@ -1,5 +1,6 @@
 package com.pams.module.member;
 
+import com.pams.common.BizException;
 import com.pams.entity.Department;
 import com.pams.entity.Role;
 import com.pams.entity.User;
@@ -14,9 +15,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -66,10 +69,53 @@ class MemberAccountImportServiceTest {
         when(roleRepo.findByCode("STAFF")).thenReturn(Optional.of(staff));
         when(roleRepo.findByCode("DIRECTOR")).thenReturn(Optional.of(dir));
 
-        var r = service.importAccounts(new AccountImportRequest(1L, List.of(2L, 3L), null), 99L);
+        var r = service.importAccounts(new AccountImportRequest(1L, List.of(2L, 3L), null), 99L, null);
 
         assertThat(r.created()).isEqualTo(1);
         assertThat(r.skipped()).isEqualTo(1);
         verify(userRepo).save(any(User.class));
+    }
+
+    @Test
+    void importAccounts_teacherOverride_rejected() {
+        Member a = new Member(); a.setId(2L); a.setName("张三"); a.setStudentNo("20250101");
+        a.setPosition("STAFF"); a.setDeptId(null);
+        when(memberRepo.findBySessionId(1L)).thenReturn(List.of(a));
+
+        assertThatThrownBy(() -> service.importAccounts(
+                new AccountImportRequest(1L, List.of(2L), Map.of(2L, "TEACHER")), 99L, null))
+                .isInstanceOf(BizException.class).hasMessageContaining("不允许授予该角色");
+        verify(userRepo, never()).save(any(User.class));
+    }
+
+    @Test
+    void importAccounts_directorOverride_byLevel4Caller_allowed() {
+        Member a = new Member(); a.setId(2L); a.setName("张三"); a.setStudentNo("20250101");
+        a.setPosition("STAFF"); a.setDeptId(null);
+        when(memberRepo.findBySessionId(1L)).thenReturn(List.of(a));
+        when(userRepo.existsByUsername("20250101")).thenReturn(false);
+        when(userRepo.findByStudentNo("20250101")).thenReturn(List.of());
+        Role dir = new Role(); dir.setCode("DIRECTOR"); dir.setLevel(4);
+        when(roleRepo.findByCode("DIRECTOR")).thenReturn(Optional.of(dir));
+
+        var r = service.importAccounts(
+                new AccountImportRequest(1L, List.of(2L), Map.of(2L, "DIRECTOR")), 99L, 4);
+
+        assertThat(r.created()).isEqualTo(1);
+        verify(userRepo).save(any(User.class));
+    }
+
+    @Test
+    void importAccounts_directorOverride_byLevel3Caller_rejected() {
+        Member a = new Member(); a.setId(2L); a.setName("张三"); a.setStudentNo("20250101");
+        a.setPosition("STAFF"); a.setDeptId(null);
+        when(memberRepo.findBySessionId(1L)).thenReturn(List.of(a));
+        Role dir = new Role(); dir.setCode("DIRECTOR"); dir.setLevel(4);
+        when(roleRepo.findByCode("DIRECTOR")).thenReturn(Optional.of(dir));
+
+        assertThatThrownBy(() -> service.importAccounts(
+                new AccountImportRequest(1L, List.of(2L), Map.of(2L, "DIRECTOR")), 99L, 3))
+                .isInstanceOf(BizException.class).hasMessageContaining("不能授予高于自己级别的角色");
+        verify(userRepo, never()).save(any(User.class));
     }
 }

@@ -242,7 +242,7 @@ export default function UserList() {
     try {
       const r = await importAccounts({ sessionId: accSessionId, memberIds: accSelected })
       message.success(`创建 ${r.created} 个账号${r.skipped ? `，跳过 ${r.skipped}` : ''}`)
-      setAccountModalOpen(false); setAccSelected([]); fetchList()
+      setAccountModalOpen(false); setAccSelected([]); setUnregistered([]); fetchList()
     } catch { /* http 拦截已提示 */ } finally { setImportingAccounts(false) }
   }
 
@@ -303,7 +303,22 @@ export default function UserList() {
         extra={
           isMinisterOrAbove ? (
             <Space>
-              <Button onClick={() => { setAccountModalOpen(true); listMemberSessions().then((s) => { setAccSessions(s); setAccSessionId(s.find((x) => x.isCurrent === 1)?.id ?? s[0]?.id) }).catch(() => {}) }}>
+              <Button
+                onClick={() => {
+                  // 打开即清空上次数据并按默认届别即时加载未注册成员（修复上一批数据的残留显示）
+                  setAccSelected([])
+                  setUnregistered([])
+                  setAccountModalOpen(true)
+                  listMemberSessions()
+                    .then((s) => {
+                      setAccSessions(s)
+                      const defaultId = s.find((x) => x.isCurrent === 1)?.id ?? s[0]?.id
+                      setAccSessionId(defaultId)
+                      loadUnregistered(defaultId)
+                    })
+                    .catch(() => {})
+                }}
+              >
                 从花名册导入账号
               </Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -361,9 +376,9 @@ export default function UserList() {
       <GlassModal
         title="从花名册导入注册账号"
         open={accountModalOpen}
-        onCancel={() => setAccountModalOpen(false)}
+        onCancel={() => { setUnregistered([]); setAccSelected([]); setAccountModalOpen(false) }}
         footer={<Space>
-          <Button onClick={() => setAccountModalOpen(false)}>取消</Button>
+          <Button onClick={() => { setUnregistered([]); setAccSelected([]); setAccountModalOpen(false) }}>取消</Button>
           <Button type="primary" loading={importingAccounts} disabled={!accSelected.length} onClick={handleImportAccounts}>
             导入选中账号（{accSelected.length}）
           </Button>

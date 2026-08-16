@@ -124,8 +124,11 @@ public class MemberController {
 
     @PostMapping("/import-accounts")
     @PreAuthorize(ADMIN)
-    public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req) {
-        return Result.ok(accountImportService.importAccounts(req, null));
+    public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req,
+                                                        @AuthenticationPrincipal LoginUser current) {
+        return Result.ok(accountImportService.importAccounts(req,
+                current == null ? null : current.getId(),
+                current == null ? null : current.getRoleLevel()));
     }
 
     private ResponseEntity<Resource> xlsxResponse(byte[] data, String filename) {

@@ -1,12 +1,13 @@
 CREATE TABLE IF NOT EXISTS member_session (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(50) NOT NULL UNIQUE COMMENT '届名，如"第九届"',
+  name VARCHAR(50) NOT NULL COMMENT '届名，如"第九届"',
   is_current TINYINT DEFAULT 0 COMMENT '是否当前届',
   sort_order INT DEFAULT 0,
   remark VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  deleted TINYINT DEFAULT 0
+  deleted TINYINT DEFAULT 0,
+  UNIQUE KEY uk_member_session_name (name, deleted)
 );
 
 CREATE TABLE IF NOT EXISTS member (
@@ -28,5 +29,5 @@ CREATE TABLE IF NOT EXISTS member (
   deleted TINYINT DEFAULT 0,
   CONSTRAINT fk_member_session FOREIGN KEY (session_id) REFERENCES member_session(id),
   CONSTRAINT fk_member_dept FOREIGN KEY (dept_id) REFERENCES sys_department(id),
-  UNIQUE KEY uk_member_session_student (session_id, student_no)
+  UNIQUE KEY uk_member_session_student (session_id, student_no, deleted)
 );

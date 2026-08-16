@@ -62,6 +62,34 @@ class MemberServiceTest {
     }
 
     @Test
+    void update_storedNullStudentNo_setsNewStudentNo_noNpe() {
+        MemberSession s = new MemberSession(); s.setId(1L); s.setName("第九届");
+        when(sessionRepo.findById(1L)).thenReturn(Optional.of(s));
+        Member m = new Member(); m.setId(7L); m.setSessionId(1L); m.setStudentNo(null);
+        when(memberRepo.findById(7L)).thenReturn(Optional.of(m));
+        when(memberRepo.existsBySessionIdAndStudentNoAndIdNot(1L, "20250101", 7L)).thenReturn(false);
+
+        service.update(7L, new MemberRequest(1L, null, "STAFF", "张三", "男", "20250101",
+                "班", "123", "共青团员", "ACTIVE", null));
+
+        assertThat(m.getStudentNo()).isEqualTo("20250101");
+        verify(memberRepo).save(m);
+    }
+
+    @Test
+    void update_moveToAnotherSession_conflictingStudentNoThrows() {
+        MemberSession target = new MemberSession(); target.setId(2L); target.setName("第十届");
+        when(sessionRepo.findById(2L)).thenReturn(Optional.of(target));
+        Member m = new Member(); m.setId(7L); m.setSessionId(1L); m.setStudentNo("20250101");
+        when(memberRepo.findById(7L)).thenReturn(Optional.of(m));
+        when(memberRepo.existsBySessionIdAndStudentNoAndIdNot(2L, "20250101", 7L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(7L, new MemberRequest(2L, null, "STAFF", "张三", "男",
+                "20250101", "班", "123", "共青团员", "ACTIVE", null)))
+                .isInstanceOf(BizException.class).hasMessageContaining("学号");
+    }
+
+    @Test
     void archive_returnsCount() {
         when(memberRepo.archiveSession(eq(1L), any(LocalDateTime.class))).thenReturn(12);
         assertThat(service.archive(1L)).isEqualTo(12);

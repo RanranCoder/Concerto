@@ -85,8 +85,7 @@ public class MemberService {
         Member m = memberRepo.findById(id).orElseThrow(() -> new BizException(2805, "成员不存在"));
         validate(req);
         if (req.studentNo() != null && !req.studentNo().isBlank()
-                && !m.getStudentNo().equals(req.studentNo().trim())
-                && memberRepo.existsBySessionIdAndStudentNo(req.sessionId(), req.studentNo().trim())) {
+                && memberRepo.existsBySessionIdAndStudentNoAndIdNot(req.sessionId(), req.studentNo().trim(), id)) {
             throw new BizException(2804, "该届别下学号已存在");
         }
         apply(m, req);

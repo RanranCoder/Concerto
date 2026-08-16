@@ -65,6 +65,33 @@ class MemberRepositoryTest {
     }
 
     @Test
+    void softDeletedMember_freesUniqueKey_reimportSameStudentNoSucceeds() {
+        MemberSession s = new MemberSession();
+        s.setName("测试届丁"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
+        sessionRepo.save(s);
+
+        Member a = new Member();
+        a.setSessionId(s.getId()); a.setPosition("STAFF"); a.setName("张三");
+        a.setStudentNo("20250303"); a.setStatus("ACTIVE");
+        a.setCreatedAt(LocalDateTime.now()); a.setUpdatedAt(LocalDateTime.now());
+        memberRepo.save(a);
+
+        // 软删除释放 (session, studentNo) 唯一键
+        a.setDeleted(1);
+        memberRepo.saveAndFlush(a);
+
+        // 同届同号重新导入不应违反唯一约束
+        Member b = new Member();
+        b.setSessionId(s.getId()); b.setPosition("STAFF"); b.setName("李四");
+        b.setStudentNo("20250303"); b.setStatus("ACTIVE");
+        b.setCreatedAt(LocalDateTime.now()); b.setUpdatedAt(LocalDateTime.now());
+        memberRepo.saveAndFlush(b);
+
+        assertThat(memberRepo.existsBySessionIdAndStudentNo(s.getId(), "20250303")).isTrue();
+        assertThat(memberRepo.findBySessionId(s.getId())).extracting(Member::getName).containsExactly("李四");
+    }
+
+    @Test
     void archiveSession_flipsActiveToAlumni() {
         MemberSession s = new MemberSession();
         s.setName("测试届丙"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
