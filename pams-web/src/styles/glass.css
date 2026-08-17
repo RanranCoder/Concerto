@@ -10,12 +10,172 @@
   border-color: rgba(222, 41, 16, 0.35);
 }
 
-.login-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: var(--color-bg-page);
-  padding: 24px;
+/* 仪表盘统计卡：hover 轻微上浮 + 阴影加深，配合玻璃拟态 */
+.stat-card {
+  transition: transform 0.2s var(--easing), box-shadow 0.2s var(--easing), border-color 0.2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
 }
 
-.login-card { width: 380px; max-width: 100%; padding: 40px 32px; }
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(56px, 8vw, 140px);
+  padding: 24px 6vw;
+  overflow: hidden;
+}
+
+/* 固定全屏背景层：比视口大一圈（inset 负值）实现轻微放大，
+   把壁纸左右深色边缘推出屏幕，中间主体铺满；被 .login-page 的 overflow 裁剪不产生滚动条 */
+.login-bg {
+  position: absolute;
+  inset: -3%;
+  z-index: 0;
+  background: #14171f url('/login-bg.webp') center / cover no-repeat;
+  pointer-events: none;
+}
+
+/* 统一压暗保证文字/登录框可读性；位于背景之上、内容之下 */
+.login-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
+    radial-gradient(120% 120% at 50% 42%, transparent 52%, rgba(0, 0, 0, 0.18) 100%);
+  pointer-events: none;
+}
+
+/* ============ 左侧品牌区 ============ */
+.login-brand {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+  color: #fff;
+  text-align: left;
+}
+.login-brand-title {
+  margin: 0 0 20px;
+  font-size: clamp(42px, 5vw, 64px);
+  font-weight: 700;
+  letter-spacing: 8px;
+  line-height: 1.1;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.4);
+}
+.login-brand-title::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 18px;
+  background: #DE2910;
+}
+.login-brand-slogan {
+  font-size: 17px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+.login-brand-slogan span {
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0 12px;
+}
+
+/* ============ 右侧登录卡片（线条UI） ============ */
+.login-card {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 400px);
+  padding: 44px 40px;
+  text-align: left;
+  border-radius: 16px;
+  background: rgba(12, 14, 20, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  animation: card-fade-in 0.4s var(--easing) both;
+}
+.login-card-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+.login-card-logo {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  z-index: 1;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+.login-card-subtitle {
+  margin: 0 0 32px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* 输入框：无填充、仅下边框的线条样式 */
+.login-card .ant-input {
+  background: transparent !important;
+  color: #fff;
+}
+.login-card .ant-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.login-card .ant-input-affix-wrapper {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding-left: 4px;
+}
+.login-card .ant-input-affix-wrapper:hover {
+  border-bottom-color: rgba(255, 255, 255, 0.6) !important;
+}
+.login-card .ant-input-affix-wrapper:focus-within,
+.login-card .ant-input-affix-wrapper-focused {
+  border-bottom-color: #DE2910 !important;
+}
+.login-card .ant-input-prefix,
+.login-card .ant-input-suffix {
+  color: rgba(255, 255, 255, 0.5);
+}
+.login-card .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+/* 登录按钮：白底红字，无阴影 */
+.login-card .login-submit {
+  height: 46px;
+  margin-top: 10px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  background: #fff !important;
+  border: 1px solid #fff !important;
+  color: #DE2910 !important;
+  box-shadow: none !important;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.login-card .login-submit:hover {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: #fff !important;
+  color: #DE2910 !important;
+  box-shadow: none !important;
+}
+
+/* 窄屏：隐藏左侧品牌区，登录卡片居中 */
+@media (max-width: 920px) {
+  .login-brand { display: none; }
+}

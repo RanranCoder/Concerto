@@ -156,13 +156,22 @@ export default function MainLayout() {
           overflowY: 'auto',
         }}
       >
-        <div style={{ padding: '20px 16px' }}>
-          <Typography.Title level={5} style={{ color: 'var(--color-text)', margin: 0 }}>
-            党务管理系统
-          </Typography.Title>
-          <Typography.Text style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
-            信息与智能工程学院党建办公室
-          </Typography.Text>
+        <div style={{ padding: '20px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img
+            src="/hello-kitty.png"
+            alt=""
+            width={36}
+            height={36}
+            style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }}
+          />
+          <div>
+            <Typography.Title level={5} style={{ color: 'var(--color-text)', margin: 0 }}>
+              党建工作台
+            </Typography.Title>
+            <Typography.Text style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+              信息与智能工程学院党建办公室
+            </Typography.Text>
+          </div>
         </div>
         <Menu
           mode="inline"

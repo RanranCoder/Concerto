@@ -1,4 +1,4 @@
-import { App, Form, Input, Button, Typography } from 'antd'
+import { App, Form, Input, Button } from 'antd'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
@@ -20,13 +20,18 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <div className="glass-card login-card">
-        <Typography.Title level={3} style={{ textAlign: 'center', color: 'var(--color-text)' }}>
-          党务管理系统
-        </Typography.Title>
-        <Typography.Paragraph style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-          信息与智能工程学院党建办公室
-        </Typography.Paragraph>
+      <div className="login-bg" aria-hidden="true" />
+      <div className="login-brand">
+        <h1 className="login-brand-title">党建办公室</h1>
+        <p className="login-brand-slogan">
+          不忘初心<span>|</span>砥砺前行<span>|</span>逐梦党建<span>|</span>与我同行
+        </p>
+      </div>
+
+      <div className="login-card">
+        <img className="login-card-logo" src="/hello-kitty.png" alt="" />
+        <h2 className="login-card-title">欢迎回来</h2>
+        <p className="login-card-subtitle">登录继续你的工作</p>
         <Form onFinish={onFinish} size="large">
           <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input prefix={<UserOutlined />} placeholder="用户名" />
@@ -35,7 +40,7 @@ export default function Login() {
             <Input.Password prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" block>登 录</Button>
+            <Button className="login-submit" type="primary" htmlType="submit" block>登 录</Button>
           </Form.Item>
         </Form>
       </div>

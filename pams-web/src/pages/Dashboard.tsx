@@ -7,9 +7,9 @@ import {
   ClockCircleOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
+  FundOutlined,
   PlayCircleOutlined,
   ScheduleOutlined,
-  TrophyOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -24,9 +24,9 @@ import { ARTICLE_TYPE_MAP } from '@/api/article'
 import { ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
 
-/** 统计卡配色（图标底色圆角块） */
+/** 统计卡配色（图标底色圆角块）。注意：不用 var(--color-red) 拼 alpha 后缀，CSS 变量替换是 token 级不会合并成 8 位 hex，渐变会失效 */
 const CARD_ACCENT: Record<string, string> = {
-  red: 'var(--color-red)',
+  red: '#DE2910',
   orange: '#FA8C16',
   green: '#52A052',
   blue: '#2F6FB0',
@@ -78,7 +78,7 @@ export default function Dashboard() {
       : activities.length
     const executing = s?.EXECUTING ?? 0
     return [
-      { key: 'total', label: '活动总数', value: total, accent: 'red', icon: <TrophyOutlined /> },
+      { key: 'total', label: '活动总数', value: total, accent: 'red', icon: <FundOutlined /> },
       { key: 'executing', label: '进行中活动', value: executing, accent: 'orange', icon: <PlayCircleOutlined /> },
       { key: 'week', label: '本周排班', value: dash?.weekSchedules ?? 0, accent: 'blue', icon: <ScheduleOutlined /> },
       { key: 'todo', label: '我的待办', value: dash?.myTasks?.length ?? 0, accent: 'green', icon: <ClockCircleOutlined /> },
@@ -149,7 +149,26 @@ export default function Dashboard() {
         }}
       >
         {stats.map((s) => (
-          <GlassCard key={s.key} style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <GlassCard
+            key={s.key}
+            className="stat-card"
+            style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16, overflow: 'hidden' }}
+          >
+            {/* 角落水印图标：同色系超大低透明，增强卡片层次 */}
+            <span
+              style={{
+                position: 'absolute',
+                right: -4,
+                bottom: -10,
+                fontSize: 72,
+                lineHeight: 1,
+                color: CARD_ACCENT[s.accent],
+                opacity: 0.08,
+                pointerEvents: 'none',
+              }}
+            >
+              {s.icon}
+            </span>
             <div
               style={{
                 width: 48,
@@ -159,15 +178,26 @@ export default function Dashboard() {
                 placeItems: 'center',
                 color: '#fff',
                 fontSize: 22,
-                background: `linear-gradient(135deg, ${CARD_ACCENT[s.accent]}, ${CARD_ACCENT[s.accent]}cc)`,
-                boxShadow: `0 8px 20px ${CARD_ACCENT[s.accent]}44`,
+                flexShrink: 0,
+                background: `linear-gradient(135deg, ${CARD_ACCENT[s.accent]}, ${CARD_ACCENT[s.accent]}bb)`,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 8px 18px ${CARD_ACCENT[s.accent]}55`,
               }}
             >
               {s.icon}
             </div>
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>{s.value}</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{s.label}</div>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 700,
+                  lineHeight: 1.15,
+                  color: 'var(--color-text)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {s.value}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 2 }}>{s.label}</div>
             </div>
           </GlassCard>
         ))}
