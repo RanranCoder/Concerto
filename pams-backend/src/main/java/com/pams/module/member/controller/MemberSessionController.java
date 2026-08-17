@@ -11,7 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/member-sessions")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+@PreAuthorize("hasAuthority('member:manage')")
 public class MemberSessionController {
     private final MemberSessionService service;
     public MemberSessionController(MemberSessionService service) { this.service = service; }

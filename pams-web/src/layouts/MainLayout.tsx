@@ -55,35 +55,47 @@ export default function MainLayout() {
     }
   }
 
-  // 菜单按角色过滤（Task 26）：
-  // - 干事：仪表盘 / 活动管理 / 排班考勤 / 材料库
-  // - 部长及以上：+ 党务台账 / 内容宣传(推文+新闻稿) / 模板库 / 素拓加分 / 通知公告
-  // - 主任 / 指导老师：+ 用户管理（后端 @PreAuthorize 为部长以上，前端按简报口径仅主任+显示）
+  // 菜单按权限码显隐（Task 26 + RBAC 接通）：
+  // 有权限码的项读 user.permissions（与权限管理页配置一致）；无独立权限码的功能
+  // （内容宣传、系统设置）仍按角色兜底。默认权限映射保证现有可见性不变。
   const menuItems = useMemo(() => {
     const roleCode = user?.roleCode
+    const perms = user?.permissions ?? []
+    const hasPerm = (code: string) => perms.includes(code)
     const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
     const isAdmin = roleCode === 'TEACHER' || roleCode === 'DIRECTOR'
 
     const items: MenuProps['items'] = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
-      { key: '/activities', label: '活动管理', icon: <CalendarOutlined /> },
-      {
+    ]
+    if (hasPerm('activity:view')) {
+      items.push({ key: '/activities', label: '活动管理', icon: <CalendarOutlined /> })
+    }
+    if (hasPerm('schedule:view')) {
+      items.push({
         key: 'routine',
         label: '排班考勤',
         icon: <ScheduleOutlined />,
         children: [
           { key: '/routine/schedules', label: '排班' },
           { key: '/routine/attendance', label: '考勤' },
-          { key: '/routine/course-schedule', label: '无课表制作' },
-          { key: '/routine/free-schedules', label: '无课表' },
+          ...(hasPerm('schedule:free_table') ? [
+            { key: '/routine/course-schedule', label: '无课表制作' },
+            { key: '/routine/free-schedules', label: '无课表' },
+          ] : []),
         ],
-      },
-      { key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> },
-    ]
-    if (isMinisterOrAbove) {
+      })
+    }
+    if (hasPerm('material:view')) {
+      items.push({ key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> })
+    }
+    if (hasPerm('party:view')) {
       items.push({ key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> })
-      // 成员管理（仅干部可见）
+    }
+    if (hasPerm('member:view')) {
       items.push({ key: '/members', label: '成员管理', icon: <IdcardOutlined /> })
+    }
+    if (isMinisterOrAbove) {
       items.push({
         key: 'content',
         label: '内容宣传',
@@ -93,8 +105,14 @@ export default function MainLayout() {
           { key: '/content/news', label: '新闻稿' },
         ],
       })
+    }
+    if (hasPerm('template:view')) {
       items.push({ key: '/archive/templates', label: '模板库', icon: <TagsOutlined /> })
+    }
+    if (hasPerm('quality:view')) {
       items.push({ key: '/archive/credits', label: '素拓加分', icon: <TrophyOutlined /> })
+    }
+    if (hasPerm('notice:view')) {
       items.push({
         key: 'archive',
         label: '通知公告',
@@ -105,21 +123,23 @@ export default function MainLayout() {
         ],
       })
     }
-    if (isAdmin) {
+    // 用户与权限：有 user:view 或 user:permission 任一即显示父菜单
+    if (hasPerm('user:view') || hasPerm('user:permission')) {
+      const adminChildren: MenuProps['items'] = []
+      if (hasPerm('user:view')) adminChildren.push({ key: '/admin/users', label: '用户管理' })
+      if (hasPerm('user:permission')) adminChildren.push({ key: '/admin/permissions', label: '权限管理' })
       items.push({
         key: 'admin',
         label: '用户与权限',
         icon: <TeamOutlined />,
-        children: [
-          { key: '/admin/users', label: '用户管理' },
-          // 权限管理仅指导老师（PRD F07.2），主任隐藏入口避免 403
-          ...(roleCode === 'TEACHER' ? [{ key: '/admin/permissions', label: '权限管理' }] : []),
-        ],
+        children: adminChildren,
       })
+    }
+    if (isAdmin) {
       items.push({ key: '/admin/settings', label: '系统设置', icon: <SettingOutlined /> })
     }
     return items
-  }, [user?.roleCode, user?.roleLevel])
+  }, [user?.roleCode, user?.roleLevel, user?.permissions])
 
   // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传子菜单项；
   // /archive/* → 材料库；/admin/users → 用户管理、/admin/permissions → 权限管理、

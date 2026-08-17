@@ -3,7 +3,7 @@ import { lazy } from 'react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import MainLayout from '@/layouts/MainLayout'
-import RequireRole, { LEADER_ROLES, ADMIN_ROLES } from '@/components/glass/RequireRole'
+import RequireRole, { LEADER_ROLES, ADMIN_ROLES, RequirePerm } from '@/components/glass/RequireRole'
 
 const Login = lazy(() => import('@/pages/Login'))
 const SigninScan = lazy(() => import('@/pages/signin/SigninScan'))
@@ -68,10 +68,10 @@ export const router = createBrowserRouter([
       { path: '/routine/course-schedule', element: <CourseSchedule /> },
       { path: '/routine/free-schedules', element: <FreeSchedules /> },
 
-      // 成员管理（敏感名单，仅干部可见）
+      // 成员管理（敏感名单，仅拥有 member:view 权限码的角色可见）
       {
         path: '/members',
-        element: <RequireRole roles={LEADER_ROLES}><Outlet /></RequireRole>,
+        element: <RequirePerm codes={['member:view']}><Outlet /></RequirePerm>,
         children: [
           { path: '', element: <MemberList /> },
           { path: ':id', element: <MemberDetail /> },
@@ -103,10 +103,10 @@ export const router = createBrowserRouter([
       // 通知中心
       { path: '/notifications', element: <NotificationList /> },
 
-      // 用户管理：简报"主任+额外显示用户管理"，前端仅主任/指导老师可访问
-      { path: '/admin/users', element: <RequireRole roles={ADMIN_ROLES}><Users /></RequireRole> },
-      // 权限管理：指导老师（PRD F07.2，后端 @PreAuthorize 仅 TEACHER 可读写）
-      { path: '/admin/permissions', element: <RequireRole roles={ADMIN_ROLES}><PermissionManage /></RequireRole> },
+      // 用户管理：拥有 user:view 权限码可访问（默认主任/指导老师）
+      { path: '/admin/users', element: <RequirePerm codes={['user:view']}><Users /></RequirePerm> },
+      // 权限管理：拥有 user:permission 权限码可访问（默认仅指导老师，可由指导老师在权限管理页开放给主任）
+      { path: '/admin/permissions', element: <RequirePerm codes={['user:permission']}><PermissionManage /></RequirePerm> },
       // 系统设置：仅主任/指导老师可访问
       { path: '/admin/settings', element: <RequireRole roles={ADMIN_ROLES}><Settings /></RequireRole> },
 

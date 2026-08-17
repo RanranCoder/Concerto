@@ -22,3 +22,16 @@ export default function RequireRole({ roles, children }: { roles: string[]; chil
   if (!role || !roles.includes(role)) return <Navigate to="/403" replace />
   return <>{children}</>
 }
+
+/** 权限码守卫：当前用户未拥有任一指定权限码时跳转 /403。配合后端 hasAuthority 链路。 */
+export function RequirePerm({ codes, children }: { codes: string[]; children: React.ReactNode }) {
+  const perms = useAuthStore((s) => s.user?.permissions) ?? []
+  if (!codes.some((c) => perms.includes(c))) return <Navigate to="/403" replace />
+  return <>{children}</>
+}
+
+/** 读取当前用户权限码集合，返回 hasPerm(code) 判定函数（供菜单显隐）。 */
+export function useHasPerm() {
+  const perms = useAuthStore((s) => s.user?.permissions) ?? []
+  return (code: string) => perms.includes(code)
+}

@@ -35,9 +35,8 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/members")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+@PreAuthorize("hasAuthority('member:view')")
 public class MemberController {
-    private static final String ADMIN = "hasAnyRole('TEACHER','DIRECTOR')";
     private final MemberService service;
     private final MemberImportService importService;
     private final MemberAccountImportService accountImportService;
@@ -69,24 +68,29 @@ public class MemberController {
         return Result.ok(service.detail(id));
     }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @PostMapping
     public Result<Long> create(@RequestBody MemberRequest req, @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(req, current == null ? null : current.getId()));
     }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @RequestBody MemberRequest req) {
         service.update(id, req); return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) { service.delete(id); return Result.ok(); }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @PostMapping("/batch-delete")
     public Result<Void> batchDelete(@RequestBody Map<String, List<Long>> body) {
         service.batchDelete(body.get("ids")); return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<MemberImportResultVO> importMembers(@RequestParam("sessionId") Long sessionId,
                                                       @RequestParam("file") MultipartFile file) {
@@ -95,12 +99,14 @@ public class MemberController {
         } catch (IOException e) { throw new BizException(4001, "名单文件解析失败"); }
     }
 
+    @PreAuthorize("hasAuthority('member:export')")
     @GetMapping("/import/template")
     public ResponseEntity<Resource> template() throws IOException {
         byte[] data = importService.buildTemplate();
         return xlsxResponse(data, "成员导入模板.xlsx");
     }
 
+    @PreAuthorize("hasAuthority('member:export')")
     @GetMapping("/export")
     public ResponseEntity<Resource> export(@RequestParam(required = false) Long sessionId,
                                            @RequestParam(required = false) Long deptId,
@@ -111,19 +117,20 @@ public class MemberController {
         return xlsxResponse(data, "成员花名册.xlsx");
     }
 
+    @PreAuthorize("hasAuthority('member:manage')")
     @PostMapping("/{sessionId}/archive")
     public Result<Map<String, Integer>> archive(@PathVariable Long sessionId) {
         return Result.ok(Map.of("count", service.archive(sessionId)));
     }
 
+    @PreAuthorize("hasAuthority('member:import_account')")
     @GetMapping("/unregistered")
-    @PreAuthorize(ADMIN)
     public Result<List<UnregisteredMemberVO>> unregistered(@RequestParam(required = false) Long sessionId) {
         return Result.ok(accountImportService.unregistered(sessionId));
     }
 
+    @PreAuthorize("hasAuthority('member:import_account')")
     @PostMapping("/import-accounts")
-    @PreAuthorize(ADMIN)
     public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req,
                                                         @AuthenticationPrincipal LoginUser current) {
         return Result.ok(accountImportService.importAccounts(req,

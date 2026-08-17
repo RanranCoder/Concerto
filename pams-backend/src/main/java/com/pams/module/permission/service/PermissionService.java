@@ -106,6 +106,7 @@ public class PermissionService {
                     "notice:view","notice:publish",
                     "schedule:view","schedule:manage","schedule:check","schedule:free_table",
                     "party:view","party:manage","party:letter","party:entry",
+                    "member:view","member:manage","member:export",
                     "notification:view","notification:preference"), null);
         }
         insertDefaultForRole("STAFF", Set.of(
