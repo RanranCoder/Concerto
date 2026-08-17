@@ -258,7 +258,7 @@ class MemberRepositoryTest {
     @Test
     void sessionAndMember_persist_and_query() {
         MemberSession s = new MemberSession();
-        s.setName("第九届"); s.setIsCurrent(1); s.setSortOrder(1);
+        s.setName("测试届甲"); s.setIsCurrent(1); s.setSortOrder(1);
         s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
         sessionRepo.save(s);
 
@@ -278,7 +278,7 @@ class MemberRepositoryTest {
     @Test
     void duplicateStudentNoInSameSession_rejected() {
         MemberSession s = new MemberSession();
-        s.setName("第十届"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
+        s.setName("测试届乙"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
         sessionRepo.save(s);
 
         Member a = new Member();
@@ -298,7 +298,7 @@ class MemberRepositoryTest {
     @Test
     void archiveSession_flipsActiveToAlumni() {
         MemberSession s = new MemberSession();
-        s.setName("第八届"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
+        s.setName("测试届丙"); s.setCreatedAt(LocalDateTime.now()); s.setUpdatedAt(LocalDateTime.now());
         sessionRepo.save(s);
 
         Member act = new Member();
@@ -1100,10 +1100,10 @@ class MemberImportServiceTest {
         memberRepo = mock(MemberRepository.class);
         deptRepo = mock(DepartmentRepository.class);
         service = new MemberImportService(memberRepo, deptRepo);
-        Department d = new Department(); d.setId(2L); d.setName("文秘部");
-        when(deptRepo.findAll()).thenReturn(List.of(d));
+        Department wm = new Department(); wm.setId(2L); wm.setName("文秘部");
+        Department zzb = new Department(); zzb.setId(3L); zzb.setName("组织部");
+        when(deptRepo.findAll()).thenReturn(List.of(wm, zzb));
         when(memberRepo.findBySessionId(1L)).thenReturn(List.of());
-        when(memberRepo.existsBySessionIdAndStudentNo(1L, "20250101")).thenReturn(true);
     }
 
     /** 构造：标题行 + 表头 + 数据（部门列用合并单元格：第2行部门=文秘部，第3行部门留空） */
@@ -1128,8 +1128,8 @@ class MemberImportServiceTest {
     @Test
     void import_parsesAndForwardFillsDept() throws Exception {
         var r = service.importFromXlsx(new ByteArrayInputStream(rosterXlsx()), 1L);
-        assertThat(r.success()).isEqualTo(2);   // 吴苑重复(学号已存在)、谢文杰、蔡键泽 → 3 行中 1 重复
-        assertThat(r.skipped()).isEqualTo(1);
+        assertThat(r.success()).isEqualTo(3);
+        assertThat(r.skipped()).isZero();
         @SuppressWarnings("unchecked")
         var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
         verify(memberRepo).saveAll(captor.capture());
@@ -1141,7 +1141,22 @@ class MemberImportServiceTest {
         assertThat(xie.getPosition()).isEqualTo("STAFF");
         assertThat(xie.getStatus()).isEqualTo("ACTIVE");
         var cai = saved.stream().filter(m -> m.getName().equals("蔡键泽")).findFirst().orElseThrow();
-        assertThat(cai.getDeptId()).isEqualTo(2L); // 组织部未 mock 在 deptRepo，落入兜底逻辑（见实现说明）
+        assertThat(cai.getDeptId()).isEqualTo(3L);
+        assertThat(cai.getPoliticalStatus()).isEqualTo("共青团员");
+    }
+
+    /** 库中已有同届同学号成员时，导入该行记失败（学号已存在），不重复写入。 */
+    @Test
+    void import_skipsDuplicateFromDb() throws Exception {
+        com.pams.module.member.entity.Member existing = new com.pams.module.member.entity.Member();
+        existing.setStudentNo("2435101020120"); existing.setName("吴苑");
+        when(memberRepo.findBySessionId(1L)).thenReturn(List.of(existing));
+
+        var r = service.importFromXlsx(new ByteArrayInputStream(rosterXlsx()), 1L);
+
+        assertThat(r.success()).isEqualTo(2);
+        assertThat(r.failed()).hasSize(1);
+        assertThat(r.failed().get(0).reason()).contains("学号已存在");
     }
 
     @Test
@@ -1163,9 +1178,11 @@ class MemberImportServiceTest {
     void import_blankNameSkipsRow() throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sheet = wb.createSheet("S");
-            sheet.createRow(0).createCell(0).setCellValue("姓名");
-            sheet.createRow(1).createCell(0).setCellValue("");
-            sheet.createRow(2).createCell(0).setCellValue("张三");
+            Row h = sheet.createRow(0);
+            h.createCell(0).setCellValue("姓名"); h.createCell(1).setCellValue("学号");
+            sheet.createRow(1).createCell(0).setCellValue("");            // 空行：姓名+学号皆空 → 跳过
+            Row r2 = sheet.createRow(2);
+            r2.createCell(0).setCellValue("张三"); r2.createCell(1).setCellValue("20250999");
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) { wb.write(out);
                 var r = service.importFromXlsx(new ByteArrayInputStream(out.toByteArray()), 1L);
                 assertThat(r.success()).isEqualTo(1);
@@ -1176,14 +1193,14 @@ class MemberImportServiceTest {
 }
 ```
 
-> 注：上面 `import_parsesAndForwardFillsDept` 中「组织部」未 mock 进 deptRepo，因此蔡键泽的 deptId 解析结果取决于实现。若实现为「未知部门记失败行」，则 expected 需调整。**建议实现**：部门名精确匹配 `deptRepo.findAll()`；匹配不上且部门名非空 → 记失败行「部门无法识别」；部门空/「主任」/「副主任」/「主任室」→ deptId null。为让测试稳定，请把组织部也加入 `deptRepo` mock（`d2.setName("组织部")`），再断言蔡键泽 deptId = 组织部 id。若你选择「未知部门失败」实现，则示例测试需同步改期望。以你写出的实现为准，保证测试与实现一致。
-
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `cd pams-backend && mvn test -Dtest=MemberImportServiceTest`
 Expected: FAIL（`MemberImportService` 不存在）。
 
 - [ ] **Step 3: 实现 MemberImportService**
+
+> **导入规则（用户可见）**：模板 9 列与登记表一致；**学号必填**（缺学号记失败行「学号缺失」，因为一键建账号与去重都依赖学号；登记表每行都有学号，不影响真实数据）；部门前向填充；职位/政治面貌归一化；部门名无法识别记失败行；重复学号记失败行。
 
 `MemberImportService.java`（核心：表头定位、部门前向填充、职位/部门/政治面貌归一化、去重、失败行收集、模板生成、导出）：
 ```java
@@ -1827,12 +1844,12 @@ class MemberIntegrationTest {
 
         String token = login("zhuren");
 
-        // 建届别
+        // 建届别（用唯一届名，避免与 Task 12 种子届「第九届」在共享 H2 上冲突）
         MvcResult sres = mvc.perform(post("/api/member-sessions").header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"第九届\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"集成测试届\"}"))
                 .andExpect(status().isOk()).andReturn();
         String sessionId = sessionRepo.findAll().stream()
-                .filter(s -> "第九届".equals(s.getName())).findFirst().orElseThrow().getId().toString();
+                .filter(s -> "集成测试届".equals(s.getName())).findFirst().orElseThrow().getId().toString();
 
         // 导入成员
         MockMultipartFile file = new MockMultipartFile("file", "members.xlsx",
@@ -2720,15 +2737,31 @@ git commit -m "feat(member): 用户管理-从花名册一键导入注册账号�
 
 `DataSeeder.java`：
 - 构造参数与字段加 `MemberSessionRepository memberSessionRepository`（`com.pams.module.member.repository.MemberSessionRepository`）。
-- `seedOrg()` 末尾（`roleRepository.save(r)` 循环后）加：
+- `run()` 中在 `seedOrg();` 后、`if (isTestProfile()) return;` 前调用新增的 `seedMemberSessions();`：
 ```java
-if (memberSessionRepository.count() > 0) return; // 幂等（但 seedOrg 已有 departmentRepository.count()>0 短路，此处兜底）
-MemberSession s9 = new MemberSession();
-s9.setName("第九届"); s9.setIsCurrent(1); s9.setSortOrder(1);
-s9.setCreatedAt(LocalDateTime.now()); s9.setUpdatedAt(LocalDateTime.now());
-memberSessionRepository.save(s9);
+@Override
+@Transactional
+public void run(ApplicationArguments args) {
+    seedOrg();
+    seedMemberSessions();   // 届别种子独立于部门种子（dev 库部门已存在时也能补种）
+    if (isTestProfile()) return;
+    seedDemoData();
+}
 ```
-> 注意：`seedOrg()` 顶部已 `if (departmentRepository.count() > 0) return;`，届别种子会随部门种子在同一分支内执行，幂等。把届别种子放 `saveUser("staff", ...)` 之后即可。若担心 `memberSessionRepository.count()>0` 短路的嵌套，直接在 `seedOrg()` 内部门/角色/账号之后追加，无需额外短路。
+- 新增私有方法（幂等，按 member_session 计数而非部门计数）：
+```java
+/** 种子届别：只建「第九届」为当前届，便于直接导入真实登记表。 */
+private void seedMemberSessions() {
+    if (memberSessionRepository.count() > 0) return;
+    MemberSession s9 = new MemberSession();
+    s9.setName("第九届"); s9.setIsCurrent(1); s9.setSortOrder(1);
+    s9.setCreatedAt(LocalDateTime.now()); s9.setUpdatedAt(LocalDateTime.now());
+    memberSessionRepository.save(s9);
+}
+```
+> 说明：不放进 `seedOrg()` 是因为 `seedOrg()` 顶部 `if (departmentRepository.count() > 0) return;` —— dev MySQL 库部门已存在时会整体短路，届别种子也会被跳过。独立方法保证 dev 库补种。
+
+> **注意**：测试 H2 共享库（`DB_CLOSE_DELAY=-1`）在上下文启动时即 seed「第九届」。Task 1 的 MemberRepositoryTest 与 Task 6 的 MemberIntegrationTest 已改用非冲突届名（测试届甲/乙/丙、集成测试届），不会撞唯一约束。
 
 - [ ] **Step 2: 全量后端测试**
 

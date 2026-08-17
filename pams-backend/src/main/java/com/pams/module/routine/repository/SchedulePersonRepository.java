@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface SchedulePersonRepository extends JpaRepository<SchedulePerson, Long> {
     List<SchedulePerson> findByScheduleId(Long scheduleId);
+    long countByPersonName(String personName);
     void deleteByScheduleId(Long scheduleId);
 }
