@@ -1,4 +1,4 @@
-import { post } from './http'
+import { get, post } from './http'
 
 export interface LoginParams { username: string; password: string }
 export interface LoginResponse {
@@ -16,3 +16,4 @@ export interface LoginResponse {
 }
 
 export const loginApi = (params: LoginParams) => post<LoginResponse>('/auth/login', params)
+export const meApi = () => get<LoginResponse['user']>('/auth/me')

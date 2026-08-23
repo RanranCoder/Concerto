@@ -1,7 +1,8 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
-import { lazy } from 'react'
+import { lazy, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
+import { meApi } from '@/api/auth'
 import MainLayout from '@/layouts/MainLayout'
 import RequireRole, { LEADER_ROLES, ADMIN_ROLES, RequirePerm } from '@/components/glass/RequireRole'
 
@@ -38,6 +39,13 @@ const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token)
+  const refreshUser = useAuthStore((s) => s.refreshUser)
+  // 启动/刷新页面时用 JWT 换取最新 user+permissions，使权限管理页的变更刷新即生效（无需重新登录）
+  useEffect(() => {
+    if (token) {
+      meApi().then((u) => refreshUser(u)).catch(() => { /* 401 由 http 拦截器登出 */ })
+    }
+  }, [token, refreshUser])
   if (!token) return <Navigate to="/login" replace />
   return <>{children}</>
 }

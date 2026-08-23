@@ -8,8 +8,11 @@ import com.pams.entity.User;
 import com.pams.module.permission.service.PermissionService;
 import com.pams.repository.UserRepository;
 import com.pams.security.JwtUtil;
+import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,5 +63,23 @@ public class AuthController {
         user.put("permissions", permissionService.permissionsOfRole(roleCode));
         resp.setUser(user);
         return Result.ok(resp);
+    }
+
+    /** 当前登录用户信息（含最新权限码），供前端启动时刷新、权限管理页改完刷新即生效。 */
+    @GetMapping("/me")
+    public Result<Map<String, Object>> me(@AuthenticationPrincipal LoginUser lu) {
+        if (lu == null) {
+            throw new BizException(1001, "未登录");
+        }
+        Map<String, Object> user = new HashMap<>();
+        user.put("id", lu.getId());
+        user.put("username", lu.getUsername());
+        user.put("realName", lu.getRealName());
+        user.put("roleCode", lu.getRoleCode());
+        user.put("roleLevel", lu.getRoleLevel());
+        user.put("deptId", lu.getDeptId());
+        user.put("deptName", lu.getDeptName());
+        user.put("permissions", permissionService.permissionsOfRole(lu.getRoleCode()));
+        return Result.ok(user);
     }
 }

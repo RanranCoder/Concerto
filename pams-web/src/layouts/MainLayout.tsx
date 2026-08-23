@@ -89,7 +89,8 @@ export default function MainLayout() {
     if (hasPerm('material:view')) {
       items.push({ key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> })
     }
-    if (hasPerm('party:view')) {
+    // 党务台账路由守卫是 RequireRole(LEADER_ROLES) 不含 STAFF，菜单按角色对齐避免干事点进去 403
+    if (isMinisterOrAbove) {
       items.push({ key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> })
     }
     if (hasPerm('member:view')) {
