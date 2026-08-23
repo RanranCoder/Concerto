@@ -128,22 +128,16 @@ class NotificationEventListenerTest {
     @Test
     void handlePlanApproved_notifiesAllUsersExceptReviewer() {
         User reviewer = userWithIdAndRole(1L, "TEACHER");
-        User user1 = userWithIdAndRole(2L, "MEMBER");
-        User user2 = userWithIdAndRole(3L, "DIRECTOR");
-        when(userRepo.findAll()).thenReturn(List.of(reviewer, user1, user2));
+        when(userRepo.findByRoleCode(org.mockito.ArgumentMatchers.anyString())).thenReturn(List.of(reviewer));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanReviewed(new PlanReviewedEvent(
             1L, 100L, "策划书", 1L, true, null, 5L));
 
-        // should notify user1 and user2, but not reviewer
-        verify(notificationService, times(2)).createAndSave(
+        // 改为按角色广播一行（recipientRole），不再逐用户插行；7 个角色各一行
+        verify(notificationService, times(7)).createAndSave(
             eq(NotificationType.PLAN_APPROVED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(1L), anyLong(), isNull(), isNull()
-        );
-        verify(notificationService, never()).createAndSave(
-            eq(NotificationType.PLAN_APPROVED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(1L), eq(1L), isNull(), isNull()
+            eq("PLAN"), eq(1L), eq(1L), isNull(), anyString(), isNull()
         );
     }
 

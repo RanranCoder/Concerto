@@ -139,20 +139,15 @@ public class NotificationEventListener {
     public void handlePlanReviewed(PlanReviewedEvent event) {
         String activityName = getActivityName(event.getActivityId());
         if (event.isApproved()) {
-            List<User> allUsers = userRepo.findAll();
-            for (User user : allUsers) {
-                if (!user.getId().equals(event.getReviewerId())) {
-                    notificationService.createAndSave(
-                        NotificationType.PLAN_APPROVED,
-                        "策划书审核通过",
-                        "活动「" + activityName + "」的策划书已审核通过",
-                        "PLAN", event.getPlanId(), event.getReviewerId(),
-                        user.getId(), null, null
-                    );
-                    pushToUser(user);
-                }
-            }
-            log.info("PlanApproved 通知已发送给 {} 名用户", allUsers.size() - 1);
+            // 按角色广播一行通知（recipientRole），不再逐用户插行；WS 推送复用 broadcastToRoles（排除审核人本人）
+            Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
+            roles.add("STAFF");
+            broadcastToRoles(
+                NotificationType.PLAN_APPROVED,
+                "策划书审核通过",
+                "活动「" + activityName + "」的策划书已审核通过",
+                "PLAN", event.getPlanId(), event.getReviewerId(), roles);
+            log.info("PlanApproved 通知已广播给 {} 个角色", roles.size());
         } else {
             notificationService.createAndSave(
                 NotificationType.PLAN_REJECTED,

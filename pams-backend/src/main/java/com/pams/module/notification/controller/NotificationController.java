@@ -24,11 +24,8 @@ public class NotificationController {
 
     @GetMapping
     public Result<List<NotificationVO>> list(@AuthenticationPrincipal LoginUser user) {
-        List<NotificationVO> list = service.findForUser(user.getId(), user.getRoleCode(), user.getDeptId());
-        if (list.size() > 50) {
-            list = list.subList(0, 50);
-        }
-        return Result.ok(list);
+        // service 已分页取前 50 条并批量解析 sender，无需在此截断
+        return Result.ok(service.findForUser(user.getId(), user.getRoleCode(), user.getDeptId()));
     }
 
     @GetMapping("/page")

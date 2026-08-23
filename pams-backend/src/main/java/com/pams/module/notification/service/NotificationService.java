@@ -2,6 +2,7 @@ package com.pams.module.notification.service;
 
 import com.pams.common.BizException;
 import com.pams.common.PageResult;
+import com.pams.entity.User;
 import com.pams.module.notification.dto.NotificationPreferenceVO;
 import com.pams.module.notification.dto.NotificationVO;
 import com.pams.module.notification.entity.Notification;
@@ -15,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
@@ -50,8 +54,9 @@ public class NotificationService {
     }
 
     public List<NotificationVO> findForUser(Long userId, String roleCode, Long deptId) {
-        List<Notification> list = repo.findForUser(userId, roleCode, deptId);
-        return list.stream().map(this::toVO).toList();
+        // 铃铛列表只取前 50 条（分页下沉 DB），并对 sender 批量取数避免 N+1
+        List<Notification> list = repo.pageForUser(userId, roleCode, deptId, null, PageRequest.of(0, 50));
+        return toVOs(list);
     }
 
     public long countUnreadForUser(Long userId, String roleCode, Long deptId) {
@@ -66,7 +71,7 @@ public class NotificationService {
             PageRequest.of(safePage - 1, safeSize));
         long total = repo.countForUser(userId, roleCode, deptId, type);
         PageResult<NotificationVO> pr = new PageResult<>();
-        pr.setRecords(list.stream().map(this::toVO).toList());
+        pr.setRecords(toVOs(list));
         pr.setTotal(total);
         pr.setCurrent(safePage);
         pr.setSize(safeSize);
@@ -115,21 +120,29 @@ public class NotificationService {
         repo.markAllAsRead(userId, roleCode, deptId, LocalDateTime.now());
     }
 
-    private NotificationVO toVO(Notification n) {
-        NotificationVO vo = new NotificationVO();
-        vo.setId(n.getId());
-        vo.setType(n.getType().name());
-        vo.setTitle(n.getTitle());
-        vo.setContent(n.getContent());
-        vo.setEntityType(n.getEntityType());
-        vo.setEntityId(n.getEntityId());
-        vo.setPriority("NORMAL");
-        vo.setRead(n.getIsRead() == 1);
-        vo.setCreatedAt(n.getCreatedAt());
-        if (n.getSenderId() != null) {
-            userRepo.findById(n.getSenderId())
-                .ifPresent(u -> vo.setSenderName(u.getRealName()));
-        }
-        return vo;
+    /** 批量 toVO：一次 findAllById 取所有发送者姓名，消除逐条 userRepo.findById 的 N+1。 */
+    private List<NotificationVO> toVOs(List<Notification> list) {
+        Set<Long> senderIds = list.stream()
+            .map(Notification::getSenderId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<Long, String> senderNames = senderIds.isEmpty()
+            ? Map.of()
+            : userRepo.findAllById(senderIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getRealName, (a, b) -> a));
+        return list.stream().map(n -> {
+            NotificationVO vo = new NotificationVO();
+            vo.setId(n.getId());
+            vo.setType(n.getType().name());
+            vo.setTitle(n.getTitle());
+            vo.setContent(n.getContent());
+            vo.setEntityType(n.getEntityType());
+            vo.setEntityId(n.getEntityId());
+            vo.setPriority("NORMAL");
+            vo.setRead(n.getIsRead() == 1);
+            vo.setCreatedAt(n.getCreatedAt());
+            vo.setSenderName(n.getSenderId() == null ? null : senderNames.get(n.getSenderId()));
+            return vo;
+        }).toList();
     }
 }

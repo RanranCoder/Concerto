@@ -97,10 +97,11 @@ class NotificationServiceTest {
         n.setCreatedAt(LocalDateTime.of(2025, 6, 1, 10, 0));
 
         User sender = new User();
+        sender.setId(1L);
         sender.setRealName("张三");
 
-        when(repo.findForUser(2L, null, null)).thenReturn(List.of(n));
-        when(userRepo.findById(1L)).thenReturn(Optional.of(sender));
+        when(repo.pageForUser(any(), any(), any(), any(), any())).thenReturn(List.of(n));
+        when(userRepo.findAllById(any())).thenReturn(List.of(sender));
 
         var result = service.findForUser(2L, null, null);
 
@@ -121,12 +122,12 @@ class NotificationServiceTest {
         n.setIsRead(1);
         n.setCreatedAt(LocalDateTime.now());
 
-        when(repo.findForUser(2L, null, null)).thenReturn(List.of(n));
+        when(repo.pageForUser(any(), any(), any(), any(), any())).thenReturn(List.of(n));
 
         var result = service.findForUser(2L, null, null);
 
         assertThat(result.get(0).getSenderName()).isNull();
-        verify(userRepo, never()).findById(any());
+        verify(userRepo, never()).findAllById(any());
     }
 
     @Test
