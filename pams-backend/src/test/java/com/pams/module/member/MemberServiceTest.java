@@ -136,10 +136,10 @@ class MemberServiceTest {
 
     @Test
     void delete_softDeletes() {
-        Member m = new Member(); m.setId(5L); m.setDeleted(0);
+        Member m = new Member(); m.setId(5L); m.setDeleted(0L);
         when(memberRepo.findById(5L)).thenReturn(Optional.of(m));
         service.delete(5L);
-        assertThat(m.getDeleted()).isEqualTo(1);
+        assertThat(m.getDeleted()).isEqualTo(5L);
         verify(memberRepo).save(m);
     }
 }

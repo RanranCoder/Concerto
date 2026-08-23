@@ -58,7 +58,7 @@ public class MemberSessionService {
         if (memberRepo.countBySessionId(id) > 0) {
             throw new BizException(2803, "该届别下已有成员，不能删除");
         }
-        s.setDeleted(1);
+        s.setDeleted(s.getId());
         s.setUpdatedAt(LocalDateTime.now());
         sessionRepo.save(s);
     }

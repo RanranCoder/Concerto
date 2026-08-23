@@ -77,7 +77,7 @@ class MemberRepositoryTest {
         memberRepo.save(a);
 
         // 软删除释放 (session, studentNo) 唯一键
-        a.setDeleted(1);
+        a.setDeleted(1L);
         memberRepo.saveAndFlush(a);
 
         // 同届同号重新导入不应违反唯一约束

@@ -25,5 +25,5 @@ public class MemberSession {
     private LocalDateTime createdAt;
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-    private Integer deleted = 0;
+    private Long deleted = 0L;
 }

@@ -96,7 +96,7 @@ public class MemberService {
     @Transactional
     public void delete(Long id) {
         Member m = memberRepo.findById(id).orElseThrow(() -> new BizException(2805, "成员不存在"));
-        m.setDeleted(1);
+        m.setDeleted(m.getId());
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);
     }
@@ -104,7 +104,7 @@ public class MemberService {
     @Transactional
     public void batchDelete(List<Long> ids) {
         if (ids == null) return;
-        for (Long id : ids) { memberRepo.findById(id).ifPresent(m -> { m.setDeleted(1); memberRepo.save(m); }); }
+        for (Long id : ids) { memberRepo.findById(id).ifPresent(m -> { m.setDeleted(m.getId()); memberRepo.save(m); }); }
     }
 
     @Transactional

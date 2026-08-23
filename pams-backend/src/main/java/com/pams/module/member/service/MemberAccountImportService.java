@@ -96,19 +96,34 @@ public class MemberAccountImportService {
                 throw new BizException(2813, "不能授予高于自己级别的角色");
             }
 
-            User u = new User();
-            u.setUsername(username);
-            u.setPassword(passwordEncoder.encode("123456"));
-            u.setRealName(m.getName());
-            u.setStudentNo(username);
-            u.setPhone(m.getPhone());
-            u.setDept(m.getDeptId() == null ? null : deptRepo == null ? null
-                    : deptRepo.findById(m.getDeptId()).orElse(null));
-            u.setRole(role);
-            u.setStatus(1);
-            u.setCreatedAt(LocalDateTime.now());
-            u.setUpdatedAt(LocalDateTime.now());
-            u.setDeleted(0);
+            // C3：若该学号对应账号已软删，复活原行而非插入新行，规避 username 硬唯一键冲突导致整批导入 500。
+            User u = userRepo.findDeletedByUsername(username).orElse(null);
+            if (u != null) {
+                u.setPassword(passwordEncoder.encode("123456"));
+                u.setRealName(m.getName());
+                u.setStudentNo(username);
+                u.setPhone(m.getPhone());
+                u.setDept(m.getDeptId() == null ? null : deptRepo == null ? null
+                        : deptRepo.findById(m.getDeptId()).orElse(null));
+                u.setRole(role);
+                u.setStatus(1);
+                u.setUpdatedAt(LocalDateTime.now());
+                u.setDeleted(0L);
+            } else {
+                u = new User();
+                u.setUsername(username);
+                u.setPassword(passwordEncoder.encode("123456"));
+                u.setRealName(m.getName());
+                u.setStudentNo(username);
+                u.setPhone(m.getPhone());
+                u.setDept(m.getDeptId() == null ? null : deptRepo == null ? null
+                        : deptRepo.findById(m.getDeptId()).orElse(null));
+                u.setRole(role);
+                u.setStatus(1);
+                u.setCreatedAt(LocalDateTime.now());
+                u.setUpdatedAt(LocalDateTime.now());
+                u.setDeleted(0L);
+            }
             userRepo.save(u);
             created++;
         }

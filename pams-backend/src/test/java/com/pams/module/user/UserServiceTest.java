@@ -84,7 +84,7 @@ class UserServiceTest {
         when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
 
         svc.deleteUser(1L, 3);
-        assertThat(existing.getDeleted()).isEqualTo(1);
+        assertThat(existing.getDeleted()).isEqualTo(1L);
         verify(userRepo).save(existing);
     }
 
@@ -96,7 +96,7 @@ class UserServiceTest {
         existing.setRole(null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
         userService.deleteUser(1L);
-        assertThat(existing.getDeleted()).isEqualTo(1);
+        assertThat(existing.getDeleted()).isEqualTo(1L);
     }
 
     // ==================== Task 26：角色级别防提权 ====================

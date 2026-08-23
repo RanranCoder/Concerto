@@ -105,12 +105,24 @@ public class UserService {
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new BizException(1003, "用户名已存在");
         }
+        // C3：若同名账号已被软删，复活该行（setDeleted(0) + 更新字段）而非插入新行，
+        //     规避 sys_user.username 硬唯一键与软删冲突（删除账号后无法重建同名）。
+        User deleted = userRepository.findDeletedByUsername(req.getUsername()).orElse(null);
+        if (deleted != null) {
+            deleted.setPassword(passwordEncoder.encode(
+                    req.getPassword() == null || req.getPassword().isBlank() ? "123456" : req.getPassword()));
+            apply(deleted, req, currentLevel);
+            deleted.setDeleted(0L);
+            deleted.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(deleted);
+            return deleted.getId();
+        }
         User u = new User();
         u.setUsername(req.getUsername());
         u.setPassword(passwordEncoder.encode(
                 req.getPassword() == null || req.getPassword().isBlank() ? "123456" : req.getPassword()));
         apply(u, req, currentLevel);
-        u.setDeleted(0);
+        u.setDeleted(0L);
         return userRepository.save(u).getId();
     }
 
@@ -191,7 +203,7 @@ public class UserService {
     public void deleteUser(Long id, Integer currentLevel) {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         checkDeleteLevel(u, currentLevel);
-        u.setDeleted(1);
+        u.setDeleted(u.getId());
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
     }

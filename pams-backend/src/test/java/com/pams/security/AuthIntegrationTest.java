@@ -77,7 +77,7 @@ class AuthIntegrationTest {
         // deleted = 0 为 NULL 恒假，findByUsername 查不到该行 → u==null 误走"用户不存在"的 401，
         // 该测试即使回退禁用用户校验也仍通过，无法隔离 status 分支。显式置 0 后才会真正命中
         // JwtAuthenticationFilter 的 status != 0 放行判定，形成有效回归保护。
-        u.setDeleted(0);
+        u.setDeleted(0L);
         userRepository.save(u);
 
         String token = jwtUtil.generate(u.getId(), u.getUsername(), u.getRole().getCode());
@@ -99,7 +99,7 @@ class AuthIntegrationTest {
         u.setRealName("正常测试");
         u.setRole(role);
         u.setStatus(1);
-        u.setDeleted(0);
+        u.setDeleted(0L);
         userRepository.save(u);
 
         String token = jwtUtil.generate(u.getId(), u.getUsername(), u.getRole().getCode());

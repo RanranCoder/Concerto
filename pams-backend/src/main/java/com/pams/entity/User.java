@@ -27,5 +27,5 @@ public class User {
     private Integer status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Integer deleted;
+    private Long deleted;
 }

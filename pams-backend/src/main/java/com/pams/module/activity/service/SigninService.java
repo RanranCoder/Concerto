@@ -77,6 +77,7 @@ public class SigninService {
         }
     }
 
+    @Transactional
     public Signin scanSignin(String token, String name, String studentNo) {
         return scanSignin(token, name, studentNo, null);
     }
@@ -86,6 +87,7 @@ public class SigninService {
      * 校验 token/活动 → 构造 Signin（fields 映射到列）→ 若活动有应签名单且匹配到，remark 追加"（应签名单）"→ save。
      * 不匹配仍签到（宽松策略），仅不加名单标记。
      */
+    @Transactional
     public Signin scanSignin(String token, String name, String studentNo, Map<String, String> fields) {
         Long activityId = validateAndResolveActivity(token);
         Signin s = new Signin();
