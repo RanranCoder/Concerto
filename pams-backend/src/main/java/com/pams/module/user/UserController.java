@@ -72,8 +72,10 @@ public class UserController {
 
     @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
     @PostMapping("/{id}/reset-password")
-    public Result<Void> resetPassword(@PathVariable Long id) {
-        userService.resetPassword(id);
+    public Result<Void> resetPassword(@PathVariable Long id,
+                                      @AuthenticationPrincipal LoginUser current) {
+        Integer currentLevel = current == null ? null : current.getRoleLevel();
+        userService.resetPassword(id, currentLevel);
         return Result.ok();
     }
 

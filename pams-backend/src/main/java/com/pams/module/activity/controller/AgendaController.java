@@ -6,6 +6,7 @@ import com.pams.module.activity.dto.AgendaRequest;
 import com.pams.module.activity.entity.ActivityAgenda;
 import com.pams.module.activity.repository.ActivityAgendaRepository;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,8 @@ public class AgendaController {
         return Result.ok(repository.findByActivityIdOrderByStepNoAsc(activityId));
     }
 
+    /** 议程的增删改限干部，登录即可查询 */
+    @PreAuthorize(ActivityController.LEADER)
     @PostMapping
     public Result<ActivityAgenda> create(@Valid @RequestBody AgendaRequest req) {
         ActivityAgenda a = new ActivityAgenda();
@@ -33,6 +36,7 @@ public class AgendaController {
         return Result.ok(repository.save(a));
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody AgendaRequest req) {
         ActivityAgenda a = repository.findById(id)
@@ -44,6 +48,7 @@ public class AgendaController {
         return Result.ok();
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         repository.findById(id).orElseThrow(() -> new BizException(2101, "议程不存在"));

@@ -6,6 +6,7 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import ActivityCreditModal from '@/components/credit/ActivityCreditModal'
 import {
   createCredit,
@@ -28,6 +29,10 @@ interface CreditFormValues {
 
 export default function CreditList() {
   const { message } = App.useApp()
+  // 写操作按钮按权限码显隐（quality:add 加分 / quality:delete 删除），与后端 @PreAuthorize 同口径
+  const hasPerm = useHasPerm()
+  const canAdd = hasPerm('quality:add')
+  const canDelete = hasPerm('quality:delete')
   const [data, setData] = useState<CreditVO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -173,13 +178,15 @@ export default function CreditList() {
       title: '操作',
       key: 'action',
       width: 90,
-      render: (_: unknown, r: CreditVO) => (
-        <Popconfirm title="确认删除该加分记录？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>
-      ),
+      // 无 quality:delete 权限时隐藏删除入口（与后端 @PreAuthorize 同口径）
+      render: (_: unknown, r: CreditVO) =>
+        canDelete ? (
+          <Popconfirm title="确认删除该加分记录？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        ) : null,
     },
   ]
 
@@ -189,14 +196,16 @@ export default function CreditList() {
         title="素拓加分"
         description="活动素拓加分台账：记录参与 / 答题等加分，汇总人次与总分值"
         extra={
-          <Space>
-            <Button icon={<ThunderboltOutlined />} onClick={() => setActivityCreditOpen(true)}>
-              活动加分
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-              新增加分
-            </Button>
-          </Space>
+          canAdd ? (
+            <Space>
+              <Button icon={<ThunderboltOutlined />} onClick={() => setActivityCreditOpen(true)}>
+                活动加分
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+                新增加分
+              </Button>
+            </Space>
+          ) : null
         }
       />
 

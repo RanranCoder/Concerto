@@ -164,6 +164,30 @@ class PermissionGuardIntegrationTest {
             .andExpect(jsonPath("$.message").value("不能删除级别不低于自己的用户"));
     }
 
+    // ==================== A1：resetPassword 防提权（重置密码即账号接管） ====================
+
+    @Test
+    void leader_cannotResetHigherRolePassword() throws Exception {
+        // 重置密码后新密码归操作者掌握，等同账号接管：部长（level 3）不能重置主任（level 4，id=2）
+        // 的密码，口径与 deleteUser 一致（目标级别 ≥ 自己级别即拒绝，错误码同为 1008）。
+        mvc.perform(post("/api/users/2/reset-password")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value(1008))
+            .andExpect(jsonPath("$.message").value("不能重置级别不低于自己的账号密码"));
+    }
+
+    @Test
+    void leader_canResetStaffPassword() throws Exception {
+        // 对照用例：部长可以重置干事（STAFF，种子固定第 8 个插入 → id=8）的密码。
+        // 固定 id 与上方 /api/users/2 同一约定：DataSeeder 空库按固定顺序种入，
+        // 测试套件只增不删种子账号，id 稳定；重置结果仍是默认密码 123456，天然幂等。
+        mvc.perform(post("/api/users/8/reset-password")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
+    }
+
     @Test
     void changeStatus_invalidEnum_returns400() throws Exception {
         // 非法枚举：BizException(2009) 由全局异常处理返回 HTTP 200 + JSON code=2009

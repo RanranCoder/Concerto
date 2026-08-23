@@ -8,6 +8,7 @@ import com.pams.module.archive.entity.CreditRecord;
 import com.pams.module.archive.service.CreditService;
 import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,18 +31,22 @@ public class CreditController {
         return Result.ok(service.page(keyword, userId, activityId, page, size));
     }
 
+    /** 手动加分（含修改），需 quality:add 权限码；查询接口保持登录可见 */
+    @PreAuthorize("hasAuthority('quality:add')")
     @PostMapping
     public Result<CreditRecord> create(@Valid @RequestBody CreditRequest req,
                                        @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
+    @PreAuthorize("hasAuthority('quality:add')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody CreditRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('quality:delete')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);
@@ -49,6 +54,7 @@ public class CreditController {
     }
 
     /** 活动批量加分，body {sourceActivityId, project, credit, remark, people:[{personName,studentNo}]} */
+    @PreAuthorize("hasAuthority('quality:add')")
     @PostMapping("/activity-batch")
     public Result<Map<String, Integer>> activityBatch(@RequestBody Map<String, Object> body,
                                                       @AuthenticationPrincipal LoginUser current) {
@@ -66,6 +72,7 @@ public class CreditController {
     }
 
     /** 按批次撤回活动批量加分 */
+    @PreAuthorize("hasAuthority('quality:delete')")
     @DeleteMapping("/batch/{batchId}")
     public Result<Integer> batchRollback(@PathVariable String batchId) {
         return Result.ok(service.batchRollback(batchId));

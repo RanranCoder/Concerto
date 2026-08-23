@@ -35,7 +35,7 @@ class UserServiceTest {
         User u = new User();
         u.setId(1L);
         when(userRepository.findById(1L)).thenReturn(Optional.of(u));
-        userService.resetPassword(1L);
+        userService.resetPassword(1L, 3); // 部长重置下级（角色为 null → level 视作 0）的密码
         assertThat(u.getPassword()).isNotEqualTo("123456");
         assertThat(encoder.matches("123456", u.getPassword())).isTrue();
         verify(userRepository).save(u);

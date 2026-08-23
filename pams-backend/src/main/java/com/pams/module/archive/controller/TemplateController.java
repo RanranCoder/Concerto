@@ -1,11 +1,13 @@
 package com.pams.module.archive.controller;
 
 import com.pams.common.Result;
+import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.dto.TemplateRequest;
 import com.pams.module.archive.entity.TemplateAsset;
 import com.pams.module.archive.service.TemplateService;
 import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,18 +25,22 @@ public class TemplateController {
         return Result.ok(service.list(category));
     }
 
+    /** 模板的增删改限干部，登录即可查询 */
+    @PreAuthorize(ActivityController.LEADER)
     @PostMapping
     public Result<TemplateAsset> create(@Valid @RequestBody TemplateRequest req,
                                         @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody TemplateRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

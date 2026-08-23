@@ -172,6 +172,21 @@ public class UserService {
         }
     }
 
+    /**
+     * 防提权校验：重置密码等于账号接管（操作者拿到新密码即可登录目标账号），
+     * 目标用户角色 level ≥ 当前操作者 level 时拒绝（部长不能重置主任/指导老师的密码，
+     * 也不能重置平级部长）。口径与 {@link #checkDeleteLevel} 一致。
+     * currentLevel 为 null 时放行（保留旧行为）。
+     */
+    private void checkResetPasswordLevel(User target, Integer currentLevel) {
+        if (currentLevel == null) return;
+        Integer targetLevel = target.getRole() == null || target.getRole().getLevel() == null
+                ? 0 : target.getRole().getLevel();
+        if (targetLevel >= currentLevel) {
+            throw new BizException(1008, "不能重置级别不低于自己的账号密码");
+        }
+    }
+
     @Transactional
     public void deleteUser(Long id, Integer currentLevel) {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
@@ -192,11 +207,22 @@ public class UserService {
     }
 
     @Transactional
-    public void resetPassword(Long id) {
+    public void resetPassword(Long id, Integer currentLevel) {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        checkResetPasswordLevel(u, currentLevel);
         u.setPassword(passwordEncoder.encode("123456"));
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
+    }
+
+    /**
+     * 仅测试使用，禁止生产调用：传 currentLevel=null，绕过防提权校验（1008）。
+     * 生产代码必须走 {@link #resetPassword(Long, Integer)} 传真实操作者级别。
+     */
+    @Deprecated
+    @Transactional
+    public void resetPassword(Long id) {
+        resetPassword(id, null);
     }
 
     /** 当前用户自行修改密码：校验旧密码 + 新密码长度 */

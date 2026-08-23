@@ -2,6 +2,7 @@ package com.pams.module.archive.controller;
 
 import com.pams.common.BizException;
 import com.pams.common.Result;
+import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.service.FileStorageService;
@@ -13,6 +14,7 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,6 +46,8 @@ public class FileController {
         return Result.ok(rec);
     }
 
+    /** 下载需材料或党务任一查看权限（名单类文件可能被两侧引用），上传保持登录即可 */
+    @PreAuthorize("hasAuthority('material:view') or hasAuthority('party:view')")
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
         FileRecord rec = fileRecordRepository.findById(id)
@@ -73,6 +77,7 @@ public class FileController {
      * 基于原始文件名判断 ~$ Office 临时文件：sanitize 会剥离 ~$ 前缀，
      * 若先 sanitize 再判断会变成永不触发的死代码，故此处用原始文件名。
      */
+    @PreAuthorize(ActivityController.LEADER)
     @PostMapping("/import")
     public Result<Map<String, Integer>> importRoster(@RequestParam("file") MultipartFile file,
                                                      @RequestParam(value = "type", defaultValue = "ACTIVE") String type) {

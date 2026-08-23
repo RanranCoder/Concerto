@@ -2,11 +2,13 @@ package com.pams.module.archive.controller;
 
 import com.pams.common.PageResult;
 import com.pams.common.Result;
+import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.dto.MaterialRequest;
 import com.pams.module.archive.entity.Material;
 import com.pams.module.archive.service.MaterialService;
 import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,12 +43,15 @@ public class MaterialController {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
+    /** 改动/删除材料限干部；登录即可查询与新增（干事也可上传材料） */
+    @PreAuthorize(ActivityController.LEADER)
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody MaterialRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
+    @PreAuthorize(ActivityController.LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

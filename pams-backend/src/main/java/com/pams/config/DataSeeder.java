@@ -34,6 +34,7 @@ import com.pams.module.party.repository.PartyStageRepository;
 import com.pams.repository.DepartmentRepository;
 import com.pams.repository.RoleRepository;
 import com.pams.repository.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
@@ -53,6 +54,9 @@ public class DataSeeder implements ApplicationRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
+    // 幂等判断用：repository.count() 受 @SQLRestriction 软删过滤，
+    // 原生 COUNT 不经 Hibernate 过滤，才能反映真实行数
+    private final EntityManager entityManager;
 
     // 演示业务数据用仓库（仅在非 test profile 注入）
     private final ActivityRepository activityRepository;
@@ -71,6 +75,7 @@ public class DataSeeder implements ApplicationRunner {
 
     public DataSeeder(DepartmentRepository d, RoleRepository r, UserRepository u, PasswordEncoder p,
                       Environment environment,
+                      EntityManager entityManager,
                       ActivityRepository activityRepository,
                       ActivityPlanRepository activityPlanRepository,
                       ActivityAgendaRepository agendaRepository,
@@ -89,6 +94,7 @@ public class DataSeeder implements ApplicationRunner {
         this.userRepository = u;
         this.passwordEncoder = p;
         this.environment = environment;
+        this.entityManager = entityManager;
         this.activityRepository = activityRepository;
         this.activityPlanRepository = activityPlanRepository;
         this.agendaRepository = agendaRepository;
@@ -116,21 +122,37 @@ public class DataSeeder implements ApplicationRunner {
 
     /** 种子届别：只建「第九届」为当前届，便于直接导入真实登记表。 */
     private void seedMemberSessions() {
-        if (memberSessionRepository.count() > 0) return;
+        // 幂等须计软删行：换届归档会软删届别，若只数可见行，
+        // 软删光后重启会把已归档的「第九届」复活成当前届（原生 COUNT 绕过 @SQLRestriction）
+        Object cnt = entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM member_session").getSingleResult();
+        if (((Number) cnt).longValue() > 0) return;
         MemberSession s9 = new MemberSession();
         s9.setName("第九届"); s9.setIsCurrent(1); s9.setSortOrder(1);
         s9.setCreatedAt(LocalDateTime.now()); s9.setUpdatedAt(LocalDateTime.now());
         memberSessionRepository.save(s9);
     }
 
-    /** Task 4 建的基础数据：部门 / 角色 / 账号（空库才建，幂等）。 */
+    /**
+     * Task 4 建的基础数据（空库才建，幂等）。拆成两段：
+     * 部门/角色是系统运行必需的字典，生产空库也要种；
+     * 8 个弱口令种子账号（123456）只允许在 dev/test 环境注入，
+     * 生产一律不落（含 admin），管理员账号由部署方自行创建。
+     */
     private void seedOrg() {
         if (departmentRepository.count() > 0) return;
+        seedBaseDict();
+        if (isDevOrTestProfile()) {
+            seedDevAccounts();
+        }
+    }
+
+    /** 基础字典：部门 + 角色。系统初始化必需，任何环境都种。 */
+    private void seedBaseDict() {
         Department[] depts = {
             mkDept("文秘部", 1), mkDept("组织部", 2), mkDept("新媒体中心", 3), mkDept("青年科技部", 4)
         };
         for (Department d : depts) departmentRepository.save(d);
-        Department org = depts[1];
 
         Role[] roles = {
             mkRole("TEACHER", "指导老师", 5, "ALL"),
@@ -142,23 +164,33 @@ public class DataSeeder implements ApplicationRunner {
             mkRole("STAFF", "干事", 1, "DEPT")
         };
         for (Role r : roles) roleRepository.save(r);
+    }
 
-        saveUser("teacher", "指导老师", null, roleByCode(roles, "TEACHER"));
-        saveUser("zhuren", "主任", null, roleByCode(roles, "DIRECTOR"));
-        saveUser("orgleader", "组织部长", org, roleByCode(roles, "ORG_LEADER"));
-        saveUser("secleader", "文秘部长", depts[0], roleByCode(roles, "SECRETARY_LEADER"));
-        saveUser("medialeader", "新媒体部长", depts[2], roleByCode(roles, "MEDIA_LEADER"));
-        saveUser("techleader", "青年科技部长", depts[3], roleByCode(roles, "TECH_LEADER"));
-        saveUser("admin", "系统管理员", null, roleByCode(roles, "DIRECTOR"));
-        saveUser("staff", "干事", depts[0], roleByCode(roles, "STAFF"));
+    /** 开发/测试专用账号种子：8 个弱口令（123456）账号，生产环境禁止注入。 */
+    private void seedDevAccounts() {
+        Department[] depts = departmentRepository.findAll().toArray(Department[]::new);
+        Department org = depts[1];
+
+        saveUser("teacher", "指导老师", null, roleByCode("TEACHER"));
+        saveUser("zhuren", "主任", null, roleByCode("DIRECTOR"));
+        saveUser("orgleader", "组织部长", org, roleByCode("ORG_LEADER"));
+        saveUser("secleader", "文秘部长", depts[0], roleByCode("SECRETARY_LEADER"));
+        saveUser("medialeader", "新媒体部长", depts[2], roleByCode("MEDIA_LEADER"));
+        saveUser("techleader", "青年科技部长", depts[3], roleByCode("TECH_LEADER"));
+        saveUser("admin", "系统管理员", null, roleByCode("DIRECTOR"));
+        saveUser("staff", "干事", depts[0], roleByCode("STAFF"));
     }
 
     /**
      * Task 30 演示数据：1 个示例活动全流程 + 若干党务成员 + 素拓加分。
-     * 只对空库生效（activityRepository.count()>0 跳过），不污染已有 dev 库。
+     * 只对空库生效（activity 表原生 COUNT>0 即跳过），不污染已有 dev 库。
      */
     private void seedDemoData() {
-        if (activityRepository.count() > 0) return;
+        // 幂等须计软删行：activity 表带 @SQLRestriction("deleted = 0")，
+        // count() 漏掉软删行会导致演示数据被删光后重启时复活（原生 COUNT 绕过该过滤）
+        Object cnt = entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM activity").getSingleResult();
+        if (((Number) cnt).longValue() > 0) return;
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
 
@@ -402,6 +434,16 @@ public class DataSeeder implements ApplicationRunner {
         return Arrays.asList(environment.getActiveProfiles()).contains("test");
     }
 
+    /** dev/test 判定：激活 profile 含 "dev" 即算（照抄 isTestProfile 的 Environment 模式）。 */
+    private boolean isDevProfile() {
+        return Arrays.asList(environment.getActiveProfiles()).contains("dev");
+    }
+
+    /** 弱口令种子账号仅允许 dev 或 test 环境注入；生产（默认无 profile）一律跳过。 */
+    private boolean isDevOrTestProfile() {
+        return isDevProfile() || isTestProfile();
+    }
+
     private Long userId(String username) {
         return userRepository.findByUsername(username).map(User::getId).orElse(null);
     }
@@ -429,9 +471,12 @@ public class DataSeeder implements ApplicationRunner {
         return r;
     }
 
-    private Role roleByCode(Role[] roles, String code) {
-        for (Role r : roles) if (r.getCode().equals(code)) return r;
-        throw new IllegalStateException("role not found: " + code);
+    /** 按角色码查库取角色（账号种子与字典拆分后，不再依赖同批数组）。 */
+    private Role roleByCode(String code) {
+        return roleRepository.findAll().stream()
+                .filter(r -> code.equals(r.getCode()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("role not found: " + code));
     }
 
     private void saveUser(String username, String realName, Department dept, Role role) {

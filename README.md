@@ -41,12 +41,25 @@ cmd //c start.bat
 ### 手动启动
 
 1. 创建数据库：`mysql -u root -p < database/init_db.sql`（创建 `pams_db`，默认 utf8mb4）
-2. 后端：`cd pams-backend && mvn spring-boot:run`（端口 8080）
+2. 后端：`cd pams-backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev`（端口 8080）
    - 数据库账号密码默认 `root / root`，可用环境变量覆盖：`DB_PASSWORD=yourpass`
-   - 启动时 Flyway 自动建表；**空库首次启动会自动注入演示种子数据**（含"第四十期入党积极分子培训班"全流程示例，便于验收演示；已有数据的库不会重复注入）
+   - 启动时 Flyway 自动建表；**空库首次启动（dev profile）会自动注入演示种子数据**（含"第四十期入党积极分子培训班"全流程示例，便于验收演示；已有数据的库不会重复注入）
+   - `dev` profile 才注入 8 个演示账号；生产部署**不要**激活 dev profile（docker-compose 默认不激活，空库首启不落任何弱口令账号）
+
 3. 前端：`cd pams-web && npm i && npm run dev`（端口 3000，已配置 `/api` 与 `/uploads` 代理到 8080）
 
-## 初始账号（密码均 `123456`）
+### 生产部署首个管理员账号
+
+生产环境（未激活 dev profile）空库首启后 `sys_user` 为空、无人能登录。部署方需手工插入首个管理员（密码用 BCrypt 哈希值，可用 `mvn -f pams-backend/pom.xml exec:java -Dexec.mainClass=org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder` 或在线 bcrypt 工具生成，cost 10）：
+
+```sql
+INSERT INTO sys_user (username, real_name, role_id, password, status, created_at)
+SELECT 'admin', '系统管理员', id, '$2a$10$xxxBCrypt哈希xxx', 1, NOW() FROM sys_role WHERE code='TEACHER';
+```
+
+## 初始账号（dev profile，密码均 `123456`）
+
+> 仅 `dev`/`test` profile 注入；生产环境不创建这些账号。
 
 | 用户名 | 角色 | 说明 |
 | --- | --- | --- |

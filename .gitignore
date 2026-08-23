@@ -25,3 +25,8 @@ database/materials.csv
 # 部署密钥（docker compose 用，勿提交）
 .env
 .env.local
+
+# 数据抽取临时产物
+extract_stdout.txt
+field_extract_result.txt
+*_extract_result.txt
