@@ -1,6 +1,5 @@
 package com.pams.module.dashboard;
 
-import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.entity.Task;
 import com.pams.module.activity.repository.ActivityRepository;
@@ -11,7 +10,6 @@ import com.pams.module.archive.repository.AnnouncementRepository;
 import com.pams.module.archive.repository.MaterialRepository;
 import com.pams.module.content.entity.Article;
 import com.pams.module.content.repository.ArticleRepository;
-import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.repository.ScheduleRepository;
 import com.pams.security.LoginUser;
 import org.springframework.stereotype.Service;
@@ -27,6 +25,9 @@ import java.util.Map;
  * 仪表盘聚合：活动统计 / 本周排班 / 最新推文 / 最新材料 / 最新公告 / 我的待办。
  * 返回轻量 Map（recentArticles 等不含大字段如 article.content），值可能为 null/空，
  * 全部用可空的组装方式，保证首页拿到的是安全结构。
+ *
+ * 全部子查询已下沉到数据库端（分组计数 / BETWEEN 计数 / Top-N 派生 / 等值过滤），
+ * 不再 findAll 全表加载到内存。返回 VO 结构保持不变（前端契约不变）。
  */
 @Service
 public class DashboardService {
@@ -62,13 +63,15 @@ public class DashboardService {
         return map;
     }
 
-    /** 按 6 态分组计数（未出现的状态补 0） */
+    /** 按 6 态分组计数（status 为 null 归入 ASSIGNED，未出现的状态补 0） */
     public Map<String, Object> activityStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
         for (ActivityStatus s : ActivityStatus.values()) stats.put(s.name(), 0);
-        for (Activity a : activityRepository.findAll()) {
-            String key = a.getStatus() == null ? ActivityStatus.ASSIGNED.name() : a.getStatus().name();
-            stats.put(key, ((Integer) stats.get(key)) + 1);
+        // 数据库端 GROUP BY status 聚合，替代 findAll 遍历
+        for (Object[] row : activityRepository.countGroupByStatus()) {
+            ActivityStatus s = (ActivityStatus) row[0];
+            String key = s == null ? ActivityStatus.ASSIGNED.name() : s.name();
+            stats.put(key, ((Number) stats.get(key)).intValue() + ((Number) row[1]).intValue());
         }
         return stats;
     }
@@ -78,21 +81,14 @@ public class DashboardService {
         LocalDate today = LocalDate.now();
         LocalDate monday = today.with(DayOfWeek.MONDAY);
         LocalDate sunday = today.with(DayOfWeek.SUNDAY);
-        int count = 0;
-        for (Schedule s : scheduleRepository.findAll()) {
-            LocalDate d = s.getScheduleDate();
-            if (d != null && !d.isBefore(monday) && !d.isAfter(sunday)) count++;
-        }
-        return count;
+        // 数据库端 BETWEEN 计数，替代 findAll 遍历后内存过滤
+        return (int) scheduleRepository.countByScheduleDateBetween(monday, sunday);
     }
 
     /** 最近 5 篇已发布推文（publishTime 倒序，空值垫底） */
     public List<Map<String, Object>> recentArticles() {
-        return articleRepository.findAll().stream()
-                .filter(a -> a.getStatus() == Article.ArticleStatus.PUBLISHED)
-                .sorted(Comparator.comparing(Article::getPublishTime,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(5)
+        // 数据库端过滤+排序+Top5，替代 findAll 后内存过滤/排序/截断
+        return articleRepository.findTop5ByStatusOrderByPublishTimeDesc(Article.ArticleStatus.PUBLISHED).stream()
                 .map(a -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", a.getId());
@@ -107,10 +103,8 @@ public class DashboardService {
 
     /** 最近 5 条材料（createdAt 倒序） */
     public List<Map<String, Object>> recentMaterials() {
-        return materialRepository.findAll().stream()
-                .sorted(Comparator.comparing(Material::getCreatedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(5)
+        // 数据库端排序+Top5，替代 findAll 后内存排序/截断
+        return materialRepository.findTop5ByOrderByCreatedAtDesc().stream()
                 .map(m -> {
                     Map<String, Object> mm = new LinkedHashMap<>();
                     mm.put("id", m.getId());
@@ -124,12 +118,8 @@ public class DashboardService {
 
     /** 最近 5 条公告（publishTime 倒序，空值垫底再按 createdAt） */
     public List<Map<String, Object>> recentAnnouncements() {
-        return announcementRepository.findAll().stream()
-                .sorted(Comparator.comparing(Announcement::getPublishTime,
-                        Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Announcement::getCreatedAt,
-                                Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(5)
+        // 数据库端排序+Top5，替代 findAll 后内存排序/截断
+        return announcementRepository.findTop5ByOrderByPublishTimeDescCreatedAtDesc().stream()
                 .map(a -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", a.getId());
@@ -145,8 +135,8 @@ public class DashboardService {
     public List<Task> myTasks(LoginUser current) {
         String me = current == null ? null : current.getRealName();
         if (me == null || me.isBlank()) return List.of();
-        return taskRepository.findAll().stream()
-                .filter(t -> t.getAssignee() != null && t.getAssignee().trim().equalsIgnoreCase(me.trim()))
+        // 数据库端等值过滤（TRIM+LOWER），替代 findAll 后内存匹配；截止日期排序保留在内存（结果集小）
+        return taskRepository.findByAssigneeMatching(me).stream()
                 .sorted(Comparator.comparing(Task::getEndDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }

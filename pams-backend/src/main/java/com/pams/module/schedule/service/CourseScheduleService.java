@@ -125,18 +125,27 @@ public class CourseScheduleService {
         }
         int total = Math.max(users.size(), 1);
 
+        // 循环外一次性载入所有人员课表，构建 Map<userId, List<CourseSchedule>>，避免三重循环内逐人查库（N+1）
+        List<CourseSchedule> allSchedules = ids.isEmpty()
+                ? List.of()
+                : (semester == null || semester.isBlank()
+                    ? scheduleRepo.findByUserIdIn(ids)
+                    : scheduleRepo.findByUserIdInAndSemester(ids, semester));
+        Map<Long, List<CourseSchedule>> scheduleByUser = new HashMap<>();
+        for (CourseSchedule cs : allSchedules) {
+            scheduleByUser.computeIfAbsent(cs.getUserId(), k -> new ArrayList<>()).add(cs);
+        }
+
         Map<String, Object> heatmap = new LinkedHashMap<>();
         for (int day = 1; day <= 7; day++) {
             int curDay = day; // 显式赋值，保证 lambda 可捕获
             Map<Integer, Integer> dayMap = new LinkedHashMap<>();
             for (ScheduleConfig c : configs) {
                 int curPeriod = c.getPeriod(); // 同理，enhanced for 变量在 lambda 中需显式捕获
-                // 空闲人数 = 总人数 - 该天该节有课人数
+                // 空闲人数 = 总人数 - 该天该节有课人数（纯内存计算）
                 int free = 0;
                 for (Long uid : ids) {
-                    List<CourseSchedule> list = semester == null || semester.isBlank()
-                            ? scheduleRepo.findByUserId(uid)
-                            : scheduleRepo.findByUserIdAndSemester(uid, semester);
+                    List<CourseSchedule> list = scheduleByUser.getOrDefault(uid, Collections.emptyList());
                     boolean isBusy = list.stream().anyMatch(cs ->
                             cs.getDayOfWeek() == curDay && cs.getPeriod().equals(curPeriod));
                     if (!isBusy) free++;

@@ -1,6 +1,5 @@
 package com.pams.module.dashboard;
 
-import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.entity.Task;
 import com.pams.module.activity.repository.ActivityRepository;
@@ -11,12 +10,12 @@ import com.pams.module.archive.repository.AnnouncementRepository;
 import com.pams.module.archive.repository.MaterialRepository;
 import com.pams.module.content.entity.Article;
 import com.pams.module.content.repository.ArticleRepository;
-import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.repository.ScheduleRepository;
 import com.pams.security.LoginUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,10 +49,11 @@ class DashboardServiceTest {
 
     @Test
     void activityStats_groupsByStatus_withZeroFill() {
-        Activity a1 = new Activity(); a1.setStatus(ActivityStatus.EXECUTING);
-        Activity a2 = new Activity(); a2.setStatus(ActivityStatus.EXECUTING);
-        Activity a3 = new Activity(); a3.setStatus(ActivityStatus.ARCHIVED);
-        when(activityRepository.findAll()).thenReturn(List.of(a1, a2, a3));
+        // 数据库端 GROUP BY 返回 [status, count] 行；null status 归入 ASSIGNED
+        when(activityRepository.countGroupByStatus()).thenReturn(List.<Object[]>of(
+                new Object[]{ActivityStatus.EXECUTING, 2L},
+                new Object[]{ActivityStatus.ARCHIVED, 1L}
+        ));
 
         Map<String, Object> stats = service.activityStats();
 
@@ -67,40 +67,49 @@ class DashboardServiceTest {
     }
 
     @Test
+    void activityStats_nullStatusMapsToAssigned() {
+        when(activityRepository.countGroupByStatus()).thenReturn(List.<Object[]>of(
+                new Object[]{null, 3L}
+        ));
+
+        Map<String, Object> stats = service.activityStats();
+
+        assertThat(stats.get("ASSIGNED")).isEqualTo(3);
+    }
+
+    @Test
     void weekScheduleCount_countsCurrentWeekByScheduleDate() {
-        // 以与实现一致的 ISO 周边界构造数据：今天为周日时 today.plusDays(2) 会落入下周，故用周内确定日期
         LocalDate today = LocalDate.now();
-        LocalDate monday = today.with(java.time.DayOfWeek.MONDAY);
-        Schedule inWeek = new Schedule(); inWeek.setScheduleDate(monday);
-        Schedule inWeek2 = new Schedule(); inWeek2.setScheduleDate(today);
-        Schedule otherWeek = new Schedule(); otherWeek.setScheduleDate(monday.minusWeeks(1));
-        Schedule noDate = new Schedule(); noDate.setScheduleDate(null);
-        when(scheduleRepository.findAll()).thenReturn(List.of(inWeek, inWeek2, otherWeek, noDate));
+        LocalDate monday = today.with(DayOfWeek.MONDAY);
+        LocalDate sunday = today.with(DayOfWeek.SUNDAY);
+        // 数据库端 BETWEEN 计数；验证服务用本周 [monday, sunday] 调用
+        when(scheduleRepository.countByScheduleDateBetween(monday, sunday)).thenReturn(2L);
 
         assertThat(service.weekScheduleCount()).isEqualTo(2);
     }
 
     @Test
-    void recentArticles_filtersPublishedAndLimits5() {
-        Article pub1 = article(1L, Article.ArticleStatus.PUBLISHED, LocalDateTime.of(2026, 8, 1, 10, 0));
-        Article draft = article(2L, Article.ArticleStatus.DRAFT, LocalDateTime.of(2026, 8, 2, 10, 0));
-        Article pending = article(3L, Article.ArticleStatus.PENDING, LocalDateTime.of(2026, 8, 2, 11, 0));
+    void recentArticles_mapsRepoResultToVo() {
+        // 数据库端已过滤 PUBLISHED 并按 publishTime 倒序返回 Top5
         Article pub2 = article(4L, Article.ArticleStatus.PUBLISHED, LocalDateTime.of(2026, 8, 2, 12, 0));
-        when(articleRepository.findAll()).thenReturn(List.of(pub1, draft, pending, pub2));
+        Article pub1 = article(1L, Article.ArticleStatus.PUBLISHED, LocalDateTime.of(2026, 8, 1, 10, 0));
+        when(articleRepository.findTop5ByStatusOrderByPublishTimeDesc(Article.ArticleStatus.PUBLISHED))
+                .thenReturn(List.of(pub2, pub1));
 
         List<Map<String, Object>> list = service.recentArticles();
 
         assertThat(list).hasSize(2);
         assertThat((Long) list.get(0).get("id")).isEqualTo(4L);
         assertThat((Long) list.get(1).get("id")).isEqualTo(1L);
+        assertThat(list.get(0).get("title")).isEqualTo("t4");
     }
 
     @Test
-    void recentMaterials_limits5_andNewestFirst() {
-        Material m1 = material(1L, LocalDateTime.of(2026, 8, 1, 9, 0));
+    void recentMaterials_mapsRepoResultToVo() {
         Material m2 = material(2L, LocalDateTime.of(2026, 8, 2, 9, 0));
         Material m3 = material(3L, LocalDateTime.of(2026, 8, 2, 8, 0));
-        when(materialRepository.findAll()).thenReturn(List.of(m1, m2, m3));
+        Material m1 = material(1L, LocalDateTime.of(2026, 8, 1, 9, 0));
+        when(materialRepository.findTop5ByOrderByCreatedAtDesc()).thenReturn(List.of(m2, m3, m1));
 
         List<Map<String, Object>> list = service.recentMaterials();
 
@@ -110,11 +119,24 @@ class DashboardServiceTest {
     }
 
     @Test
-    void myTasks_matchesCurrentUserRealNameIgnoreCase() {
+    void recentAnnouncements_mapsRepoResultToVo() {
+        Announcement a1 = announcement(1L, LocalDateTime.of(2026, 8, 2, 9, 0));
+        Announcement a2 = announcement(2L, LocalDateTime.of(2026, 8, 1, 9, 0));
+        when(announcementRepository.findTop5ByOrderByPublishTimeDescCreatedAtDesc()).thenReturn(List.of(a1, a2));
+
+        List<Map<String, Object>> list = service.recentAnnouncements();
+
+        assertThat(list).hasSize(2);
+        assertThat((Long) list.get(0).get("id")).isEqualTo(1L);
+        assertThat((Long) list.get(1).get("id")).isEqualTo(2L);
+    }
+
+    @Test
+    void myTasks_delegatesToAssigneeMatchQuery() {
         Task mine = task(1L, "张三");
-        Task another = task(2L, "李四");
         Task spaced = task(3L, "  张三  ");
-        when(taskRepository.findAll()).thenReturn(List.of(mine, another, spaced));
+        // 数据库端 TRIM+LOWER 等值过滤；服务再按 endDate 升序排序
+        when(taskRepository.findByAssigneeMatching("张三")).thenReturn(List.of(mine, spaced));
 
         LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部");
         List<Task> tasks = service.myTasks(current);
@@ -124,19 +146,22 @@ class DashboardServiceTest {
 
     @Test
     void myTasks_nullUser_returnsEmpty() {
-        when(taskRepository.findAll()).thenReturn(List.of(task(1L, "张三")));
         assertThat(service.myTasks(null)).isEmpty();
     }
 
     @Test
     void dashboard_assemblesAllSections() {
-        Activity a = new Activity(); a.setStatus(ActivityStatus.EXECUTING);
-        when(activityRepository.findAll()).thenReturn(List.of(a));
-        when(scheduleRepository.findAll()).thenReturn(List.of());
-        when(articleRepository.findAll()).thenReturn(List.of());
-        when(materialRepository.findAll()).thenReturn(List.of());
-        when(announcementRepository.findAll()).thenReturn(List.of());
-        when(taskRepository.findAll()).thenReturn(List.of());
+        when(activityRepository.countGroupByStatus()).thenReturn(List.<Object[]>of(
+                new Object[]{ActivityStatus.EXECUTING, 1L}
+        ));
+        when(scheduleRepository.countByScheduleDateBetween(
+                LocalDate.now().with(DayOfWeek.MONDAY), LocalDate.now().with(DayOfWeek.SUNDAY)))
+                .thenReturn(0L);
+        when(articleRepository.findTop5ByStatusOrderByPublishTimeDesc(Article.ArticleStatus.PUBLISHED))
+                .thenReturn(List.of());
+        when(materialRepository.findTop5ByOrderByCreatedAtDesc()).thenReturn(List.of());
+        when(announcementRepository.findTop5ByOrderByPublishTimeDescCreatedAtDesc()).thenReturn(List.of());
+        when(taskRepository.findByAssigneeMatching("张三")).thenReturn(List.of());
 
         LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部");
         Map<String, Object> map = service.dashboard(current);
@@ -163,6 +188,14 @@ class DashboardServiceTest {
         m.setBizType("OTHER");
         m.setCreatedAt(createdAt);
         return m;
+    }
+
+    private static Announcement announcement(Long id, LocalDateTime publishTime) {
+        Announcement a = new Announcement();
+        a.setId(id);
+        a.setTitle("a" + id);
+        a.setPublishTime(publishTime);
+        return a;
     }
 
     private static Task task(Long id, String assignee) {

@@ -9,6 +9,10 @@ import java.util.Optional;
 public interface CourseScheduleRepository extends JpaRepository<CourseSchedule, Long> {
     List<CourseSchedule> findByUserIdAndSemester(Long userId, String semester);
     List<CourseSchedule> findByUserId(Long userId);
+    /** 批量按人员 ids 载入某学期课表（避免 N+1） */
+    List<CourseSchedule> findByUserIdInAndSemester(List<Long> userIds, String semester);
+    /** 批量按人员 ids 载入全部课表（无学期过滤，避免 N+1） */
+    List<CourseSchedule> findByUserIdIn(List<Long> userIds);
     Optional<CourseSchedule> findByUserIdAndSemesterAndDayOfWeekAndPeriod(Long userId, String semester, Integer dayOfWeek, Integer period);
     void deleteByUserIdAndSemester(Long userId, String semester);
     void deleteByUserId(Long userId);
