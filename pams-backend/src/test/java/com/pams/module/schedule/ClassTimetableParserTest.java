@@ -53,6 +53,22 @@ class ClassTimetableParserTest {
         }
     }
 
+    /** 构造最小网格：表头 + 第 1 节一行仅“星期一”放一门课，用于指定课程单元格的解析测试。 */
+    static byte[] buildTimetableWithCourse(String courseCell) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            var sheet = wb.createSheet("2025-2026-2课表");
+            Row hdr = sheet.createRow(0);
+            hdr.createCell(0).setCellValue("节次");
+            String[] days = {"星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"};
+            for (int d = 0; d < days.length; d++) hdr.createCell(d + 1).setCellValue(days[d]);
+            sheet.createRow(1).createCell(1).setCellValue(courseCell);
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                wb.write(out);
+                return out.toByteArray();
+            }
+        }
+    }
+
     @Test
     void parsesGrid() throws Exception {
         Map<SlotKey, List<Course>> tt = ClassTimetableParser.parse(new ByteArrayInputStream(buildTimetable()));
@@ -64,6 +80,18 @@ class ClassTimetableParserTest {
         assertThat(tt.get(new SlotKey(2, 2)).get(0).weeks()).isEqualTo(w(3,4,5,6,11,12,13,14,15,16,17,18));
         assertThat(tt.get(new SlotKey(5, 2)).get(0).weeks()).isEqualTo(w(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18));
         assertThat(tt.get(new SlotKey(4, 6)).get(0).weeks()).isEqualTo(w(8));
+    }
+
+    @Test
+    void parse_respectsMaxWeek() throws Exception {
+        byte[] xlsx = buildTimetableWithCourse("课程A(1-22)[1,2]◇1101◇老师甲");
+        Map<SlotKey, List<Course>> tt = ClassTimetableParser.parse(new ByteArrayInputStream(xlsx), 25);
+        assertThat(tt.get(new SlotKey(1, 1)).get(0).weeks())
+                .isEqualTo(w(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22));
+
+        Map<SlotKey, List<Course>> def = ClassTimetableParser.parse(new ByteArrayInputStream(xlsx));
+        assertThat(def.get(new SlotKey(1, 1)).get(0).weeks())
+                .isEqualTo(w(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18));
     }
 
     @Test

@@ -99,7 +99,7 @@ public class NoClassScheduleImportService {
                 // 学期检测失败不阻塞
             }
             try (InputStream in = f.getInputStream()) {
-                Map<SlotKey, List<Course>> tt = ClassTimetableParser.parse(in);
+                Map<SlotKey, List<Course>> tt = ClassTimetableParser.parse(in, max);
                 people.add(new PersonTimetable(name, tt));
             } catch (IllegalArgumentException e) {
                 failed.add(failure(filename, e.getMessage()));

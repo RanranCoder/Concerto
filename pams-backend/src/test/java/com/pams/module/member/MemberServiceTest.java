@@ -15,6 +15,9 @@ import com.pams.module.routine.repository.SchedulePersonRepository;
 import com.pams.repository.DepartmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -141,5 +144,35 @@ class MemberServiceTest {
         service.delete(5L);
         assertThat(m.getDeleted()).isEqualTo(5L);
         verify(memberRepo).save(m);
+    }
+
+    @Test
+    void page_batchesSessionAndDeptLookups_notNPlusOne() {
+        MemberSession s1 = new MemberSession(); s1.setId(1L); s1.setName("第九届");
+        MemberSession s2 = new MemberSession(); s2.setId(2L); s2.setName("第十届");
+        when(sessionRepo.findAllById(anySet())).thenReturn(List.of(s1, s2));
+        Department d = new Department(); d.setId(2L); d.setName("文秘部");
+        when(deptRepo.findAllById(anySet())).thenReturn(List.of(d));
+
+        Member m1 = new Member(); m1.setId(1L); m1.setSessionId(1L); m1.setDeptId(2L);
+        m1.setPosition("STAFF"); m1.setName("张三"); m1.setStatus("ACTIVE");
+        Member m2 = new Member(); m2.setId(2L); m2.setSessionId(2L); m2.setDeptId(null);
+        m2.setPosition("STAFF"); m2.setName("李四"); m2.setStatus("ACTIVE");
+        when(memberRepo.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(m1, m2)));
+
+        var r = service.page(null, null, null, null, null, 1, 10);
+
+        assertThat(r.getRecords()).hasSize(2);
+        assertThat(r.getRecords().get(0).sessionName()).isEqualTo("第九届");
+        assertThat(r.getRecords().get(0).deptName()).isEqualTo("文秘部");
+        assertThat(r.getRecords().get(1).sessionName()).isEqualTo("第十届");
+        assertThat(r.getRecords().get(1).deptName()).isNull();
+        assertThat(r.getTotal()).isEqualTo(2);
+        // 批量载入，不应出现逐条 findById 查询
+        verify(sessionRepo, never()).findById(anyLong());
+        verify(deptRepo, never()).findById(anyLong());
+        verify(sessionRepo).findAllById(anySet());
+        verify(deptRepo).findAllById(anySet());
     }
 }

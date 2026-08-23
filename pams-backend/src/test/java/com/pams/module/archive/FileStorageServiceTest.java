@@ -53,6 +53,21 @@ class FileStorageServiceTest {
     }
 
     @Test
+    void sanitize_keepsSpaceHyphenUnderscoreDot() {
+        FileStorageService svc = new FileStorageService(java.nio.file.Path.of("target/uploads"));
+        // 空格/连字符/下划线/点/中文/数字均为安全字符，不应被正则误删
+        assertThat(svc.sanitize("2026 汇报-方案_v1.0 终稿.docx")).isEqualTo("2026 汇报-方案_v1.0 终稿.docx");
+    }
+
+    @Test
+    void sanitize_removesDelControlChar() {
+        FileStorageService svc = new FileStorageService(java.nio.file.Path.of("target/uploads"));
+        // DEL（0x7F）也属于控制字符，应一并移除
+        String dirty = "bad" + (char) 0x7F + "name.docx";
+        assertThat(svc.sanitize(dirty)).isEqualTo("badname.docx");
+    }
+
+    @Test
     void bizType_detectsScheduleAndAttendanceAndInvoice() {
         FileStorageService svc = new FileStorageService(java.nio.file.Path.of("target/uploads"));
         assertThat(svc.bizTypeOf("排班表.xlsx")).isEqualTo("SCHEDULE");

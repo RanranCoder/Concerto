@@ -60,7 +60,7 @@ public class MemberService {
         };
         var p = memberRepo.findAll(spec, PageRequest.of(page - 1, size, Sort.by(Sort.Direction.ASC, "id")));
         PageResult<MemberVO> r = new PageResult<>();
-        r.setRecords(p.getContent().stream().map(this::toVO).toList());
+        r.setRecords(toVOList(p.getContent()));
         r.setTotal(p.getTotalElements()); r.setCurrent(page); r.setSize(size);
         return r;
     }
@@ -169,9 +169,28 @@ public class MemberService {
     }
 
     public MemberVO toVO(Member m) {
+        // 单条组装（详情用）：逐项按需查询一次
         String sessionName = sessionRepo.findById(m.getSessionId()).map(MemberSession::getName).orElse(null);
         String deptName = m.getDeptId() == null ? null
                 : deptRepo.findById(m.getDeptId()).map(Department::getName).orElse(null);
+        return buildVO(m, sessionName, deptName);
+    }
+
+    /** 批量组装：按 sessionId/deptId 集合一次批量载入名称 Map，避免逐条查询（N+1）。 */
+    private List<MemberVO> toVOList(List<Member> members) {
+        if (members.isEmpty()) return List.of();
+        Set<Long> sessionIds = members.stream().map(Member::getSessionId).collect(Collectors.toSet());
+        Set<Long> deptIds = members.stream().map(Member::getDeptId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> sessionNames = sessionRepo.findAllById(sessionIds).stream()
+                .collect(Collectors.toMap(MemberSession::getId, MemberSession::getName));
+        Map<Long, String> deptNames = deptRepo.findAllById(deptIds).stream()
+                .collect(Collectors.toMap(Department::getId, Department::getName));
+        return members.stream().map(m -> buildVO(m,
+                sessionNames.get(m.getSessionId()),
+                m.getDeptId() == null ? null : deptNames.get(m.getDeptId()))).toList();
+    }
+
+    private MemberVO buildVO(Member m, String sessionName, String deptName) {
         return new MemberVO(m.getId(), m.getSessionId(), sessionName, m.getDeptId(), deptName,
                 m.getPosition(), MemberEnums.POSITION_LABELS.getOrDefault(m.getPosition(), m.getPosition()),
                 m.getName(), m.getGender(), m.getStudentNo(), m.getClassName(), m.getPhone(),

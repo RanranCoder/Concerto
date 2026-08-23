@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class AttendanceServiceTest {
@@ -77,9 +77,8 @@ class AttendanceServiceTest {
         Attendance c = new Attendance();
         c.setPersonName("王五"); c.setStatus("PRESENT"); c.setScheduleId(3L);
         when(repo.findAll()).thenReturn(List.of(a, b, c));
-        when(schedRepo.findById(1L)).thenReturn(Optional.of(smoking));
-        when(schedRepo.findById(2L)).thenReturn(Optional.of(duty));
-        when(schedRepo.findById(3L)).thenReturn(Optional.of(noWeek));
+        // C3: 批量加载排班（findAllById），替代逐条 findById 的 N+1
+        when(schedRepo.findAllById(any())).thenReturn(List.of(smoking, duty, noWeek));
 
         var all = svc.summary(null, null);
         assertThat(all).extracting(m -> m.get("personName")).containsExactlyInAnyOrder("张三", "李四", "王五");
@@ -111,12 +110,39 @@ class AttendanceServiceTest {
         Attendance unlinked = new Attendance();
         unlinked.setPersonName("李四"); unlinked.setStatus("PRESENT"); unlinked.setScheduleId(null);
         when(repo.findAll()).thenReturn(List.of(linked, unlinked));
-        when(schedRepo.findById(10L)).thenReturn(Optional.of(s));
+        when(schedRepo.findAllById(any())).thenReturn(List.of(s));
 
         assertThat(svc.summary(2, null)).extracting(m -> m.get("personName")).containsExactly("张三");
         assertThat(svc.summary(null, "SMOKING_CURB")).extracting(m -> m.get("personName")).containsExactly("张三");
 
         assertThat(svc.summary(null, "   ")).hasSize(2);
         assertThat(svc.summary(null, null)).hasSize(2);
+    }
+
+    /** C3: 汇总按 weekNo/type 过滤时批量加载排班（一次 findAllById），而非逐条 findById 的 N+1 */
+    @Test
+    void summary_batchLoadsSchedulesInsteadOfPerRowFindById() {
+        ScheduleRepository schedRepo = mock(ScheduleRepository.class);
+        RoutineService svc = new RoutineService(schedRepo, repo);
+
+        Schedule s = new Schedule();
+        s.setId(7L); s.setScheduleType("SMOKING_CURB"); s.setWeekNo(3);
+        // 3 条考勤同属一个排班，仅需一次批量加载
+        Attendance a1 = new Attendance();
+        a1.setPersonName("张三"); a1.setStatus("PRESENT"); a1.setScheduleId(7L);
+        Attendance a2 = new Attendance();
+        a2.setPersonName("李四"); a2.setStatus("PRESENT"); a2.setScheduleId(7L);
+        Attendance a3 = new Attendance();
+        a3.setPersonName("王五"); a3.setStatus("LEAVE"); a3.setScheduleId(7L);
+        when(repo.findAll()).thenReturn(List.of(a1, a2, a3));
+        when(schedRepo.findAllById(any())).thenReturn(List.of(s));
+
+        var byType = svc.summary(null, "SMOKING_CURB");
+        assertThat(byType).hasSize(3);
+        verify(schedRepo, times(1)).findAllById(any());
+        verify(schedRepo, never()).findById(any());
+        // 未命中过滤的 type 同样只触发一次批量加载
+        assertThat(svc.summary(null, "ARCHIVE")).isEmpty();
+        verify(schedRepo, times(2)).findAllById(any());
     }
 }

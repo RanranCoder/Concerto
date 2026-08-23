@@ -31,23 +31,52 @@ public class PartyMemberService {
         this.stageRepo = stageRepo;
     }
 
+    /** 流转记录状态：CURRENT=当前阶段，HISTORY=已流转过的历史阶段。 */
+    private static final String STATUS_CURRENT = "CURRENT";
+    private static final String STATUS_HISTORY = "HISTORY";
+
     /**
      * 追加一条 party_stage 流转记录，并把 party_member.political_status 更新为对应阶段的中文身份。
+     * 校验阶段合法、只允许按 PartyStageType 顺序逐步推进；新 CURRENT 生效前把旧 CURRENT 标记为历史。
      */
     @Transactional
     public void changeStage(Long memberId, String stage, String issueNo, String startDate, String endDate, String remark) {
         PartyMember m = memberRepo.findById(memberId).orElseThrow(() -> new BizException(3001, "成员不存在"));
+        PartyStageType target;
+        try {
+            target = PartyStageType.valueOf(stage);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new BizException(3008, "阶段不合法");
+        }
+        List<PartyStage> existing = stageRepo.findByMemberIdOrderByStartDateAsc(memberId);
+        if (existing != null) {
+            int maxOrdinal = existing.stream()
+                    .filter(s -> s.getStage() != null)
+                    .mapToInt(s -> s.getStage().ordinal())
+                    .max().orElse(-1);
+            // 已有流转记录时，只允许推进到下一个阶段，禁止乱序跳转/回退
+            if (maxOrdinal >= 0 && target.ordinal() != maxOrdinal + 1) {
+                throw new BizException(3009, "阶段流转只能按顺序推进");
+            }
+            // 把旧 CURRENT 标记为历史，保证同一时刻只有一个 CURRENT
+            for (PartyStage old : existing) {
+                if (STATUS_CURRENT.equals(old.getStatus())) {
+                    old.setStatus(STATUS_HISTORY);
+                    stageRepo.save(old);
+                }
+            }
+        }
         PartyStage s = new PartyStage();
         s.setMemberId(memberId);
-        s.setStage(PartyStageType.valueOf(stage));
+        s.setStage(target);
         s.setIssueNo(issueNo);
-        s.setStatus("CURRENT");
+        s.setStatus(STATUS_CURRENT);
         s.setStartDate(startDate == null ? null : LocalDate.parse(startDate));
         s.setEndDate(endDate == null ? null : LocalDate.parse(endDate));
         s.setRemark(remark);
         s.setCreatedAt(LocalDateTime.now());
         stageRepo.save(s);
-        m.setPoliticalStatus(PartyStageType.valueOf(stage).label());
+        m.setPoliticalStatus(target.label());
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);
     }
@@ -141,6 +170,11 @@ public class PartyMemberService {
     @Transactional
     public void update(Long id, PartyMemberRequest req) {
         PartyMember m = memberRepo.findById(id).orElseThrow(() -> new BizException(3001, "成员不存在"));
+        // 与创建口径一致：学号查重，排除自身
+        if (req.getStudentNo() != null && !req.getStudentNo().isBlank()
+                && memberRepo.existsByStudentNoAndIdNot(req.getStudentNo().trim(), id)) {
+            throw new BizException(3002, "学号已存在");
+        }
         apply(m, req);
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);

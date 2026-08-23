@@ -8,5 +8,6 @@ import java.util.List;
 
 public interface GroupChatDepartmentRepository extends JpaRepository<GroupChatDepartment, GroupChatDepartmentId> {
     List<GroupChatDepartment> findByGroupChatId(Long groupChatId);
+    List<GroupChatDepartment> findByGroupChatIdIn(List<Long> groupChatIds);
     void deleteByGroupChatId(Long groupChatId);
 }

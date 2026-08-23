@@ -1,6 +1,8 @@
 package com.pams.module.chat.service;
 
 import com.pams.common.BizException;
+import com.pams.entity.User;
+import com.pams.module.activity.entity.Activity;
 import com.pams.module.chat.dto.GroupChatRequest;
 import com.pams.module.chat.entity.GroupChat;
 import com.pams.module.chat.entity.GroupChatCategory;
@@ -14,9 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 群聊管理（PRD F06）
@@ -76,6 +82,8 @@ public class GroupChatService {
 
     @Transactional
     public void deleteCategory(Long id) {
+        // 先解除群聊对该分类的引用（批量置空 category_id），再删除分类，避免孤儿引用
+        chatRepo.clearCategoryId(id);
         categoryRepo.deleteById(id);
     }
 
@@ -95,40 +103,65 @@ public class GroupChatService {
 
     public List<Map<String, Object>> list(String keyword, Long categoryId, String status, String department) {
         List<GroupChat> all = chatRepo.findAllByOrderByCreatedAtDesc();
-        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        if (all.isEmpty()) return List.of();
+        // 部门关系按群聊一次性批量载入，避免逐条查询（N+1）
+        Map<Long, List<String>> departmentsByChat = departmentRepo.findByGroupChatIdIn(
+                        all.stream().map(GroupChat::getId).toList()).stream()
+                .collect(Collectors.groupingBy(GroupChatDepartment::getGroupChatId,
+                        Collectors.mapping(GroupChatDepartment::getDepartment, Collectors.toList())));
+        List<GroupChat> filtered = new ArrayList<>();
         for (GroupChat c : all) {
-            List<String> departments = departmentRepo.findByGroupChatId(c.getId())
-                    .stream().map(GroupChatDepartment::getDepartment).toList();
+            List<String> departments = departmentsByChat.getOrDefault(c.getId(), List.of());
             // 筛选
             if (keyword != null && !keyword.isBlank() && !c.getName().contains(keyword.trim())) continue;
             if (categoryId != null && !categoryId.equals(c.getCategoryId())) continue;
             if (status != null && !status.isBlank() && !status.equals(c.getStatus())) continue;
             if (department != null && !department.isBlank() && !departments.contains(department)) continue;
-            result.add(toVo(c, departments));
+            filtered.add(c);
         }
-        return result;
+        // 筛选后的群聊：分类/活动/群主名称各批量取一次建 Map，再组装 VO
+        Map<Long, GroupChatCategory> categoryMap = toMapById(categoryRepo.findAllById(
+                filtered.stream().map(GroupChat::getCategoryId).filter(Objects::nonNull).distinct().toList()),
+                GroupChatCategory::getId);
+        Map<Long, Activity> activityMap = toMapById(activityRepo.findAllById(
+                filtered.stream().map(GroupChat::getActivityId).filter(Objects::nonNull).distinct().toList()),
+                Activity::getId);
+        Map<Long, User> ownerMap = toMapById(userRepo.findAllById(
+                filtered.stream().map(GroupChat::getOwnerId).filter(Objects::nonNull).distinct().toList()),
+                User::getId);
+        return filtered.stream().map(c -> toVo(c, departmentsByChat.getOrDefault(c.getId(), List.of()),
+                categoryMap, activityMap, ownerMap)).toList();
     }
 
     public Map<String, Object> get(Long id) {
         GroupChat c = chatRepo.findById(id).orElseThrow(() -> new BizException(2603, "群聊不存在"));
         List<String> departments = departmentRepo.findByGroupChatId(c.getId())
                 .stream().map(GroupChatDepartment::getDepartment).toList();
-        return toVo(c, departments);
+        Map<Long, GroupChatCategory> categoryMap = c.getCategoryId() == null ? Map.of()
+                : toMapById(categoryRepo.findAllById(List.of(c.getCategoryId())), GroupChatCategory::getId);
+        Map<Long, Activity> activityMap = c.getActivityId() == null ? Map.of()
+                : toMapById(activityRepo.findAllById(List.of(c.getActivityId())), Activity::getId);
+        Map<Long, User> ownerMap = c.getOwnerId() == null ? Map.of()
+                : toMapById(userRepo.findAllById(List.of(c.getOwnerId())), User::getId);
+        return toVo(c, departments, categoryMap, activityMap, ownerMap);
     }
 
-    private Map<String, Object> toVo(GroupChat c, List<String> departments) {
+    private Map<String, Object> toVo(GroupChat c, List<String> departments,
+                                     Map<Long, GroupChatCategory> categoryMap,
+                                     Map<Long, Activity> activityMap,
+                                     Map<Long, User> ownerMap) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
         m.put("name", c.getName());
         m.put("categoryId", c.getCategoryId());
         m.put("categoryName", c.getCategoryId() == null ? null
-                : categoryRepo.findById(c.getCategoryId()).map(GroupChatCategory::getName).orElse(null));
+                : categoryMap.get(c.getCategoryId()) == null ? null : categoryMap.get(c.getCategoryId()).getName());
         m.put("activityId", c.getActivityId());
         m.put("activityName", c.getActivityId() == null ? null
-                : activityRepo.findById(c.getActivityId()).map(a -> a.getName()).orElse(null));
+                : activityMap.get(c.getActivityId()) == null ? null : activityMap.get(c.getActivityId()).getName());
         m.put("ownerId", c.getOwnerId());
         m.put("ownerName", c.getOwnerId() == null ? null
-                : userRepo.findById(c.getOwnerId()).map(u -> u.getRealName()).orElse(null));
+                : ownerMap.get(c.getOwnerId()) == null ? null : ownerMap.get(c.getOwnerId()).getRealName());
         m.put("qrCodeUrl", c.getQrCodeUrl() == null ? "" : c.getQrCodeUrl());
         m.put("remark", c.getRemark() == null ? "" : c.getRemark());
         m.put("status", c.getStatus());
@@ -136,6 +169,10 @@ public class GroupChatService {
         m.put("createdAt", c.getCreatedAt());
         m.put("updatedAt", c.getUpdatedAt());
         return m;
+    }
+
+    private <T> Map<Long, T> toMapById(List<T> entities, Function<T, Long> idFn) {
+        return entities.stream().collect(Collectors.toMap(idFn, Function.identity()));
     }
 
     @Transactional

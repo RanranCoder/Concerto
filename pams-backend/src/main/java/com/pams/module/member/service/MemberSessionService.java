@@ -46,6 +46,10 @@ public class MemberSessionService {
         if (!s.getName().equals(req.name().trim()) && sessionRepo.existsByName(req.name().trim())) {
             throw new BizException(2801, "届别名称已存在");
         }
+        // 与 setCurrent 一致：编辑设为当前届时，先清掉其它届的当前标记，避免出现多个“当前届”
+        if (req.isCurrent() != null && req.isCurrent() == 1) {
+            sessionRepo.clearCurrentFlag();
+        }
         apply(s, req);
         s.setUpdatedAt(LocalDateTime.now());
         sessionRepo.save(s);

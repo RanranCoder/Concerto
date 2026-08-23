@@ -206,4 +206,55 @@ class SigninRosterServiceTest {
         assertThat(summary.getSigned()).isEqualTo(1);
         assertThat(summary.getUnsigned()).isEqualTo(1);
     }
+
+    // ==================== B5 主名单重复上传去重 ====================
+
+    /** B5: 主名单重复上传同一份 xlsx 时，按 (姓名, 学号) 跳过已存在行并计入 skipped。 */
+    @Test
+    void upload_reuploadSameFile_skipsExistingRows() throws Exception {
+        when(activityRepo.existsById(1L)).thenReturn(true);
+        stubFields("姓名", "学号");
+        // 库里已存在同一主名单的一行（张三/2025001）
+        SigninRoster existing = new SigninRoster(); existing.setId(1L); existing.setActivityId(1L);
+        existing.setFieldsJson("{\"姓名\":\"张三\",\"学号\":\"2025001\"}");
+        when(rosterRepo.findByActivityId(1L)).thenReturn(List.of(existing));
+        when(rosterRepo.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        byte[] xlsx = buildXlsx(new String[][]{
+                {"姓名", "学号"},
+                {"张三", "2025001"},
+                {"李四", "2025002"},
+        });
+        Map<String, Integer> res = service.uploadFromXlsx(1L, rosterFile(xlsx));
+
+        assertThat(res.get("added")).isEqualTo(1);
+        assertThat(res.get("skipped")).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(rosterRepo).saveAll(captor.capture());
+        long saved = java.util.stream.StreamSupport.stream(captor.getValue().spliterator(), false).count();
+        assertThat(saved).isEqualTo(1);
+    }
+
+    /** B5: 学号为空时按姓名去重——已有无学号行的重名行被跳过。 */
+    @Test
+    void upload_duplicateByNameWhenStudentNoEmpty_skips() throws Exception {
+        when(activityRepo.existsById(1L)).thenReturn(true);
+        stubFields("姓名", "学号");
+        // 库中已有一行仅姓名（学号为空）
+        SigninRoster existing = new SigninRoster(); existing.setId(1L); existing.setActivityId(1L);
+        existing.setFieldsJson("{\"姓名\":\"张三\"}");
+        when(rosterRepo.findByActivityId(1L)).thenReturn(List.of(existing));
+        when(rosterRepo.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        byte[] xlsx = buildXlsx(new String[][]{
+                {"姓名", "学号"},
+                {"张三", ""},
+                {"李四", "2025002"},
+        });
+        Map<String, Integer> res = service.uploadFromXlsx(1L, rosterFile(xlsx));
+
+        assertThat(res.get("added")).isEqualTo(1);
+        assertThat(res.get("skipped")).isEqualTo(1);
+    }
 }

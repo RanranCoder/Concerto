@@ -1,5 +1,7 @@
 package com.pams.security;
 
+import com.pams.entity.User;
+import com.pams.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +22,11 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private static final Logger log = LoggerFactory.getLogger(WebSocketAuthInterceptor.class);
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-    public WebSocketAuthInterceptor(JwtUtil jwtUtil) {
+    public WebSocketAuthInterceptor(JwtUtil jwtUtil, UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -35,6 +39,12 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 try {
                     Claims claims = jwtUtil.parse(token);
                     String username = claims.getSubject();
+                    // 与 HTTP 链路 JwtAuthenticationFilter 口径一致：账号不存在/软删（deleted=1）/禁用（status=0）不放行
+                    User u = userRepository.findByUsername(username).orElse(null);
+                    if (u == null || u.getStatus() == null || u.getStatus() == 0) {
+                        log.warn("WebSocket 连接拒绝：账号不存在或已禁用/删除 username={}", username);
+                        return null; // 账号不可用，拒绝连接
+                    }
                     UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(username, null, List.of());
                     accessor.setUser(auth);

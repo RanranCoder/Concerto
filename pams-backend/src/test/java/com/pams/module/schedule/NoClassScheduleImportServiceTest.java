@@ -63,6 +63,23 @@ class NoClassScheduleImportServiceTest {
     }
 
     @Test
+    void import_respectsMaxWeekBeyond18(@TempDir Path tempDir) throws Exception {
+        DepartmentRepository deptRepo = mock(DepartmentRepository.class);
+        Department dept = new Department(); dept.setId(1L); dept.setName("文秘部");
+        when(deptRepo.findById(1L)).thenReturn(Optional.of(dept));
+        NoClassScheduleImportService service = new NoClassScheduleImportService(deptRepo, recordRepo);
+        service.setUploadDir(tempDir.toString());
+
+        MockMultipartFile f = new MockMultipartFile("files", "张三-文件-2025物联网3班-班级课表.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ClassTimetableParserTest.buildTimetableWithCourse("课程A(1-22)[1,2]◇1101◇老师甲"));
+
+        // maxWeek=25：课程占 1-22 周，空闲应为 23-25；若解析仍按 18 截断会误报 19-25
+        NoClassScheduleImportVO vo = service.importTimetables(List.of(f), 1L, "2025-2026-2", 25);
+        assertThat(vo.getRows().get(0).getDays().get("1").get(0).getFreeWeeks()).isEqualTo("23-25");
+    }
+
+    @Test
     void allFilesFailed_returnsZeroSuccess() {
         NoClassScheduleImportService service = new NoClassScheduleImportService(mock(DepartmentRepository.class), recordRepo);
         MockMultipartFile f = new MockMultipartFile("files", "2025物联网3班.xlsx",

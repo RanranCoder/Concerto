@@ -62,8 +62,9 @@ public class ScheduleController {
                                          @RequestParam(required = false) Integer weekday,
                                          @RequestParam(required = false) Long activityId) {
         String path = service.exportExcel(type, weekNo, weekday, activityId);
+        Path file = Path.of(path);
         try {
-            byte[] bytes = Files.readAllBytes(Path.of(path));
+            byte[] bytes = Files.readAllBytes(file);
             String fileName = "schedule-" + System.currentTimeMillis() + ".xlsx";
             String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
             return ResponseEntity.ok()
@@ -73,6 +74,13 @@ public class ScheduleController {
                     .body(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            // B6 fix: 导出临时 xlsx 仅在读取字节时使用，返回后立即清理，避免 uploads 目录文件堆积
+            try {
+                Files.deleteIfExists(file);
+            } catch (IOException ignored) {
+                // 清理失败不阻断下载响应，最多遗留单次临时文件
+            }
         }
     }
 }

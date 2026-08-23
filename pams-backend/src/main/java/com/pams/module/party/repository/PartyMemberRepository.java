@@ -12,4 +12,7 @@ public interface PartyMemberRepository extends JpaRepository<PartyMember, Long>,
     Optional<PartyMember> findByStudentNo(String studentNo);
 
     boolean existsByStudentNo(String studentNo);
+
+    /** 编辑查重：同学号但排除自身 id（改学号时不能撞别人的学号）。 */
+    boolean existsByStudentNoAndIdNot(String studentNo, Long id);
 }

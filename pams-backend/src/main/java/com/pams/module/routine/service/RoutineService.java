@@ -27,9 +27,11 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -102,13 +104,21 @@ public class RoutineService {
     /** 按 type/weekNo/weekday/activityId 过滤排班列表，并组装每个排班的人员数组 */
     public List<Schedule> listSchedules(String type, Integer weekNo, Integer weekday, Long activityId) {
         List<Schedule> all = scheduleRepository.findAll();
-        return all.stream()
+        List<Schedule> filtered = all.stream()
                 .filter(s -> type == null || type.isBlank() || type.equals(s.getScheduleType()))
                 .filter(s -> weekNo == null || weekNo.equals(s.getWeekNo()))
                 .filter(s -> weekday == null || weekday.equals(s.getWeekday()))
                 .filter(s -> activityId == null || activityId.equals(s.getActivityId()))
-                .peek(s -> s.setPersons(schedulePersonRepository.findByScheduleId(s.getId())))
                 .collect(Collectors.toList());
+        // C3 fix: 批量加载排班人员替代逐条 findByScheduleId，避免 N+1
+        if (!filtered.isEmpty() && schedulePersonRepository != null) {
+            List<Long> ids = filtered.stream().map(Schedule::getId).collect(Collectors.toList());
+            Map<Long, List<SchedulePerson>> personsBySchedule = schedulePersonRepository
+                    .findByScheduleIdIn(ids).stream()
+                    .collect(Collectors.groupingBy(SchedulePerson::getScheduleId));
+            filtered.forEach(s -> s.setPersons(personsBySchedule.getOrDefault(s.getId(), List.of())));
+        }
+        return filtered;
     }
 
     /** 导出值班表 xlsx，返回文件路径（控制器负责读 bytes 下载） */
@@ -214,9 +224,11 @@ public class RoutineService {
     /** 按 scheduleId/weekNo/personName 过滤考勤列表 */
     public List<Attendance> listAttendances(Long scheduleId, Integer weekNo, String personName) {
         List<Attendance> all = attendanceRepository.findAll();
+        // 仅当按周次过滤时才需要排班数据；批量加载替代逐条 findById 的 N+1
+        Map<Long, Schedule> scheduleById = weekNo != null ? loadScheduleByIds(all) : Map.of();
         return all.stream()
                 .filter(a -> scheduleId == null || scheduleId.equals(a.getScheduleId()))
-                .filter(a -> weekNo == null || matchesWeekNo(a, weekNo))
+                .filter(a -> weekNo == null || matchesWeekNo(a, weekNo, scheduleById))
                 .filter(a -> personName == null || personName.isBlank() || a.getPersonName().contains(personName))
                 .collect(Collectors.toList());
     }
@@ -228,10 +240,14 @@ public class RoutineService {
      * 未关联排班的考勤不匹配任何 weekNo/type。
      */
     public List<Map<String, Object>> summary(Integer weekNo, String type) {
+        List<Attendance> all = attendanceRepository.findAll();
+        // 仅当按 weekNo/type 过滤时才需要排班数据；批量加载替代逐条 findById 的 N+1
+        boolean filterBySchedule = weekNo != null || (type != null && !type.isBlank());
+        Map<Long, Schedule> scheduleById = filterBySchedule ? loadScheduleByIds(all) : Map.of();
         Map<String, Map<String, Object>> acc = new LinkedHashMap<>();
-        for (Attendance a : attendanceRepository.findAll()) {
-            if (weekNo != null && !matchesWeekNo(a, weekNo)) continue;
-            if (type != null && !type.isBlank() && !matchesScheduleType(a, type)) continue;
+        for (Attendance a : all) {
+            if (weekNo != null && !matchesWeekNo(a, weekNo, scheduleById)) continue;
+            if (type != null && !type.isBlank() && !matchesScheduleType(a, type, scheduleById)) continue;
             Map<String, Object> row = acc.computeIfAbsent(a.getPersonName(), k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("personName", k);
@@ -260,19 +276,32 @@ public class RoutineService {
     }
 
     /** 记录所属排班周次是否匹配。未关联排班（scheduleId 为空或排班不存在）时按 0 处理，不匹配任何 weekNo */
-    private boolean matchesWeekNo(Attendance a, Integer weekNo) {
-        return scheduleOf(a).map(s -> weekNo.equals(s.getWeekNo())).orElse(false);
+    private boolean matchesWeekNo(Attendance a, Integer weekNo, Map<Long, Schedule> byId) {
+        return scheduleOf(a, byId).map(s -> weekNo.equals(s.getWeekNo())).orElse(false);
     }
 
     /** 记录所属排班类型（scheduleType）是否匹配。未关联排班时不匹配任何 type */
-    private boolean matchesScheduleType(Attendance a, String type) {
-        return scheduleOf(a).map(s -> type.equals(s.getScheduleType())).orElse(false);
+    private boolean matchesScheduleType(Attendance a, String type, Map<Long, Schedule> byId) {
+        return scheduleOf(a, byId).map(s -> type.equals(s.getScheduleType())).orElse(false);
     }
 
-    /** 考勤所属排班；无 scheduleId 或 repo 未注入（测试构造器）时返回 Optional.empty */
-    private Optional<Schedule> scheduleOf(Attendance a) {
-        if (a.getScheduleId() == null || scheduleRepository == null) return Optional.empty();
-        return scheduleRepository.findById(a.getScheduleId());
+    /** 考勤所属排班；无 scheduleId、repo 未注入（测试构造器）或未命中批量索引时返回 Optional.empty */
+    private Optional<Schedule> scheduleOf(Attendance a, Map<Long, Schedule> byId) {
+        Long sid = a.getScheduleId();
+        if (sid == null || byId.isEmpty()) return Optional.empty();
+        return Optional.ofNullable(byId.get(sid));
+    }
+
+    /** C3: 批量加载一批考勤所属排班并按 id 建索引，替代逐条 findById 的 N+1 */
+    private Map<Long, Schedule> loadScheduleByIds(List<Attendance> attendances) {
+        if (scheduleRepository == null) return Map.of();
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Attendance a : attendances) {
+            if (a.getScheduleId() != null) ids.add(a.getScheduleId());
+        }
+        if (ids.isEmpty()) return Map.of();
+        return scheduleRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Schedule::getId, s -> s));
     }
 
     private static String statusOf(Attendance a) {

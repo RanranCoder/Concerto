@@ -29,8 +29,13 @@ public final class ClassTimetableParser {
     private ClassTimetableParser() {}
 
     public static Map<SlotKey, List<Course>> parse(InputStream in) throws IOException {
+        return parse(in, 18);
+    }
+
+    /** 按学期总周数 maxWeek 截断解析，与无课表生成的 maxWeek 口径一致，避免周数不一致。 */
+    public static Map<SlotKey, List<Course>> parse(InputStream in, int maxWeek) throws IOException {
         try (Workbook wb = WorkbookFactory.create(in)) {
-            return parseSheet(wb.getSheetAt(0));
+            return parseSheet(wb.getSheetAt(0), maxWeek);
         }
     }
 
@@ -41,7 +46,7 @@ public final class ClassTimetableParser {
         }
     }
 
-    private static Map<SlotKey, List<Course>> parseSheet(Sheet sheet) {
+    private static Map<SlotKey, List<Course>> parseSheet(Sheet sheet, int maxWeek) {
         DataFormatter fmt = new DataFormatter();
         int headerRow = -1;
         for (int r = 0; r <= Math.min(5, sheet.getLastRowNum()); r++) {
@@ -70,14 +75,14 @@ public final class ClassTimetableParser {
             for (int d = 1; d <= 7; d++) {
                 Integer col = dayCol.get(d);
                 if (col == null) continue;
-                List<Course> courses = parseCell(fmt.formatCellValue(row.getCell(col)));
+                List<Course> courses = parseCell(fmt.formatCellValue(row.getCell(col)), maxWeek);
                 if (!courses.isEmpty()) result.put(new SlotKey(d, period), courses);
             }
         }
         return result;
     }
 
-    private static List<Course> parseCell(String text) {
+    private static List<Course> parseCell(String text, int maxWeek) {
         List<Course> out = new ArrayList<>();
         if (text == null || text.isBlank()) return out;
         for (String line : text.split("\\r?\\n")) {
@@ -87,7 +92,7 @@ public final class ClassTimetableParser {
             if (!m.find()) continue;
             String name = trimmed.substring(0, m.start()).trim();
             if (name.isEmpty()) name = "未知课程";
-            out.add(new Course(name, WeekRangeParser.parse(m.group(1).trim(), 18)));
+            out.add(new Course(name, WeekRangeParser.parse(m.group(1).trim(), maxWeek)));
         }
         return out;
     }

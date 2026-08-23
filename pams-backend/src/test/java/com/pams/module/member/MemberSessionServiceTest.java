@@ -55,6 +55,34 @@ class MemberSessionServiceTest {
     }
 
     @Test
+    void update_settingCurrent_clearsOtherCurrentFlags() {
+        MemberSession s = new MemberSession();
+        s.setId(1L);
+        s.setName("第九届");
+        when(sessionRepo.findById(1L)).thenReturn(Optional.of(s));
+
+        service.update(1L, new MemberSessionRequest("第九届", 1, 1, null));
+
+        verify(sessionRepo).clearCurrentFlag();
+        verify(sessionRepo).save(any(MemberSession.class));
+        assertThat(s.getIsCurrent()).isEqualTo(1);
+    }
+
+    @Test
+    void update_clearingCurrent_doesNotClearOthers() {
+        MemberSession s = new MemberSession();
+        s.setId(1L);
+        s.setName("第九届");
+        when(sessionRepo.findById(1L)).thenReturn(Optional.of(s));
+
+        service.update(1L, new MemberSessionRequest("第九届", 0, 1, null));
+
+        verify(sessionRepo, never()).clearCurrentFlag();
+        verify(sessionRepo).save(any(MemberSession.class));
+        assertThat(s.getIsCurrent()).isEqualTo(0);
+    }
+
+    @Test
     void list_ordersCurrentFirst() {
         MemberSession old = new MemberSession(); old.setName("第八届"); old.setIsCurrent(0);
         MemberSession cur = new MemberSession(); cur.setName("第九届"); cur.setIsCurrent(1);

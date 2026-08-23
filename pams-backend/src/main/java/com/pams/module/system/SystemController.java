@@ -29,7 +29,9 @@ public class SystemController {
 
     @GetMapping("/info")
     public Result<SystemInfoVO> info() {
-        String absolute = Path.of(uploadDir).toAbsolutePath().normalize().toString();
-        return Result.ok(new SystemInfoVO(version, absolute, "pong"));
+        // 脱敏：仅返回目录名，去掉盘符/用户主目录等绝对路径前缀，避免向登录用户泄露服务器目录结构
+        Path abs = Path.of(uploadDir).toAbsolutePath().normalize();
+        String safe = abs.getFileName() == null ? uploadDir : abs.getFileName().toString();
+        return Result.ok(new SystemInfoVO(version, safe, "pong"));
     }
 }

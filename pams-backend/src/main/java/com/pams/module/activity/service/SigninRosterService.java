@@ -25,7 +25,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,8 +115,15 @@ public class SigninRosterService {
         List<SigninRoster> toSave = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         if (groupId != null) {
+            // 分组上传：按分组已有名单的全字段键去重
             for (SigninRoster existing : rosterRepo.findByGroupId(groupId)) {
                 seen.add(rowKey(parseJson(existing.getFieldsJson())));
+            }
+        } else {
+            // B5 fix: 主名单上传按 (姓名, 学号) 去重（学号为空退化为姓名），
+            // 跳过该活动已存在行，避免重复上传同一份 xlsx 整表重复入库
+            for (SigninRoster existing : rosterRepo.findByActivityId(activityId)) {
+                seen.add(personKey(parseJson(existing.getFieldsJson())));
             }
         }
         int skipped = 0;
@@ -150,7 +156,8 @@ public class SigninRosterService {
                     values.put(fieldName, v);
                 }
                 if (!any) continue; // 全空行跳过
-                String key = rowKey(values);
+                // 主名单按 (姓名, 学号) 去重、分组按全字段键去重，与预置的 seen 保持一致
+                String key = groupId == null ? personKey(values) : rowKey(values);
                 if (!seen.add(key)) { skipped++; continue; } // B8 fix: 计数跳过的重复行
                 SigninRoster rr = new SigninRoster();
                 rr.setActivityId(activityId);
@@ -178,6 +185,13 @@ public class SigninRosterService {
                 .filter(e -> !e.getValue().isEmpty())
                 .map(e -> e.getKey() + "=" + e.getValue())
                 .reduce("", (a, b) -> a + "|" + b);
+    }
+
+    /** B5: 主名单去重键——按 (姓名, 学号) 判定重复，学号为空时退化为仅按姓名去重 */
+    private String personKey(Map<String, String> values) {
+        String name = values.getOrDefault("姓名", "").trim();
+        String no = values.getOrDefault("学号", "").trim();
+        return no.isEmpty() ? name : name + "|" + no;
     }
 
     private String toJson(Map<String, String> m) {
