@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Typography } from 'antd'
 import {
   AuditOutlined,
@@ -90,16 +90,22 @@ export default function ArticleList() {
   const [updating, setUpdating] = useState(false)
   const [statsForm] = Form.useForm<{ readCount: number; likeCount: number }>()
 
+  /** 递增计数器，用于忽略过期异步响应 */
+  const fetchIdRef = useRef(0)
+
   const fetchList = useCallback(async () => {
+    const id = ++fetchIdRef.current
     setLoading(true)
     try {
       const res = await listArticles({ status, type, keyword: keyword || undefined, activityId, page, size })
+      if (id !== fetchIdRef.current) return // 已过期，忽略
       setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
       setTotal(res.total)
     } catch {
+      if (id !== fetchIdRef.current) return
       /* http 拦截已提示 */
     } finally {
-      setLoading(false)
+      if (id === fetchIdRef.current) setLoading(false)
     }
   }, [status, type, keyword, activityId, page, size])
 
@@ -296,9 +302,11 @@ export default function ArticleList() {
       width: 80,
       render: (_: unknown, r: ArticleRecord) =>
         r.wxUrl ? (
-          <a href={r.wxUrl} target="_blank" rel="noreferrer">
-            打开
-          </a>
+          /^https?:\/\//i.test(r.wxUrl) ? (
+            <a href={r.wxUrl} target="_blank" rel="noreferrer">打开</a>
+          ) : (
+            <span title={r.wxUrl} style={{ color: 'var(--color-text-secondary)' }}>链接</span>
+          )
         ) : (
           '-'
         ),

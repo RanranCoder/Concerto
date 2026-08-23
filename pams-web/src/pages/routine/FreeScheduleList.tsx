@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Empty, Select, Space, Spin } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
@@ -35,12 +35,15 @@ export default function FreeScheduleList() {
 
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [deptId, semester])
 
+  // 用 ref 持有最新 load 引用，避免 focus 闭包捕获旧 deptId/semester
+  const loadRef = useRef(load)
+  loadRef.current = load
+
   // 窗口重新聚焦时自动重新拉取：在别的标签页生成后切回本页也能看到最新数据
   useEffect(() => {
-    const onFocus = () => load()
+    const onFocus = () => loadRef.current()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

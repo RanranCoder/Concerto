@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Modal, Space, Spin } from 'antd'
 import { DownloadOutlined, EyeOutlined } from '@ant-design/icons'
 import { downloadFile } from '@/api/file'
+import DOMPurify from 'dompurify'
 
 /**
  * 文件预览组件（PRD F03/F04）
@@ -75,7 +76,7 @@ export default function FilePreviewModal({ open, onClose, fileId, fileName, extr
             ignoreHeight: true,
             breakPages: false,
           })
-          setWordHtml(holder.innerHTML)
+          setWordHtml(DOMPurify.sanitize(holder.innerHTML))
         })
         .catch(() => setError('Word 预览失败，请下载查看'))
         .finally(() => setLoading(false))
@@ -138,7 +139,7 @@ export default function FilePreviewModal({ open, onClose, fileId, fileName, extr
           <img src={blobUrl} alt={fileName} style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }} />
         )}
         {!loading && !error && isPdf && blobUrl && (
-          <iframe src={blobUrl} title={fileName} style={{ width: '100%', height: '70vh', border: 'none' }} />
+          <iframe src={blobUrl} title={fileName} style={{ width: '100%', height: '70vh', border: 'none' }} sandbox="allow-scripts allow-same-origin" />
         )}
         {!loading && !error && isWord && wordHtml && (
           <div className="file-preview-word-wrap" dangerouslySetInnerHTML={{ __html: wordHtml }} />

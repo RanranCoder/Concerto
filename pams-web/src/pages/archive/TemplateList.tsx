@@ -8,6 +8,7 @@ import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import UploadFile from '@/components/glass/UploadFile'
 import FilePreviewModal from '@/components/file/FilePreviewModal'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import {
   createTemplate,
   deleteTemplate,
@@ -28,6 +29,7 @@ interface TemplateFormValues {
 
 export default function TemplateList() {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
   const [all, setAll] = useState<TemplateVO[]>([])
   const [loading, setLoading] = useState(false)
   const [category, setCategory] = useState<string>()
@@ -168,11 +170,13 @@ export default function TemplateList() {
               下载
             </Button>
           )}
+          {hasPerm('template:manage') && (
           <Popconfirm title="确认删除该模板？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除
             </Button>
           </Popconfirm>
+        )}
         </Space>
       ),
     },
@@ -190,9 +194,11 @@ export default function TemplateList() {
         title="模板库"
         description="活动常用模板资产：策划书 / 座位表 / 议程表 / 签到表 / 水牌 / LOGO / 党徽 / 新闻稿"
         extra={
+          {hasPerm('template:manage') && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
             上传模板
           </Button>
+        )}
         }
       />
 

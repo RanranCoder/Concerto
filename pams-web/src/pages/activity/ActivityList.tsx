@@ -12,6 +12,7 @@ import { listActivities, getActivity, createActivity, updateActivity, changeActi
 import type { ActivitySave, ActivityVO } from '@/api/activity'
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP, ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
+import { useHasPerm } from '@/components/glass/RequireRole'
 
 // 活动状态 → 推进后状态（状态机：ASSIGNED→PLANNING→PLAN_REVIEW→EXECUTING→FINISHED→ARCHIVED）
 const NEXT_STATUS: Record<string, string> = {
@@ -53,6 +54,7 @@ export default function ActivityList() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+  const hasPerm = useHasPerm()
 
   const [data, setData] = useState<ActivityRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -190,9 +192,11 @@ export default function ActivityList() {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/activities/${r.id}`)}>
             详情
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-            编辑
-          </Button>
+          {hasPerm('activity:edit') && (
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+              编辑
+            </Button>
+          )}
           {isMinisterOrAbove && NEXT_STATUS[r.status] && (
             <Button type="link" size="small" onClick={() => handleAdvance(r)}>
               推进状态
@@ -216,9 +220,11 @@ export default function ActivityList() {
         title="活动管理"
         description="党建活动全流程管理"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增活动
-          </Button>
+          {hasPerm('activity:create') && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新增活动
+            </Button>
+          )}
         }
       />
 

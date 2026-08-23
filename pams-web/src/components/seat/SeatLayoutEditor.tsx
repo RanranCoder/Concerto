@@ -322,35 +322,45 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   const exportPng = () => {
     const node = gridRef.current
     if (!node) return
-    // 用 html-to-image 动态导入（前端已有依赖？若无则用 canvas 兜底方案省略——直接打开打印视图）
     void node
     const win = window.open('', '_blank')
     if (!win) return
+    // 写入静态 HTML 骨架（不含动态用户数据）
     win.document.write(
-      `<html><head><title>${layoutName}</title><style>
-        body { padding: 24px; font-family: -apple-system, 'Segoe UI', sans-serif; }
-        .seat-grid-wrap { overflow: visible; }
-        table.seat-grid { border-collapse: collapse; margin: 16px auto; }
-        table.seat-grid td { border: 1px solid #ccc; width: 36px; height: 36px; text-align: center; font-size: 10px; }
-        td.aisle { background: #f0f0f0; width: 54px; }
-      </style></head><body><h3>${layoutName}</h3>`,
+      '<!DOCTYPE html><html><head><title>座位表</title><style>' +
+        'body { padding: 24px; font-family: -apple-system, "Segoe UI", sans-serif; }' +
+        '.seat-grid-wrap { overflow: visible; }' +
+        'table.seat-grid { border-collapse: collapse; margin: 16px auto; }' +
+        'table.seat-grid td { border: 1px solid #ccc; width: 36px; height: 36px; text-align: center; font-size: 10px; }' +
+        'td.aisle { background: #f0f0f0; width: 54px; }' +
+        '</style></head><body></body></html>',
     )
-    // 简单表格导出
-    let table = '<table class="seat-grid">'
+    win.document.close()
+    // 以下使用 DOM 操作（textContent/setAttribute）避免 XSS
+    const h3 = win.document.createElement('h3')
+    h3.textContent = layoutName
+    win.document.body.appendChild(h3)
+
+    const table = win.document.createElement('table')
+    table.className = 'seat-grid'
     for (let r = 1; r <= rows; r++) {
-      table += '<tr>'
+      const tr = win.document.createElement('tr')
       for (let c = 1; c <= cols; c++) {
         const cell = cells.get(key(r, c))
         const isAisle = aisleCols.has(c)
-        if (isAisle) table += '<td class="aisle" title="过道"></td>'
-        else if (cell?.type === 'seat') table += `<td style="background:${cell.color || '#fff'}">${cell.label?.[0] || ''}</td>`
-        else table += '<td></td>'
+        const td = win.document.createElement('td')
+        if (isAisle) {
+          td.className = 'aisle'
+          td.title = '过道'
+        } else if (cell?.type === 'seat') {
+          td.style.background = cell.color || '#fff'
+          td.textContent = cell.label?.[0] || ''
+        }
+        tr.appendChild(td)
       }
-      table += '</tr>'
+      table.appendChild(tr)
     }
-    table += '</table>'
-    win.document.write(table + '</body></html>')
-    win.document.close()
+    win.document.body.appendChild(table)
     win.focus()
     win.print()
   }

@@ -18,6 +18,7 @@ import {
   type MemberImportResult, type MemberSave, type MemberSessionVO, type MemberVO,
   POSITION_OPTIONS, STATUS_OPTIONS, STATUS_COLOR, STATUS_LABELS, POLITICAL_OPTIONS,
 } from '@/api/member'
+import { useHasPerm } from '@/components/glass/RequireRole'
 
 type MemberRecord = MemberVO & { key: number }
 
@@ -25,6 +26,7 @@ interface MemberFormValues extends MemberSave {}
 
 export default function MemberList() {
   const { message, modal } = App.useApp()
+  const hasPerm = useHasPerm()
   const [sessions, setSessions] = useState<MemberSessionVO[]>([])
   const [sessionId, setSessionId] = useState<number | undefined>()
   const [data, setData] = useState<MemberRecord[]>([])
@@ -46,6 +48,7 @@ export default function MemberList() {
 
   const [sessionModalOpen, setSessionModalOpen] = useState(false)
   const [editingSession, setEditingSession] = useState<MemberSessionVO | null>(null)
+  const [sessionSaving, setSessionSaving] = useState(false)
   const [sessionForm] = Form.useForm<{ name: string; remark?: string }>()
 
   const [importing, setImporting] = useState(false)
@@ -174,9 +177,12 @@ export default function MemberList() {
 
   const handleSessionSave = async () => {
     const v = await sessionForm.validateFields()
-    if (editingSession) { await updateMemberSession(editingSession.id, { ...v, sortOrder: editingSession.sortOrder }); message.success('届别已更新') }
-    else { await createMemberSession({ ...v, isCurrent: sessions.length === 0 ? 1 : 0 }); message.success('届别已新增') }
-    setSessionModalOpen(false); fetchSessions()
+    setSessionSaving(true)
+    try {
+      if (editingSession) { await updateMemberSession(editingSession.id, { ...v, sortOrder: editingSession.sortOrder }); message.success('届别已更新') }
+      else { await createMemberSession({ ...v, isCurrent: sessions.length === 0 ? 1 : 0 }); message.success('届别已新增') }
+      setSessionModalOpen(false); fetchSessions()
+    } catch { /* 已提示 */ } finally { setSessionSaving(false) }
   }
 
   const columns: TableColumnsType<MemberRecord> = [
@@ -197,10 +203,12 @@ export default function MemberList() {
       render: (_: unknown, r: MemberRecord) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => { window.location.href = `/members/${r.id}` }}>详情</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
-          <Popconfirm title="确认删除该成员？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
+          {hasPerm('member:manage') && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>}
+          {hasPerm('member:manage') && (
+            <Popconfirm title="确认删除该成员？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -213,16 +221,16 @@ export default function MemberList() {
         description="党建办公室干部干事花名册（仅干部可见），支持 Excel 导入 / 手动添加 / 换届归档"
         extra={
           <Space wrap>
-            <Button icon={<PlusOutlined />} onClick={openCreate}>新增成员</Button>
-            <Button icon={<UploadOutlined />} loading={importing} onClick={() => document.getElementById('member-import')?.click()}>
+            {hasPerm('member:manage') && <Button icon={<PlusOutlined />} onClick={openCreate}>新增成员</Button>}
+            {hasPerm('member:manage') && <Button icon={<UploadOutlined />} loading={importing} onClick={() => document.getElementById('member-import')?.click()}>
               导入 Excel
-            </Button>
+            </Button>}
             <Button icon={<DownloadOutlined />} onClick={() => downloadImportTemplate().then((res) => {
               const url = URL.createObjectURL(res.data); const a = document.createElement('a')
               a.href = url; a.download = '成员导入模板.xlsx'; a.click(); URL.revokeObjectURL(url)
             }).catch(() => { /* http 拦截已提示 */ })}>下载模板</Button>
-            <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
-            <Button icon={<ReloadOutlined />} onClick={handleArchive}>换届归档</Button>
+            {hasPerm('member:export') && <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>}
+            {hasPerm('member:manage') && <Button icon={<ReloadOutlined />} onClick={handleArchive}>换届归档</Button>}
           </Space>
         }
       />
@@ -256,7 +264,7 @@ export default function MemberList() {
             value={positionFilter} onChange={(v) => { setPage(1); setPositionFilter(v) }} />
           <Select placeholder="状态" allowClear options={STATUS_OPTIONS} style={{ width: 120 }}
             value={statusFilter} onChange={(v) => { setPage(1); setStatusFilter(v) }} />
-          {selectedRowKeys.length > 0 && (
+          {selectedRowKeys.length > 0 && hasPerm('member:manage') && (
             <Button danger onClick={handleBatchDelete}>批量删除（{selectedRowKeys.length}）</Button>
           )}
         </Space>
@@ -329,7 +337,7 @@ export default function MemberList() {
         title="届别管理" open={sessionModalOpen} onCancel={() => setSessionModalOpen(false)}
         footer={<Space>
           <Button onClick={() => setSessionModalOpen(false)}>关闭</Button>
-          <Button type="primary" onClick={handleSessionSave}>保存</Button>
+          <Button type="primary" loading={sessionSaving} onClick={handleSessionSave}>保存</Button>
         </Space>}>
         <Form form={sessionForm} layout="vertical" preserve={false}>
           <Form.Item name="name" label="届别名称" rules={[{ required: true, message: '请输入届名' }]}>

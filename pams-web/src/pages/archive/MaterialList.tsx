@@ -14,6 +14,7 @@ import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import PageHeader from '@/components/glass/PageHeader'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import UploadFile from '@/components/glass/UploadFile'
 import FilePreviewModal from '@/components/file/FilePreviewModal'
 import {
@@ -38,6 +39,7 @@ interface MaterialFormValues {
 
 export default function MaterialList() {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
   const [keyword, setKeyword] = useState('')
   const [tree, setTree] = useState<MaterialTreeActivityNode[]>([])
   const [flat, setFlat] = useState<MaterialVO[]>([])
@@ -195,9 +197,11 @@ export default function MaterialList() {
                     onClick={() => downloadFile(m.fileId as number, m.name)}
                   />
                 )}
+                {hasPerm('material:delete') && (
                 <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
                   <Button type="link" size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
+              )}
               </Space>
             ),
           })),
@@ -212,9 +216,11 @@ export default function MaterialList() {
         title="材料库"
         description="活动材料归档，按活动 / 类型分组，替代手工汇总包"
         extra={
+          {hasPerm('material:upload') && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
             上传材料
           </Button>
+        )}
         }
       />
 
@@ -264,11 +270,13 @@ export default function MaterialList() {
                       下载
                     </Button>
                   )}
+                  {hasPerm('material:delete') && (
                   <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
                     <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                       删除
                     </Button>
                   </Popconfirm>
+                )}
                 </div>
               ))
             )}

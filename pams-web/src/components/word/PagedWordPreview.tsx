@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from 'antd'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { planYearFromMeta, type PlanMeta } from './planTemplate'
+import { planYearFromMeta, sanitizeEditableHtml, type PlanMeta } from './planTemplate'
 
 interface PagedWordPreviewProps {
   /** HTML 字符串（自由编辑内容） */
@@ -75,6 +75,8 @@ export default function PagedWordPreview({ content, meta }: PagedWordPreviewProp
     contentHtml,
     `<div class="word-sign" style="text-align:right;margin-top:32px"><div>${orgName}</div><div>${year}年</div></div>`,
   ].join('')
+  // XSS 消毒：渲染前过 DOMPurify（匹配 sanitizeEditableHtml 配置）
+  const safeContent = sanitizeEditableHtml(fullContent)
 
   return (
     <div>
@@ -88,14 +90,14 @@ export default function PagedWordPreview({ content, meta }: PagedWordPreviewProp
           padding: '96px 120px',
           boxSizing: 'border-box',
         }}
-        dangerouslySetInnerHTML={{ __html: fullContent }}
+        dangerouslySetInnerHTML={{ __html: safeContent }}
       />
 
       {/* 显示当前页 */}
       <div className="word-page">
         <div style={{ padding: '96px 120px' }}>
           {pages.length > 0 ? (pages[currentPage] || <div>加载中...</div>) : (
-            <div dangerouslySetInnerHTML={{ __html: fullContent }} />
+            <div dangerouslySetInnerHTML={{ __html: safeContent }} />
           )}
         </div>
       </div>
