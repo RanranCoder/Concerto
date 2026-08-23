@@ -489,7 +489,7 @@ public class DataSeeder implements ApplicationRunner {
         u.setStatus(1);
         u.setCreatedAt(LocalDateTime.now());
         u.setUpdatedAt(LocalDateTime.now());
-        u.setDeleted(0);
+        u.setDeleted(0L);
         userRepository.save(u);
     }
 
