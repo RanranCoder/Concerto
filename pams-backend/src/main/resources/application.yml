@@ -31,8 +31,9 @@ spring:
 
 pams:
   jwt:
-    secret: PAMS-2026-party-affairs-management-system-secret-key-please-change-in-prod-0123456789
-    expire-hours: 72
+    # 生产务必用环境变量 PAMS_JWT_SECRET 覆盖（docker-compose 已注入）；此默认值仅供本地 dev
+    secret: ${PAMS_JWT_SECRET:9f3c7a1e5b204d6f8a2c1e9b4d7f3a6c5e8b2d1f7a4c9e6b3d0a1c5f8e2b7d4a}
+    expire-hours: 24
   upload-dir: ./uploads
 
 # 测试库用 H2(MySQL 模式) + Flyway 同迁移脚本

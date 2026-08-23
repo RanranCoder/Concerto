@@ -197,4 +197,33 @@ class PermissionGuardIntegrationTest {
                 .content("{\"status\":\"BOGUS\"}"))
             .andExpect(jsonPath("$.code").value(2009));
     }
+
+    // ===== RBAC 双轨（hasAuthority）回归 =====
+
+    @Test
+    void staff_creditsDelete_forbidden() throws Exception {
+        // STAFF 无 quality:delete，素拓删除接口必须 403（DELETE 无 body 校验，@PreAuthorize 先于方法体）
+        mvc.perform(delete("/api/credits/1")
+                .header("Authorization", bearer("staff")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staff_membersWrite_forbidden() throws Exception {
+        // STAFF 无 member:view，MemberController 类级鉴权必须 403
+        mvc.perform(post("/api/members")
+                .header("Authorization", bearer("staff"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void teacher_permissionsApi_allowed() throws Exception {
+        // TEACHER 有 user:permission，权限管理接口放行（验证 hasAuthority 链路对权限管理页生效）
+        mvc.perform(get("/api/permissions")
+                .header("Authorization", bearer("teacher")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
+    }
 }

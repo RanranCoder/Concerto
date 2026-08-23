@@ -31,6 +31,7 @@ public class SigninController {
         this.rosterService = rosterService;
     }
 
+    @PreAuthorize(LEADER)
     @GetMapping
     public Result<List<Signin>> list(@RequestParam Long activityId,
                                      @RequestParam(required = false) String keyword) {

@@ -108,4 +108,17 @@ class AuthIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));
     }
+
+    @Test
+    void login_success_downloadsPermissions() throws Exception {
+        // RBAC 双轨：登录响应必须下发 user.permissions，前端菜单/路由按权限码显隐
+        mvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"teacher\",\"password\":\"123456\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.user.permissions").isArray())
+            .andExpect(jsonPath("$.data.user.permissions").isNotEmpty())
+            .andExpect(jsonPath("$.data.user.permissions").value(org.hamcrest.Matchers.hasItem("activity:view")))
+            .andExpect(jsonPath("$.data.user.permissions").value(org.hamcrest.Matchers.hasItem("member:view")));
+    }
 }

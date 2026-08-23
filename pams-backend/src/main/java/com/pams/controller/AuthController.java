@@ -8,6 +8,7 @@ import com.pams.entity.User;
 import com.pams.module.permission.service.PermissionService;
 import com.pams.repository.UserRepository;
 import com.pams.security.JwtUtil;
+import com.pams.security.LoginRateLimiter;
 import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,22 +29,28 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final PermissionService permissionService;
+    private final LoginRateLimiter loginRateLimiter;
 
     public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
-                          PermissionService permissionService) {
+                          PermissionService permissionService, LoginRateLimiter loginRateLimiter) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.permissionService = permissionService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
+        // 失败次数限流：同一用户名连续失败 5 次锁 5 分钟
+        loginRateLimiter.checkLocked(req.getUsername());
         User u = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> new BizException(1001, "用户名或密码错误"));
+                .orElseThrow(() -> { loginRateLimiter.recordFailure(req.getUsername()); return new BizException(1001, "用户名或密码错误"); });
         if (!passwordEncoder.matches(req.getPassword(), u.getPassword())) {
+            loginRateLimiter.recordFailure(req.getUsername());
             throw new BizException(1001, "用户名或密码错误");
         }
+        loginRateLimiter.clear(req.getUsername());
         if (u.getStatus() == null || u.getStatus() == 0) {
             throw new BizException(1002, "账号已禁用");
         }
