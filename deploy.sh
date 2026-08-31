@@ -4,6 +4,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# .env 只有 docker compose 会自动读；脚本分支判断也依赖 PAMS_IMAGE_PREFIX，需手动加载
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
 echo "==> [1/3] git pull"
 git pull --ff-only
 
