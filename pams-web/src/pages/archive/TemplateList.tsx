@@ -194,11 +194,11 @@ export default function TemplateList() {
         title="模板库"
         description="活动常用模板资产：策划书 / 座位表 / 议程表 / 签到表 / 水牌 / LOGO / 党徽 / 新闻稿"
         extra={
-          {hasPerm('template:manage') && (
+          hasPerm('template:manage') && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
             上传模板
           </Button>
-        )}
+        )
         }
       />
 

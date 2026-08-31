@@ -220,11 +220,11 @@ export default function ActivityList() {
         title="活动管理"
         description="党建活动全流程管理"
         extra={
-          {hasPerm('activity:create') && (
+          hasPerm('activity:create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新增活动
             </Button>
-          )}
+          )
         }
       />
 

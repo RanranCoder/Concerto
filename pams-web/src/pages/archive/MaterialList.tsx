@@ -216,11 +216,11 @@ export default function MaterialList() {
         title="材料库"
         description="活动材料归档，按活动 / 类型分组，替代手工汇总包"
         extra={
-          {hasPerm('material:upload') && (
+          hasPerm('material:upload') && (
           <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
             上传材料
           </Button>
-        )}
+        )
         }
       />
 
