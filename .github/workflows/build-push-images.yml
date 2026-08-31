@@ -39,6 +39,7 @@ jobs:
           context: ./pams-backend
           file: ./pams-backend/Dockerfile
           push: true
+          provenance: false
           tags: |
             ghcr.io/ranrancoder/pams-backend:latest
             ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/pams-backend:latest
@@ -51,6 +52,7 @@ jobs:
           context: ./pams-web
           file: ./pams-web/Dockerfile
           push: true
+          provenance: false
           tags: |
             ghcr.io/ranrancoder/pams-web:latest
             ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/pams-web:latest
