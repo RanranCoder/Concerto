@@ -17,7 +17,6 @@ import java.util.List;
 @RequestMapping("/api/tasks")
 public class TaskController {
     private final TaskService service;
-    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     public TaskController(TaskService service) { this.service = service; }
 
@@ -26,28 +25,28 @@ public class TaskController {
         return Result.ok(service.listByActivity(activityId));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PostMapping
     public Result<Task> create(@Valid @RequestBody TaskRequest req,
                                @AuthenticationPrincipal LoginUser user) {
         return Result.ok(service.create(req, user.getId()));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody TaskRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}/progress")
     public Result<Void> updateProgress(@PathVariable Long id, @Valid @RequestBody ProgressRequest req) {
         service.updateProgress(id, req.getProgress());

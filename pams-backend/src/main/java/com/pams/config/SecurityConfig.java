@@ -49,10 +49,12 @@ public class SecurityConfig {
             .cors(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/login", "/api/ping").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/ping").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/signins/scan").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/signins/scan-config").permitAll()
-                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                // 静态文件目录不再匿名直出（2026-08 审计 M4）：<img>/<a> 直链由登录时下发的
+                // pams_token Cookie 兜底鉴权（见 JwtAuthenticationFilter），其余一律走 /api/files/{id}/download
+                .requestMatchers(HttpMethod.GET, "/uploads/**").authenticated()
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> {
                 res.setStatus(401);

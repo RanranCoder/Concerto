@@ -32,4 +32,5 @@ export const listNews = (params: { keyword?: string; page?: number; size?: numbe
   get<PageResult<NewsVO>>('/news', params)
 export const createNews = (data: NewsSave) => post<number>('/news', data)
 export const updateNews = (id: number, data: NewsSave) => put<void>(`/news/${id}`, data)
+export const publishNews = (id: number) => post<void>(`/news/${id}/publish`)
 export const deleteNews = (id: number) => del<void>(`/news/${id}`)

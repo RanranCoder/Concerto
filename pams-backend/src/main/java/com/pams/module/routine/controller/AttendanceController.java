@@ -1,7 +1,6 @@
 package com.pams.module.routine.controller;
 
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.routine.dto.AttendanceRequest;
 import com.pams.module.routine.entity.Attendance;
 import com.pams.module.routine.service.RoutineService;
@@ -25,14 +24,14 @@ public class AttendanceController {
         return Result.ok(service.listAttendances(scheduleId, weekNo, personName));
     }
 
-    /** 考勤的登记/删除限干部，登录即可查询与汇总 */
-    @PreAuthorize(ActivityController.LEADER)
+    /** 考勤登记：schedule:check（V7 种子：含干事，值班打卡场景）；删除：schedule:manage */
+    @PreAuthorize("hasAuthority('schedule:check')")
     @PostMapping
     public Result<Attendance> create(@Valid @RequestBody AttendanceRequest req) {
         return Result.ok(service.createAttendance(req));
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.deleteAttendance(id);

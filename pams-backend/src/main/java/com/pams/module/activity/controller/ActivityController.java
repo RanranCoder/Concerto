@@ -19,7 +19,10 @@ public class ActivityController {
     private final ActivityService service;
     public ActivityController(ActivityService service) { this.service = service; }
 
-    /** 部长及以上角色，用于写操作的 @PreAuthorize。干事（STAFF）不可执行。 */
+    /**
+     * 部长及以上角色宏（历史遗留，逐步收敛为权限码——PRD-v5 S2）。
+     * 新代码请使用下方权限码常量，与 V7 权限种子（附录B）一致。
+     */
     public static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     @GetMapping
@@ -37,20 +40,20 @@ public class ActivityController {
         return Result.ok(service.detail(id));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:create')")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody ActivityRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ActivityRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}/status")
     public Result<Void> changeStatus(@PathVariable Long id, @Valid @RequestBody StatusChangeRequest req) {
         // B2 fix: 用 DTO + @NotBlank + try-catch 替代裸 Map，消除 NPE
@@ -64,7 +67,8 @@ public class ActivityController {
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    /** 删除为高破坏性操作：按 V7 设计仅 TEACHER/DIRECTOR（部长级种子不含 activity:delete） */
+    @PreAuthorize("hasAuthority('activity:delete')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

@@ -1,6 +1,7 @@
 package com.pams.module.member.service;
 
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.common.PageResult;
 import com.pams.entity.Department;
 import com.pams.module.member.dto.MemberImportResultVO;
@@ -52,7 +53,7 @@ public class MemberImportService {
         Set<String> seen = new HashSet<>();
         existing.forEach(m -> seen.add(key(sessionId, m.getStudentNo())));
 
-        try (Workbook wb = WorkbookFactory.create(in)) {
+        try (Workbook wb = ExcelGuard.open(in)) {
             Sheet sheet = firstDataSheet(wb);
             Row header = findHeaderRow(sheet);
             Map<String, Integer> col = locateColumns(header);

@@ -17,7 +17,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       setLogin: (data) => set({ token: data.token, user: data.user }),
       refreshUser: (user) => set({ user }),
-      logout: () => set({ token: null, user: null }),
+      logout: () => {
+        set({ token: null, user: null })
+        // 通知后端清理文件直链兜底 Cookie（pams_token）；本地已清空，失败无影响
+        fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+      },
     }),
     {
       name: 'pams_token',

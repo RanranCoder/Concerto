@@ -1,6 +1,7 @@
 package com.pams.module.member.controller;
 
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.common.PageResult;
 import com.pams.common.Result;
 import com.pams.module.member.dto.AccountImportRequest;
@@ -94,6 +95,7 @@ public class MemberController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<MemberImportResultVO> importMembers(@RequestParam("sessionId") Long sessionId,
                                                       @RequestParam("file") MultipartFile file) {
+        ExcelGuard.checkSize(file.getSize());
         try (InputStream in = new ByteArrayInputStream(file.getBytes())) {
             return Result.ok(importService.importFromXlsx(in, sessionId));
         } catch (IOException e) { throw new BizException(4001, "名单文件解析失败"); }

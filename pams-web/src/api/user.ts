@@ -38,6 +38,17 @@ export interface RoleVO {
 export const listUsers = (params: { keyword?: string; deptId?: number; page?: number; size?: number }) =>
   get<PageResult<UserVO>>('/users', params)
 
+/** 选人组件数据源（PRD-v5 F5）：登录即可用，仅 id/姓名/部门/角色最小字段 */
+export interface UserOptionVO {
+  id: number
+  realName: string
+  deptId: number | null
+  deptName: string | null
+  roleName: string | null
+}
+
+export const listUserOptions = () => get<UserOptionVO[]>('/users/options')
+
 export const createUser = (data: UserSave) => post<number>('/users', data)
 export const updateUser = (id: number, data: UserSave) => put<void>(`/users/${id}`, data)
 export const deleteUser = (id: number) => del<void>(`/users/${id}`)

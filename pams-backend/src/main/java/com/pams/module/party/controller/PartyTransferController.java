@@ -12,7 +12,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/party/transfers")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+/** 转入转出：整体限 party:entry（V7 种子：部长级及以上） */
+@PreAuthorize("hasAuthority('party:entry')")
 public class PartyTransferController {
     private final PartyRecordService service;
 

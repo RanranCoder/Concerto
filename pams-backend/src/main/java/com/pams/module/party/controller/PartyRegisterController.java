@@ -12,7 +12,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/party/registers")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+/** 党务登记：整体限 party:entry（V7 种子：部长级及以上） */
+@PreAuthorize("hasAuthority('party:entry')")
 public class PartyRegisterController {
     private final PartyRecordService service;
 

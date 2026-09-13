@@ -1,10 +1,10 @@
 package com.pams.module.schedule.generator;
 
+import com.pams.common.ExcelGuard;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,13 +34,13 @@ public final class ClassTimetableParser {
 
     /** 按学期总周数 maxWeek 截断解析，与无课表生成的 maxWeek 口径一致，避免周数不一致。 */
     public static Map<SlotKey, List<Course>> parse(InputStream in, int maxWeek) throws IOException {
-        try (Workbook wb = WorkbookFactory.create(in)) {
+        try (Workbook wb = ExcelGuard.open(in)) {
             return parseSheet(wb.getSheetAt(0), maxWeek);
         }
     }
 
     public static String detectSemester(InputStream in) throws IOException {
-        try (Workbook wb = WorkbookFactory.create(in)) {
+        try (Workbook wb = ExcelGuard.open(in)) {
             Matcher m = SEMESTER.matcher(wb.getSheetAt(0).getSheetName());
             return m.find() ? m.group(1) : null;
         }

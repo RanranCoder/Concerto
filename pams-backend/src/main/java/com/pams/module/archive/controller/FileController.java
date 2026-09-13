@@ -1,8 +1,8 @@
 package com.pams.module.archive.controller;
 
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import com.pams.module.archive.service.FileStorageService;
@@ -77,7 +77,7 @@ public class FileController {
      * 基于原始文件名判断 ~$ Office 临时文件：sanitize 会剥离 ~$ 前缀，
      * 若先 sanitize 再判断会变成永不触发的死代码，故此处用原始文件名。
      */
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('party:entry')")
     @PostMapping("/import")
     public Result<Map<String, Integer>> importRoster(@RequestParam("file") MultipartFile file,
                                                      @RequestParam(value = "type", defaultValue = "ACTIVE") String type) {
@@ -92,6 +92,7 @@ public class FileController {
         if (file.isEmpty()) {
             throw new BizException(4001, "文件为空");
         }
+        ExcelGuard.checkSize(file.getSize());
         RosterImportResult result;
         try (java.io.InputStream in = file.getInputStream()) {
             result = rosterImportService.importFromXlsx(in, type);

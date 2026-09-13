@@ -27,6 +27,7 @@ import {
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import {
   archiveGroupChat,
   createChatCategory,
@@ -44,7 +45,7 @@ import {
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listUsers, type UserVO } from '@/api/user'
 import { listDepts, type DeptVO } from '@/api/dept'
-import { uploadFile } from '@/api/file'
+import { uploadFile, downloadUrl } from '@/api/file'
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   ACTIVE: { label: '活跃', color: 'green' },
@@ -65,6 +66,7 @@ interface ChatFormValues {
 
 export default function GroupChatList() {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
   const [chats, setChats] = useState<GroupChatVO[]>([])
   const [categories, setCategories] = useState<GroupChatCategoryVO[]>([])
   const [keyword, setKeyword] = useState('')
@@ -155,8 +157,10 @@ export default function GroupChatList() {
   const handleQrUpload = async (file: File) => {
     try {
       const rec = await uploadFile(file, 'OTHER')
-      setQrUrl(`/uploads/${rec.path}`)
-      form.setFieldsValue({ qrCodeUrl: `/uploads/${rec.path}` })
+      // 存下载地址而非 /uploads 直链：静态目录已收紧鉴权，统一走带 Cookie 兜底的下载端点
+      const url = downloadUrl(rec.id)
+      setQrUrl(url)
+      form.setFieldsValue({ qrCodeUrl: url })
       message.success('二维码已上传')
     } catch {
       /* http 拦截已提示 */
@@ -329,19 +333,23 @@ export default function GroupChatList() {
       width: 160,
       render: (_: unknown, r: GroupChatVO) => (
         <Space size="small" wrap>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-            编辑
-          </Button>
-          {r.status !== 'ARCHIVED' && (
+          {hasPerm('chat:manage') && (
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+              编辑
+            </Button>
+          )}
+          {hasPerm('chat:manage') && r.status !== 'ARCHIVED' && (
             <Button type="link" size="small" icon={<InboxOutlined />} onClick={() => handleArchive(r.id)}>
               归档
             </Button>
           )}
-          <Popconfirm title="确认删除该群聊？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+          {hasPerm('chat:manage') && (
+            <Popconfirm title="确认删除该群聊？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -354,12 +362,16 @@ export default function GroupChatList() {
         description="统一管理党务工作微信群：分类、关联活动/部门、负责人与二维码"
         extra={
           <Space>
-            <Button icon={<AppstoreOutlined />} onClick={() => setCategoryOpen(true)}>
-              分类管理
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增群聊
-            </Button>
+            {hasPerm('chat:category') && (
+              <Button icon={<AppstoreOutlined />} onClick={() => setCategoryOpen(true)}>
+                分类管理
+              </Button>
+            )}
+            {hasPerm('chat:manage') && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新增群聊
+              </Button>
+            )}
           </Space>
         }
       />

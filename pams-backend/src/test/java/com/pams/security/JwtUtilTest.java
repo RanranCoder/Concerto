@@ -60,4 +60,16 @@ class JwtUtilTest {
                 .compact();
         assertThatThrownBy(() -> jwtUtil.parse(expired)).isInstanceOf(JwtException.class);
     }
+
+    @Test
+    void constructor_acceptsUuidConcatenatedLocalFallbackSecret() {
+        // application.yml 本地回退密钥形如两个 UUID 拼接（72 字符 = 576 位）。
+        // 防回归：若有人把回退改成单个 random.uuid（36 字符含 4 个连字符），密钥熵不足，
+        // hmacShaKeyFor 将抛 WeakKeyException——本测试固化「拼接形式可用」这一约定。
+        String localFallbackLike = "c9bf9e57-1685-4c89-bafb-ff5af830be83" + "3f8a1b2c-9d4e-4f6a-8b7c-1d2e3f4a5b6c";
+        assertThat(localFallbackLike).hasSize(72);
+        JwtUtil local = new JwtUtil(localFallbackLike, 24);
+        String token = local.generate(1L, "staff", "STAFF");
+        assertThat(local.parse(token).getSubject()).isEqualTo("staff");
+    }
 }

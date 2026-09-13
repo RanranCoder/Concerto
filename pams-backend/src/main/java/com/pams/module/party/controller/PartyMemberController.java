@@ -2,7 +2,6 @@ package com.pams.module.party.controller;
 
 import com.pams.common.PageResult;
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.party.dto.PartyMemberRequest;
 import com.pams.module.party.dto.PartyStageRequest;
 import com.pams.module.party.entity.PartyStage;
@@ -44,21 +43,21 @@ public class PartyMemberController {
         return Result.ok(service.detail(id, staff));
     }
 
-    /** 写操作：部长及以上（干事 STAFF 不可增删改/流转）。 */
-    @PreAuthorize(ActivityController.LEADER)
+    /** 写操作：party:manage（V7 种子：部长级；干事 STAFF 仅脱敏查看）。 */
+    @PreAuthorize("hasAuthority('party:manage')")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody PartyMemberRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('party:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PartyMemberRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('party:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);
@@ -68,7 +67,7 @@ public class PartyMemberController {
     /**
      * 追加流转阶段并更新政治面貌。
      */
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('party:manage')")
     @PutMapping("/{id}/stage")
     public Result<Void> changeStage(@PathVariable Long id, @Valid @RequestBody PartyStageRequest req) {
         service.changeStage(id, req.getStage(), req.getIssueNo(), req.getStartDate(), req.getEndDate(), req.getRemark());

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { App, Button, Form, Input, Popconfirm, Select, Space, Upload } from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
@@ -11,6 +11,7 @@ import {
   createRoster,
   updateRoster,
   deleteRoster,
+  importRosters,
   ROSTER_TYPES,
   ROSTER_TYPE_MAP,
   GENDER_OPTIONS,
@@ -43,6 +44,10 @@ export default function PartyRosterList() {
   const [editing, setEditing] = useState<PartyRosterVO | null>(null)
   const [formInit, setFormInit] = useState<Partial<RosterFormValues>>()
   const [saving, setSaving] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importForm] = Form.useForm<{ rosterType: string }>()
   const [form] = Form.useForm<RosterFormValues>()
 
   const fetchList = useCallback(async () => {
@@ -123,6 +128,32 @@ export default function PartyRosterList() {
     }
   }
 
+  /** F3：xlsx 批量导入（后端按表头识别列、按 类型+姓名+学号 去重） */
+  const openImport = () => {
+    setImportFile(null)
+    importForm.resetFields()
+    setImportOpen(true)
+  }
+
+  const handleImport = async () => {
+    if (!importFile) {
+      message.warning('请先选择 xlsx 文件')
+      return
+    }
+    const values = await importForm.validateFields()
+    setImporting(true)
+    try {
+      const res = await importRosters(importFile, values.rosterType)
+      message.success(`导入完成：新增 ${res.added} 条，跳过重复 ${res.skipped} 条`)
+      setImportOpen(false)
+      fetchList()
+    } catch {
+      /* http 拦截已提示 */
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const columns = [
     { title: '姓名', dataIndex: 'name', key: 'name' },
     { title: '性别', dataIndex: 'gender', key: 'gender', render: (v: string) => v || '-' },
@@ -166,9 +197,14 @@ export default function PartyRosterList() {
         description="推优 / 通过 / 汇总 / 发展对象 / 转移名单"
         extra={
           isMinisterOrAbove && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增名单
-            </Button>
+            <Space>
+              <Button icon={<UploadOutlined />} onClick={openImport}>
+                导入名单
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新增名单
+              </Button>
+            </Space>
           )
         }
       />
@@ -246,6 +282,45 @@ export default function PartyRosterList() {
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={3} maxLength={200} />
           </Form.Item>
+        </Form>
+      </GlassModal>
+
+      {/* F3：xlsx 批量导入名单 */}
+      <GlassModal
+        title="导入名单"
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setImportOpen(false)}>取消</Button>
+            <Button type="primary" loading={importing} onClick={handleImport}>
+              导入
+            </Button>
+          </Space>
+        }
+      >
+        <Form form={importForm} layout="vertical" preserve={false} initialValues={{ rosterType: 'ACTIVE' }}>
+          <Form.Item name="rosterType" label="名单类型" rules={[{ required: true, message: '请选择名单类型' }]}>
+            <Select options={ROSTER_TYPES as unknown as { value: string; label: string }[]} placeholder="请选择" />
+          </Form.Item>
+          <Form.Item label="xlsx 文件" required>
+            <Upload
+              accept=".xlsx,.xls"
+              maxCount={1}
+              beforeUpload={(file) => {
+                setImportFile(file as unknown as File)
+                return false
+              }}
+              onRemove={() => setImportFile(null)}
+              fileList={importFile ? [{ uid: '-1', name: importFile.name, status: 'done' }] : []}
+            >
+              <Button icon={<UploadOutlined />}>选择文件</Button>
+            </Upload>
+          </Form.Item>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            支持 .xlsx / .xls；表头需含「姓名」「学号」列（性别/班级/支部可选，列顺序不限，可跳过标题行）；
+            与已有名单按「类型 + 姓名 + 学号」自动去重，重复行跳过不重复入库。
+          </div>
         </Form>
       </GlassModal>
     </div>

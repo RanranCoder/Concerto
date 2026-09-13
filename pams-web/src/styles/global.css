@@ -264,6 +264,18 @@ body::before {
   margin-top: 16px;
 }
 
+/* ============ 策划书逐页编辑器：纸张内容自适应高度（分页由外层视口滚动） ============ */
+.plan-page-sheet .w-e-text-container,
+.plan-page-sheet .w-e-scroll {
+  height: auto !important;
+  overflow: visible !important;
+}
+.plan-page-sheet [data-slate-editor] {
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: transparent;
+}
+
 .word-pagination-info {
   font-size: 14px;
   color: var(--color-text-secondary);

@@ -35,10 +35,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
-        if (header != null && header.startsWith("Bearer ")) {
+        String token = resolveToken(request);
+        if (token != null) {
             try {
-                Claims claims = jwtUtil.parse(header.substring(7));
+                Claims claims = jwtUtil.parse(token);
                 String username = claims.getSubject();
                 User u = userRepository.findByUsername(username).orElse(null);
                 // 已禁用用户（status=0 或 null）即使持有有效 JWT 也不放行，保持匿名走 401。
@@ -68,4 +68,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         chain.doFilter(request, response);
     }
+
+    /**
+     * 解析请求凭证：优先 Authorization: Bearer 头（常规 API）。
+     * <img>/<a> 直链（文章长图、策划书插图、群二维码等）无法携带请求头，
+     * 此时对「文件类 GET」降级读取登录时下发的 pams_token Cookie（HttpOnly）。
+     * Cookie 兜底只开放给文件读取路径，避免其成为通用认证通道。
+     */
+    private String resolveToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        if (!"GET".equalsIgnoreCase(request.getMethod()) || !isFileGetPath(request.getRequestURI())) {
+            return null;
+        }
+        if (request.getCookies() == null) {
+            return null;
+        }
+        for (jakarta.servlet.http.Cookie c : request.getCookies()) {
+            if ("pams_token".equals(c.getName()) && !c.getValue().isBlank()) {
+                return c.getValue();
+            }
+        }
+        return null;
+    }
+
+    private boolean isFileGetPath(String uri) {
+        if (uri == null) return false;
+        // /uploads/2026-08-02/xxx.png（历史直链）与 /api/files/{id}/download
+        return uri.startsWith("/uploads/")
+                || FILE_DOWNLOAD_PATTERN.matcher(uri).matches();
+    }
+
+    private static final java.util.regex.Pattern FILE_DOWNLOAD_PATTERN =
+            java.util.regex.Pattern.compile("^/api/files/\\d+/download$");
 }

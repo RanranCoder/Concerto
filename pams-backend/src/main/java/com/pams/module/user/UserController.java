@@ -24,7 +24,14 @@ public class UserController {
         this.roleRepository = roleRepository;
     }
 
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+    /** 用户选项（选人组件数据源，登录即可）：仅 id/姓名/部门/角色最小字段（PRD-v5 F5） */
+    @GetMapping("/options")
+    public Result<java.util.List<Map<String, Object>>> options() {
+        return Result.ok(userService.options());
+    }
+
+    /** 用户列表：user:view（V7 种子：仅 TEACHER/DIRECTOR）。数据权限按角色 dataScope 兜底。 */
+    @PreAuthorize("hasAuthority('user:view')")
     @GetMapping
     public Result<com.pams.common.PageResult<Map<String, Object>>> page(
             @RequestParam(required = false) String keyword,
@@ -44,8 +51,8 @@ public class UserController {
         return Result.ok(userService.page(keyword, deptId, currentDeptId, forceOwnDept, page, size));
     }
 
-    /** 当前登录用户角色级别，供 createUser / updateUser 防提权校验使用。 */
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+    /** 创建用户：user:manage（V7 种子：仅 TEACHER/DIRECTOR；级别防提权校验在 Service 层）。 */
+    @PreAuthorize("hasAuthority('user:manage')")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody UserSaveRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -53,7 +60,7 @@ public class UserController {
         return Result.ok(userService.createUser(req, currentLevel));
     }
 
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+    @PreAuthorize("hasAuthority('user:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UserSaveRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -62,7 +69,7 @@ public class UserController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+    @PreAuthorize("hasAuthority('user:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
         Integer currentLevel = current == null ? null : current.getRoleLevel();
@@ -70,7 +77,7 @@ public class UserController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+    @PreAuthorize("hasAuthority('user:manage')")
     @PostMapping("/{id}/reset-password")
     public Result<Void> resetPassword(@PathVariable Long id,
                                       @AuthenticationPrincipal LoginUser current) {

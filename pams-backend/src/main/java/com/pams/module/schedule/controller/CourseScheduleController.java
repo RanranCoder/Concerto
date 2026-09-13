@@ -1,6 +1,7 @@
 package com.pams.module.schedule.controller;
 
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.common.Result;
 import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
@@ -27,14 +28,12 @@ import java.util.Map;
 
 /**
  * 无课表制作（PRD F08）
- * 权限：schedule:free_table（全部用户可录入自己的课程表；部长+可配置时间格）
+ * 权限（PRD-v5 S2 收敛为 V7 权限码）：个人课表读写 schedule:free_table（V7 种子：全部角色），
+ * 时间格配置与批量导入 schedule:manage（V7 种子：部长级）
  */
 @RestController
 @RequestMapping("/api/course-schedules")
 public class CourseScheduleController {
-
-    private static final String LEADER =
-            "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     private final CourseScheduleService service;
     private final NoClassScheduleImportService importService;
@@ -51,7 +50,7 @@ public class CourseScheduleController {
         return Result.ok(service.getConfigs());
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @PutMapping("/configs")
     public Result<Void> saveConfigs(@RequestBody List<Map<String, Object>> configs) {
         service.saveConfigs(configs);
@@ -89,14 +88,19 @@ public class CourseScheduleController {
 
     // ===== 批量导入课表生成无课表 =====
 
-    /** 批量上传班级课表 xlsx，生成无课表（含下载）。仅部长及以上。 */
-    @PreAuthorize(LEADER)
+    /** 批量上传班级课表 xlsx，生成无课表（含下载）。schedule:manage（V7 种子：部长级）。 */
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<NoClassScheduleImportVO> importTimetables(
             @RequestParam("files") MultipartFile[] files,
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String semester,
             @RequestParam(required = false) Integer maxWeek) {
+        if (files != null) {
+            for (MultipartFile f : files) {
+                ExcelGuard.checkSize(f.getSize());
+            }
+        }
         return Result.ok(importService.importTimetables(files == null ? List.of() : List.of(files), deptId, semester, maxWeek));
     }
 

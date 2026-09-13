@@ -12,7 +12,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/party/investigations")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')")
+/** 函调含家庭关系等敏感信息：整体限 party:letter（V7 种子：部长级及以上） */
+@PreAuthorize("hasAuthority('party:letter')")
 public class PartyInvestigationController {
     private final PartyRecordService service;
 

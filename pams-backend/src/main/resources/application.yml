@@ -31,8 +31,11 @@ spring:
 
 pams:
   jwt:
-    # 生产务必用环境变量 PAMS_JWT_SECRET 覆盖（docker-compose 已注入）；此默认值仅供本地 dev
-    secret: ${PAMS_JWT_SECRET:9f3c7a1e5b204d6f8a2c1e9b4d7f3a6c5e8b2d1f7a4c9e6b3d0a1c5f8e2b7d4a}
+    # 签名密钥：生产链路（docker-compose/deploy.sh）强制经 PAMS_JWT_SECRET 注入；
+    # 本地 IDEA/mvn 直跑未设置时，回退为每次启动随机生成的密钥（重启后需重新登录，本地可接受），
+    # 仓库内不存在任何固定默认密钥（2026-08 审计 P1 修复）。
+    # 注意：两个 random.uuid 拼接共 72 字符（576 位），满足 HMAC 最小密钥长度。
+    secret: ${PAMS_JWT_SECRET:${random.uuid}${random.uuid}}
     expire-hours: 24
   upload-dir: ./uploads
 
@@ -49,3 +52,6 @@ spring:
     password: ""
   flyway:
     locations: classpath:db/migration
+pams:
+  jwt:
+    secret: test-only-jwt-secret-0123456789abcdef0123456789abcdef

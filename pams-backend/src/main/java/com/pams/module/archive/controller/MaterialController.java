@@ -2,7 +2,6 @@ package com.pams.module.archive.controller;
 
 import com.pams.common.PageResult;
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.dto.MaterialRequest;
 import com.pams.module.archive.entity.Material;
 import com.pams.module.archive.service.MaterialService;
@@ -37,21 +36,24 @@ public class MaterialController {
         return Result.ok(service.tree(activityId));
     }
 
+    /** 材料上传需 material:upload（V7 种子：干事亦可上传材料） */
+    @PreAuthorize("hasAuthority('material:upload')")
     @PostMapping
     public Result<Material> create(@Valid @RequestBody MaterialRequest req,
                                    @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
-    /** 改动/删除材料限干部；登录即可查询与新增（干事也可上传材料） */
-    @PreAuthorize(ActivityController.LEADER)
+    /** 材料元数据改动：material:upload（与上传同权） */
+    @PreAuthorize("hasAuthority('material:upload')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody MaterialRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    /** 删除材料为高破坏性操作：material:delete（V7 种子：仅 TEACHER/DIRECTOR） */
+    @PreAuthorize("hasAuthority('material:delete')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

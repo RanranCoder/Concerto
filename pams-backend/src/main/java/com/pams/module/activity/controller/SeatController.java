@@ -15,7 +15,6 @@ import java.util.Map;
 @RequestMapping("/api/seats")
 public class SeatController {
     private final SeatService service;
-    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','SECRETARY_LEADER','ORG_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     public SeatController(SeatService service) { this.service = service; }
 
@@ -25,20 +24,20 @@ public class SeatController {
         return Result.ok(service.listByActivity(activityId));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:edit')")
     @PostMapping
     public Result<SeatMap> create(@Valid @RequestBody SeatRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody SeatRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:edit')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

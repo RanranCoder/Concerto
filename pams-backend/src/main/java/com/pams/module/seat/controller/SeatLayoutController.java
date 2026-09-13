@@ -14,14 +14,12 @@ import java.util.Map;
 
 /**
  * 座位表可视化布局（PRD F01）
- * 权限：查看 seat:view（登录即可），编辑 seat:edit（部长+），模板管理 seat:template（部长+）
+ * 权限（PRD-v5 S2 收敛为 V7 权限码）：查看 seat:view（登录即可），
+ * 编辑 seat:edit（V7 种子：部长级含干事），模板管理 seat:template（V7 种子：部长级）
  */
 @RestController
 @RequestMapping("/api/seat-layouts")
 public class SeatLayoutController {
-
-    private static final String LEADER =
-            "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     private final SeatLayoutService service;
 
@@ -42,14 +40,14 @@ public class SeatLayoutController {
         return Result.ok(service.listTemplates());
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:edit')")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody SeatLayoutRequest req,
                                @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody SeatLayoutRequest req) {
         service.update(id, req);
@@ -57,7 +55,7 @@ public class SeatLayoutController {
     }
 
     /** 保存当前布局为模板 */
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:template')")
     @PostMapping("/{id}/save-as-template")
     public Result<Long> saveAsTemplate(@PathVariable Long id,
                                        @RequestParam(required = false) String category,
@@ -66,7 +64,7 @@ public class SeatLayoutController {
     }
 
     /** 从模板新建活动布局 */
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:template')")
     @PostMapping("/from-template")
     public Result<Long> createFromTemplate(@RequestParam Long templateId,
                                            @RequestParam Long activityId,
@@ -77,7 +75,7 @@ public class SeatLayoutController {
     }
 
     /** 删除模板 */
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('seat:template')")
     @DeleteMapping("/templates/{id}")
     public Result<Void> deleteTemplate(@PathVariable Long id) {
         service.deleteTemplate(id);

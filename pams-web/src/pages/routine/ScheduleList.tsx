@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Spin } from 'antd'
+import { App, AutoComplete, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Select, Space, Spin } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -19,6 +19,7 @@ import {
   type ScheduleSave,
   type ScheduleVO,
 } from '@/api/schedule'
+import { listUserOptions, type UserOptionVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 
 interface GridEntry {
@@ -72,6 +73,21 @@ export default function ScheduleList() {
   const [editing, setEditing] = useState<ScheduleVO | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<FormValues>()
+  // F5 选人数据源：排班人员绑定 userId，消除同名混淆（接口登录即可用，最小字段）
+  const [userOptions, setUserOptions] = useState<UserOptionVO[]>([])
+
+  useEffect(() => {
+    listUserOptions()
+      .then((res) => setUserOptions(res ?? []))
+      .catch(() => {
+        /* 加载失败时仍可手输姓名 */
+      })
+  }, [])
+
+  const personOptions = useMemo(
+    () => userOptions.map((u) => ({ value: u.realName, label: `${u.realName}（${u.deptName ?? u.roleName ?? ''}）` })),
+    [userOptions],
+  )
 
   /**
    * GlassModal 用 destroyOnHidden：关闭后 Form 卸载，重开时重新挂载。
@@ -385,10 +401,28 @@ export default function ScheduleList() {
                     <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
                       <Form.Item
                         name={[field.name, 'personName']}
-                        rules={[{ required: true, message: '请输入姓名' }]}
+                        rules={[{ required: true, message: '请输入或选择姓名' }]}
                         style={{ marginBottom: 0 }}
                       >
-                        <Input placeholder="人员姓名" style={{ width: 180 }} />
+                        <AutoComplete
+                          options={personOptions}
+                          placeholder="输入搜索或选择人员"
+                          style={{ width: 220 }}
+                          filterOption={(input, option) =>
+                            ((option?.value as string) ?? '').toLowerCase().includes(input.toLowerCase())
+                          }
+                          onSelect={(value: string) => {
+                            // F5：选中系统用户时绑定 userId；手动输入则清空绑定（宁缺勿错）
+                            const matched = userOptions.find((u) => u.realName === value)
+                            form.setFieldValue(['persons', field.name, 'userId'], matched?.id ?? undefined)
+                          }}
+                          onChange={(value: string) => {
+                            const matched = userOptions.find((u) => u.realName === value)
+                            if (!matched) {
+                              form.setFieldValue(['persons', field.name, 'userId'], undefined)
+                            }
+                          }}
+                        />
                       </Form.Item>
                       <Form.Item name={[field.name, 'isPrimary']} style={{ marginBottom: 0 }}>
                         <Select

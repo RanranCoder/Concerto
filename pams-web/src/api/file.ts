@@ -33,6 +33,12 @@ export const uploadFile = (file: File, bizType?: string, onProgress?: (percent: 
 /** 下载地址（公开 URL，供新窗口打开等场景；需认证时请用 downloadFile） */
 export const downloadUrl = (id: number) => `/api/files/${id}/download`
 
+/** 走 axios + JWT 拉取文件二进制（不触发浏览器保存），供「从模板导入」等需程序化处理的场景 */
+export const fetchFileBlob = async (id: number): Promise<Blob> => {
+  const res = (await http.get(`/files/${id}/download`, { responseType: 'blob' })) as unknown as { data: Blob }
+  return res.data
+}
+
 /**
  * 走 axios + JWT 下载：window.open 新窗口不携带 Authorization 头会 401，
  * 这里用 responseType blob 拉取后触发浏览器保存。文件名优先取 Content-Disposition。

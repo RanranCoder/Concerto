@@ -33,6 +33,8 @@ cmd //c start.bat
 2. 等待 Maven 依赖导入完成（右下角进度条结束；首次需下载依赖，耗时较长）
 3. 运行配置里找到 **`PartyAffairsManagementSystemApplication`** 主类，点击 Run/Debug 一键启动后端（端口 8080）
    - 若没有自动生成，可手动创建：`Run → Edit Configurations → + → Spring Boot → Main class` 选 `com.pams.PartyAffairsManagementSystemApplication`
+   - 无需配置 JWT 密钥：未设置 `PAMS_JWT_SECRET` 时自动使用**每次启动随机生成**的密钥（重启后端后需重新登录）；希望本地会话跨重启保留时，可在 Run Configuration 的 Environment variables 里显式设置该变量
+   - 需要演示账号（teacher/zhuren/...）时，在 Active profiles 填 `dev`（仅空库首启注入，已有账号的库不受影响）
 4. 前端另开终端启动：`cd pams-web && npm run dev`（端口 5173）
 5. 浏览器访问 `http://localhost:5173`（后端需已启动，MySQL 需已运行）
 

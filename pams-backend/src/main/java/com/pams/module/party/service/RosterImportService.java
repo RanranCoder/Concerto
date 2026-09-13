@@ -1,6 +1,7 @@
 package com.pams.module.party.service;
 
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.module.party.entity.PartyRoster;
 import com.pams.module.party.repository.PartyRosterRepository;
 import org.apache.poi.ss.usermodel.Cell;
@@ -9,7 +10,6 @@ import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +47,7 @@ public class RosterImportService {
     @Transactional
     public RosterImportResult importFromXlsx(InputStream in, String rosterType) {
         List<PartyRoster> rows = new ArrayList<>();
-        try (Workbook wb = WorkbookFactory.create(in)) {
+        try (Workbook wb = ExcelGuard.open(in)) {
             Sheet sheet = firstDataSheet(wb);
             Row header = findHeaderRow(sheet);
             Map<String, Integer> col = locateColumns(header);

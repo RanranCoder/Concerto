@@ -37,8 +37,8 @@ public class Article {
     private String imageUrls;
     private LocalDateTime deadline;
     private String wxUrl;
-    private Integer readCount;
-    private Integer likeCount;
+    private Integer readCount = 0;
+    private Integer likeCount = 0;
     private LocalDateTime deadlineRemindedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

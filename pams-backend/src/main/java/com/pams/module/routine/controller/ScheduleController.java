@@ -1,7 +1,6 @@
 package com.pams.module.routine.controller;
 
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.routine.dto.ScheduleRequest;
 import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.service.RoutineService;
@@ -33,21 +32,21 @@ public class ScheduleController {
         return Result.ok(service.listSchedules(type, weekNo, weekday, activityId));
     }
 
-    /** 值班表的增删改与导出限干部（导出含全员值班信息），登录即可查询 */
-    @PreAuthorize(ActivityController.LEADER)
+    /** 值班表的增删改与导出需 schedule:manage（V7 种子：部长级；导出含全员值班信息），登录即可查询 */
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @PostMapping
     public Result<Long> create(@Valid @RequestBody ScheduleRequest req) {
         return Result.ok(service.createSchedule(req));
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ScheduleRequest req) {
         service.updateSchedule(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.deleteSchedule(id);
@@ -55,7 +54,7 @@ public class ScheduleController {
     }
 
     /** 导出值班表 xlsx（POI 生成，Content-Disposition 下载） */
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('schedule:manage')")
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) Integer weekNo,

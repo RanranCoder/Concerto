@@ -19,9 +19,19 @@ import java.util.UUID;
 @Service
 public class FileStorageService {
     /**
-     * 危险/可执行扩展名黑名单：上传到 /uploads/**（公开可访问）的文件禁止这些后缀，
-     * 防止存储型 XSS 与服务器端脚本执行。正常文档（.xlsx/.docx/.pdf/.jpg/.png/.pptx 等）不受影响。
+     * 上传扩展名白名单（PRD-v5 S4，替代单一黑名单）：Office 文档 / 图片 / 文本 / 压缩包。
+     * 仍保留危险扩展名黑名单作第二层防线——白名单收紧新增类型时黑名单兜底不失效。
+     * html/htm/svg 不在白名单（存储型 XSS），exe/脚本类一律拒绝。
      */
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            // Office 文档
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "csv", "txt", "md",
+            // 图片
+            "jpg", "jpeg", "png", "gif", "webp", "bmp",
+            // 压缩包（归档材料）
+            "zip", "rar", "7z");
+
+    /** 危险/可执行扩展名黑名单：上传文件的二次防线，防止白名单遗漏时兜底拒绝 */
     private static final Set<String> BLOCKED_EXTENSIONS = Set.of(
             "exe", "jsp", "jspx", "war", "php", "php3", "sh", "bat", "cmd", "ps1", "html", "htm", "svg");
 
@@ -81,10 +91,15 @@ public class FileStorageService {
 
     public FileRecord store(MultipartFile file, String bizType, Long uploaderId) {
         String original = sanitize(file.getOriginalFilename() == null ? "unnamed" : file.getOriginalFilename());
-        // 危险扩展名拒绝（基于 sanitize 后的文件名取扩展名）
+        // 扩展名判定（基于 sanitize 后的文件名）
         String ext = original.contains(".")
                 ? original.substring(original.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT)
                 : "";
+        // 白名单优先（S4）：不在允许清单的类型直接拒绝
+        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            throw new BizException(4002, "不允许上传该文件类型");
+        }
+        // 黑名单二次防线：白名单调整误放行时兜底
         if (BLOCKED_EXTENSIONS.contains(ext)) {
             throw new BizException(4002, "不允许上传该文件类型");
         }

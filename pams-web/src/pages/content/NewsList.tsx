@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Form, Input, Popconfirm, Space, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
@@ -10,6 +10,7 @@ import {
   listNews,
   createNews,
   updateNews,
+  publishNews,
   deleteNews,
   type NewsSave,
   type NewsVO,
@@ -121,6 +122,16 @@ export default function NewsList() {
     }
   }
 
+  const handlePublish = async (id: number) => {
+    try {
+      await publishNews(id)
+      message.success('已发布')
+      fetchList()
+    } catch {
+      /* http 拦截已提示 */
+    }
+  }
+
   const columns = [
     { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
     {
@@ -160,6 +171,13 @@ export default function NewsList() {
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
               编辑
             </Button>
+          )}
+          {isMinisterOrAbove && r.status === 'DRAFT' && (
+            <Popconfirm title="确认发布该新闻稿？" onConfirm={() => handlePublish(r.id)} okText="发布" cancelText="取消">
+              <Button type="link" size="small" icon={<SendOutlined />}>
+                发布
+              </Button>
+            </Popconfirm>
           )}
           {isMinisterOrAbove && (
             <Popconfirm title="确认删除该新闻稿？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">

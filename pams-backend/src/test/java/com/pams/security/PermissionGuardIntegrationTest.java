@@ -130,8 +130,10 @@ class PermissionGuardIntegrationTest {
 
     @Test
     void leader_cannotCreateHigherRole() throws Exception {
-        String token = login("orgleader");
-        String body = "{\"username\":\"permup\",\"realName\":\"测试\",\"roleId\":1}"; // roleId=1 为 TEACHER(level5)
+        // PRD-v5 S2 后用户管理需 user:manage（仅 TEACHER/DIRECTOR）。
+        // 主任（level 4）尝试创建指导老师（roleId=1，level 5）→ 1007 防提权
+        String token = login("zhuren");
+        String body = "{\"username\":\"permup\",\"realName\":\"测试\",\"roleId\":1}";
         MvcResult res = mvc.perform(post("/api/users")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -145,9 +147,10 @@ class PermissionGuardIntegrationTest {
     }
 
     @Test
-    void leader_users_allowed() throws Exception {
+    void director_users_allowed() throws Exception {
+        // user:view（V7 种子：仅 TEACHER/DIRECTOR）——主任可查用户列表
         mvc.perform(get("/api/users")
-                .header("Authorization", bearer("orgleader")))
+                .header("Authorization", bearer("zhuren")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));
     }
@@ -155,10 +158,10 @@ class PermissionGuardIntegrationTest {
     // ==================== Task 27：deleteUser 防提权 + IllegalArgumentException → 400 ====================
 
     @Test
-    void leader_cannotDeleteHigherRole() throws Exception {
-        // 部长（level 3）不能删除主任（level 4，id=2）
-        mvc.perform(delete("/api/users/2")
-                .header("Authorization", bearer("orgleader")))
+    void director_cannotDeleteHigherRole() throws Exception {
+        // 主任（level 4，id=2）不能删除指导老师（level 5，id=1）
+        mvc.perform(delete("/api/users/1")
+                .header("Authorization", bearer("zhuren")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value(1008))
             .andExpect(jsonPath("$.message").value("不能删除级别不低于自己的用户"));
@@ -167,23 +170,23 @@ class PermissionGuardIntegrationTest {
     // ==================== A1：resetPassword 防提权（重置密码即账号接管） ====================
 
     @Test
-    void leader_cannotResetHigherRolePassword() throws Exception {
-        // 重置密码后新密码归操作者掌握，等同账号接管：部长（level 3）不能重置主任（level 4，id=2）
+    void director_cannotResetHigherRolePassword() throws Exception {
+        // 重置密码后新密码归操作者掌握，等同账号接管：主任（level 4）不能重置指导老师（level 5，id=1）
         // 的密码，口径与 deleteUser 一致（目标级别 ≥ 自己级别即拒绝，错误码同为 1008）。
-        mvc.perform(post("/api/users/2/reset-password")
-                .header("Authorization", bearer("orgleader")))
+        mvc.perform(post("/api/users/1/reset-password")
+                .header("Authorization", bearer("zhuren")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value(1008))
             .andExpect(jsonPath("$.message").value("不能重置级别不低于自己的账号密码"));
     }
 
     @Test
-    void leader_canResetStaffPassword() throws Exception {
-        // 对照用例：部长可以重置干事（STAFF，种子固定第 8 个插入 → id=8）的密码。
-        // 固定 id 与上方 /api/users/2 同一约定：DataSeeder 空库按固定顺序种入，
+    void director_canResetStaffPassword() throws Exception {
+        // 对照用例：主任可以重置干事（STAFF，种子固定第 8 个插入 → id=8）的密码。
+        // 固定 id 与上方 /api/users/1 同一约定：DataSeeder 空库按固定顺序种入，
         // 测试套件只增不删种子账号，id 稳定；重置结果仍是默认密码 123456，天然幂等。
         mvc.perform(post("/api/users/8/reset-password")
-                .header("Authorization", bearer("orgleader")))
+                .header("Authorization", bearer("zhuren")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));
     }
@@ -223,6 +226,83 @@ class PermissionGuardIntegrationTest {
         // TEACHER 有 user:permission，权限管理接口放行（验证 hasAuthority 链路对权限管理页生效）
         mvc.perform(get("/api/permissions")
                 .header("Authorization", bearer("teacher")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
+    }
+
+    // ==================== PRD-v5 S2：双轨权限收敛回归（角色宏 → 权限码） ====================
+
+    @Test
+    void orgleader_activityDelete_forbidden() throws Exception {
+        // activity:delete 仅 TEACHER/DIRECTOR（V7 种子）：部长级删除活动 → 403
+        mvc.perform(delete("/api/activities/1")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void orgleader_materialDelete_forbidden() throws Exception {
+        // material:delete 仅 TEACHER/DIRECTOR：部长级删除材料 → 403
+        mvc.perform(delete("/api/materials/1")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void orgleader_templateCreate_forbidden() throws Exception {
+        // template:manage 仅 TEACHER/DIRECTOR：部长级上传模板 → 403
+        mvc.perform(post("/api/templates")
+                .header("Authorization", bearer("orgleader"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"t\",\"category\":\"PLAN\"}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void orgleader_chatCategory_forbidden() throws Exception {
+        // chat:category 仅 TEACHER/DIRECTOR：部长级新增群聊分类 → 403
+        mvc.perform(post("/api/chat/categories")
+                .header("Authorization", bearer("orgleader"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"新分类\"}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void orgleader_users_forbidden() throws Exception {
+        // user:view 仅 TEACHER/DIRECTOR（S2 收敛后部长不再可访问用户管理）
+        mvc.perform(get("/api/users")
+                .header("Authorization", bearer("orgleader")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staff_signinList_allowed() throws Exception {
+        // checkin:view（V7 种子：干事含签到查看）——干事可查签到记录
+        mvc.perform(get("/api/signins")
+                .param("activityId", "1")
+                .header("Authorization", bearer("staff")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
+    void staff_rosterList_allowed() throws Exception {
+        // 类级 checkin:view：干事可查应签名单
+        mvc.perform(get("/api/signins/roster")
+                .param("activityId", "1")
+                .header("Authorization", bearer("staff")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
+    void orgleader_newsWrite_allowed() throws Exception {
+        // 内容模块保留角色宏口径（部门分工设计）：部长可撰写新闻稿
+        mvc.perform(post("/api/news")
+                .header("Authorization", bearer("orgleader"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"权限回归新闻稿\",\"content\":\"正文\"}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));
     }

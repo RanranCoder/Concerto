@@ -11,7 +11,6 @@ import StatusTag from '@/components/glass/StatusTag'
 import { listActivities, getActivity, createActivity, updateActivity, changeActivityStatus, deleteActivity } from '@/api/activity'
 import type { ActivitySave, ActivityVO } from '@/api/activity'
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP, ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
-import { useAuthStore } from '@/stores/auth'
 import { useHasPerm } from '@/components/glass/RequireRole'
 
 // 活动状态 → 推进后状态（状态机：ASSIGNED→PLANNING→PLAN_REVIEW→EXECUTING→FINISHED→ARCHIVED）
@@ -52,8 +51,6 @@ function toFormValues(detail?: ActivityVO & { description?: string }): FormValue
 export default function ActivityList() {
   const { message } = App.useApp()
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
   const hasPerm = useHasPerm()
 
   const [data, setData] = useState<ActivityRecord[]>([])
@@ -126,14 +123,15 @@ export default function ActivityList() {
       if (editing) {
         await updateActivity(editing.id, payload)
         message.success('保存成功')
+        fetchList()
       } else {
         await createActivity(payload)
         message.success('创建成功')
-        setPage(1)  // useEffect 会触发 fetchList，无需手动调
+        // E2E 发现的回归：page 已是 1 时 setPage(1) 不触发 effect，列表不刷新——当前页为 1 时手动刷新
+        if (page === 1) fetchList()
+        else setPage(1) // 翻页场景由 useEffect 触发刷新
       }
       setModalOpen(false)
-      // B13 fix: 编辑后手动刷新；创建时 setPage(1) 触发 useEffect 刷新，避免双重请求
-      if (editing) fetchList()
     } catch {
       /* 校验失败或 http 拦截已提示 */
     } finally {
@@ -197,12 +195,12 @@ export default function ActivityList() {
               编辑
             </Button>
           )}
-          {isMinisterOrAbove && NEXT_STATUS[r.status] && (
+          {hasPerm('activity:edit') && NEXT_STATUS[r.status] && (
             <Button type="link" size="small" onClick={() => handleAdvance(r)}>
               推进状态
             </Button>
           )}
-          {isMinisterOrAbove && (
+          {hasPerm('activity:delete') && (
             <Popconfirm title="确认删除该活动？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 删除

@@ -1,4 +1,4 @@
-import { get, post, put, del } from './http'
+import { get, post, put, del, http } from './http'
 import type { PageResult } from './types'
 
 // ===================== 常量 =====================
@@ -132,6 +132,14 @@ export interface PartyRosterSave {
   className?: string | null
   branchName?: string | null
   remark?: string | null
+}
+
+/** F3：xlsx 批量导入名单（后端 /api/files/import，表头识别 + 按 类型+姓名+学号 去重） */
+export const importRosters = (file: File, rosterType: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('type', rosterType)
+  return http.post('/files/import', form) as unknown as Promise<{ added: number; skipped: number }>
 }
 
 // ===================== 函调 =====================

@@ -92,6 +92,19 @@ public class NewsService {
         repository.save(n);
     }
 
+    /** 发布新闻稿：DRAFT → PUBLISHED，记录发布日期（PRD-v5 F1 发布闭环） */
+    @Transactional
+    public void publish(Long id) {
+        News n = getEntity(id);
+        if (n.getStatus() == News.NewsStatus.PUBLISHED) {
+            throw new BizException(2007, "该新闻稿已发布");
+        }
+        n.setStatus(News.NewsStatus.PUBLISHED);
+        n.setPublishDate(java.time.LocalDate.now());
+        n.setUpdatedAt(LocalDateTime.now());
+        repository.save(n);
+    }
+
     @Transactional
     public void delete(Long id) {
         News n = getEntity(id);

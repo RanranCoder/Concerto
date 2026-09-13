@@ -22,7 +22,6 @@ import java.util.Map;
 public class SigninController {
     private final SigninService service;
     private final SigninRosterService rosterService;
-    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','SECRETARY_LEADER','ORG_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     public SigninController(SigninService service) { this(service, null); }
     @Autowired
@@ -31,20 +30,23 @@ public class SigninController {
         this.rosterService = rosterService;
     }
 
-    @PreAuthorize(LEADER)
+    /** 签到记录含姓名/学号等个人信息：查看需 checkin:view（V7 种子：全体角色含干事） */
+    @PreAuthorize("hasAuthority('checkin:view')")
     @GetMapping
     public Result<List<Signin>> list(@RequestParam Long activityId,
                                      @RequestParam(required = false) String keyword) {
         return Result.ok(service.listByActivity(activityId, keyword));
     }
 
-    @PreAuthorize(LEADER)
+    /** 手动补签/登记：checkin:manage */
+    @PreAuthorize("hasAuthority('checkin:manage')")
     @PostMapping
     public Result<Signin> create(@Valid @RequestBody SigninRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize(LEADER)
+    /** 生成扫码签到码：checkin:manage（签到组织动作） */
+    @PreAuthorize("hasAuthority('checkin:manage')")
     @PostMapping("/token")
     public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body,
                                                      HttpServletRequest request) {
@@ -123,7 +125,7 @@ public class SigninController {
         return null;
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('checkin:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

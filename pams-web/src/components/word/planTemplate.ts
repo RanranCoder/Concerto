@@ -221,44 +221,6 @@ export function defaultSectionOrder(): PlanSectionOrderItem[] {
   }))
 }
 
-/** 组装整篇策划书预览 HTML（抬头 + 各章节 override||meta 只读值/富文本正文），供 PagedWordPreview 使用 */
-export function buildPlanPreviewHtml(
-  plan: PlanFields,
-  overrides: PlanOverrides | undefined,
-  meta?: PlanMeta,
-  sectionOrder?: PlanSectionOrderItem[],
-): string {
-  const orgName = meta?.orgName || '信息工程学院党建办公室'
-  const title = meta?.name || '活动策划书'
-  const theme = meta?.theme || ''
-  const sections = sectionOrder && sectionOrder.length > 0 ? sectionOrder : defaultSectionOrder()
-
-  const head = [
-    `<div class="word-header-center">${escapeHtml(orgName)}</div>`,
-    `<div class="word-header-title">${escapeHtml(title)}</div>`,
-    theme ? `<div class="word-header-sub">（主题：${escapeHtml(theme)}）</div>` : '',
-  ].join('')
-
-  const body = sections
-    .map((sec) => {
-      const label = escapeHtml(sec.customLabel || sec.label)
-      let content = ''
-      if (sec.field) {
-        content = plan[sec.field] ?? ''
-      } else if (isCustomSection(sec)) {
-        content = sec.contentHtml ?? ''
-      } else {
-        const fixed = sectionOverrideValue(sec.label, overrides, meta).trim()
-        if (fixed) content = `<div>${escapeHtml(fixed)}</div>`
-      }
-      if (!content.trim()) return ''
-      return `<div class="word-sec"><div class="word-sec-label">${label}</div><div class="word-sec-body">${content}</div></div>`
-    })
-    .join('')
-
-  return `${head}${body}`
-}
-
 /** 解析后端 section_order JSON；非数组/损坏则回退默认模板 */
 export function parseSectionOrder(raw: string | null | undefined): PlanSectionOrderItem[] {
   if (raw) {
@@ -311,7 +273,7 @@ export function parseBudgetArray(s: string | null | undefined): Array<Record<str
 }
 
 /** 规范标题：将 "三、活动背景" / "三." / "3." 等形式的章节标题统一为 PLAN_TEMPLATE_SECTIONS 的 label */
-function normalizeSectionTitle(raw: string): string | null {
+export function normalizeSectionTitle(raw: string): string | null {
   const t = (raw || '').replace(/[ \t ]+/g, '').trim()
   if (!t) return null
   const noC = t.replace(/^(第?[一二三四五六七八九十\d]+)([、\.．:：])\s*/, '').trim()

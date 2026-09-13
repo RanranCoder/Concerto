@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/plans")
 public class PlanController {
     private final PlanService service;
-    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     public PlanController(PlanService service) { this.service = service; }
 
@@ -30,13 +29,13 @@ public class PlanController {
         return Result.ok(service.getEntity(id));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PostMapping
     public Result<ActivityPlan> create(@Valid @RequestBody PlanRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PlanRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -44,7 +43,7 @@ public class PlanController {
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}/submit")
     public Result<Void> submit(@PathVariable Long id,
                                @AuthenticationPrincipal LoginUser user) {
@@ -52,7 +51,7 @@ public class PlanController {
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:review')")
     @PutMapping("/{id}/review")
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody PlanReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {

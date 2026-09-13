@@ -11,11 +11,14 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/member-sessions")
+// 写操作（建/改/删/设当前届）需 member:manage；届别列表是成员页渲染依赖，
+// 下沉到方法级放行 member:view（M12：只配 member:view 的自定义角色不再整页瘫痪）
 @PreAuthorize("hasAuthority('member:manage')")
 public class MemberSessionController {
     private final MemberSessionService service;
     public MemberSessionController(MemberSessionService service) { this.service = service; }
 
+    @PreAuthorize("hasAuthority('member:view')")
     @GetMapping
     public Result<List<MemberSessionVO>> list() { return Result.ok(service.list()); }
 

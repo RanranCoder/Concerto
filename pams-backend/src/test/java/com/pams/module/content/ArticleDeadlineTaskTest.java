@@ -4,6 +4,7 @@ import com.pams.module.content.entity.Article;
 import com.pams.module.content.repository.ArticleRepository;
 import com.pams.module.content.task.ArticleDeadlineTask;
 import com.pams.module.notification.event.ArticleDeadlineReminderEvent;
+import com.pams.module.notification.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -16,11 +17,15 @@ import static org.mockito.Mockito.*;
 
 class ArticleDeadlineTaskTest {
 
+    private ArticleDeadlineTask newTask(ArticleRepository repo, ApplicationEventPublisher publisher) {
+        return new ArticleDeadlineTask(repo, publisher, mock(NotificationService.class));
+    }
+
     @Test
     void remindOverdue_publishes_event_and_sets_reminded_at() {
         ArticleRepository repo = mock(ArticleRepository.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ArticleDeadlineTask task = new ArticleDeadlineTask(repo, publisher);
+        ArticleDeadlineTask task = newTask(repo, publisher);
 
         Article a = new Article();
         a.setId(1L);
@@ -42,7 +47,7 @@ class ArticleDeadlineTaskTest {
     void remindOverdue_skips_already_reminded_today() {
         ArticleRepository repo = mock(ArticleRepository.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        ArticleDeadlineTask task = new ArticleDeadlineTask(repo, publisher);
+        ArticleDeadlineTask task = newTask(repo, publisher);
 
         Article a = new Article();
         a.setId(2L);
@@ -58,5 +63,21 @@ class ArticleDeadlineTaskTest {
 
         verify(publisher, never()).publishEvent(any(ArticleDeadlineReminderEvent.class));
         verify(repo, never()).save(a);
+    }
+
+    @Test
+    void remindOverdue_onFailure_notifiesTeacher_notSilent() {
+        // X2：定时任务异常不再静默——必须向指导老师发出 SYSTEM 告警通知
+        ArticleRepository repo = mock(ArticleRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        NotificationService notificationService = mock(NotificationService.class);
+        ArticleDeadlineTask task = new ArticleDeadlineTask(repo, publisher, notificationService);
+        when(repo.findOverdue(any())).thenThrow(new RuntimeException("数据库连接失败"));
+
+        task.remindOverdue();
+
+        verify(notificationService).createAndSave(
+                eq(com.pams.module.notification.entity.NotificationType.SYSTEM),
+                any(), any(), eq("TASK"), any(), any(), any(), eq("TEACHER"), any());
     }
 }

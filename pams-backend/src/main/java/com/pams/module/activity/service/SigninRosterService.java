@@ -3,6 +3,7 @@ package com.pams.module.activity.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
+import com.pams.common.ExcelGuard;
 import com.pams.module.activity.dto.GroupPersonVO;
 import com.pams.module.activity.dto.GroupUploadResultVO;
 import com.pams.module.activity.dto.SignInGroupSummaryVO;
@@ -23,7 +24,6 @@ import com.pams.module.notification.event.SigninRosterUploadedEvent;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -127,7 +127,7 @@ public class SigninRosterService {
             }
         }
         int skipped = 0;
-        try (InputStream in = file.getInputStream(); Workbook wb = WorkbookFactory.create(in)) {
+        try (InputStream in = file.getInputStream(); Workbook wb = ExcelGuard.open(in)) {
             Sheet sheet = wb.getSheetAt(0);
             Row header = findHeaderRow(sheet);
             Map<String, Integer> col = new HashMap<>();

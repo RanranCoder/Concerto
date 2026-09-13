@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Form, Input, Popconfirm, Select, Space, Tabs } from 'antd'
-import { DeleteOutlined, DownloadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -29,6 +30,7 @@ interface TemplateFormValues {
 
 export default function TemplateList() {
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const hasPerm = useHasPerm()
   const [all, setAll] = useState<TemplateVO[]>([])
   const [loading, setLoading] = useState(false)
@@ -114,6 +116,27 @@ export default function TemplateList() {
     }
   }
 
+  /** F2「使用此模板」：策划书模板引导到活动策划书的「从模板库导入」；其余类型下载后给出使用指引 */
+  const handleUse = async (r: TemplateVO) => {
+    if (r.category === 'PLAN') {
+      message.info('请打开目标活动 → 策划书 Tab → 编辑 →「从模板库导入」，选中该模板即可自动填充章节')
+      navigate('/activities')
+      return
+    }
+    if (!r.fileId) {
+      message.warning('该模板未关联文件')
+      return
+    }
+    await downloadFile(r.fileId, r.name)
+    const guide: Record<string, string> = {
+      SEAT: '模板已下载：可在活动详情座位表 Tab 参考搭建，或直接打印使用',
+      AGENDA: '模板已下载：填写后可在活动详情议程 Tab 对照录入',
+      SIGNIN: '模板已下载：名单列结构与「应签名单」上传一致，填好即可直接上传',
+      NEWS: '模板已下载：按模板结构在「内容宣传 → 新闻稿」撰写',
+    }
+    message.success(guide[r.category] ?? '模板已下载')
+  }
+
   const columns = [
     {
       title: '名称',
@@ -157,9 +180,14 @@ export default function TemplateList() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 220,
       render: (_: unknown, r: TemplateVO) => (
         <Space size="small" wrap>
+          {r.fileId && (
+            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleUse(r)}>
+              使用
+            </Button>
+          )}
           {r.fileId && (
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreview(r)}>
               预览

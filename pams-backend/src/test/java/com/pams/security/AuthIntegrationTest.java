@@ -91,7 +91,8 @@ class AuthIntegrationTest {
         // 对照：deleted=0 且 status=1 的正常用户持有效 JWT 应放行 → 200。
         // 与 disabledUser_... 成对证明"禁用才拦截、正常放行"；
         // 若哪天禁用用户检查被回退，本测试会继续通过而 disabledUser_... 会失败。
-        Role role = roleRepository.findByCode("ORG_LEADER").orElseThrow(); // 部长及以上才可访问 /api/users
+        // PRD-v5 S2 后 /api/users 需 user:view（仅 TEACHER/DIRECTOR），故用主任角色验证。
+        Role role = roleRepository.findByCode("DIRECTOR").orElseThrow();
         String name = "enabled_" + System.nanoTime();
         User u = new User();
         u.setUsername(name);
@@ -120,5 +121,64 @@ class AuthIntegrationTest {
             .andExpect(jsonPath("$.data.user.permissions").isNotEmpty())
             .andExpect(jsonPath("$.data.user.permissions").value(org.hamcrest.Matchers.hasItem("activity:view")))
             .andExpect(jsonPath("$.data.user.permissions").value(org.hamcrest.Matchers.hasItem("member:view")));
+    }
+
+    // ===================== /uploads 收紧 + 文件直链 Cookie 兜底（S1） =====================
+
+    @Test
+    void login_success_setsHttpOnlyFileCookie() throws Exception {
+        // 登录同时下发 pams_token HttpOnly Cookie（<img>/<a> 文件直链兜底）
+        mvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"zhuren\",\"password\":\"123456\"}"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.allOf(
+                    org.hamcrest.Matchers.containsString("pams_token="),
+                    org.hamcrest.Matchers.containsString("Path=/"),
+                    org.hamcrest.Matchers.containsString("Max-Age="),
+                    org.hamcrest.Matchers.containsString("HttpOnly"),
+                    org.hamcrest.Matchers.containsString("SameSite=Lax"))));
+    }
+
+    @Test
+    void uploads_anonymous_returns401() throws Exception {
+        // 2026-08 审计 M4：/uploads/** 不再匿名直出
+        mvc.perform(get("/uploads/2026-01-01/not-exist.png"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void uploads_withFileCookie_authenticated_not401() throws Exception {
+        // 持 pams_token Cookie 的文件直链 GET 应通过鉴权（文件不存在 → 404 而非 401）
+        String body = mvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"zhuren\",\"password\":\"123456\"}"))
+            .andReturn().getResponse().getContentAsString();
+        String jwt = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(body).path("data").path("token").asText();
+        mvc.perform(get("/uploads/2026-01-01/not-exist.png").cookie(
+                        new jakarta.servlet.http.Cookie("pams_token", jwt)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void fileCookie_notAcceptedOnNonFilePaths() throws Exception {
+        // Cookie 兜底只开放文件类 GET：常规 API 仅凭 Cookie 不得放行（防 Cookie 成为通用认证通道）
+        String body = mvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"zhuren\",\"password\":\"123456\"}"))
+            .andReturn().getResponse().getContentAsString();
+        String jwt = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(body).path("data").path("token").asText();
+        mvc.perform(get("/api/users").cookie(new jakarta.servlet.http.Cookie("pams_token", jwt)))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logout_clearsFileCookie() throws Exception {
+        mvc.perform(post("/api/auth/logout"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Set-Cookie",
+                    org.hamcrest.Matchers.containsString("Max-Age=0")));
     }
 }

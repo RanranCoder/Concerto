@@ -11,24 +11,24 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   listAnnouncements,
+  listAnnouncementReadIds,
+  markAnnouncementRead,
   type AnnouncementVO,
 } from '@/api/announcement'
 import { listUsers, type UserVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useHasPerm } from '@/components/glass/RequireRole'
 
 interface AnnouncementFormValues {
   title: string
   content: string
 }
 
-// 已读集合存 localStorage（Task 22 未建公告已读表，简报约定前端本地记录）
-const READ_KEY = 'pams_announcement_read'
-
 export default function AnnouncementList() {
   const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
-  // 部长以上（roleLevel >= 3）可发布/删除
-  const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+  const hasPerm = useHasPerm()
+  // 发布/修改：notice:publish（V7 种子：部长级）；删除：notice:manage（仅 TEACHER/DIRECTOR）
 
   const [data, setData] = useState<AnnouncementVO[]>([])
   const [loading, setLoading] = useState(false)
@@ -39,14 +39,16 @@ export default function AnnouncementList() {
   const [form] = Form.useForm<AnnouncementFormValues>()
   const [detail, setDetail] = useState<AnnouncementVO | null>(null)
 
+  // 已读状态已落库（PRD-v5 F4），随账号走、跨设备一致；未登录兜底为空集合
   const loadReadIds = useCallback(() => {
-    try {
-      const raw = localStorage.getItem(READ_KEY)
-      setReadIds(raw ? (JSON.parse(raw) as number[]) : [])
-    } catch {
+    if (!user) {
       setReadIds([])
+      return
     }
-  }, [])
+    listAnnouncementReadIds()
+      .then((ids) => setReadIds(ids ?? []))
+      .catch(() => setReadIds([]))
+  }, [user])
 
   useEffect(() => {
     loadReadIds()
@@ -106,13 +108,10 @@ export default function AnnouncementList() {
   const handleRead = (a: AnnouncementVO) => {
     setDetail(a)
     if (!readIds.includes(a.id)) {
-      const next = [...readIds, a.id]
-      setReadIds(next)
-      try {
-        localStorage.setItem(READ_KEY, JSON.stringify(next))
-      } catch {
-        /* 隐私模式等 localStorage 不可用时忽略 */
-      }
+      setReadIds([...readIds, a.id])
+      markAnnouncementRead(a.id).catch(() => {
+        /* 后端标记失败不影响阅读，下次进入会重新拉取已读集合 */
+      })
     }
   }
 
@@ -158,7 +157,7 @@ export default function AnnouncementList() {
       render: (_: unknown, r: AnnouncementVO) =>
         readIds.includes(r.id) ? <Tag>已读</Tag> : <Tag color="processing">未读</Tag>,
     },
-    ...(isMinisterOrAbove
+    ...(hasPerm('notice:manage')
       ? [
           {
             title: '操作',
@@ -180,9 +179,9 @@ export default function AnnouncementList() {
     <div>
       <PageHeader
         title="通知公告"
-        description="党建办公室通知发布（部长以上可发布 / 删除），已读状态记录于本机"
+        description="党建办公室通知发布（部长以上可发布，删除限老师/主任），已读状态跟随账号"
         extra={
-          isMinisterOrAbove ? (
+          hasPerm('notice:publish') ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={openPublish}>
               发布公告
             </Button>
@@ -190,10 +189,10 @@ export default function AnnouncementList() {
         }
       />
 
-      {!isMinisterOrAbove && (
+      {!hasPerm('notice:publish') && (
         <GlassCard style={{ padding: 12, marginBottom: 16 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            仅部长及以上可发布 / 删除公告，您当前仅可查看。
+            您当前仅可查看公告，发布需部长及以上权限。
           </Typography.Text>
         </GlassCard>
       )}

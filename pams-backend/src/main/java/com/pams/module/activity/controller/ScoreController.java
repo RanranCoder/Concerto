@@ -15,7 +15,6 @@ import java.util.Map;
 @RequestMapping("/api/scores")
 public class ScoreController {
     private final ScoreService service;
-    private static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','SECRETARY_LEADER','ORG_LEADER','MEDIA_LEADER','TECH_LEADER')";
 
     public ScoreController(ScoreService service) { this.service = service; }
 
@@ -28,40 +27,41 @@ public class ScoreController {
         return Result.ok(vo);
     }
 
-    @PreAuthorize(LEADER)
+    /** 评分规则与记录的增删改：activity:edit（V7 种子：部长级及以上） */
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PostMapping("/rules")
     public Result<Long> createRule(@Valid @RequestBody ScoreRuleRequest req) {
         return Result.ok(service.createRule(req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PostMapping("/records")
     public Result<Long> createRecord(@Valid @RequestBody ScoreRecordRequest req) {
         return Result.ok(service.createRecord(req));
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/rules/{id}")
     public Result<Void> updateRule(@PathVariable Long id, @Valid @RequestBody ScoreRuleRequest req) {
         service.updateRule(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/records/{id}")
     public Result<Void> updateRecord(@PathVariable Long id, @Valid @RequestBody ScoreRecordRequest req) {
         service.updateRecord(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @DeleteMapping("/rules/{id}")
     public Result<Void> deleteRule(@PathVariable Long id) {
         service.deleteRule(id);
         return Result.ok();
     }
 
-    @PreAuthorize(LEADER)
+    @PreAuthorize("hasAuthority('activity:edit')")
     @DeleteMapping("/records/{id}")
     public Result<Void> deleteRecord(@PathVariable Long id) {
         service.deleteRecord(id);

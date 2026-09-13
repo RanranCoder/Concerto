@@ -1,12 +1,16 @@
 @echo off
 chcp 65001 >nul
 if not defined DB_PASSWORD set DB_PASSWORD=root
+rem 本地开发密钥：未显式设置时每次启动生成随机值（重启后需重新登录，dev 可接受）
+if not defined PAMS_JWT_SECRET (
+    for /f %%i in ('powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"') do set PAMS_JWT_SECRET=%%i
+)
 echo [1/4] 检查 MySQL 服务...
 mysqladmin -u root -p%DB_PASSWORD% ping >nul 2>&1 || (echo 请先启动 MySQL 服务 & pause & exit /b)
 echo [2/4] 初始化数据库...
 mysql -u root -p%DB_PASSWORD% < %~dp0database\init_db.sql
 echo [3/4] 启动后端 (http://localhost:8080)...
-start "pams-backend" cmd /k "cd /d %~dp0pams-backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev"
+start "pams-backend" cmd /k "cd /d %~dp0pams-backend && set PAMS_JWT_SECRET=%PAMS_JWT_SECRET%&& mvn spring-boot:run -Dspring-boot.run.profiles=dev"
 echo [4/4] 启动前端 (http://localhost:5173)...
 start "pams-web" cmd /k "cd /d %~dp0pams-web && npm run dev"
 timeout /t 15 >nul

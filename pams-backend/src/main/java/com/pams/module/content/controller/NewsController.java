@@ -43,6 +43,14 @@ public class NewsController {
         return Result.ok();
     }
 
+    /** 发布新闻稿（DRAFT → PUBLISHED，记录发布日期）。与增删改同权限口径。 */
+    @PreAuthorize(ActivityController.LEADER)
+    @PostMapping("/{id}/publish")
+    public Result<Void> publish(@PathVariable Long id) {
+        service.publish(id);
+        return Result.ok();
+    }
+
     @PreAuthorize(ActivityController.LEADER)
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {

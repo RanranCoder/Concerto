@@ -23,6 +23,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
+  FileTextOutlined,
   PaperClipOutlined,
   PlusOutlined,
   SendOutlined,
@@ -34,6 +35,7 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import StatusTag from '@/components/glass/StatusTag'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import GanttChart from '@/components/gantt/GanttChart'
 import type { GanttTask } from '@/components/gantt/gantt.utils'
 import {
@@ -47,7 +49,8 @@ import {
 } from '@/api/activity'
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP } from '@/api/activityStatus'
 import { listMaterials, MATERIAL_BIZ_TYPE_MAP, type MaterialVO } from '@/api/material'
-import { downloadFile } from '@/api/file'
+import { downloadFile, fetchFileBlob } from '@/api/file'
+import { listTemplates, TEMPLATE_CATEGORY_MAP, type TemplateVO } from '@/api/template'
 import { listDepts } from '@/api/dept'
 import {
   createPlan,
@@ -60,8 +63,7 @@ import { createAgenda, deleteAgenda, listAgendas, updateAgenda } from '@/api/age
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
 import WordEditor from '@/components/word/WordEditor'
-import PagedWordPreview from '@/components/word/PagedWordPreview'
-import { agendaToDocx, buildPlanPreviewHtml, docxToPlan, parseSectionOrder, planToDocx, type PlanFields, type PlanMeta, type PlanOverrides, type PlanSectionOrderItem } from '@/components/word/planTemplate'
+import { agendaToDocx, docxToPlan, parseSectionOrder, planToDocx, type PlanFields, type PlanMeta, type PlanOverrides, type PlanSectionOrderItem } from '@/components/word/planTemplate'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
 import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'
@@ -143,7 +145,9 @@ function PlanTab({
   const [reviewOpen, setReviewOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [mode, setMode] = useState<'preview' | 'edit'>('preview')
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [templates, setTemplates] = useState<TemplateVO[]>([])
+  const [templateLoading, setTemplateLoading] = useState(false)
   const [planFields, setPlanFields] = useState<PlanFields | null>(null)
   const [overrides, setOverrides] = useState<PlanOverrides | null>(null)
   const [sectionOrder, setSectionOrder] = useState<PlanSectionOrderItem[] | null>(null)
@@ -191,12 +195,6 @@ function PlanTab({
     }),
     [activity],
   )
-
-  const openCreate = () => {
-    // GlassModal destroyOnHidden 关闭即卸载，回填用 initialValues（挂载时生效）
-    setFormInit(undefined)
-    setModalOpen(true)
-  }
 
   const openEdit = (p: ActivityPlanVO) => {
     setFormInit({
@@ -324,11 +322,41 @@ function PlanTab({
       setPlanFields(next)
       setOverrides({})
       setSectionOrder(null)
-      setMode('edit')
       message.success(`已导入，填充 ${Object.keys(parsed).length} 个章节字段`)
     } catch {
       message.error('导入失败，请确认文件为 .docx 格式')
     } finally {
+      setImporting(false)
+    }
+  }
+
+  /** F2：打开模板库（策划书分类），选中即拉取文件走 docx 导入管线 */
+  const openTemplatePick = () => {
+    setTemplateOpen(true)
+    setTemplateLoading(true)
+    listTemplates({ category: 'PLAN' })
+      .then((res) => setTemplates(res ?? []))
+      .catch(() => {
+        /* http 拦截已提示 */
+      })
+      .finally(() => setTemplateLoading(false))
+  }
+
+  const handleUseTemplate = async (t: TemplateVO) => {
+    if (!t.fileId) {
+      message.warning('该模板未关联文件')
+      return
+    }
+    setImporting(true)
+    try {
+      const blob = await fetchFileBlob(t.fileId)
+      const file = new File([blob], t.originFilename || `${t.name}.docx`, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
+      setTemplateOpen(false)
+      await handleImportFile(file)
+    } catch {
+      message.error('模板文件获取失败')
       setImporting(false)
     }
   }
@@ -387,7 +415,6 @@ function PlanTab({
       setPlanFields(null) // 清空编辑缓冲，避免旧内容残留
       setOverrides(null)
       setSectionOrder(null)
-      setMode('preview')
       onChanged()
     } catch {
       /* http 拦截已提示 */
@@ -412,118 +439,77 @@ function PlanTab({
     }
   }
 
-  if (!latest) {
-    return (
-      <div style={{ textAlign: 'center', padding: 32 }}>
-        <Empty description="尚未编写策划书" />
-        <Button type="primary" icon={<PlusOutlined />} style={{ marginTop: 8 }} onClick={openCreate}>
-          创建策划书
-        </Button>
-        <GlassModal
-          title="创建策划书"
-          open={modalOpen}
-          onCancel={() => setModalOpen(false)}
-          onOk={handleSave}
-          confirmLoading={saving}
-          footer={
-            <Space>
-              <Button onClick={() => setModalOpen(false)}>取消</Button>
-              <Button type="primary" loading={saving} onClick={handleSave}>
-                保存
-              </Button>
-            </Space>
-          }
-        >
-          <Form form={form} layout="vertical" preserve={false}>
-            {PLAN_FIELDS.map((f) => (
-              <Form.Item key={f.name} name={f.name} label={f.label}>
-                <Input.TextArea rows={f.textarea ? 4 : 1} placeholder={f.placeholder} />
-              </Form.Item>
-            ))}
-          </Form>
-        </GlassModal>
-      </div>
-    )
-  }
-
   return (
     <div>
       <GlassCard style={{ padding: 20 }}>
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Tag color="red">版本 v{latest.version ?? 1}</Tag>
-          <Tag>{PLAN_STATUS_TEXT[latest.status] ?? latest.status}</Tag>
-          {latest.reviewComment && <Tag color="orange">审核意见：{latest.reviewComment}</Tag>}
-          {latest.status === 'DRAFT' || latest.status === 'REJECTED' ? (
-            <>
-              <Button icon={<EditOutlined />} onClick={() => openEdit(latest)}>
-                字段编辑
-              </Button>
-              <Button icon={<SendOutlined />} onClick={handleSubmit}>
-                提交审核
-              </Button>
-            </>
-          ) : null}
-          {latest.status === 'PENDING' && isMinisterOrAbove ? (
-            <Space>
-              <Button type="primary" onClick={() => setReviewOpen(true)}>
-                审核
-              </Button>
-            </Space>
-          ) : null}
-          {latest.status === 'PENDING' && !isMinisterOrAbove ? (
-            <Tag color="processing">等待部长审核</Tag>
-          ) : null}
-          {latest.status === 'APPROVED' ? (
-            <>
-              <Tag color="green">已通过</Tag>
-              <Button onClick={handleNewVersion}>新建版本</Button>
-            </>
-          ) : null}
-        </Space>
-
-        {/* Word 形态工具栏：预览/编辑切换 + 导入/导出/保存 */}
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)}>
-            <Radio.Button value="preview">Word 预览</Radio.Button>
-            <Radio.Button value="edit">编辑</Radio.Button>
-          </Radio.Group>
-          {mode === 'edit' ? (
-            <>
-              <Button loading={importing} icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                导入 docx
-              </Button>
-              <Button icon={<DownloadOutlined />} onClick={handleExport}>
-                导出 docx
-              </Button>
-              <Button type="primary" loading={saving} onClick={onSaveClick}>
-                保存
-              </Button>
-            </>
-          ) : (
-            <Button icon={<DownloadOutlined />} onClick={handleExport}>
-              导出 docx
-            </Button>
-          )}
-        </Space>
-
-        {/* Word 形态：预览（A4 只读渲染）/ 编辑（章节导航 + wangEditor 单编辑器） */}
-        {mode === 'edit' ? (
-          <WordEditor
-            value={fields}
-            onChange={setPlanFields}
-            meta={planMeta}
-            overrides={curOverrides}
-            onOverridesChange={setOverrides}
-            sectionOrder={curSectionOrder.length > 0 ? curSectionOrder : undefined}
-            onSectionOrderChange={setSectionOrder}
-          />
+        {latest ? (
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Tag color="red">版本 v{latest.version ?? 1}</Tag>
+            <Tag>{PLAN_STATUS_TEXT[latest.status] ?? latest.status}</Tag>
+            {latest.reviewComment && <Tag color="orange">审核意见：{latest.reviewComment}</Tag>}
+            {latest.status === 'DRAFT' || latest.status === 'REJECTED' ? (
+              <>
+                <Button icon={<EditOutlined />} onClick={() => openEdit(latest)}>
+                  字段编辑
+                </Button>
+                <Button icon={<SendOutlined />} onClick={handleSubmit}>
+                  提交审核
+                </Button>
+              </>
+            ) : null}
+            {latest.status === 'PENDING' && isMinisterOrAbove ? (
+              <Space>
+                <Button type="primary" onClick={() => setReviewOpen(true)}>
+                  审核
+                </Button>
+              </Space>
+            ) : null}
+            {latest.status === 'PENDING' && !isMinisterOrAbove ? (
+              <Tag color="processing">等待部长审核</Tag>
+            ) : null}
+            {latest.status === 'APPROVED' ? (
+              <>
+                <Tag color="green">已通过</Tag>
+                <Button onClick={handleNewVersion}>新建版本</Button>
+              </>
+            ) : null}
+          </Space>
         ) : (
-          <PagedWordPreview content={buildPlanPreviewHtml(fields, curOverrides, planMeta, curSectionOrder)} meta={planMeta} />
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Tag color="red">尚未创建（编辑后保存即创建）</Tag>
+          </Space>
         )}
 
-        {/* 活动流程字段不在 12 章模板中，Word 预览/导出不含流程，引导用字段编辑 */}
+        {/* 工具栏：导入/导出/保存（页面即编辑器，无独立预览） */}
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Button loading={importing} icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+            导入 docx
+          </Button>
+          <Button icon={<FileTextOutlined />} onClick={openTemplatePick}>
+            从模板库导入
+          </Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExport}>
+            导出 docx
+          </Button>
+          <Button type="primary" loading={saving} onClick={onSaveClick}>
+            保存
+          </Button>
+        </Space>
+
+        {/* 策划书编辑器：章节导航 + 纸张尺寸 + 单个 wangEditor */}
+        <WordEditor
+          value={fields}
+          onChange={setPlanFields}
+          meta={planMeta}
+          overrides={curOverrides}
+          onOverridesChange={setOverrides}
+          sectionOrder={curSectionOrder.length > 0 ? curSectionOrder : undefined}
+          onSectionOrderChange={setSectionOrder}
+        />
+
+        {/* 活动流程字段不在 12 章模板中，导出 docx 不含流程 */}
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          提示：活动流程字段未在 Word 展示，如需查看/编辑请用「字段编辑」。
+          提示：活动流程已在编辑页提供，但不含在 Word 导出中；如需单独调整各字段可用「字段编辑」。
         </div>
 
         {/* 隐藏的文件选择：导入 docx */}
@@ -540,9 +526,60 @@ function PlanTab({
         />
       </GlassCard>
 
-      {/* 编辑/创建弹窗 */}
+      {/* F2：从模板库导入策划书模板（PLAN 分类，选中即走 docx 导入管线） */}
       <GlassModal
-        title={latest ? '编辑策划书' : '创建策划书'}
+        title="从模板库导入"
+        open={templateOpen}
+        onCancel={() => setTemplateOpen(false)}
+        footer={<Button onClick={() => setTemplateOpen(false)}>取消</Button>}
+      >
+        <Spin spinning={templateLoading}>
+          {templates.length === 0 && !templateLoading ? (
+            <Empty description="模板库暂无策划书分类模板，可先在「档案资产 → 模板库」上传" />
+          ) : (
+            templates.map((t) => (
+              <div
+                key={t.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  marginBottom: 8,
+                  border: '1px solid var(--surface-border)',
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    {TEMPLATE_CATEGORY_MAP[t.category] ?? t.category}
+                    {t.description ? ` · ${t.description}` : ''}
+                  </div>
+                </div>
+                <Button
+                  type="link"
+                  size="small"
+                  loading={importing}
+                  disabled={!t.fileId}
+                  onClick={() => handleUseTemplate(t)}
+                >
+                  使用
+                </Button>
+              </div>
+            ))
+          )}
+        </Spin>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          提示：模板内容将按章节标题自动填充到当前策划书，导入后可继续编辑。
+        </div>
+      </GlassModal>
+
+      {/* 字段编辑弹窗（仅对已存在策划书开放） */}
+      <GlassModal
+        title="编辑策划书"
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         footer={
@@ -558,7 +595,7 @@ function PlanTab({
           form={form}
           layout="vertical"
           preserve={false}
-          key={latest ? `plan-edit-${latest.id}` : 'plan-create'}
+          key={`plan-edit-${latest?.id ?? 'none'}`}
           initialValues={formInit}
         >
           {PLAN_FIELDS.map((f) => (
@@ -765,6 +802,7 @@ function AgendaTab({ activityId }: { activityId: number }) {
 
 function SeatTab({ activityId }: { activityId: number }) {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
   const [zones, setZones] = useState<Record<string, SeatMapVO[]>>({})
   const [view, setView] = useState<'visual' | 'matrix' | 'excel'>('visual')
   const [layout, setLayout] = useState<SeatLayoutVO | null>(null)
@@ -920,14 +958,30 @@ function SeatTab({ activityId }: { activityId: number }) {
 
   return (
     <div>
+      {/* F6 座位表双轨收敛：已存在可视化布局（seat_layout）时旧版座位表（seat_map）转只读归档；
+          仅有旧数据时提示迁移，写入口统一收敛到可视化编辑 */}
+      {layout && allSeats.length > 0 && (
+        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--color-primary)', background: 'var(--surface-strong)', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          该活动已启用可视化座位表（新版），下方旧版座位表转为只读归档；编辑请在「可视化编辑」中进行。
+        </div>
+      )}
+      {!layout && allSeats.length > 0 && (
+        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid #faad14', background: 'var(--surface-strong)', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          检测到旧版座位表数据（{allSeats.length} 个座位）。建议切换到「可视化编辑」重建并保存新布局，旧版编辑入口将在新布局创建后转为只读。
+        </div>
+      )}
       <Space style={{ marginBottom: 12 }} wrap>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增座位
-        </Button>
+        {!layout && hasPerm('seat:edit') && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新增座位
+          </Button>
+        )}
         <Radio.Group value={view} onChange={(e) => setView(e.target.value)}>
           <Radio.Button value="visual">可视化编辑</Radio.Button>
           <Radio.Button value="matrix">图表视图</Radio.Button>
-          <Radio.Button value="excel">Excel 编辑</Radio.Button>
+          <Radio.Button value="excel" disabled={!!layout}>
+            Excel 编辑{layout ? '（已只读）' : ''}
+          </Radio.Button>
         </Radio.Group>
       </Space>
 
@@ -940,7 +994,11 @@ function SeatTab({ activityId }: { activityId: number }) {
           </div>
         )
       ) : view === 'matrix' ? (
-        <SeatMapView seats={allSeats} legend={legend} onSelect={openEdit} />
+        <SeatMapView seats={allSeats} legend={legend} onSelect={layout ? undefined : openEdit} />
+      ) : layout ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
+          旧版 Excel 编辑已锁定：该活动已启用可视化座位表，请使用「可视化编辑」。
+        </div>
       ) : (
         <SeatExcelEditor seats={allSeats} legend={legend} onChangeLegend={handleLegendChange} onChangeSeats={handleExcelChange} />
       )}

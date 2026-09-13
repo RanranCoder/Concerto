@@ -6,6 +6,9 @@ uploads/
 # Node
 pams-web/node_modules/
 pams-web/dist/
+# Playwright E2E 产物
+pams-web/test-results/
+pams-web/playwright-report/
 # IDE / OS
 .idea/
 .vscode/

@@ -42,6 +42,24 @@ public class UserService {
     }
 
     /**
+     * 用户选项（PRD-v5 F5 选人组件数据源）：仅返回 id/姓名/部门/角色等最小字段，
+     * 不含用户名/手机号等敏感信息，登录即可用（排班选人、群聊负责人等场景）。
+     */
+    public java.util.List<Map<String, Object>> options() {
+        return userRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream()
+                .map(u -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", u.getId());
+                    m.put("realName", u.getRealName());
+                    m.put("deptId", u.getDept() == null ? null : u.getDept().getId());
+                    m.put("deptName", u.getDept() == null ? null : u.getDept().getName());
+                    m.put("roleName", u.getRole() == null ? null : u.getRole().getName());
+                    return m;
+                })
+                .toList();
+    }
+
+    /**
      * 判断角色数据范围是否为本部门（DEPT）。
      * 由 Role.dataScope 决定：干事（STAFF）dataScope=DEPT → 只能看本部门；
      * 部长及以上 dataScope=ALL → 可全量查看。Task 5 预留，Task 26 接入。

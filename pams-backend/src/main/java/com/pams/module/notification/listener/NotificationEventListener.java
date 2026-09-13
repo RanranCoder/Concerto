@@ -4,6 +4,7 @@ import com.pams.entity.User;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.notification.entity.NotificationType;
+import com.pams.module.notification.event.AnnouncementPublishedEvent;
 import com.pams.module.notification.event.ArticleAssignedEvent;
 import com.pams.module.notification.event.ArticleDeadlineReminderEvent;
 import com.pams.module.notification.event.ArticlePublishedEvent;
@@ -322,6 +323,17 @@ public class NotificationEventListener {
                 "ARTICLE", e.getArticleId(), null, u.getId(), null, null);
             pushToUser(u);
         });
+    }
+
+    /** PRD-v5 F4：新公告发布 → 全员广播（含干事，通知中心可见） */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleAnnouncementPublished(AnnouncementPublishedEvent e) {
+        Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
+        roles.add("STAFF");
+        broadcastToRoles(NotificationType.ANNOUNCEMENT, "新公告",
+            "发布新公告《" + e.getTitle() + "》，请前往「通知公告」查看",
+            "ANNOUNCEMENT", e.getAnnouncementId(), e.getPublisherId(), roles);
+        log.info("AnnouncementPublished 通知已广播给 {} 个角色", roles.size());
     }
 
     /**

@@ -62,11 +62,15 @@ export default function MemberList() {
   const activeSessionId = sessionId ?? currentSession?.id
 
   const fetchSessions = useCallback(async () => {
-    const list = await listMemberSessions()
-    setSessions(list)
-    if (sessionId == null) {
-      const cur = list.find((s) => s.isCurrent === 1) ?? list[0]
-      setSessionId(cur?.id)
+    try {
+      const list = await listMemberSessions()
+      setSessions(list)
+      if (sessionId == null) {
+        const cur = list.find((s) => s.isCurrent === 1) ?? list[0]
+        setSessionId(cur?.id)
+      }
+    } catch {
+      /* 无权限/网络异常：届别为空时列表按无届别过滤展示，不阻塞整页 */
     }
   }, [sessionId])
 
@@ -242,9 +246,11 @@ export default function MemberList() {
             value={activeSessionId}
             onChange={(v) => { setSessionId(v as number); setPage(1) }}
           />
-          <Button size="small" type="link" onClick={() => { setEditingSession(null); sessionForm.resetFields(); setSessionModalOpen(true) }}>
-            届别管理
-          </Button>
+          {hasPerm('member:manage') && (
+            <Button size="small" type="link" onClick={() => { setEditingSession(null); sessionForm.resetFields(); setSessionModalOpen(true) }}>
+              届别管理
+            </Button>
+          )}
         </Space>
         {stats && (
           <Space wrap style={{ marginTop: 8 }}>

@@ -153,4 +153,22 @@ class FileStorageServiceTest {
         }
         verify(repo, org.mockito.Mockito.times(7)).save(org.mockito.ArgumentMatchers.any(FileRecord.class));
     }
+
+    @Test
+    void store_rejectsNonWhitelistedExtensions() throws Exception {
+        // S4 白名单：不在允许清单（Office/图片/文本/压缩包）之外的类型拒绝——
+        // 视频等即使"无害"也不允许，白名单收紧上传面
+        java.nio.file.Path root = java.nio.file.Files.createTempDirectory("pams-upload");
+        FileRecordRepository repo = mock(FileRecordRepository.class);
+        FileStorageService svc = new FileStorageService(root.toString(), repo);
+
+        for (String name : new String[]{"视频.mp4", "音频.mp3", "无扩展名文件", "脚本.js"}) {
+            MockMultipartFile file = new MockMultipartFile("file", name,
+                    "application/octet-stream", "data".getBytes());
+            assertThatThrownBy(() -> svc.store(file, null, 1L))
+                    .isInstanceOf(BizException.class)
+                    .hasMessage("不允许上传该文件类型");
+        }
+        verify(repo, never()).save(org.mockito.ArgumentMatchers.any(FileRecord.class));
+    }
 }

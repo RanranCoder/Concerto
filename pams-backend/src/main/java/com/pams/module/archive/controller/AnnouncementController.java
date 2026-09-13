@@ -1,7 +1,6 @@
 package com.pams.module.archive.controller;
 
 import com.pams.common.Result;
-import com.pams.module.activity.controller.ActivityController;
 import com.pams.module.archive.dto.AnnouncementRequest;
 import com.pams.module.archive.entity.Announcement;
 import com.pams.module.archive.service.AnnouncementService;
@@ -24,24 +23,46 @@ public class AnnouncementController {
         return Result.ok(service.list());
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    /** 发布/修改公告：notice:publish（V7 种子：部长级及以上） */
+    @PreAuthorize("hasAuthority('notice:publish')")
     @PostMapping
     public Result<Announcement> create(@Valid @RequestBody AnnouncementRequest req,
                                        @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('notice:publish')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody AnnouncementRequest req) {
         service.update(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    /** 删除公告：notice:manage（V7 种子：仅 TEACHER/DIRECTOR） */
+    @PreAuthorize("hasAuthority('notice:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return Result.ok();
+    }
+
+    /** 标记公告已读（幂等）。已读状态落库，跨设备一致（PRD-v5 F4） */
+    @PostMapping("/{id}/read")
+    public Result<Void> markRead(@PathVariable Long id,
+                                 @AuthenticationPrincipal LoginUser current) {
+        if (current == null) {
+            return Result.ok();
+        }
+        service.markRead(id, current.getId());
+        return Result.ok();
+    }
+
+    /** 当前用户已读公告 id 列表 */
+    @GetMapping("/read-ids")
+    public Result<List<Long>> readIds(@AuthenticationPrincipal LoginUser current) {
+        if (current == null) {
+            return Result.ok(List.of());
+        }
+        return Result.ok(service.readIds(current.getId()));
     }
 }
