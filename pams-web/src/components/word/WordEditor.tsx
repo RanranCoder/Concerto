@@ -88,8 +88,8 @@ function loadMargin(): MarginPreset {
 const MM_TO_PX = 96 / 25.4
 const mmToPx = (mm: number): number => Math.round(mm * MM_TO_PX)
 
-/** 页与页之间的间隔（px）：内容被下推，间隔带露出灰带，视觉上页与页独立 */
-const PAGE_GAP = 32
+/** 页与页之间的间隔（px）：末块补白下推、页间露底色，视觉上页与页独立 */
+const PAGE_GAP = 40
 
 /** 计算纸张 + 页边距 → 像素布局（编辑/分页/预览共用同一套数值） */
 export function paperLayout(paper: PaperSize, margin: MarginPreset) {
@@ -482,7 +482,7 @@ export default function WordEditor({
               layout={layout}
               pageCount={pageCount}
               gap={PAGE_GAP}
-              bandTops={bandTops}
+              pageStarts={pageStarts}
             />
           </Suspense>
           <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>

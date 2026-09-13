@@ -269,6 +269,7 @@ body::before {
 .plan-page-sheet .w-e-scroll {
   height: auto !important;
   overflow: visible !important;
+  background: transparent !important; /* wangEditor 自带白底会盖住页间隔的透明露底 */
 }
 .plan-page-sheet [data-slate-editor] {
   min-height: 0 !important;

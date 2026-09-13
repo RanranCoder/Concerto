@@ -33,8 +33,8 @@ interface PlanRichEditorProps {
   pageCount: number
   /** 页与页之间的间隔（px） */
   gap: number
-  /** 各页间隔带位置（内容坐标，由父组件测量/下推后得出） */
-  bandTops: number[]
+  /** 各页内容起始位置（内容坐标，第 0 页 = 0；由父组件测量/下推后得出） */
+  pageStarts: number[]
 }
 
 /** wangEditor 5 工具栏：标题/加粗/斜体/下划线/删除线/颜色/高亮/对齐/列表/缩进/表格/图片/链接/清除格式/撤销重做 */
@@ -69,7 +69,7 @@ const TOOLBAR_KEYS: (string | { key: string; title: string; menuKeys: string[] }
 ]
 
 /** wangEditor 5 单编辑器封装：功能栏独立固定顶部 + 逐页分页纸张（图片走 /api/files/upload） */
-export default function PlanRichEditor({ value, onChange, placeholder, editorRef, viewportRef, layout, pageCount, gap, bandTops }: PlanRichEditorProps) {
+export default function PlanRichEditor({ value, onChange, placeholder, editorRef, viewportRef, layout, pageCount, gap, pageStarts }: PlanRichEditorProps) {
   const [editor, setEditor] = useState<IDomEditor | null>(null)
   const [ready, setReady] = useState(false)
 
@@ -124,9 +124,24 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
   }, [editor])
 
   const { sheetW, pageH, contentH, margin } = layout
-  // 纸张最小高度：内容区至少撑满最后一页（间隔带末 + 一页内容），保证每页顶部都能滚动到
-  const lastBandTop = bandTops.length > 0 ? bandTops[bandTops.length - 1] : 0
-  const sheetMinH = pageCount > 1 ? margin.t + margin.b + lastBandTop + gap + contentH : pageH
+  // 纸张最小高度：内容区至少撑满最后一页卡片（最后一页起始 + 一页内容），保证每页都能滚动到
+  const lastStart = pageStarts.length > 0 ? pageStarts[pageStarts.length - 1] : 0
+  const sheetMinH = pageCount > 1 ? margin.t + margin.b + lastStart + contentH : pageH
+
+  // 纸张底色：每页内容区白色、页与页之间透明（露出视口深色 → 页间隔清晰）
+  const sheetBg = useMemo(() => {
+    const stops: string[] = ['#fff 0px']
+    for (let k = 0; k < pageStarts.length; k++) {
+      const end = margin.t + pageStarts[k] + contentH
+      stops.push(`#fff ${end}px`, `transparent ${end}px`)
+      if (k < pageStarts.length - 1) {
+        const next = margin.t + pageStarts[k + 1]
+        stops.push(`transparent ${next}px`, `#fff ${next}px`)
+      }
+    }
+    stops.push('#fff') // 末页以下保持白色
+    return `linear-gradient(to bottom, ${stops.join(',')})`
+  }, [pageStarts, margin.t, contentH])
 
   return (
     <div className="plan-paper-editor">
@@ -147,7 +162,7 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
         {ready ? <div ref={toolbarRef} /> : <div style={{ height: 40 }} />}
       </div>
 
-      {/* 逐页分页视口：高度=单页（含页边距），纸张随内容增高，视口滚动翻页 */}
+      {/* 逐页分页视口：高度=单页（含页边距），页与页之间透明露出深色间隔，视口滚动翻页 */}
       <div
         className="plan-page-viewport"
         ref={viewportRef}
@@ -156,7 +171,7 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
           overflowY: 'auto',
           borderRadius: 8,
           padding: '12px 8px',
-          background: 'rgba(0,0,0,0.04)',
+          background: 'rgba(0,0,0,0.12)',
         }}
       >
         <div
@@ -167,29 +182,28 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
             margin: '0 auto',
             minHeight: sheetMinH,
             boxSizing: 'border-box',
-            background: '#fff',
-            borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            background: sheetBg,
+            borderRadius: 6,
+            boxShadow: '0 2px 10px rgba(0,0,0,0.10)',
             padding: `${margin.t}px ${margin.r}px ${margin.b}px ${margin.l}px`,
             position: 'relative',
           }}
         >
-          {/* 页间隔灰带 + 页码（随内容滚动，pointer-events:none 不挡编辑） */}
-          {bandTops.map((top, k) => (
+          {/* 页间隔中的页码（随内容滚动，pointer-events:none 不挡编辑） */}
+          {pageStarts.slice(0, -1).map((start, k) => (
             <div
               key={k}
               style={{
                 position: 'absolute',
-                left: margin.l,
-                right: margin.r,
-                top: margin.t + top,
-                height: gap,
-                background: '#e9ebee',
+                left: 0,
+                right: 0,
+                top: margin.t + start + contentH + gap / 2,
+                transform: 'translateY(-50%)',
                 textAlign: 'center',
                 pointerEvents: 'none',
               }}
             >
-              <span style={{ fontSize: 11, color: '#9aa0a6', lineHeight: `${gap}px` }}>— 第 {k + 2} 页 —</span>
+              <span style={{ fontSize: 11, color: '#8c9198' }}>— 第 {k + 2} 页 —</span>
             </div>
           ))}
 
