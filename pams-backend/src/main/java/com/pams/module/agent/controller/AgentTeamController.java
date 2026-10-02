@@ -2,6 +2,7 @@ package com.pams.module.agent.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.Result;
+import com.pams.module.agent.core.ToolContext;
 import com.pams.module.agent.entity.AgentDefinition;
 import com.pams.module.agent.entity.AgentRun;
 import com.pams.module.agent.entity.AgentStep;
@@ -9,6 +10,7 @@ import com.pams.module.agent.orchestration.Blackboard;
 import com.pams.module.agent.orchestration.CoordinatorAgent;
 import com.pams.module.agent.orchestration.AgentRunService;
 import com.pams.module.agent.registry.AgentRegistry;
+import com.pams.module.agent.stream.AgentEventPublisher;
 import com.pams.security.LoginUser;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -31,13 +33,15 @@ public class AgentTeamController {
     private final CoordinatorAgent coordinator;
     private final AgentRunService runService;
     private final AgentRegistry registry;
+    private final AgentEventPublisher eventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AgentTeamController(CoordinatorAgent coordinator, AgentRunService runService,
-                               AgentRegistry registry) {
+                               AgentRegistry registry, AgentEventPublisher eventPublisher) {
         this.coordinator = coordinator;
         this.runService = runService;
         this.registry = registry;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 只做任务分解，不落库（预览协作计划）。 */
@@ -46,13 +50,17 @@ public class AgentTeamController {
         return Result.ok(coordinator.plan(req.goal()));
     }
 
-    /** 执行一次协作 Run（B 批次：登记规划步骤 + 落黑板）。 */
+    /** 执行一次协作 Run（C 批次：规划 → 委派专家执行 → 落库）。 */
     @PostMapping("/run")
     public Result<Map<String, Object>> run(@RequestBody TeamRequest req,
                                            @AuthenticationPrincipal LoginUser lu) {
-        AgentRun run = coordinator.run(req.goal(), lu.getId(), req.conversationId(),
-                req.mode() == null ? "P1" : req.mode(), null, null);
-        return Result.ok(toDetail(run));
+        String streamId = eventPublisher.newStream("run", lu.getId());
+        ToolContext ctx = ToolContext.current(req.conversationId(), streamId);
+        AgentRun run = coordinator.run(req.goal(), ctx, req.conversationId(),
+                req.mode() == null ? "P1" : req.mode(), streamId);
+        Map<String, Object> detail = toDetail(run);
+        detail.put("streamId", streamId);
+        return Result.ok(detail);
     }
 
     /** Run 详情（含步骤与黑板），按归属校验。 */

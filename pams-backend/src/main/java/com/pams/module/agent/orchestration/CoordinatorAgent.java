@@ -1,5 +1,6 @@
 package com.pams.module.agent.orchestration;
 
+import com.pams.module.agent.core.ToolContext;
 import com.pams.module.agent.entity.AgentRun;
 import com.pams.module.agent.entity.AgentStep;
 import com.pams.module.agent.registry.AgentCatalog;
@@ -29,13 +30,16 @@ public class CoordinatorAgent {
     private final AgentRegistry registry;
     private final AgentRunService runService;
     private final AgentEventPublisher eventPublisher;
+    private final SpecialistExecutor specialistExecutor;
 
     public CoordinatorAgent(AgentRegistry registry,
                             AgentRunService runService,
-                            AgentEventPublisher eventPublisher) {
+                            AgentEventPublisher eventPublisher,
+                            SpecialistExecutor specialistExecutor) {
         this.registry = registry;
         this.runService = runService;
         this.eventPublisher = eventPublisher;
+        this.specialistExecutor = specialistExecutor;
     }
 
     /** 规则式任务分解：按关键词把目标路由到专家 Agent，产出协作计划。 */
@@ -92,38 +96,46 @@ public class CoordinatorAgent {
     }
 
     /**
-     * 执行一次协作 Run（B 批次：登记规划步骤 + 落黑板）。
+     * 执行一次协作 Run（C 批次：规划 → 逐步委派专家 → 落库）。
      *
-     * @param streamId 可空；非空时推送 AGENT_START/AGENT_END 事件（前端协作视图）
-     * @param username 事件推送目标用户；streamId 非空时必须提供
+     * @param ctx      工具执行上下文（含发起用户与权限）；为专家执行时以「发起用户身份」鉴权
+     * @param streamId 可空；非空时推送协作事件（前端协作视图）
      */
-    public AgentRun run(String goal, Long userId, Long conversationId, String mode,
-                        String streamId, String username) {
+    public AgentRun run(String goal, ToolContext ctx, Long conversationId, String mode, String streamId) {
         Blackboard bb = plan(goal);
         bb.setGoal(goal);
         bb.setMode(mode);
 
+        Long userId = ctx == null ? null : ctx.getUserId();
+        String username = ctx != null && ctx.getLoginUser() != null
+                ? ctx.getLoginUser().getUsername() : null;
+
         AgentRun run = runService.startRun(conversationId, userId, goal, mode);
 
-        boolean emit = streamId != null && username != null;
-        if (emit) {
-            eventPublisher.publish(username, AgentStreamEvent.agentStart(
-                    streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR, null, null));
-        }
+        // 协调者：规划步骤
+        emit(username, streamId, AgentStreamEvent.agentStart(
+                streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR, null, null));
         long t0 = System.currentTimeMillis();
-        String output = runService.toJson(bb.getPlan());
         AgentStep step = runService.recordStep(run.getId(), AgentCatalog.COORDINATOR,
                 runService.nextSeq(run.getId()), null,
                 runService.toJson(java.util.Map.of("goal", goal == null ? "" : goal)),
-                output, AgentStep.STATUS_SUCCESS, System.currentTimeMillis() - t0);
-        if (emit) {
-            eventPublisher.publish(username, AgentStreamEvent.agentEnd(
-                    streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR,
-                    step.getId(), AgentStep.STATUS_SUCCESS, System.currentTimeMillis() - t0));
-        }
-
+                runService.toJson(bb.getPlan()), AgentStep.STATUS_SUCCESS, System.currentTimeMillis() - t0);
+        long planDuration = System.currentTimeMillis() - t0;
+        emit(username, streamId, AgentStreamEvent.agentEnd(
+                streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR,
+                step.getId(), AgentStep.STATUS_SUCCESS, planDuration));
         bb.addFinding(AgentCatalog.COORDINATOR, "已生成 " + bb.getPlan().size() + " 步协作计划", 1.0);
+
+        // 逐步委派专家执行（P1 串行）
+        specialistExecutor.executePlan(run, bb, ctx, streamId);
+
         return runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
+    }
+
+    private void emit(String username, String streamId, AgentStreamEvent event) {
+        if (streamId != null && username != null) {
+            eventPublisher.publish(username, event);
+        }
     }
 
     private String taskFor(String agent, String goal) {
