@@ -42,6 +42,7 @@ const MemberList = lazy(() => import('@/pages/member/MemberList'))
 const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
 const AgentHome = lazy(() => import('@/pages/agent/AgentHome'))
 const AgentTeam = lazy(() => import('@/pages/agent/AgentTeam'))
+const AgentBenchmark = lazy(() => import('@/pages/admin/AgentBenchmark'))
 const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
 const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
 
@@ -154,6 +155,8 @@ export const router = createBrowserRouter([
       { path: '/admin/permissions', element: <RequirePerm codes={['user:permission']}><PermissionManage /></RequirePerm> },
       // 系统设置：仅主任/指导老师可访问
       { path: '/admin/settings', element: <RequireRole roles={ADMIN_ROLES}><Settings /></RequireRole> },
+      // 对比评估实验（E 批次）：仅主任/指导老师可访问
+      { path: '/admin/benchmark', element: <RequireRole roles={ADMIN_ROLES}><AgentBenchmark /></RequireRole> },
 
       { path: '/403', element: <Forbidden /> },
       { path: '*', element: <Navigate to="/" replace /> },

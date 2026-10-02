@@ -8,6 +8,7 @@ import {
   BookOutlined,
   CalendarOutlined,
   DashboardOutlined,
+  ExperimentOutlined,
   FileTextOutlined,
   FolderOutlined,
   IdcardOutlined,
@@ -153,6 +154,7 @@ export default function MainLayout() {
     }
     if (isAdmin) {
       items.push({ key: '/admin/settings', label: '系统设置', icon: <SettingOutlined /> })
+      items.push({ key: '/admin/benchmark', label: '协作实验', icon: <ExperimentOutlined /> })
       items.push({ key: '/org/structure', label: '组织架构', icon: <ApartmentOutlined /> })
     }
     return items

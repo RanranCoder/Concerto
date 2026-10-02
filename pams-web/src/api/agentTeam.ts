@@ -49,15 +49,27 @@ export interface AgentRunDetail {
 
 export type CollaborationMode = 'P1' | 'P2' | 'P3' | 'P4'
 
+/** 发起协作的即时返回：执行在后台进行，过程经 WS 推送。 */
+export interface TeamRunStart { runId: number; streamId: string }
+
+/** 协作过程事件（/user/queue/agent/stream）。 */
+export interface TeamStreamEvent {
+  streamId: string
+  seq: number
+  type: string
+  payload: Record<string, unknown>
+  ts: number
+}
+
 /** 已注册的 Agent 定义（专家团队）。 */
 export const listAgentDefinitions = () => get<AgentDefinitionVO[]>('/agent/team/agents')
 
 /** 只做任务分解（预览协作计划，不落库）。 */
 export const planTeam = (goal: string) => post<Blackboard>('/agent/team/plan', { goal })
 
-/** 执行一次协作 Run。 */
+/** 发起一次协作 Run（异步，立即返回 runId + streamId）。 */
 export const runTeam = (goal: string, mode: CollaborationMode = 'P1') =>
-  post<AgentRunDetail>('/agent/team/run', { goal, mode })
+  post<TeamRunStart>('/agent/team/run', { goal, mode })
 
 /** Run 详情（含步骤与黑板）。 */
 export const getTeamRun = (id: number) => get<AgentRunDetail>(`/agent/team/runs/${id}`)

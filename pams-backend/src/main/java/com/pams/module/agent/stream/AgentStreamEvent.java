@@ -57,6 +57,15 @@ public record AgentStreamEvent(String streamId, int seq, String type,
     public static final String AGENT_DELEGATE = "AGENT_DELEGATE";
     /** 审查结论（PASS / REVISE） */
     public static final String REVIEW_RESULT = "REVIEW_RESULT";
+    /** 一次协作 Run 结束（异步执行完成；前端据此拉取最终 Run 详情） */
+    public static final String RUN_DONE = "RUN_DONE";
+
+    public static AgentStreamEvent runDone(String streamId, int seq, Long runId, String status) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("runId", runId);
+        p.put("status", status);
+        return of(streamId, seq, RUN_DONE, p);
+    }
 
     public static AgentStreamEvent agentStart(String streamId, int seq, String agent,
                                               Long stepId, Long parentStepId) {

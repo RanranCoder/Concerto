@@ -5,8 +5,10 @@ import { App } from 'antd'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useAgentStore } from '@/stores/agent'
+import { useAgentTeamStore } from '@/stores/agentTeam'
 import type { NotificationVO } from '@/api/notification'
 import type { AgentStreamEvent } from '@/api/agent'
+import type { TeamStreamEvent } from '@/api/agentTeam'
 
 export function useWebSocket() {
   const { notification } = App.useApp()
@@ -57,6 +59,8 @@ export function useWebSocket() {
           try {
             const event = JSON.parse(msg.body) as AgentStreamEvent
             useAgentStore.getState().applyStreamEvent(event)
+            // 多 Agent 协作视图（批次 D）：过程事件实时驱动协作页
+            useAgentTeamStore.getState().applyEvent(event as unknown as TeamStreamEvent)
           } catch (e) {
             console.error('[WS] 解析灵思过程事件失败', e)
           }

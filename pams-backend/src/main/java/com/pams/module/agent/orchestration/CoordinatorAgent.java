@@ -102,15 +102,23 @@ public class CoordinatorAgent {
      * @param streamId 可空；非空时推送协作事件（前端协作视图）
      */
     public AgentRun run(String goal, ToolContext ctx, Long conversationId, String mode, String streamId) {
+        return executeRun(start(goal, ctx, conversationId, mode), goal, ctx, streamId, mode);
+    }
+
+    /** 只创建 Run（异步执行入口：先返回 runId/streamId 给前端，再后台执行）。 */
+    public AgentRun start(String goal, ToolContext ctx, Long conversationId, String mode) {
+        Long userId = ctx == null ? null : ctx.getUserId();
+        return runService.startRun(conversationId, userId, goal, mode);
+    }
+
+    /** 执行已创建的 Run：规划 → 委派专家 → 落库。 */
+    public AgentRun executeRun(AgentRun run, String goal, ToolContext ctx, String streamId, String mode) {
         Blackboard bb = plan(goal);
         bb.setGoal(goal);
         bb.setMode(mode);
 
-        Long userId = ctx == null ? null : ctx.getUserId();
         String username = ctx != null && ctx.getLoginUser() != null
                 ? ctx.getLoginUser().getUsername() : null;
-
-        AgentRun run = runService.startRun(conversationId, userId, goal, mode);
 
         // 协调者：规划步骤
         emit(username, streamId, AgentStreamEvent.agentStart(
