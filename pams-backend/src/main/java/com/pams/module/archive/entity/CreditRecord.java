@@ -1,5 +1,5 @@
 package com.pams.module.archive.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "credit_record")
-public class CreditRecord {
+public class CreditRecord implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,4 +30,5 @@ public class CreditRecord {
     private String remark;
     private Long recordBy;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

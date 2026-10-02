@@ -4,7 +4,7 @@ import com.pams.common.BizException;
 import com.pams.common.ExcelGuard;
 import com.pams.common.Result;
 import com.pams.module.archive.entity.FileRecord;
-import com.pams.module.archive.repository.FileRecordRepository;
+import com.pams.module.archive.service.FileService;
 import com.pams.module.archive.service.FileStorageService;
 import com.pams.module.party.service.RosterImportService;
 import com.pams.module.party.service.RosterImportService.RosterImportResult;
@@ -27,13 +27,13 @@ import java.util.Map;
 @RequestMapping("/api/files")
 public class FileController {
     private final FileStorageService storageService;
-    private final FileRecordRepository fileRecordRepository;
+    private final FileService fileService;
     private final RosterImportService rosterImportService;
 
-    public FileController(FileStorageService storageService, FileRecordRepository fileRecordRepository,
+    public FileController(FileStorageService storageService, FileService fileService,
                           RosterImportService rosterImportService) {
         this.storageService = storageService;
-        this.fileRecordRepository = fileRecordRepository;
+        this.fileService = fileService;
         this.rosterImportService = rosterImportService;
     }
 
@@ -46,12 +46,14 @@ public class FileController {
         return Result.ok(rec);
     }
 
-    /** 下载需材料或党务任一查看权限（名单类文件可能被两侧引用），上传保持登录即可 */
+    /** 下载需材料或党务任一查看权限（名单类文件可能被两侧引用），上传保持登录即可。
+     *  审计 #2：类级注解只是粗闸（V7 种子全员持有），对象级/部门级鉴权由 FileService 统一把守
+     *  （预览/导出在前端同走本接口，策略一视同仁；越权与不存在同响应防 fileId 枚举） */
     @PreAuthorize("hasAuthority('material:view') or hasAuthority('party:view')")
     @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> download(@PathVariable Long id) {
-        FileRecord rec = fileRecordRepository.findById(id)
-                .orElseThrow(() -> new BizException(4001, "文件不存在"));
+    public ResponseEntity<Resource> download(@PathVariable Long id,
+                                             @AuthenticationPrincipal LoginUser current) {
+        FileRecord rec = fileService.getReadableRecord(id, current);
         Path target = storageService.physicalPath(rec.getPath());
         if (!Files.exists(target)) {
             throw new BizException(4001, "文件不存在或已被移除");

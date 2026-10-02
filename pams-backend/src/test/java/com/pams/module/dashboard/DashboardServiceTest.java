@@ -138,7 +138,7 @@ class DashboardServiceTest {
         // 数据库端 TRIM+LOWER 等值过滤；服务再按 endDate 升序排序
         when(taskRepository.findByAssigneeMatching("张三")).thenReturn(List.of(mine, spaced));
 
-        LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部");
+        LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部", 1L);
         List<Task> tasks = service.myTasks(current);
 
         assertThat(tasks).extracting(Task::getId).containsExactlyInAnyOrder(1L, 3L);
@@ -163,7 +163,7 @@ class DashboardServiceTest {
         when(announcementRepository.findTop5ByOrderByPublishTimeDescCreatedAtDesc()).thenReturn(List.of());
         when(taskRepository.findByAssigneeMatching("张三")).thenReturn(List.of());
 
-        LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部");
+        LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部", 1L);
         Map<String, Object> map = service.dashboard(current);
 
         assertThat(map).containsKeys("activityStats", "weekSchedules", "recentArticles",

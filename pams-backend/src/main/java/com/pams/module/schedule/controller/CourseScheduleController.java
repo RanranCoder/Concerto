@@ -127,4 +127,10 @@ public class CourseScheduleController {
                                                         @RequestParam(required = false) String semester) {
         return Result.ok(importService.getGenerated(deptId, semester));
     }
+
+    /** 最近一次导入无课表的部门+学期（供前端默认选中；无导入则 null）。 */
+    @GetMapping("/generated/latest")
+    public Result<Map<String, Object>> generatedLatest() {
+        return Result.ok(importService.latestImport());
+    }
 }

@@ -1,0 +1,1781 @@
+/* ============================================================================
+ * 灵思（Agent）样式 —— UI v2（参考 Trae Work 会话页的设计语言）
+ * 对应文档：docs/PAMS-灵思UI改版方案-v2.md    原型：docs/lingsi-ui-v2-prototype.html
+ *
+ * 设计语言四条主干：
+ *   1. 灰阶极简    —— 白底 + 浅灰面板 + 深灰字，品牌红收窄到 4 处
+ *   2. 内容优先    —— AI 回答是"文档流"不是"气泡"；去容器后卡片成为唯一层级
+ *   3. 产物分屏    —— 对话里的产物在右栏打开，不遮罩、不打断
+ *   4. 单侧控制点  —— 权限档位与模型常驻输入框，不塞设置页
+ *
+ * 红色只出现在：① 新建任务图标 ② 左栏选中竖条 ③ 发送按钮 ④ 不可逆操作警示
+ * （引用 chip 的 hover 描边也算，但那是交互反馈，静态不可见）
+ *
+ * 坑（源码已踩过，勿重蹈）：
+ *   ❌ 不要用 `var(--color-red)55` 这类 alpha 后缀拼接（CSS 变量是 token 级替换，
+ *      不会合成 8 位 hex）。需要透明色时写字面量，见下面的局部变量块。
+ *   ❌ 不要在卡片上叠多个 box-shadow；`.glass-card` 已有 --surface-shadow。
+ *   ✅ 需要"更深一层"的容器用 --surface-strong，不要用透明度。
+ * ========================================================================== */
+
+.lingsi-page {
+  /* ---- 局部语义色：一次定义，明暗各一套（写实色字面量，不做 token 拼接） ---- */
+  --ls-ok: #3f8f4f;
+  --ls-ok-bg: #f2f8f3;
+  --ls-ok-line: #d6e8da;
+  --ls-warn: #a9701a;
+  --ls-warn-bg: #fdf7ec;
+  --ls-warn-line: #f0d9ab;
+  --ls-soft: rgba(0, 0, 0, 0.045);
+  --ls-soft-strong: rgba(0, 0, 0, 0.07);
+
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 88px);
+  min-height: 0;
+}
+
+:root[data-theme='dark'] .lingsi-page {
+  --ls-ok: #7fc48d;
+  --ls-ok-bg: #17251b;
+  --ls-ok-line: #2b4432;
+  --ls-warn: #d8a95c;
+  --ls-warn-bg: #241d12;
+  --ls-warn-line: #4a3a1e;
+  --ls-soft: rgba(255, 255, 255, 0.06);
+  --ls-soft-strong: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================ 通用小件 */
+
+.lingsi-icon-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+}
+.lingsi-icon-btn:hover {
+  background: var(--ls-soft);
+  color: var(--color-text);
+}
+.lingsi-icon-btn-on {
+  color: var(--color-red);
+}
+
+/* ============================================================ 左栏：任务栏 */
+
+.lingsi-sider {
+  width: 252px;
+  flex: 0 0 252px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 10px;
+  overflow: hidden;
+}
+
+.lingsi-sider-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 12px;
+}
+
+.lingsi-sider-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.lingsi-brand-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #DE2910, #c2220c);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.lingsi-sider-sub {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.75;
+}
+
+/* 新建任务：整宽描边按钮置顶 —— 原设计是标题右上角一个 `+`，入口太小、语义太弱 */
+.lingsi-new-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  margin-bottom: 4px;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.14s var(--easing), background 0.14s var(--easing);
+}
+.lingsi-new-task:hover {
+  border-color: rgba(222, 41, 16, 0.4);
+}
+.lingsi-new-task svg {
+  color: var(--color-red); /* 红色用途 ① */
+  flex-shrink: 0;
+}
+
+.lingsi-sider-pending {
+  flex-shrink: 0;
+  margin: 6px 2px 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--ls-warn-bg);
+  border: 1px solid var(--ls-warn-line);
+  color: var(--ls-warn);
+  font-size: 11.5px;
+}
+
+/* 任务搜索：纯本地过滤（列表一次只拉 50 条，为前缀过滤再打接口不值当） */
+.lingsi-sider-search.ant-input-affix-wrapper {
+  flex-shrink: 0;
+  margin: 2px 2px 6px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.lingsi-sider-search .anticon {
+  color: var(--color-text-secondary);
+}
+
+.lingsi-sider-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.lingsi-sider-loading {
+  text-align: center;
+  padding: 24px;
+}
+
+.lingsi-conv-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  margin: 14px 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  letter-spacing: 0.04em;
+}
+.lingsi-conv-group:first-child {
+  margin-top: 4px;
+}
+.lingsi-conv-group-count {
+  margin-left: auto;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* 任务项：两行（标题 + 相对时间）；选中态 = 白底 + 左侧红色竖条 */
+.lingsi-conv {
+  position: relative;
+  padding: 7px 10px 7px 12px;
+  margin-bottom: 1px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.14s var(--easing);
+}
+.lingsi-conv:hover {
+  background: var(--ls-soft);
+}
+.lingsi-conv-active {
+  background: var(--surface-strong);
+  box-shadow: 0 1px 2px rgba(20, 24, 32, 0.06);
+}
+.lingsi-conv-active::before {
+  /* 红色用途 ②：定位当前任务。原设计方案 §3.3 写了这条但实现里漏了，
+     导致选中态与 hover 态在视觉上几乎分不出来 */
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--color-red);
+}
+
+.lingsi-conv-title {
+  font-size: 12.5px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 24px;
+}
+
+.lingsi-conv-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+}
+
+.lingsi-conv-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* 删除按钮：hover 才出现（避免列表噪声） */
+.lingsi-conv-del {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  opacity: 0;
+}
+.lingsi-conv:hover .lingsi-conv-del {
+  opacity: 1;
+}
+
+/* ============================================================ 中栏：对话区 */
+
+.lingsi-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lingsi-main-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+.lingsi-main-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.lingsi-main-title svg {
+  color: var(--color-text-secondary);
+}
+
+.lingsi-main-mode {
+  padding: 0 6px;
+  line-height: 17px;
+  border-radius: 5px;
+  border: 1px solid var(--surface-border);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-main-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lingsi-main-pending {
+  margin: 0;
+  font-size: 11.5px;
+}
+
+.lingsi-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 0 12px;
+}
+
+/* 内容 760px 居中：党务对话多为短问短答，超宽行会显著降低可读性 */
+.lingsi-stream-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+.lingsi-stream-loading {
+  text-align: center;
+  padding: 60px;
+}
+
+.lingsi-turn-wrap {
+  margin-bottom: 26px;
+}
+.lingsi-turn-wrap:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================ 空态 / 欢迎 */
+
+.lingsi-hero {
+  margin: 24px auto 0;
+  max-width: 640px;
+  text-align: center;
+  padding: 24px 8px;
+}
+
+.lingsi-hero-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--color-red-soft);
+  color: var(--color-red);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  margin-bottom: 14px;
+}
+
+.lingsi-hero-title {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 6px;
+}
+
+.lingsi-hero-sub {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 22px;
+  line-height: 1.7;
+}
+
+.lingsi-suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  text-align: left;
+}
+
+.lingsi-suggest {
+  padding: 12px 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  cursor: pointer;
+  transition: border-color 0.18s var(--easing), transform 0.18s var(--easing);
+}
+.lingsi-suggest:hover {
+  border-color: rgba(222, 41, 16, 0.45);
+  transform: translateY(-2px);
+}
+
+.lingsi-suggest-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 3px;
+}
+
+.lingsi-suggest-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* ============================================================ 用户提问（引用块） */
+
+/* 原来是右对齐红底气泡。改成左对齐引用块：
+   ① 长指令在 76% 宽气泡里会折行、起点参差 ② 红底把"强调"用成了常态
+   ③ 与 AI 文档流同栏对齐，整条会话读起来像工作记录而不是聊天记录 */
+.lingsi-user-quote {
+  position: relative;
+  margin: 0 0 18px;
+  padding: 11px 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.lingsi-user-quote-text {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 本条消息实际附带的上下文（只作展示，不可点 —— 可交互入口在右栏与产物卡） */
+.lingsi-quote-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding-right: 56px;
+}
+.lingsi-quote-ref {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lingsi-user-quote-actions {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s var(--easing);
+}
+.lingsi-user-quote:hover .lingsi-user-quote-actions {
+  opacity: 1;
+}
+
+/* ============================================================ AI 消息（文档流） */
+
+/* 关键改动：去掉原 `.lingsi-bubble` 的 1px 边框 + 底色。
+   容器装饰与卡片边框同色叠在一起 = 最典型的"卡片套卡片"噪声；
+   去掉之后卡片本身成为页面上唯一的容器层级。 */
+.lingsi-turn {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.lingsi-turn-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lingsi-avatar {
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #DE2910, #c2220c);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* -------------------------------------------------------------- 过程区 */
+
+.lingsi-process {
+  margin-bottom: 9px;
+}
+
+/* 无边框纯文字摘要行（原来是药丸：1px 边框 + 999px 圆角 + 底色，在灰阶体系里偏重） */
+.lingsi-process-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s var(--easing);
+}
+.lingsi-process-head:hover {
+  opacity: 1;
+}
+.lingsi-process-head-live {
+  color: var(--color-red);
+  opacity: 1;
+}
+
+.lingsi-process-body {
+  margin: 6px 0 12px 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--surface-border);
+}
+
+.lingsi-tl-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 2.5px 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.lingsi-tl-icon {
+  flex-shrink: 0;
+  width: 15px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  padding-top: 1px;
+}
+
+.lingsi-tl-label {
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+.lingsi-tl-label-active {
+  color: var(--color-text);
+}
+
+.lingsi-tl-meta {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 思考中的三点脉冲 */
+.lingsi-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: lingsi-pulse 1.1s ease-in-out infinite;
+}
+.lingsi-dot:nth-child(2) { animation-delay: 0.18s; }
+.lingsi-dot:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes lingsi-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* -------------------------------------------------------------- 正文（文档流） */
+
+.lingsi-reply {
+  font-size: 13.5px;
+  line-height: 1.78;
+  color: var(--color-text);
+  word-break: break-word;
+}
+.lingsi-reply-pending {
+  color: var(--color-text-secondary);
+}
+
+.lingsi-reply p {
+  margin: 0 0 9px;
+}
+.lingsi-reply p:last-child {
+  margin-bottom: 0;
+}
+.lingsi-reply ul,
+.lingsi-reply ol {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+}
+.lingsi-reply li {
+  margin: 3px 0;
+}
+/* 行内代码 = 浅灰底 + 细边框（原实现用红底，红色收窄后不再承担这个用途） */
+.lingsi-reply code {
+  padding: 0.5px 4px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+.lingsi-reply table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 12px;
+  font-size: 12.5px;
+}
+.lingsi-reply th,
+.lingsi-reply td {
+  border-bottom: 1px solid var(--surface-border);
+  padding: 6px 8px;
+  text-align: left;
+}
+.lingsi-reply th {
+  background: var(--surface);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.lingsi-reply h1,
+.lingsi-reply h2,
+.lingsi-reply h3 {
+  font-size: 14.5px;
+  margin: 10px 0 6px;
+}
+.lingsi-reply blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 2px solid var(--surface-border);
+  color: var(--color-text-secondary);
+}
+
+/* 流式光标 */
+.lingsi-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--color-red);
+  animation: lingsi-blink 1s steps(1) infinite;
+}
+
+@keyframes lingsi-blink {
+  0%, 45% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+/* -------------------------------------------------------------- 元信息条 */
+
+.lingsi-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+.lingsi-meta-tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+}
+.lingsi-meta-tag-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lingsi-meta-failed {
+  color: var(--color-red);
+}
+
+/* -------------------------------------------------------------- 消息动作行 */
+
+/* 常驻低对比、hover 消息时提到 1 —— 动作不抢内容注意力，但也不能藏到要用时找不到。
+   `由灵思生成` 不参与显隐：合规声明必须恒可见。 */
+.lingsi-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+  opacity: 0.5;
+  transition: opacity 0.16s var(--easing);
+}
+.lingsi-turn:hover .lingsi-msg-actions {
+  opacity: 1;
+}
+.lingsi-gen-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+
+/* ============================================================ 引用条 */
+
+.lingsi-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.lingsi-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-strong);
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s var(--easing), color 0.15s var(--easing);
+}
+.lingsi-ref:hover {
+  /* 红色用途 ④（交互反馈，静态不可见） */
+  border-color: rgba(222, 41, 16, 0.45);
+  color: var(--color-red);
+}
+
+/* ============================================================ 拟执行清单卡 */
+
+.lingsi-plan {
+  margin-top: 14px;
+  border: 1px solid rgba(222, 41, 16, 0.45);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-strong);
+}
+
+.lingsi-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  background: var(--color-red-soft);
+}
+.lingsi-plan-head svg {
+  color: var(--color-red);
+  flex-shrink: 0;
+}
+
+.lingsi-plan-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.lingsi-plan-summary {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-plan-sec {
+  padding: 10px 13px 2px;
+}
+
+.lingsi-plan-sec-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
+.lingsi-plan-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.lingsi-plan-item-no {
+  flex-shrink: 0;
+  min-width: 17px;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.lingsi-plan-item-label {
+  color: var(--color-text);
+}
+.lingsi-plan-item-sub {
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+}
+
+/* 跳过项：必现、不可折叠（§4.3） */
+.lingsi-skip {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  border-radius: 7px;
+  background: var(--ls-warn-bg);
+  border: 1px solid var(--ls-warn-line);
+  font-size: 12px;
+  color: var(--ls-warn);
+}
+.lingsi-skip-dot {
+  flex-shrink: 0;
+}
+.lingsi-skip-label {
+  font-weight: 500;
+}
+.lingsi-skip-reason {
+  opacity: 0.9;
+}
+
+.lingsi-plan-more {
+  padding: 5px 13px 0;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.lingsi-plan-more:hover {
+  color: var(--color-text);
+}
+
+.lingsi-plan-detail {
+  margin: 8px 13px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.lingsi-plan-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 13px;
+  margin-top: 9px;
+  border-top: 1px solid var(--surface-border);
+}
+
+.lingsi-plan-acts {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.lingsi-plan-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ls-warn);
+}
+
+/* ============================================================ 产物卡（UI v2 新增） */
+
+/* 替代原来的单行绿字回执：一行文案只能回答"成没成"，
+   "改了哪几样"必须结构化，否则用户得自己回业务页翻一遍才能确认 */
+.lingsi-artifact {
+  margin-top: 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  overflow: hidden;
+}
+
+.lingsi-artifact-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: background 0.14s var(--easing);
+}
+.lingsi-artifact-head:hover {
+  background: var(--ls-soft);
+}
+
+.lingsi-artifact-ic {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--ls-ok-bg);
+  border: 1px solid var(--ls-ok-line);
+  color: var(--ls-ok);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lingsi-artifact-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.lingsi-artifact-deltas {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+  font-family: Consolas, Monaco, monospace;
+}
+.lingsi-artifact-head > svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-delta-add { color: var(--ls-ok); }
+.lingsi-delta-warn { color: var(--ls-warn); }
+.lingsi-delta-mute { color: var(--color-text-secondary); }
+
+.lingsi-artifact-rows {
+  border-top: 1px solid var(--surface-border);
+}
+
+.lingsi-artifact-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--surface-border);
+  cursor: pointer;
+  transition: background 0.14s var(--easing);
+}
+.lingsi-artifact-row:last-child {
+  border-bottom: none;
+}
+.lingsi-artifact-row:hover {
+  background: var(--ls-soft);
+}
+
+/* 类型识别色块：只承担"分辨类型"，不承担强调 —— 所以不用品牌红 */
+.lingsi-artifact-glyph {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lingsi-artifact-name {
+  font-size: 12.5px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lingsi-artifact-sub {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.lingsi-artifact-act {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  opacity: 0.55;
+  transition: opacity 0.14s var(--easing);
+}
+.lingsi-artifact-row:hover .lingsi-artifact-act {
+  opacity: 1;
+}
+
+/* ============================================================ 执行结果行 */
+
+/* 改版后它只做"回执"：一句话说成没成。
+   用户反馈：任务完成后不要 corner 弹窗，结果直接落在对话框里。
+   色值用实色字面量，不做 var+alpha 拼接。 */
+.lingsi-notice {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+  border-left-width: 3px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lingsi-notice-success {
+  border-left-color: #52a052;
+  border-color: #cbe6cb;
+  background: #f6fbf6;
+  color: #2f6b2f;
+}
+.lingsi-notice-failed {
+  border-left-color: #de2910;
+  border-color: #f6d2cd;
+  background: #fef6f5;
+  color: #a81d0b;
+}
+.lingsi-notice-partial {
+  border-left-color: #fa8c16;
+  border-color: #fae0bb;
+  background: #fffaf2;
+  color: #93560a;
+}
+.lingsi-notice-info {
+  border-left-color: #9aa4b2;
+  border-color: #e3e6ea;
+  background: #fafbfc;
+  color: #5a6472;
+}
+
+/* ============================================================ 表单补全卡（D2.5） */
+
+/* 预留视觉语言：琥珀系 = "等用户输入"，与清单卡的红系区分（遵循 P6 约定） */
+.lingsi-form {
+  margin-top: 14px;
+  border: 1px solid var(--ls-warn-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-strong);
+}
+
+.lingsi-form-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  background: var(--ls-warn-bg);
+}
+.lingsi-form-head .anticon {
+  color: var(--ls-warn);
+}
+
+.lingsi-form-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.lingsi-form-summary {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-form-sec {
+  padding: 10px 13px 2px;
+}
+
+.lingsi-form-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.lingsi-form-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.lingsi-form-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  font-size: 12px;
+  color: var(--color-text);
+}
+.lingsi-form-field em {
+  color: var(--ls-warn);
+  font-style: normal;
+}
+
+.lingsi-form-prefill {
+  font-size: 11px;
+  color: var(--ls-ok);
+}
+
+.lingsi-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 13px 12px;
+}
+
+/* ============================================================ 输入区（单侧控制点） */
+
+.lingsi-composer {
+  flex-shrink: 0;
+  padding: 12px 28px 14px;
+}
+
+.lingsi-composer-inner {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.lingsi-composer-box {
+  padding: 10px 12px 8px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  transition: border-color 0.16s var(--easing), box-shadow 0.16s var(--easing);
+}
+.lingsi-composer-box:focus-within {
+  border-color: rgba(222, 41, 16, 0.45);
+  box-shadow: 0 0 0 3px rgba(222, 41, 16, 0.07);
+}
+
+/* 待附加的上下文 chip：挂在输入框上方，随消息一起发出后从输入区消失、
+   落到该条用户消息的引用行上（见 .lingsi-quote-refs） */
+.lingsi-ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-bottom: 8px;
+}
+.lingsi-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 5px 0 9px;
+  border-radius: 7px;
+  background: var(--color-red-soft);
+  border: 1px solid rgba(222, 41, 16, 0.28);
+  font-size: 11.5px;
+  color: var(--color-text);
+  max-width: 280px;
+}
+.lingsi-ref-chip-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lingsi-ref-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+}
+.lingsi-ref-chip-x:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--color-text);
+}
+
+.lingsi-ref-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lingsi-ref-picker-hint {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 320px;
+}
+
+/* 自绘外框 → 内层 TextArea 必须完全去壳，否则会出现"框里还有一个框" */
+.lingsi-composer-ta.ant-input {
+  padding: 0;
+  background: transparent;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--color-text);
+  resize: none;
+  box-shadow: none;
+}
+.lingsi-composer-ta.ant-input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.lingsi-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* 权限档位：分段控件比"单个可切换的药丸"更不容易被误读 */
+.lingsi-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+}
+
+.lingsi-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+}
+.lingsi-seg-btn:hover {
+  color: var(--color-text);
+}
+.lingsi-seg-btn-on {
+  background: var(--surface-strong);
+  color: var(--color-text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(20, 24, 32, 0.08);
+}
+
+.lingsi-model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--surface-border);
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.lingsi-model-pill-warn {
+  color: var(--ls-warn);
+  border-color: var(--ls-warn-line);
+  background: var(--ls-warn-bg);
+}
+
+.lingsi-send {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-red); /* 红色用途 ③：唯一主行动 */
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.14s var(--easing), opacity 0.14s var(--easing);
+}
+.lingsi-send:hover:not(:disabled) {
+  background: #c2220c;
+}
+.lingsi-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.lingsi-send-stop {
+  background: var(--color-text-secondary);
+}
+.lingsi-send-stop:hover:not(:disabled) {
+  background: var(--color-text);
+}
+
+.lingsi-composer-hint {
+  display: flex;
+  gap: 12px;
+  margin-top: 7px;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+.lingsi-composer-hint-r {
+  margin-left: auto;
+  text-align: right;
+}
+
+/* ============================================================ 右栏：实体面板 */
+
+.lingsi-panel {
+  /* 宽度由 store 内联注入（可拖拽调宽，320–720，localStorage 记忆） */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 拖拽分隔条：覆盖在面板左缘。平时不可见，hover/聚焦给一条 2px 的提示线 ——
+   一条常驻的把手会永远占掉 8px 且视觉上是噪声 */
+.lingsi-panel-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+}
+.lingsi-panel-handle::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.14s var(--easing);
+}
+.lingsi-panel-handle:hover::after,
+.lingsi-panel-handle:focus-visible::after {
+  background: rgba(222, 41, 16, 0.35);
+}
+.lingsi-panel-handle:focus-visible {
+  outline: none;
+}
+
+/* 拖拽进行中：禁选文本 + 全局 col-resize 光标（否则光标会闪成 text） */
+body.lingsi-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* 收起态留一条窄轨 —— 否则"有产物但面板不见了"就是死路 */
+.lingsi-panel-rail {
+  flex: 0 0 40px;
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.lingsi-panel-rail-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-panel-tabs {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--surface-border);
+  overflow-x: auto;
+}
+
+.lingsi-ptab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 6px 0 9px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+}
+.lingsi-ptab-active {
+  background: var(--surface-strong);
+  color: var(--color-text);
+  font-weight: 500;
+}
+.lingsi-ptab-label {
+  max-width: 108px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lingsi-ptab-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.lingsi-ptab-x:hover {
+  opacity: 1;
+  background: var(--ls-soft-strong);
+}
+
+.lingsi-panel-tab-spacer {
+  flex: 1;
+}
+
+.lingsi-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.lingsi-panel-title {
+  margin: 0 0 3px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.lingsi-panel-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-panel-tag {
+  padding: 0 6px;
+  line-height: 16px;
+  border-radius: 5px;
+  border: 1px solid var(--surface-border);
+  font-size: 10.5px;
+}
+
+.lingsi-panel-note {
+  margin-bottom: 14px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.lingsi-panel-preview-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lingsi-panel-doc .lingsi-reply {
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+/* ============================================================ 能力抽屉 */
+
+.lingsi-tool-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--surface-border);
+}
+.lingsi-tool-row:last-child {
+  border-bottom: none;
+}
+
+.lingsi-tool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: Consolas, Monaco, monospace;
+}
+
+.lingsi-tool-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+/* ============================================================ 响应式 / 无障碍 */
+
+@media (prefers-reduced-motion: reduce) {
+  .lingsi-cursor,
+  .lingsi-dot {
+    animation: none !important;
+  }
+}
+
+/* 窄屏不分屏（AgentHome 会同步把面板收起）。
+   任务栏在 <900px 的降级由 JS 处理（整个节点装进 antd Drawer），不再用 CSS 隐藏 ——
+   原来直接 display:none 会让手机上完全没法切换任务，等于砍掉一个功能 */
+@media (max-width: 1199px) {
+  .lingsi-panel,
+  .lingsi-panel-rail {
+    display: none;
+  }
+}
+
+/* 抽屉模式下的任务栏：容器从 flex 子项变成抽屉全宽内容 */
+.lingsi-sider-drawer .lingsi-sider {
+  width: 100%;
+  flex: 1 1 auto;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* ============================================================================
+   知识库问答（V27 对话档位）—— 依据卡与正文引用角标
+   颜色只用既有的 --ls-* 语义变量：快照用 warn（提醒时效）、已不可见用灰阶。
+   不引入新的红色（红只保留在 新建图标 / 选中竖条 / 发送按钮 / 不可逆警示）。
+   ========================================================================== */
+
+/* 正文里的 [n] 角标：读到哪里就能点哪里 */
+.lingsi-cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: var(--ls-soft-strong);
+  color: var(--color-text-secondary);
+  font-size: 10.5px;
+  line-height: 1;
+  vertical-align: 1px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.lingsi-cite:hover,
+.lingsi-cite:focus-visible {
+  background: var(--ls-soft);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lingsi-cite {
+    transition: none;
+  }
+}
+
+/* ---------- 依据卡 ---------- */
+
+.lingsi-sources {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--surface-border);
+}
+
+.lingsi-sources-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.lingsi-sources-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ls-soft-strong);
+  font-size: 10.5px;
+}
+
+.lingsi-sources-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lingsi-source {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.lingsi-source:hover {
+  background: var(--ls-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lingsi-source {
+    transition: none;
+  }
+}
+
+.lingsi-source-idx {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ls-soft-strong);
+  color: var(--color-text-secondary);
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.lingsi-source-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lingsi-source-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+}
+
+/* 出处类型徽标：让人一眼看出这条依据来自公告还是策划书 */
+.lingsi-source-kind {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ls-soft-strong);
+  color: var(--color-text-tertiary);
+  font-size: 10.5px;
+}
+
+.lingsi-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* 快照的时间限定：必须显眼到不会被忽略 —— 这是"某时刻的数字"而不是"当前值" */
+.lingsi-source-asof {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ls-warn-bg);
+  border: 1px solid var(--ls-warn-line);
+  color: var(--ls-warn);
+}
+
+.lingsi-source-snippet {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lingsi-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.lingsi-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lingsi-source-link:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+}
+
+/* 快照类整条用虚线，与文档类形成"这是数据不是文件"的区分 */
+.lingsi-source-snapshot {
+  border: 1px dashed var(--ls-warn-line);
+}
+
+/* 已不可见（权限被收回后回看历史）：只说明状态，不展示任何内容 */
+.lingsi-source-revoked .lingsi-source-title {
+  color: var(--color-text-tertiary);
+}
+
+.lingsi-source-revoked-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+}

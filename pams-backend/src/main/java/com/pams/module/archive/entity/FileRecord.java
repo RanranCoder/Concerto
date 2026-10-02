@@ -1,5 +1,5 @@
 package com.pams.module.archive.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "file_record")
-public class FileRecord {
+public class FileRecord implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -24,4 +24,5 @@ public class FileRecord {
     private String bizType;
     private Long uploaderId;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

@@ -1,5 +1,5 @@
 package com.pams.module.notification.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "notification")
 @SQLRestriction("deleted = 0")
-public class Notification {
+public class Notification implements OrgScoped {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -53,4 +53,5 @@ public class Notification {
     private LocalDateTime createdAt;
 
     private Integer deleted;
+    private Long orgId;
 }

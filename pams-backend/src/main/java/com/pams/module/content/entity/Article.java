@@ -1,5 +1,5 @@
 package com.pams.module.content.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "article")
 @SQLRestriction("deleted = 0")
-public class Article {
+public class Article implements OrgScoped {
     public enum ArticleStatus { DRAFT, PENDING, APPROVED, PUBLISHED, REJECTED }
     public enum ArticleType { PREHEAT, REPORT, VIDEO }
 
@@ -43,4 +43,5 @@ public class Article {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
+    private Long orgId;
 }

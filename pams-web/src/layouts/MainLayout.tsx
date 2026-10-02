@@ -3,7 +3,9 @@ import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, useMemo, startTransition, useState } from 'react'
 import {
+  ApartmentOutlined,
   BellOutlined,
+  BookOutlined,
   CalendarOutlined,
   DashboardOutlined,
   FileTextOutlined,
@@ -11,6 +13,7 @@ import {
   IdcardOutlined,
   LockOutlined,
   LogoutOutlined,
+  RobotOutlined,
   ScheduleOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -67,7 +70,15 @@ export default function MainLayout() {
 
     const items: MenuProps['items'] = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
+      // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限
+      { key: '/agent', label: '灵思', icon: <RobotOutlined /> },
     ]
+    // 知识库（V27）：灵思「对话」档位能检索到的资料。
+    // kb:read 种子给了全部角色 —— 与 /agent 同一立场：问答人人可用，
+    // 能看到哪些内容由各知识源的可见范围决定，不由菜单权限决定。
+    if (hasPerm('kb:read')) {
+      items.push({ key: '/knowledge', label: '知识库', icon: <BookOutlined /> })
+    }
     if (hasPerm('activity:view')) {
       items.push({ key: '/activities', label: '活动管理', icon: <CalendarOutlined /> })
     }
@@ -78,6 +89,8 @@ export default function MainLayout() {
         icon: <ScheduleOutlined />,
         children: [
           { key: '/routine/schedules', label: '排班' },
+          { key: '/routine/my-schedules', label: '我的排班' },
+          { key: '/routine/activity-schedules', label: '活动排班' },
           { key: '/routine/attendance', label: '考勤' },
           ...(hasPerm('schedule:free_table') ? [
             { key: '/routine/course-schedule', label: '无课表制作' },
@@ -138,6 +151,7 @@ export default function MainLayout() {
     }
     if (isAdmin) {
       items.push({ key: '/admin/settings', label: '系统设置', icon: <SettingOutlined /> })
+      items.push({ key: '/org/structure', label: '组织架构', icon: <ApartmentOutlined /> })
     }
     return items
   }, [user?.roleCode, user?.roleLevel, user?.permissions])
@@ -148,7 +162,10 @@ export default function MainLayout() {
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
+    if (p.startsWith('/agent')) return '/agent'
     if (p.startsWith('/routine/attendance')) return '/routine/attendance'
+    if (p.startsWith('/routine/my-schedules')) return '/routine/my-schedules'
+    if (p.startsWith('/routine/activity-schedules')) return '/routine/activity-schedules'
     if (p.startsWith('/routine/course-schedule')) return '/routine/course-schedule'
     if (p.startsWith('/routine/free-schedules')) return '/routine/free-schedules'
     if (p.startsWith('/routine')) return '/routine/schedules'
@@ -163,6 +180,7 @@ export default function MainLayout() {
     if (p === '/admin/users') return '/admin/users'
     if (p === '/admin/permissions') return '/admin/permissions'
     if (p === '/admin/settings') return '/admin/settings'
+    if (p.startsWith('/org/structure')) return '/org/structure'
     if (p.startsWith('/activities')) return '/activities'
     return p
   }, [location.pathname])

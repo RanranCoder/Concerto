@@ -46,6 +46,13 @@ export interface ScheduleVO {
   weekday: number | null
   /** 节次或时间段，如 上午第1-2节 / 9:00-9:10 */
   sessionName: string | null
+  /** 活动排班新增字段 */
+  startTime: string | null
+  endTime: string | null
+  /** 排班状态：DRAFT/PUBLISHED/ENDED/CANCELLED */
+  status: string | null
+  /** 生成来源：AUTO/MANUAL */
+  source: string | null
   location: string | null
   scheduleDate: string | null
   notes: string | null
@@ -74,6 +81,8 @@ export interface ScheduleSave {
 
 export const listSchedules = (params: { type?: string; weekNo?: number; weekday?: number; activityId?: number }) =>
   get<ScheduleVO[]>('/schedules', params)
+/** 我的排班：当前用户被排到的班次 */
+export const listMySchedules = () => get<ScheduleVO[]>('/schedules/my')
 export const createSchedule = (data: ScheduleSave) => post<number>('/schedules', data)
 export const updateSchedule = (id: number, data: ScheduleSave) => put<void>(`/schedules/${id}`, data)
 export const deleteSchedule = (id: number) => del<void>(`/schedules/${id}`)

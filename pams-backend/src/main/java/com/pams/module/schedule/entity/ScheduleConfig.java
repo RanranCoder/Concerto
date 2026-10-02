@@ -1,5 +1,5 @@
 package com.pams.module.schedule.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -11,7 +11,7 @@ import java.time.LocalTime;
 @Data
 @Entity
 @Table(name = "schedule_config")
-public class ScheduleConfig {
+public class ScheduleConfig implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -27,4 +27,5 @@ public class ScheduleConfig {
 
     @Column(length = 20)
     private String label;
+    private Long orgId;
 }

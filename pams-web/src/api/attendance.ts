@@ -1,26 +1,58 @@
-import { get, post, del } from './http'
+import { get, post, put, del } from './http'
 
-/** 考勤状态：PRESENT 出勤 / LEAVE 请假 / ABSENT 缺勤 */
-export const ATTENDANCE_STATUS = ['PRESENT', 'LEAVE', 'ABSENT'] as const
+/** 考勤状态：待签到/正常/迟到/缺勤/请假/早退/补签/取消 */
+export const ATTENDANCE_STATUS = [
+  'PENDING',
+  'NORMAL',
+  'LATE',
+  'ABSENT',
+  'LEAVE',
+  'EARLY_LEAVE',
+  'MAKEUP',
+  'CANCELED',
+] as const
 
 export const ATTENDANCE_STATUS_MAP: Record<string, string> = {
-  PRESENT: '出勤',
-  LEAVE: '请假',
+  PENDING: '待签到',
+  NORMAL: '正常',
+  LATE: '迟到',
   ABSENT: '缺勤',
+  LEAVE: '请假',
+  EARLY_LEAVE: '早退',
+  MAKEUP: '补签',
+  CANCELED: '取消',
 }
 
-export const ATTENDANCE_STATUS_OPTIONS = ATTENDANCE_STATUS.map((v) => ({ value: v, label: ATTENDANCE_STATUS_MAP[v] }))
+/** 用于人工修改状态的可选状态集合（去掉待签到，允许正常/迟到等） */
+export const ATTENDANCE_MANUAL_OPTIONS = ATTENDANCE_STATUS.filter(
+  (s) => s !== 'PENDING' && s !== 'CANCELED',
+).map((v) => ({ value: v, label: ATTENDANCE_STATUS_MAP[v] }))
+
+export const ATTENDANCE_STATUS_OPTIONS = ATTENDANCE_STATUS.map((v) => ({
+  value: v,
+  label: ATTENDANCE_STATUS_MAP[v],
+}))
 
 export interface AttendanceVO {
   id: number
-  scheduleId: number
+  scheduleId: number | null
+  sessionId: number | null
   personId: number | null
   personName: string
-  /** PRESENT / LEAVE / ABSENT */
+  studentNo: string | null
   status: string
+  statusSource: 'AUTO' | 'MANUAL' | null
   remark: string | null
-  recordTime: string
-  createdAt: string
+  checkedInAt: string | null
+  recordTime: string | null
+  activityId: number | null
+  activityName: string | null
+  activityType: string | null
+  activityDate: string | null
+  activityStart: string | null
+  activityEnd: string | null
+  sessionName: string | null
+  signCount: number
 }
 
 export interface AttendanceSave {
@@ -31,24 +63,53 @@ export interface AttendanceSave {
   remark?: string | null
 }
 
-/** 按人汇总行：应到 shouldAttend / 实到 present / 请假 leave / 缺勤 absent / 次数 count */
-export interface AttendanceSummaryVO {
-  personName: string
+export interface AttendanceStats {
+  totalActivities: number
   shouldAttend: number
-  present: number
-  leave: number
+  signed: number
+  normal: number
+  late: number
   absent: number
-  count: number
+  leave: number
+  makeup: number
+  pending: number
 }
 
-export const listAttendances = (params: { scheduleId?: number; weekNo?: number; personName?: string }) =>
-  get<AttendanceVO[]>('/attendances', params)
+export interface AttendanceAuditVO {
+  id: number
+  attendanceId: number
+  oldStatus: string | null
+  newStatus: string | null
+  operatorId: number | null
+  operatorName: string | null
+  operateTime: string | null
+  remark: string | null
+}
+
+export interface AttendanceFilter {
+  activityId?: number
+  date?: string
+  dateFrom?: string
+  dateTo?: string
+  type?: string
+  keyword?: string
+  status?: string
+}
+
+export const listAttendances = (params: AttendanceFilter) => get<AttendanceVO[]>('/attendances', params)
+export const getAttendanceStats = (params: AttendanceFilter) => get<AttendanceStats>('/attendances/stats', params)
+export const listMyAttendances = () => get<AttendanceVO[]>('/attendances/my')
+export const updateAttendanceStatus = (id: number, data: { newStatus: string; remark?: string }) =>
+  put<AttendanceVO>(`/attendances/${id}/status`, data)
+export const makeupAttendance = (id: number, remark?: string) =>
+  post<AttendanceVO>(`/attendances/${id}/makeup`, undefined, { params: { remark } })
+export const listAttendanceAudits = (id: number) => get<AttendanceAuditVO[]>(`/attendances/${id}/audits`)
+
 export const createAttendance = (data: AttendanceSave) => post<AttendanceVO>('/attendances', data)
 export const deleteAttendance = (id: number) => del<void>(`/attendances/${id}`)
-/**
- * 按人汇总。weekNo / type 均为可选；weekNo 按考勤所属排班的周次匹配，
- * type 按考勤所属排班的排班类型（scheduleType，如 SMOKING_CURB）匹配；
- * 未关联排班的考勤不匹配任何 weekNo/type。
- */
+/** 按人汇总（兼容保留） */
 export const summaryAttendance = (params: { weekNo?: number; type?: string }) =>
-  get<AttendanceSummaryVO[]>('/attendances/summary', params)
+  get<Array<{ personName: string; shouldAttend: number; present: number; leave: number; absent: number; count: number }>>(
+    '/attendances/summary',
+    params,
+  )

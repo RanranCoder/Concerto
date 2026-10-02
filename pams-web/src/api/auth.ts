@@ -11,6 +11,8 @@ export interface LoginResponse {
     roleLevel: number
     deptId: number | null
     deptName: string | null
+    orgId: number | null
+    orgName: string | null
     permissions: string[]
   }
 }

@@ -3,7 +3,7 @@ import { Button, Empty, Select, Space, Spin } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
 import PageHeader from '@/components/glass/PageHeader'
-import { getGeneratedNoClassSchedule, type NoClassScheduleGeneratedVO } from '@/api/courseSchedule'
+import { getGeneratedNoClassSchedule, getLatestNoClassSchedule, type NoClassScheduleGeneratedVO } from '@/api/courseSchedule'
 import { listDepts, type DeptVO } from '@/api/dept'
 import { useAuthStore } from '@/stores/auth'
 
@@ -15,12 +15,22 @@ export default function FreeScheduleList() {
   const [depts, setDepts] = useState<DeptVO[]>([])
   const [deptId, setDeptId] = useState<number | undefined>(user?.deptId ?? undefined)
   const [semester, setSemester] = useState('2025-2026-2')
+  const [semesterOptions, setSemesterOptions] = useState<string[]>(SEMESTERS)
   const [data, setData] = useState<NoClassScheduleGeneratedVO | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     listDepts()
       .then((res) => setDepts(res ?? []))
+      .catch(() => { /* 拦截已提示 */ })
+    // 默认选中最近一次导入的部门 + 学期
+    getLatestNoClassSchedule()
+      .then((latest) => {
+        if (!latest) return
+        setDeptId(latest.deptId)
+        setSemester(latest.semester)
+        setSemesterOptions((prev) => (prev.includes(latest.semester) ? prev : [latest.semester, ...prev]))
+      })
       .catch(() => { /* 拦截已提示 */ })
   }, [])
 
@@ -60,7 +70,7 @@ export default function FreeScheduleList() {
           />
           <Select
             style={{ width: 180 }}
-            options={SEMESTERS.map((s) => ({ value: s, label: s }))}
+            options={semesterOptions.map((s) => ({ value: s, label: s }))}
             value={semester}
             onChange={setSemester}
           />

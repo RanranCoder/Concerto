@@ -1,5 +1,5 @@
 package com.pams.module.activity.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "seat_map")
-public class SeatMap {
+public class SeatMap implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -19,4 +19,5 @@ public class SeatMap {
     private String personName;
     private String seatType;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

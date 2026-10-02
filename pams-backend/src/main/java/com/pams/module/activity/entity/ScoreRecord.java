@@ -1,5 +1,5 @@
 package com.pams.module.activity.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "score_record")
-public class ScoreRecord {
+public class ScoreRecord implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -20,4 +20,5 @@ public class ScoreRecord {
     private Integer rankNo;
     private String remark;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

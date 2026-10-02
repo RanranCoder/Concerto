@@ -14,6 +14,7 @@ import {
   type PlanOverrides,
   type PlanSectionOrderItem,
 } from './planTemplate'
+import { sanitizeEditableHtml } from '../../utils/sanitizeHtml'
 
 // wangEditor 体积较大，按需加载（进入编辑模式才拉取）
 const PlanRichEditor = lazy(() => import('./PlanRichEditor'))
@@ -141,11 +142,14 @@ function isEmptyRichText(html: string): boolean {
   return stripHtml(html).trim() === ''
 }
 
-/** 把文档 HTML 按 h1-h4 章节标题切分为 {titleHtml, titleText, bodyHtml}[]（正文原样保留） */
-function parseDocSections(html: string): Array<{ titleHtml: string; titleText: string; bodyHtml: string }> {
+/** 把文档 HTML 按 h1-h4 章节标题切分为 {titleHtml, titleText, bodyHtml}[]（正文原样保留）。
+ *  导出供单测直测解析边界（innerHTML 注入点的 XSS 防护，见 wordEditorXss.test.ts） */
+export function parseDocSections(html: string): Array<{ titleHtml: string; titleText: string; bodyHtml: string }> {
   if (typeof document === 'undefined') return []
   const frag = document.createElement('div')
-  frag.innerHTML = html || ''
+  // XSS 防护：存库字段可能含恶意 HTML（如 <img onerror=…> 外带 token），innerHTML 会触发事件属性，
+  // 解析/渲染边界统一走 sanitizeEditableHtml（DOMPurify，与 PlanRichEditor 兜底一致）净化后再解析
+  frag.innerHTML = sanitizeEditableHtml(html || '')
   const out: Array<{ titleHtml: string; titleText: string; bodyHtml: string }> = []
   let current: { titleHtml: string; titleText: string; bodyHtml: string } | null = null
   for (const node of Array.from(frag.childNodes)) {
@@ -161,8 +165,9 @@ function parseDocSections(html: string): Array<{ titleHtml: string; titleText: s
   return out
 }
 
-/** 从 props 组装整篇可编辑文档 HTML：每节 = h2 章节标题 + 正文（字段富文本 / 自定义 contentHtml / meta 覆盖值） */
-function buildDocHtml(
+/** 从 props 组装整篇可编辑文档 HTML：每节 = h2 章节标题 + 正文（字段富文本 / 自定义 contentHtml / meta 覆盖值）。
+ *  导出供单测直测（buildDocHtml 消费处的 XSS 防护，见 wordEditorXss.test.ts） */
+export function buildDocHtml(
   fields: PlanFields,
   overrides: PlanOverrides | undefined,
   meta: PlanMeta | undefined,
@@ -186,13 +191,16 @@ function buildDocHtml(
   return parts.join('')
 }
 
-/** 把编辑后的整篇文档反解回 PlanFields + overrides + sectionOrder（标题匹配回字段，未匹配为自定义章节） */
-function applyDocToState(
+/** 把编辑后的整篇文档反解回 PlanFields + overrides + sectionOrder（标题匹配回字段，未匹配为自定义章节）。
+ *  导出供单测直测（回写落库边界的 XSS 防护，见 wordEditorXss.test.ts） */
+export function applyDocToState(
   html: string,
   fields: PlanFields,
   overrides: PlanOverrides,
 ): { fields: PlanFields; overrides: PlanOverrides; order: PlanSectionOrderItem[] } {
-  const secs = parseDocSections(html)
+  // 回写/落库边界净化：字段正文与自定义章节 contentHtml 会持久化，入库前剥掉脚本与事件属性
+  const cleanHtml = sanitizeEditableHtml(html || '')
+  const secs = parseDocSections(cleanHtml)
   const nextFields: PlanFields = { ...fields }
   const nextOv: PlanOverrides = { ...overrides }
   const nextOrder: PlanSectionOrderItem[] = []
@@ -217,8 +225,8 @@ function applyDocToState(
     }
   }
   // 无任何章节标题的纯正文兜底：整体当作自定义章节，避免内容丢失
-  if (nextOrder.length === 0 && html.trim()) {
-    nextOrder.push({ label: '新章节', field: null, hint: '自定义章节', contentHtml: html })
+  if (nextOrder.length === 0 && cleanHtml.trim()) {
+    nextOrder.push({ label: '新章节', field: null, hint: '自定义章节', contentHtml: cleanHtml })
   }
   return { fields: nextFields, overrides: nextOv, order: nextOrder }
 }

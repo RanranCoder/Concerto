@@ -121,6 +121,16 @@ public class RoutineService {
         return filtered;
     }
 
+    /** 我的排班：返回当前用户在排班人员中的排班（含已组装 persons）。 */
+    public List<Schedule> listMySchedules(Long userId, String realName) {
+        List<Schedule> all = listSchedules(null, null, null, null);
+        return all.stream()
+                .filter(s -> s.getPersons().stream().anyMatch(p ->
+                        (userId != null && p.getUserId() != null && userId.equals(p.getUserId()))
+                                || (p.getUserId() == null && realName != null && realName.equalsIgnoreCase(p.getPersonName()))))
+                .collect(Collectors.toList());
+    }
+
     /** 导出值班表 xlsx，返回文件路径（控制器负责读 bytes 下载） */
     public String exportExcel(String type, Integer weekNo, Integer weekday, Long activityId) {
         List<Schedule> schedules = listSchedules(type, weekNo, weekday, activityId);

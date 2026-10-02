@@ -26,6 +26,13 @@ function hasNameField(configs: Array<{ fieldName: string }>): boolean {
   return configs.some((f) => f?.fieldName === '姓名')
 }
 
+/** 构造浏览器本地时间 ISO（LocalDateTime 可解析，无时区偏置），用于自动判时 */
+function localIso(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 /**
  * 免登录扫码签到落地页（/signin/:token）。
  * 复用 login-page / login-card 的毛玻璃样式；扫码链接为未登录的普通成员/同学打开。
@@ -84,7 +91,7 @@ export default function SigninScan() {
           fields[f.fieldName] = String(f.value).trim()
         }
       }
-      await scanSignin({ token, fields })
+      await scanSignin({ token, fields, signTime: localIso() })
       setDone(true)
       message.success('签到成功')
     } catch {

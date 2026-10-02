@@ -1,5 +1,5 @@
 package com.pams.module.activity.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "activity_plan")
-public class ActivityPlan {
+public class ActivityPlan implements OrgScoped {
     public enum PlanStatus { DRAFT, PENDING, APPROVED, REJECTED }
 
     @Id
@@ -51,4 +51,5 @@ public class ActivityPlan {
     private String reviewComment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Long orgId;
 }

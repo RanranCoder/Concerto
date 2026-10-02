@@ -1,5 +1,5 @@
 package com.pams.module.member.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "member_session")
 @SQLRestriction("deleted = 0")
-public class MemberSession {
+public class MemberSession implements OrgScoped {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(nullable = false, unique = true, length = 50)
@@ -26,4 +26,5 @@ public class MemberSession {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     private Long deleted = 0L;
+    private Long orgId;
 }

@@ -8,11 +8,13 @@ import com.pams.module.archive.repository.CreditRecordRepository;
 import com.pams.module.member.dto.*;
 import com.pams.module.member.entity.Member;
 import com.pams.module.member.entity.MemberSession;
+import com.pams.module.member.event.MemberChangedEvent;
 import com.pams.module.member.repository.MemberRepository;
 import com.pams.module.member.repository.MemberSessionRepository;
 import com.pams.module.routine.repository.AttendanceRepository;
 import com.pams.module.routine.repository.SchedulePersonRepository;
 import com.pams.repository.DepartmentRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -33,13 +35,43 @@ public class MemberService {
     private final CreditRecordRepository creditRepo;
     private final AttendanceRepository attRepo;
     private final SchedulePersonRepository spRepo;
+    /**
+     * V27：成员变更事件 —— 供知识库增量重建。
+     *
+     * <p>知识库把成员数据做成了可检索投影（{@code MemberSource}），
+     * 所以成员一变索引就得跟着变，否则用户问"谁是组织部长"会得到旧答案且不报错（方案 R6）。
+     * 单条变更发 {@code MemberChangedEvent.one(id)}；批量发 {@code bulk()}（整源重建）。
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     public MemberService(MemberRepository memberRepo, MemberSessionRepository sessionRepo,
                          DepartmentRepository deptRepo, CreditRecordRepository creditRepo,
-                         AttendanceRepository attRepo, SchedulePersonRepository spRepo) {
+                         AttendanceRepository attRepo, SchedulePersonRepository spRepo,
+                         ApplicationEventPublisher eventPublisher) {
         this.memberRepo = memberRepo; this.sessionRepo = sessionRepo;
         this.deptRepo = deptRepo; this.creditRepo = creditRepo;
         this.attRepo = attRepo; this.spRepo = spRepo;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * 发布"整源变更"（批量导入后调用）。
+     *
+     * <p>供 {@code MemberImportService} 复用：导入是 {@code saveAll} 批量写入，
+     * 逐条发事件在几百人的场景下会往执行队列塞几百个任务。
+     * 走整源重建粒度更粗但正确。
+     *
+     * <p>对 {@code eventPublisher} 做空判断是本项目的既有约定（PlanService / ArticleService 同款）——
+     * 单测直接 new 服务时不需要造一个事件发布器。
+     */
+    public void publishBulkChanged() {
+        if (eventPublisher != null) eventPublisher.publishEvent(MemberChangedEvent.bulk());
+    }
+
+    private void publishOne(Long memberId) {
+        if (eventPublisher != null && memberId != null) {
+            eventPublisher.publishEvent(MemberChangedEvent.one(memberId));
+        }
     }
 
     public PageResult<MemberVO> page(Long sessionId, Long deptId, String position, String status,
@@ -77,7 +109,10 @@ public class MemberService {
         m.setCreatedBy(currentUserId);
         m.setCreatedAt(LocalDateTime.now());
         m.setUpdatedAt(LocalDateTime.now());
-        return memberRepo.save(m).getId();
+        Long id = memberRepo.save(m).getId();
+        // 事务内发布 → AFTER_COMMIT 时才真正重建索引（索引失败不影响本次写入）
+        publishOne(id);
+        return id;
     }
 
     @Transactional
@@ -91,6 +126,7 @@ public class MemberService {
         apply(m, req);
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);
+        publishOne(id);
     }
 
     @Transactional
@@ -99,17 +135,25 @@ public class MemberService {
         m.setDeleted(m.getId());
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);
+        // 源删则索引删：抽取会返回空，索引器据此清理该成员的分块（方案 §2.3 删除语义）
+        publishOne(id);
     }
 
     @Transactional
     public void batchDelete(List<Long> ids) {
-        if (ids == null) return;
+        if (ids == null || ids.isEmpty()) return;
         for (Long id : ids) { memberRepo.findById(id).ifPresent(m -> { m.setDeleted(m.getId()); memberRepo.save(m); }); }
+        // 按"整源重建"处理：逐条发事件在批量选中很多时会把执行队列塞满，
+        // 而整源重建的代价是可控的
+        publishBulkChanged();
     }
 
     @Transactional
     public int archive(Long sessionId) {
-        return memberRepo.archiveSession(sessionId, LocalDateTime.now());
+        int n = memberRepo.archiveSession(sessionId, LocalDateTime.now());
+        // 整届归档 = 大量成员同时变更 → 整源重建
+        publishBulkChanged();
+        return n;
     }
 
     public MemberStatsVO stats(Long sessionId) {

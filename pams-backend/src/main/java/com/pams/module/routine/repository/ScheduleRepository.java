@@ -8,8 +8,11 @@ import java.util.List;
 
 public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     List<Schedule> findByScheduleType(String scheduleType);
+    List<Schedule> findByScheduleTypeAndStatus(String scheduleType, String status);
     List<Schedule> findByWeekNo(Integer weekNo);
     List<Schedule> findByActivityId(Long activityId);
+    List<Schedule> findByScheduleTypeAndActivityId(String scheduleType, Long activityId);
+    List<Schedule> findByScheduleTypeAndActivityIdAndStatus(String scheduleType, Long activityId, String status);
 
     /**
      * 统计 schedule_date 落入 [start, end]（含端点）的排班条数。

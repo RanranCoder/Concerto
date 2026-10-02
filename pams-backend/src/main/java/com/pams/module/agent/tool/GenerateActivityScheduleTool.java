@@ -1,0 +1,269 @@
+package com.pams.module.agent.tool;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pams.module.agent.core.*;
+import com.pams.module.routine.dto.ActivityScheduleGenerateRequest;
+import com.pams.module.routine.service.ActivityScheduleService;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 写类工具：一键生成活动排班（业务设计方案 §3.5）。
+ *
+ * <p>回答"给这个活动排个班"。复用 {@code ActivityScheduleService.generate}
+ * ——这是项目里既有的<b>规则算法</b>（读无课表、按节次匹配空闲人员、全局均衡分配）。
+ * 灵思不做排班算法，只做"把自然语言参数翻译成 generate 的入参"。
+ *
+ * <p><b>dry-run 的诚实边界</b>：真正的候选人是 {@code generate} 内部算出来的，
+ * 而 generate <b>会写库</b>。因此 dry-run 阶段只校验参数、展示"将在哪些日期、
+ * 什么时段、为哪些部门排班"，不预先算出具体人员名单——
+ * 并在清单里<b>明确告知</b>"具体人员将在确认后由无课表自动匹配"。
+ * 这是对"预览必须真实"的诚实处理：宁可少预览，不假预览。
+ *
+ * <p>权限码 {@code schedule:generate}；数据级 normal。
+ */
+@Component
+public class GenerateActivityScheduleTool implements WriteAgentTool {
+
+    private static final String ARGS_MARK = "__args__:";
+
+    private final ActivityScheduleService scheduleService;
+    private final ActivityResolver activityResolver;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public GenerateActivityScheduleTool(ActivityScheduleService scheduleService,
+                                        ActivityResolver activityResolver) {
+        this.scheduleService = scheduleService;
+        this.activityResolver = activityResolver;
+    }
+
+    @Override
+    public String name() { return "generateActivitySchedule"; }
+
+    @Override
+    public String label() { return "生成排班"; }
+
+    @Override
+    public String runningLabel() { return "正在生成活动排班…"; }
+
+    @Override
+    public String description() {
+        return "为活动一键生成值班/排班表，基于无课表自动匹配空闲人员。"
+                + "需要提供活动、日期范围、时间段与参与部门。"
+                + "适用于'给这个活动排个班''安排下周的值班'等指令。"
+                + "会先生成待确认清单，确认后才写入。";
+    }
+
+    @Override
+    public Map<String, Object> parametersSchema() {
+        return ToolArgs.schema("object", ToolArgs.map(
+                "activityId", ToolArgs.prop("integer", "活动 ID，可省略；与 activityName 二选一"),
+                "activityName", ToolArgs.prop("string", ActivityResolver.NAME_DESC),
+                "startDate", ToolArgs.prop("string", "开始日期 yyyy-MM-dd，必填"),
+                "endDate", ToolArgs.prop("string", "结束日期 yyyy-MM-dd，必填"),
+                "startTime", ToolArgs.prop("string", "每天开始时间 HH:mm，必填"),
+                "endTime", ToolArgs.prop("string", "每天结束时间 HH:mm，必填"),
+                "deptIds", ToolArgs.prop("array", "参与部门 ID 数组，必填"),
+                "peoplePerSlot", ToolArgs.prop("integer", "每个时段需要人数，可省略（不限）"),
+                "semester", ToolArgs.prop("string", "学期，如 2025-2026-1，可省略")
+        ), List.of("startDate", "endDate", "startTime", "endTime", "deptIds"));
+    }
+
+    @Override
+    public List<String> requiredPermissions() { return List.of("schedule:generate"); }
+
+    @Override
+    public Sensitivity sensitivity() { return Sensitivity.NORMAL; }
+
+    @Override
+    public ToolResult execute(ToolContext ctx, Map<String, Object> args) {
+        ActivityResolver.Resolution res =
+                activityResolver.resolve(ToolArgs.lng(args, "activityId"), ToolArgs.str(args, "activityName"));
+        LocalDate startDate = parseDate(ToolArgs.str(args, "startDate"));
+        LocalDate endDate = parseDate(ToolArgs.str(args, "endDate"));
+        LocalTime startTime = parseTime(ToolArgs.str(args, "startTime"));
+        LocalTime endTime = parseTime(ToolArgs.str(args, "endTime"));
+        List<Long> deptIds = ToolArgs.longList(args, "deptIds");
+        Integer peoplePerSlot = ToolArgs.lng(args, "peoplePerSlot") == null ? null
+                : ToolArgs.intVal(args, "peoplePerSlot", 0);
+        String semester = ToolArgs.str(args, "semester");
+
+        List<AgentActionPlan.SkippedItem> skipped = new ArrayList<>();
+        if (res.failed()) return ToolResult.failed(res.message());
+        Long activityId = res.activity().getId();
+        if (startDate == null) return ToolResult.failed("需要指定开始日期（格式 yyyy-MM-dd）。");
+        if (endDate == null) return ToolResult.failed("需要指定结束日期（格式 yyyy-MM-dd）。");
+        if (startTime == null) return ToolResult.failed("需要指定每天的开始时间（格式 HH:mm）。");
+        if (endTime == null) return ToolResult.failed("需要指定每天的结束时间（格式 HH:mm）。");
+        if (deptIds.isEmpty()) return ToolResult.failed("需要指定参与部门。");
+        if (endDate.isBefore(startDate)) return ToolResult.failed("结束日期不能早于开始日期。");
+
+        String activityName = res.activity().getName() == null ? ("活动 " + activityId) : res.activity().getName();
+
+        long days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        if (days > 60) {
+            return ToolResult.failed("日期范围过长（" + days + " 天），请缩小到 60 天以内。");
+        }
+
+        List<AgentActionPlan.PlanItem> items = new ArrayList<>();
+        for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+            items.add(new AgentActionPlan.PlanItem(null, d.toString(),
+                    startTime + "-" + endTime + " · " + deptIds.size() + " 个部门"));
+        }
+
+        List<String> detailLines = new ArrayList<>();
+        detailLines.add("活动：" + activityName);
+        detailLines.add("日期：共 " + days + " 天（" + startDate + " 至 " + endDate + "）");
+        detailLines.add("时段：每日 " + startTime + " - " + endTime);
+        detailLines.add("部门：共 " + deptIds.size() + " 个"
+                + (peoplePerSlot != null && peoplePerSlot > 0 ? "，每时段 " + peoplePerSlot + " 人" : "，人数不限"));
+        detailLines.add("说明：具体排班人员将在确认后按无课表自动匹配空闲人员，"
+                + "同一人不会被反复安排。");
+
+        Map<String, Object> exec = new LinkedHashMap<>();
+        exec.put("activityId", activityId);
+        exec.put("startDate", startDate.toString());
+        exec.put("endDate", endDate.toString());
+        exec.put("startTime", startTime.toString());
+        exec.put("endTime", endTime.toString());
+        exec.put("deptIds", deptIds);
+        if (peoplePerSlot != null) exec.put("peoplePerSlot", peoplePerSlot);
+        if (semester != null) exec.put("semester", semester);
+        detailLines.add(ARGS_MARK + writeJson(exec));
+
+        String summary = activityName + " · 活动排班（" + days + " 天）";
+        AgentActionPlan plan = new AgentActionPlan(null, summary, (int) days, items, skipped,
+                detailLines, true, null);
+
+        return ToolResult.plan(
+                "已整理排班参数：为「" + activityName + "」在 " + startDate + " 至 " + endDate
+                        + " 每日 " + startTime + "-" + endTime + " 排班。\n"
+                        + "确认后将按无课表自动匹配各部门空闲人员。",
+                plan);
+    }
+
+    @Override
+    public CommitResult commit(ToolContext ctx, AgentActionPlan plan) {
+        Map<String, Object> exec = readArgs(plan);
+        if (exec == null) return CommitResult.failed("无法还原排班参数，请重新发起。");
+
+        try {
+            ActivityScheduleGenerateRequest req = new ActivityScheduleGenerateRequest();
+            req.setActivityId(lng(exec.get("activityId")));
+            req.setStartDate(LocalDate.parse(str(exec.get("startDate"))));
+            req.setEndDate(LocalDate.parse(str(exec.get("endDate"))));
+            req.setStartTime(LocalTime.parse(str(exec.get("startTime"))));
+            req.setEndTime(LocalTime.parse(str(exec.get("endTime"))));
+            req.setDeptIds(toLongList(exec.get("deptIds")));
+            if (exec.get("peoplePerSlot") != null) {
+                req.setPeoplePerSlot(Integer.parseInt(String.valueOf(exec.get("peoplePerSlot"))));
+            }
+            if (exec.get("semester") != null) {
+                req.setSemester(String.valueOf(exec.get("semester")));
+            }
+
+            List<Map<String, Object>> details = scheduleService.generate(req);
+            int created = details.size();
+            int persons = 0;
+            for (Map<String, Object> d : details) {
+                Object c = d.get("count");
+                if (c instanceof Number n) persons += n.intValue();
+            }
+
+            List<Map<String, Object>> refs = new ArrayList<>();
+            Long activityId = lng(exec.get("activityId"));
+            refs.add(ToolArgs.map("type", "activity", "id", activityId,
+                    "label", "活动排班", "link", "/routine/schedule?activityId=" + activityId));
+
+            String msg = "已生成 " + created + " 天排班，共安排 " + persons + " 人次。"
+                    + "排班为草稿状态，可在排班管理中复核后发布。";
+            if (persons == 0) {
+                return new CommitResult("PARTIAL", 0, created,
+                        "已生成日期框架，但没有匹配到空闲人员——请检查参与部门的无课表是否已维护。",
+                        ToolArgs.map("days", created, "persons", 0), refs);
+            }
+            return new CommitResult("SUCCESS", persons, 0, msg,
+                    ToolArgs.map("days", created, "persons", persons), refs);
+        } catch (Exception e) {
+            return CommitResult.failed("排班生成失败：" + e.getMessage());
+        }
+    }
+
+    private LocalDate parseDate(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            return LocalDate.parse(s.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private LocalTime parseTime(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            String t = s.trim();
+            if (t.length() == 5) t = t + ":00";
+            return LocalTime.parse(t);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Long> toLongList(Object o) {
+        List<Long> out = new ArrayList<>();
+        if (o instanceof List<?> l) {
+            for (Object x : l) {
+                if (x instanceof Number n) out.add(n.longValue());
+                else if (x != null) {
+                    try {
+                        out.add(Long.parseLong(String.valueOf(x).trim()));
+                    } catch (Exception ignored) {
+                        // 跳过不可解析项
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    private String writeJson(Map<String, Object> m) {
+        try {
+            return mapper.writeValueAsString(m);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readArgs(AgentActionPlan plan) {
+        if (plan == null || plan.detailLines() == null) return null;
+        for (String line : plan.detailLines()) {
+            if (line != null && line.startsWith(ARGS_MARK)) {
+                try {
+                    return mapper.readValue(line.substring(ARGS_MARK.length()), Map.class);
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String str(Object o) { return o == null ? null : String.valueOf(o); }
+
+    private Long lng(Object o) {
+        if (o == null) return null;
+        try {
+            return Long.valueOf(String.valueOf(o));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}

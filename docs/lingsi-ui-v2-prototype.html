@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>灵思 · UI 改版高保真原型 v2（参考 Trae Work 设计语言）</title>
+<style>
+  /* ==========================================================================
+     灵思 UI v2 —— 设计语言基线
+     参考 Trae Work：灰阶克制、内容优先、文档流而非气泡、单侧控制点、产物分屏。
+     品牌色仍走党建红 #DE2910（不用 Trae 的紫），但使用面积大幅收窄：
+     仅用于 ① 新建按钮 ② 选中竖条 ③ 发送按钮 ④ 引用 chip 的 hover 描边。
+     ========================================================================== */
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",system-ui,sans-serif;
+    font-size:13px;line-height:1.6;
+    color:var(--text);
+    background:var(--bg-app);
+    -webkit-font-smoothing:antialiased;
+  }
+  :root{
+    --red:#DE2910;
+    --red-soft:rgba(222,41,16,.09);
+    --red-line:rgba(222,41,16,.35);
+
+    --bg-app:#f2f3f5;
+    --bg:#ffffff;
+    --bg-sider:#f7f7f8;
+    --bg-soft:#f6f7f9;
+    --bg-code:#f6f7f9;
+
+    --border:#e8eaed;
+    --border-soft:#eef0f2;
+
+    --text:#1f2328;
+    --text-2:#6b7280;
+    --text-3:#9aa1ab;
+
+    --ok:#3f8f4f;
+    --ok-bg:#f2f8f3;
+    --warn:#a9701a;
+    --warn-bg:#fdf7ec;
+    --warn-line:#f0d9ab;
+
+    --r-lg:14px;
+    --r-md:10px;
+    --r-sm:7px;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+
+  /* ---------------------------------------------------------------- 三栏骨架 */
+  .app{display:flex;height:100vh;background:var(--bg);overflow:hidden}
+
+  /* ============================================================ 左栏：任务栏 */
+  .sider{
+    width:252px;flex:0 0 252px;
+    background:var(--bg-sider);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:12px 10px 10px;
+  }
+  .brand{display:flex;align-items:center;gap:8px;padding:2px 6px 12px}
+  .brand-mark{
+    width:22px;height:22px;border-radius:7px;flex-shrink:0;
+    background:linear-gradient(135deg,#DE2910,#c2220c);
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28);
+  }
+  .brand-name{font-size:13.5px;font-weight:600;letter-spacing:.02em}
+  .brand-sub{font-size:11px;color:var(--text-3);margin-left:auto}
+
+  .side-btn{
+    display:flex;align-items:center;gap:9px;
+    height:32px;padding:0 10px;margin-bottom:2px;
+    border-radius:8px;color:var(--text);cursor:pointer;
+    transition:background .14s var(--ease);
+  }
+  .side-btn:hover{background:rgba(0,0,0,.045)}
+  .side-btn.primary{
+    background:#fff;border:1px solid var(--border);
+    font-weight:500;height:34px;
+  }
+  .side-btn.primary:hover{border-color:var(--border-strong,#d8dce1)}
+  .side-btn svg{color:var(--text-2);flex-shrink:0}
+  .side-btn.primary svg{color:var(--red)}
+  .side-btn .kbd{margin-left:auto;font-size:10.5px;color:var(--text-3);font-family:var(--mono)}
+
+  .group-head{
+    display:flex;align-items:center;gap:6px;
+    margin:14px 0 4px;padding:0 8px;
+    font-size:11.5px;font-weight:600;color:var(--text-3);
+    letter-spacing:.04em;cursor:pointer;
+  }
+  .group-head .caret{
+    width:0;height:0;border-left:4px solid currentColor;
+    border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
+    transform:rotate(90deg);transition:transform .16s var(--ease);
+  }
+  .group-head.collapsed .caret{transform:rotate(0)}
+  .group-head .count{margin-left:auto;font-weight:400;font-size:11px}
+
+  .task{
+    position:relative;
+    padding:7px 10px 7px 12px;margin-bottom:1px;
+    border-radius:8px;cursor:pointer;
+    transition:background .14s var(--ease);
+  }
+  .task:hover{background:rgba(0,0,0,.045)}
+  .task.active{background:#fff;box-shadow:0 1px 2px rgba(20,24,32,.06)}
+  .task.active::before{
+    content:"";position:absolute;left:0;top:8px;bottom:8px;width:2.5px;
+    border-radius:2px;background:var(--red);
+  }
+  .task-title{
+    font-size:12.5px;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .task-sub{
+    display:flex;align-items:center;gap:6px;
+    font-size:11px;color:var(--text-3);margin-top:2px;
+  }
+  .dot-pending{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:15px;height:15px;padding:0 4px;border-radius:8px;
+    background:var(--red);color:#fff;font-size:10px;font-weight:600;
+  }
+  .sider-foot{
+    margin-top:auto;padding-top:10px;border-top:1px solid var(--border);
+    display:flex;align-items:center;gap:8px;padding-left:6px;
+  }
+  .ava{
+    width:24px;height:24px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg,#8d939c,#6b7280);
+    color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;
+  }
+  .sider-foot .who{font-size:12px;color:var(--text-2)}
+  .sider-foot .tag-free{
+    margin-left:auto;font-size:10.5px;color:var(--text-3);
+    border:1px solid var(--border);border-radius:5px;padding:0 5px;line-height:16px;
+  }
+
+  /* ============================================================ 中栏：对话区 */
+  .chat{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+
+  .chat-head{
+    flex-shrink:0;height:46px;
+    display:flex;align-items:center;gap:10px;
+    padding:0 16px;border-bottom:1px solid var(--border);
+  }
+  .chat-title{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .chat-title .mini{font-size:11px;font-weight:400;color:var(--text-3)}
+  .icon-btn{
+    width:26px;height:26px;border-radius:7px;border:none;background:transparent;
+    color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:background .14s var(--ease),color .14s var(--ease);
+  }
+  .icon-btn:hover{background:rgba(0,0,0,.05);color:var(--text)}
+  .chat-head .spacer{margin-left:auto}
+  .pill-btn{
+    display:inline-flex;align-items:center;gap:5px;
+    height:26px;padding:0 10px;border-radius:7px;
+    border:1px solid var(--border);background:#fff;
+    font-size:12px;color:var(--text);cursor:pointer;
+    transition:border-color .14s var(--ease);
+  }
+  .pill-btn:hover{border-color:#d8dce1}
+
+  /* ---- 消息流 ---- */
+  .stream{
+    flex:1;min-height:0;overflow-y:auto;
+    padding:22px 0 12px;
+  }
+  .stream-inner{max-width:760px;margin:0 auto;padding:0 28px}
+
+  /* ① 用户消息 = 引用块（Trae 式），不再用红底右对齐气泡
+        理由：灵思的输入多为长指令，右对齐气泡在 76% 宽下折行、起点不齐；
+        引用块左对齐与 AI 文档流同栏，读起来像「工作记录」而不是「聊天」。 */
+  .user-quote{
+    position:relative;
+    border:1px solid var(--border);
+    background:var(--bg-soft);
+    border-radius:var(--r-md);
+    padding:11px 14px;
+    font-size:13.5px;line-height:1.7;color:var(--text);
+    margin:0 0 18px;
+  }
+  .user-quote .quote-actions{
+    position:absolute;top:8px;right:10px;
+    display:flex;gap:2px;opacity:0;transition:opacity .15s var(--ease);
+  }
+  .user-quote:hover .quote-actions{opacity:1}
+
+  /* ② AI 消息 = 文档流（去气泡）
+        原来 .lingsi-bubble 的 1px 边框 + 底色，在含卡片时会形成「卡片套卡片」；
+        去掉容器装饰后，卡片本身就是唯一的容器层级。 */
+  .turn{display:flex;gap:11px;align-items:flex-start;margin-bottom:26px}
+  .turn .avatar{
+    flex-shrink:0;width:24px;height:24px;border-radius:8px;margin-top:2px;
+    background:linear-gradient(135deg,#DE2910,#c2220c);
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28);
+  }
+  .turn .body{flex:1;min-width:0}
+
+  /* 过程条：进行中展开、完成后折成一行极淡的摘要 */
+  .proc{
+    display:flex;align-items:center;gap:7px;
+    margin-bottom:9px;font-size:11.5px;color:var(--text-3);
+    cursor:pointer;user-select:none;width:fit-content;
+  }
+  .proc:hover{color:var(--text-2)}
+  .proc .caret{
+    width:0;height:0;border-left:4px solid currentColor;
+    border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
+    transition:transform .16s var(--ease);
+  }
+  .proc.open .caret{transform:rotate(90deg)}
+  .proc .live{
+    width:11px;height:11px;border-radius:50%;
+    border:1.5px solid var(--red);border-right-color:transparent;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .proc-body{
+    margin:0 0 12px 6px;padding-left:12px;
+    border-left:1px solid var(--border-soft);
+  }
+  .proc-row{
+    display:flex;align-items:center;gap:7px;
+    font-size:11.5px;color:var(--text-3);padding:2.5px 0;
+  }
+  .proc-row .tick{color:var(--ok);flex-shrink:0}
+  .proc-row .name{color:var(--text-2)}
+  .proc-row .ms{margin-left:auto;font-variant-numeric:tabular-nums}
+
+  /* 正文：真正的文档流。段落、列表、表格都在这里。 */
+  .doc{font-size:13.5px;line-height:1.78;color:var(--text)}
+  .doc p{margin:0 0 9px}
+  .doc p:last-child{margin-bottom:0}
+  .doc b,.doc strong{font-weight:600}
+  .doc code{
+    font-family:var(--mono);font-size:12px;
+    background:var(--bg-soft);border:1px solid var(--border-soft);
+    border-radius:4px;padding:.5px 4px;
+  }
+  .doc ul{margin:6px 0 10px;padding-left:18px}
+  .doc li{margin:3px 0}
+  .doc table{width:100%;border-collapse:collapse;margin:10px 0 12px;font-size:12.5px}
+  .doc th,.doc td{border-bottom:1px solid var(--border-soft);padding:6px 8px;text-align:left}
+  .doc th{color:var(--text-2);font-weight:500;background:var(--bg-soft)}
+  .doc td.num{font-variant-numeric:tabular-nums}
+
+  .ask{
+    color:var(--text-2);font-size:13px;margin-top:12px;
+    padding-left:1px;
+  }
+
+  /* 引用 chip（点开进右栏 —— 对应 Trae 的「点文件打开右侧面板」） */
+  .refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .ref{
+    display:inline-flex;align-items:center;gap:5px;
+    height:24px;padding:0 9px;border-radius:999px;
+    border:1px solid var(--border);background:#fff;
+    font-size:11.5px;color:var(--text-2);cursor:pointer;
+    transition:border-color .15s var(--ease),color .15s var(--ease);
+  }
+  .ref:hover{border-color:var(--red-line);color:var(--red)}
+  .ref .idx{
+    font-family:var(--mono);font-size:10px;color:var(--text-3);
+    background:var(--bg-soft);border-radius:4px;padding:0 3px;
+  }
+
+  /* ③ 产物卡 —— 本次改版新增的核心组件，对应 Trae 的「文件变更卡」
+        一次批量写操作产生了什么，必须有结构化的一张卡，而不是一段绿字提示。 */
+  .artifact{
+    margin-top:14px;border:1px solid var(--border);border-radius:var(--r-md);
+    background:#fff;overflow:hidden;
+  }
+  .artifact-head{
+    display:flex;align-items:center;gap:8px;
+    padding:9px 12px;cursor:pointer;
+    transition:background .14s var(--ease);
+  }
+  .artifact-head:hover{background:var(--bg-soft)}
+  .artifact-head .ic{
+    width:20px;height:20px;border-radius:6px;flex-shrink:0;
+    background:var(--ok-bg);color:var(--ok);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .artifact-head .t{font-size:12.5px;font-weight:500}
+  .artifact-head .stats{margin-left:auto;display:flex;gap:8px;font-size:11.5px;font-family:var(--mono)}
+  .add{color:var(--ok)}
+  .del{color:#b26a6a}
+  .artifact-head .caret{
+    width:0;height:0;border-left:4px solid var(--text-3);
+    border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
+    transform:rotate(90deg);transition:transform .16s var(--ease);
+  }
+  .artifact.open .artifact-head .caret{transform:rotate(90deg) rotate(0)}
+  .artifact-rows{border-top:1px solid var(--border-soft)}
+  .artifact-row{
+    display:flex;align-items:center;gap:9px;
+    padding:8px 12px;border-bottom:1px solid var(--border-soft);
+    cursor:pointer;transition:background .14s var(--ease);
+  }
+  .artifact-row:last-child{border-bottom:none}
+  .artifact-row:hover{background:var(--bg-soft)}
+  .file-ic{
+    width:20px;height:20px;border-radius:6px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:#fff;font-family:var(--mono);
+  }
+  .file-ic.act{background:#c8703f}
+  .file-ic.doc{background:#3f6fbf}
+  .artifact-row .rn{font-size:12.5px;color:var(--text)}
+  .artifact-row .rp{font-size:11px;color:var(--text-3);margin-left:6px}
+  .artifact-row .ract{margin-left:auto;display:flex;gap:4px;opacity:.55}
+  .artifact-row:hover .ract{opacity:1}
+
+  /* 拟执行清单卡（P4，保留原语义，仅做视觉减重：去掉大面积色块头） */
+  .plan{
+    margin-top:14px;border:1px solid var(--red-line);
+    border-radius:var(--r-md);background:#fff;overflow:hidden;
+  }
+  .plan-head{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 13px;background:var(--red-soft);
+  }
+  .plan-head .t{font-size:12.5px;font-weight:600}
+  .plan-head .s{font-size:11.5px;color:var(--text-2)}
+  .plan-sec{padding:10px 13px 2px}
+  .plan-sec-title{font-size:11.5px;font-weight:600;color:var(--text-3);margin-bottom:6px}
+  .plan-item{display:flex;gap:8px;font-size:12.5px;padding:3px 0}
+  .plan-item .no{color:var(--text-3);font-variant-numeric:tabular-nums;min-width:17px}
+  .plan-item .sub{color:var(--text-3);font-size:11.5px}
+  .skip{
+    display:flex;gap:8px;align-items:flex-start;
+    padding:7px 10px;margin-bottom:6px;border-radius:var(--r-sm);
+    background:var(--warn-bg);border:1px solid var(--warn-line);
+    font-size:12px;color:var(--warn);
+  }
+  .plan-foot{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 13px;margin-top:9px;border-top:1px solid var(--border-soft);
+  }
+  .plan-foot .hint{font-size:11.5px;color:var(--text-3)}
+  .plan-foot .acts{margin-left:auto;display:flex;gap:7px}
+  .btn{
+    height:28px;padding:0 13px;border-radius:7px;font-size:12.5px;
+    border:1px solid var(--border);background:#fff;color:var(--text);
+    cursor:pointer;transition:border-color .14s var(--ease),background .14s var(--ease);
+  }
+  .btn:hover{border-color:#d8dce1}
+  .btn.solid{background:var(--red);border-color:var(--red);color:#fff;font-weight:500}
+  .btn.solid:hover{background:#c2220c;border-color:#c2220c}
+  .btn.ghost{border-color:transparent;color:var(--text-2)}
+
+  /* 结果提示行（执行回执，收窄成一行） */
+  .receipt{
+    display:flex;align-items:center;gap:7px;
+    margin-top:12px;padding:9px 12px;border-radius:var(--r-sm);
+    background:var(--ok-bg);border:1px solid #d6e8da;
+    font-size:12.5px;color:#2f6b3b;
+  }
+
+  /* ④ hover 动作行 +「由灵思生成」免责声明（Trae 同款，常驻低对比） */
+  .msg-actions{
+    display:flex;align-items:center;gap:2px;margin-top:12px;
+    opacity:.5;transition:opacity .16s var(--ease);
+  }
+  .turn:hover .msg-actions{opacity:1}
+  .msg-actions .gen{
+    margin-left:auto;font-size:11px;color:var(--text-3);
+  }
+  .meta-inline{
+    display:flex;align-items:center;gap:9px;
+    font-size:11px;color:var(--text-3);margin-top:10px;
+  }
+
+  /* ------------------------------------------------------------ 输入区（⑥） */
+  .composer{flex-shrink:0;padding:12px 28px 16px}
+  .composer-inner{max-width:760px;margin:0 auto}
+  .composer-box{
+    border:1px solid var(--border);border-radius:var(--r-lg);
+    background:#fff;padding:11px 13px 8px;
+    transition:border-color .16s var(--ease),box-shadow .16s var(--ease);
+  }
+  .composer-box:focus-within{
+    border-color:rgba(222,41,16,.45);
+    box-shadow:0 0 0 3px rgba(222,41,16,.07);
+  }
+  .composer-ta{
+    width:100%;border:none;outline:none;resize:none;
+    font:inherit;font-size:13.5px;line-height:1.7;color:var(--text);
+    background:transparent;min-height:44px;
+  }
+  .composer-ta::placeholder{color:var(--text-3)}
+  .composer-bar{display:flex;align-items:center;gap:6px;margin-top:8px}
+  .mode-pill{
+    display:inline-flex;align-items:center;gap:5px;
+    height:26px;padding:0 9px;border-radius:7px;
+    border:1px solid var(--border);background:#fff;
+    font-size:12px;color:var(--text-2);cursor:pointer;
+    transition:border-color .14s var(--ease);
+  }
+  .mode-pill:hover{border-color:#d8dce1}
+  .mode-pill.on{color:var(--red);border-color:var(--red-line);background:var(--red-soft)}
+  .send{
+    width:28px;height:28px;border-radius:8px;border:none;
+    background:var(--red);color:#fff;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;
+    margin-left:auto;
+  }
+  .send:hover{background:#c2220c}
+  .composer-hint{
+    display:flex;gap:12px;margin-top:7px;padding:0 2px;
+    font-size:11px;color:var(--text-3);
+  }
+  .composer-hint .r{margin-left:auto}
+
+  /* ============================================================ 右栏（⑧） */
+  .panel{
+    width:452px;flex:0 0 452px;
+    border-left:1px solid var(--border);background:var(--bg);
+    display:flex;flex-direction:column;
+    transition:margin-right .24s var(--ease);
+  }
+  .panel.hidden{margin-right:-452px;opacity:0;pointer-events:none}
+  .panel-tabs{
+    flex-shrink:0;height:40px;display:flex;align-items:center;gap:4px;
+    padding:0 10px;border-bottom:1px solid var(--border);
+  }
+  .ptab{
+    display:inline-flex;align-items:center;gap:6px;
+    height:26px;padding:0 9px;border-radius:7px;
+    font-size:12px;color:var(--text-2);cursor:pointer;
+    background:var(--bg-soft);border:1px solid var(--border-soft);
+  }
+  .ptab.active{background:#fff;border-color:var(--border);color:var(--text);font-weight:500}
+  .ptab .x{color:var(--text-3);font-size:13px;line-height:1}
+  .panel-body{flex:1;overflow-y:auto;padding:16px}
+  .pv-title{font-size:15px;font-weight:600;margin:0 0 3px}
+  .pv-sub{font-size:11.5px;color:var(--text-3);margin-bottom:14px}
+  .kv{display:grid;grid-template-columns:74px 1fr;gap:8px 12px;font-size:12.5px}
+  .kv dt{color:var(--text-3)}
+  .kv dd{margin:0;color:var(--text)}
+  .sec-title{
+    font-size:11.5px;font-weight:600;color:var(--text-3);
+    margin:20px 0 8px;letter-spacing:.03em;
+  }
+  .mini-table{width:100%;border-collapse:collapse;font-size:12px}
+  .mini-table th,.mini-table td{
+    border-bottom:1px solid var(--border-soft);padding:6px 6px;text-align:left;
+  }
+  .mini-table th{color:var(--text-3);font-weight:500}
+  .badge{
+    display:inline-block;font-size:10.5px;padding:0 6px;line-height:17px;
+    border-radius:5px;background:var(--bg-soft);color:var(--text-2);
+    border:1px solid var(--border-soft);
+  }
+
+  /* ---------------------------------------------------------- 标注层（⑦） */
+  .anno{
+    position:absolute;z-index:9;
+    width:17px;height:17px;border-radius:50%;
+    background:#2f6feb;color:#fff;font-size:10.5px;font-style:normal;
+    font-weight:700;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 2.5px rgba(47,111,235,.18);
+    transform:translate(-50%,-50%);
+  }
+  body.no-anno .anno{display:none}
+  .anno-bar{
+    position:fixed;right:16px;bottom:16px;z-index:50;
+    display:flex;align-items:center;gap:10px;
+    background:#1f2328;color:#fff;border-radius:10px;
+    padding:8px 12px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.24);
+  }
+  .anno-bar button{
+    font:inherit;font-size:11.5px;color:#fff;
+    background:rgba(255,255,255,.14);border:none;border-radius:6px;
+    padding:3px 9px;cursor:pointer;
+  }
+  .anno-bar .k{color:rgba(255,255,255,.62);font-size:11px}
+
+  /* 相对定位锚点 */
+  .rel{position:relative}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ==================================================== 左栏 任务栏（⑦） -->
+  <aside class="sider rel">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round">
+          <path d="M8 2l1.4 4 4 1.4-4 1.4L8 13l-1.4-4.2L2.6 7.4l4-1.4z"/>
+        </svg>
+      </span>
+      <span class="brand-name">灵思</span>
+      <span class="brand-sub">党务助手</span>
+    </div>
+
+    <div class="side-btn primary">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      新建任务
+      <span class="kbd">Ctrl N</span>
+    </div>
+
+    <div class="group-head">
+      <i class="caret"></i> 今天 <span class="count">3</span>
+    </div>
+    <div class="task active">
+      <div class="task-title">第四十期培训班任务生成</div>
+      <div class="task-sub"><span>2 分钟前 · 4 步操作</span><span class="dot-pending">1</span></div>
+    </div>
+    <div class="task">
+      <div class="task-title">本月待审策划书汇总</div>
+      <div class="task-sub"><span>1 小时前 · 2 步操作</span></div>
+    </div>
+    <div class="task">
+      <div class="task-title">素拓加分批量核对</div>
+      <div class="task-sub"><span>3 小时前 · 6 步操作</span></div>
+    </div>
+
+    <div class="group-head collapsed">
+      <i class="caret"></i> 更早 <span class="count">12</span>
+    </div>
+    <div class="task">
+      <div class="task-title">南湖纪念馆签到统计</div>
+      <div class="task-sub"><span>昨天</span></div>
+    </div>
+    <div class="task">
+      <div class="task-title">开班仪式策划书起草</div>
+      <div class="task-sub"><span>09-12</span></div>
+    </div>
+
+    <div class="sider-foot">
+      <span class="ava">章</span>
+      <span class="who">张老师</span>
+      <span class="tag-free">组织部</span>
+    </div>
+
+    <i class="anno" style="left:130px;top:64px">7</i>
+  </aside>
+
+  <!-- ================================================== 中栏 对话区 -->
+  <section class="chat">
+
+    <header class="chat-head">
+      <span class="chat-title">
+        第四十期培训班任务生成
+        <span class="mini">· 组织部</span>
+      </span>
+      <span class="spacer"></span>
+      <button class="pill-btn">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6.5 3.5h6v6"/><path d="M12.5 3.5L5 11"/></svg>
+        打开活动
+      </button>
+      <button class="icon-btn" title="更多">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.8" cy="8" r="1.2"/></svg>
+      </button>
+      <button class="icon-btn" id="togglePanel" title="收起/展开右侧面板">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>
+      </button>
+    </header>
+
+    <div class="stream">
+      <div class="stream-inner">
+
+        <!-- ---------- 轮次 A：查询类（展示「AI = 文档流」） ---------- -->
+        <div class="user-quote rel">
+          第四十期培训班现在报名了多少人？分组的分布是怎样的？
+          <span class="quote-actions">
+            <button class="icon-btn" title="复制">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5v-2a1 1 0 00-1-1h-6a1 1 0 00-1 1v6a1 1 0 001 1h2"/></svg>
+            </button>
+            <button class="icon-btn" title="编辑并重新发送">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.6l2.4 2.4-8 8L2.6 13.4l.4-2.8z"/></svg>
+            </button>
+          </span>
+          <i class="anno" style="left:-14px;top:18px">1</i>
+        </div>
+
+        <div class="turn rel">
+          <span class="avatar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2l1.4 4 4 1.4-4 1.4L8 13l-1.4-4.2L2.6 7.4l4-1.4z"/></svg>
+          </span>
+          <div class="body">
+            <!-- 过程条：完成后折成一行，不再占一整块 -->
+            <div class="proc" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">
+              <i class="caret"></i>
+              已完成 · 调用 3 项能力 · 耗时 0.9s
+              <i class="anno" style="left:-16px;top:7px">4</i>
+            </div>
+            <div class="proc-body" style="display:none">
+              <div class="proc-row"><span class="tick">✓</span><span class="name">解析活动名称</span><span>第四十期入党积极分子培训班（ID 412）</span><span class="ms">120ms</span></div>
+              <div class="proc-row"><span class="tick">✓</span><span class="name">查询报名名册</span><span>应到 38 人</span><span class="ms">310ms</span></div>
+              <div class="proc-row"><span class="tick">✓</span><span class="name">统计分组分布</span><span class="ms">470ms</span></div>
+            </div>
+
+            <!-- 正文：真正的文档流 -->
+            <div class="doc">
+              <p>第四十期入党积极分子培训班目前共报名 <b>38 人</b>，按来源单位分为 5 个小组，分布如下：</p>
+              <table>
+                <thead><tr><th>小组</th><th>来源单位</th><th style="text-align:right">人数</th><th style="text-align:right">占比</th></tr></thead>
+                <tbody>
+                  <tr><td>第一组</td><td>文学院党委</td><td class="num" style="text-align:right">11</td><td class="num" style="text-align:right">28.9%</td></tr>
+                  <tr><td>第二组</td><td>理学院党委</td><td class="num" style="text-align:right">9</td><td class="num" style="text-align:right">23.7%</td></tr>
+                  <tr><td>第三组</td><td>工学院党委</td><td class="num" style="text-align:right">8</td><td class="num" style="text-align:right">21.1%</td></tr>
+                  <tr><td>第四组</td><td>马克思主义学院</td><td class="num" style="text-align:right">7</td><td class="num" style="text-align:right">18.4%</td></tr>
+                  <tr><td>第五组</td><td>机关党委</td><td class="num" style="text-align:right">3</td><td class="num" style="text-align:right">7.9%</td></tr>
+                </tbody>
+              </table>
+              <p>其中 <code>第五组</code> 人数偏少（3 人），如按 8 人一组均分，建议把第四组拆出 2 人并入第五组。</p>
+            </div>
+
+            <!-- 引用 chip：点开 → 右侧实体面板 -->
+            <div class="refs">
+              <span class="ref" onclick="openPanel()"><span class="idx">1</span> 第四十期入党积极分子培训班</span>
+              <span class="ref" onclick="openPanel()"><span class="idx">2</span> 报名名册（38 条）</span>
+              <i class="anno" style="left:-15px;top:-6px">5</i>
+            </div>
+
+            <div class="meta-inline">
+              灵思 · 调用 3 项能力 · 耗时 0.9s
+            </div>
+
+            <!-- 动作行 + 免责声明 -->
+            <div class="msg-actions">
+              <button class="icon-btn" title="复制">
+                <svg width="13.5" height="13.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5v-2a1 1 0 00-1-1h-6a1 1 0 00-1 1v6a1 1 0 001 1h2"/></svg>
+              </button>
+              <button class="icon-btn" title="有帮助">
+                <svg width="13.5" height="13.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"><path d="M5 7.5l2.6 4.8c.5.9 1.9.5 1.9-.5V10h2.4c.9 0 1.5-.8 1.3-1.6l-.8-3.2A1.4 1.4 0 0011 4.2H7.6"/><path d="M5 7.5V12M5 7.5H3.2a.7.7 0 00-.7.7v3.1c0 .4.3.7.7.7H5"/></svg>
+              </button>
+              <button class="icon-btn" title="重新生成">
+                <svg width="13.5" height="13.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><path d="M13 8a5 5 0 11-1.6-3.7"/><path d="M13 2.6V5h-2.4"/></svg>
+              </button>
+              <span class="gen">由灵思生成</span>
+              <i class="anno" style="left:-15px;top:-7px">8</i>
+            </div>
+          </div>
+          <i class="anno" style="left:-8px;top:0">2</i>
+        </div>
+
+        <!-- ---------- 轮次 B：写类（拟执行清单卡，P4） ---------- -->
+        <div class="user-quote rel">
+          帮我把开班仪式的活动任务都生成出来，名单以最新导入的为准。
+        </div>
+
+        <div class="turn">
+          <span class="avatar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2l1.4 4 4 1.4-4 1.4L8 13l-1.4-4.2L2.6 7.4l4-1.4z"/></svg>
+          </span>
+          <div class="body">
+            <div class="proc">
+              <i class="caret"></i>
+              已完成 · 调用 4 项能力 · 耗时 1.8s
+            </div>
+
+            <div class="doc">
+              <p>已按最新导入的名单生成 <b>41 条任务草稿</b>，覆盖会务、签到、材料、宣传四个条线。名单中有 3 人尚未分配组别，已跳过（见下）。</p>
+            </div>
+
+            <div class="plan">
+              <div class="plan-head">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#DE2910" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.2l6 10.4H2z"/><path d="M8 6.4v3.1M8 11.2v.1"/></svg>
+                <span class="t">即将执行的操作</span>
+                <span class="s">生成活动任务 · 共 41 项</span>
+              </div>
+
+              <div class="plan-sec">
+                <div class="plan-sec-title">将跳过 3 项（请在确认前核对）</div>
+                <div class="skip">
+                  <span>•</span>
+                  <span>陈思远 · 未分配组别 —— 无法确定所属小组，任务无法归属</span>
+                </div>
+                <div class="skip">
+                  <span>•</span>
+                  <span>林可欣 · 未分配组别 —— 无法确定所属小组，任务无法归属</span>
+                </div>
+                <div class="skip">
+                  <span>•</span>
+                  <span>赵宇轩 · 未分配组别 —— 无法确定所属小组，任务无法归属</span>
+                </div>
+              </div>
+
+              <div class="plan-sec">
+                <div class="plan-sec-title">将执行 41 项</div>
+                <div class="plan-item"><span class="no">1.</span><span>会务组 · 会场布置与桌牌摆放 <span class="sub">· 4 人</span></span></div>
+                <div class="plan-item"><span class="no">2.</span><span>签到组 · 入口签到与名单核验 <span class="sub">· 6 人</span></span></div>
+                <div class="plan-item"><span class="no">3.</span><span>材料组 · 学习资料装袋与发放 <span class="sub">· 5 人</span></span></div>
+                <div class="plan-item"><span class="no">4.</span><span>宣传组 · 摄影、通讯稿撰写 <span class="sub">· 3 人</span></span></div>
+                <div class="plan-item" style="color:var(--text-3)">…另有 23 项</div>
+              </div>
+
+              <div class="plan-foot">
+                <span class="hint">确认后立即执行，可在会话中随时查看结果</span>
+                <span class="acts">
+                  <button class="btn">取消</button>
+                  <button class="btn solid">确认执行</button>
+                </span>
+              </div>
+            </div>
+
+            <div class="meta-inline">灵思 · 调用 4 项能力 · 耗时 1.8s</div>
+
+            <div class="msg-actions">
+              <button class="icon-btn" title="复制">
+                <svg width="13.5" height="13.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5v-2a1 1 0 00-1-1h-6a1 1 0 00-1 1v6a1 1 0 001 1h2"/></svg>
+              </button>
+              <span class="gen">由灵思生成</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------- 轮次 C：异步执行完成（产物卡，③） ---------- -->
+        <div class="turn rel">
+          <span class="avatar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2l1.4 4 4 1.4-4 1.4L8 13l-1.4-4.2L2.6 7.4l4-1.4z"/></svg>
+          </span>
+          <div class="body">
+            <div class="receipt">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.4l3 3 6.4-6.6"/></svg>
+              41 条任务已写入「开班仪式」，38 人已分配。
+            </div>
+
+            <div class="artifact open">
+              <div class="artifact-head" onclick="this.parentElement.classList.toggle('open');this.parentElement.querySelector('.artifact-rows').style.display=this.parentElement.classList.contains('open')?'block':'none'">
+                <span class="ic">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.4l3 3 6.4-6.6"/></svg>
+                </span>
+                <span class="t">2 项变更已产生</span>
+                <span class="stats"><span class="add">+41 任务</span><span class="add">+38 成员</span></span>
+                <i class="caret"></i>
+              </div>
+              <div class="artifact-rows">
+                <div class="artifact-row" onclick="openPanel()">
+                  <span class="file-ic act">活</span>
+                  <span class="rn">开班仪式 · 活动任务</span>
+                  <span class="rp">第四十期培训班 / 41 条</span>
+                  <span class="ract">
+                    <button class="icon-btn" title="在右侧打开">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6.5 3.5h6v6"/><path d="M12.5 3.5L5 11"/></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="artifact-row" onclick="openPanel()">
+                  <span class="file-ic doc">册</span>
+                  <span class="rn">应签名单 · 组别回填</span>
+                  <span class="rp">38 条记录</span>
+                  <span class="ract">
+                    <button class="icon-btn" title="在右侧打开">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6.5 3.5h6v6"/><path d="M12.5 3.5L5 11"/></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+              <i class="anno" style="left:-14px;top:12px">3</i>
+            </div>
+
+            <div class="msg-actions">
+              <button class="icon-btn" title="复制">
+                <svg width="13.5" height="13.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5v-2a1 1 0 00-1-1h-6a1 1 0 00-1 1v6a1 1 0 001 1h2"/></svg>
+              </button>
+              <span class="gen">由灵思生成</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------ 输入区（⑥ 单侧控制点） -->
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="composer-box rel">
+          <textarea class="composer-ta" rows="1" placeholder="帮我编写方案、核对名册、起草通知等党务工作，涉及写操作会先出清单。"></textarea>
+          <div class="composer-bar">
+            <button class="icon-btn" title="添加上下文 / 上传附件">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+            </button>
+            <span class="mode-pill" title="只查询、不写入任何数据">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="3.4" y="7" width="9.2" height="6.2" rx="1.6"/><path d="M5.8 7V5.2a2.2 2.2 0 014.4 0V7"/></svg>
+              只读模式
+            </span>
+            <span class="mode-pill on" title="可执行写操作，执行前出拟执行清单">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 8.4l3 3 6.4-6.6"/></svg>
+              标准模式
+            </span>
+            <span class="mode-pill" title="当前模型">
+              DeepSeek V3
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5L8 10l3.5-3.5"/></svg>
+            </span>
+            <button class="send" title="发送（Enter）">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2L7 9M14 2l-4.6 12-2.4-5-5-2.4z"/></svg>
+            </button>
+            <i class="anno" style="left:-14px;top:-6px">6</i>
+          </div>
+        </div>
+        <div class="composer-hint">
+          <span>Enter 发送 · Shift+Enter 换行</span>
+          <span class="r">灵思回答基于你的权限范围，越权内容会说明原因</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================== 右栏 实体面板（⑧） -->
+  <aside class="panel rel" id="panel">
+    <div class="panel-tabs">
+      <span class="ptab active">开班仪式 <span class="x">×</span></span>
+      <span class="ptab">报名名册 <span class="x">×</span></span>
+      <span style="margin-left:auto" class="panel-close">
+        <button class="icon-btn" id="closePanel" title="关闭面板">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="panel-body">
+      <h3 class="pv-title">第四十期入党积极分子培训班 · 开班仪式</h3>
+      <div class="pv-sub">活动 ID 412 · 更新于 2 分钟前</div>
+
+      <dl class="kv">
+        <dt>时间</dt><dd>2026-09-20 09:00 — 11:30</dd>
+        <dt>地点</dt><dd>行政楼 3F 报告厅</dd>
+        <dt>主办</dt><dd>校党委组织部</dd>
+        <dt>状态</dt><dd><span class="badge" style="color:#2f6b3b;background:#f2f8f3;border-color:#d6e8da">筹备中</span></dd>
+      </dl>
+
+      <div class="sec-title">任务条线（41 条）</div>
+      <table class="mini-table">
+        <thead><tr><th>条线</th><th>负责小组</th><th style="text-align:right">人数</th></tr></thead>
+        <tbody>
+          <tr><td>会务组</td><td>第一组</td><td style="text-align:right">4</td></tr>
+          <tr><td>签到组</td><td>第二组</td><td style="text-align:right">6</td></tr>
+          <tr><td>材料组</td><td>第三组</td><td style="text-align:right">5</td></tr>
+          <tr><td>宣传组</td><td>第四组</td><td style="text-align:right">3</td></tr>
+          <tr><td>机动</td><td>第五组</td><td style="text-align:right">20</td></tr>
+        </tbody>
+      </table>
+
+      <div class="sec-title">本次写入</div>
+      <div style="font-size:12.5px;color:var(--text-2);line-height:1.8">
+        · 新增活动任务 <b style="color:var(--text)">41</b> 条<br>
+        · 回填组别到应签名单 <b style="color:var(--text)">38</b> 条<br>
+        · 跳过 <b style="color:var(--warn)">3</b> 人（未分配组别）
+      </div>
+    </div>
+    <i class="anno" style="left:-16px;top:22px">9</i>
+  </aside>
+</div>
+
+<div class="anno-bar">
+  <span class="k">改动标注</span>
+  <span>1 用户消息改引用块</span>
+  <span>2 AI 去气泡</span>
+  <span>3 产物卡</span>
+  <span>4 过程折叠条</span>
+  <span>5 引用进右栏</span>
+  <span>6 单侧控制点</span>
+  <span>7 任务化左栏</span>
+  <span>8 动作行+免责</span>
+  <span>9 实体分屏</span>
+  <button id="annoToggle">隐藏</button>
+</div>
+
+<script>
+  var panel = document.getElementById('panel');
+  function openPanel(){ panel.classList.remove('hidden') }
+  document.getElementById('closePanel').addEventListener('click', function(){ panel.classList.add('hidden') })
+  document.getElementById('togglePanel').addEventListener('click', function(){ panel.classList.toggle('hidden') })
+  document.getElementById('annoToggle').addEventListener('click', function(){
+    document.body.classList.toggle('no-anno')
+    this.textContent = document.body.classList.contains('no-anno') ? '显示' : '隐藏'
+  })
+</script>
+</body>
+</html>

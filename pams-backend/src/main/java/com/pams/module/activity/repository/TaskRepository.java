@@ -16,4 +16,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
      */
     @Query("SELECT t FROM Task t WHERE LOWER(TRIM(t.assignee)) = LOWER(TRIM(:assignee))")
     List<Task> findByAssigneeMatching(@Param("assignee") String assignee);
+
+    /** 按截止日升序（灵思"逾期任务"用；不新增 Service 方法，保持业务侧零侵入） */
+    List<Task> findAllByOrderByEndDateAsc();
 }

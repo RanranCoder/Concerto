@@ -1,5 +1,5 @@
 package com.pams.module.schedule.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "no_class_schedule")
-public class NoClassScheduleRecord {
+public class NoClassScheduleRecord implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -20,4 +20,5 @@ public class NoClassScheduleRecord {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String gridJson;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

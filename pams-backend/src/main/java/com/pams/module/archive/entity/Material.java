@@ -1,5 +1,5 @@
 package com.pams.module.archive.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "material")
 @SQLRestriction("deleted = 0")
-public class Material {
+public class Material implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -27,4 +27,5 @@ public class Material {
     private Long fileId;
     private LocalDateTime createdAt;
     private Integer deleted;
+    private Long orgId;
 }

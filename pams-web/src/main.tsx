@@ -6,6 +6,7 @@ import App from '@/App'
 import '@/styles/global.css'
 import '@/styles/glass.css'
 import '@/styles/tokens.css'
+import '@/styles/lingsi.css'
 
 // 全局 dayjs 中文 locale：format('ddd') 等输出中文星期（Task 28 minor）
 dayjs.locale('zh-cn')

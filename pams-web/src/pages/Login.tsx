@@ -1,6 +1,6 @@
 import { App, Form, Input, Button } from 'antd'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { loginApi } from '@/api/auth'
 
@@ -42,6 +42,9 @@ export default function Login() {
           <Form.Item>
             <Button className="login-submit" type="primary" htmlType="submit" block>登 录</Button>
           </Form.Item>
+          <div style={{ textAlign: 'center' }}>
+            <Link to="/register">注册新组织</Link>
+          </div>
         </Form>
       </div>
     </div>

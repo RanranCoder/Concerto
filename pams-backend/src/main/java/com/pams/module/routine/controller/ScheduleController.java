@@ -4,11 +4,13 @@ import com.pams.common.Result;
 import com.pams.module.routine.dto.ScheduleRequest;
 import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.service.RoutineService;
+import com.pams.security.LoginUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -30,6 +32,12 @@ public class ScheduleController {
                                        @RequestParam(required = false) Integer weekday,
                                        @RequestParam(required = false) Long activityId) {
         return Result.ok(service.listSchedules(type, weekNo, weekday, activityId));
+    }
+
+    /** 我的排班：当前用户被排到的班次 */
+    @GetMapping("/my")
+    public Result<List<Schedule>> my(@AuthenticationPrincipal LoginUser user) {
+        return Result.ok(service.listMySchedules(user.getId(), user.getRealName()));
     }
 
     /** 值班表的增删改与导出需 schedule:manage（V7 种子：部长级；导出含全员值班信息），登录即可查询 */

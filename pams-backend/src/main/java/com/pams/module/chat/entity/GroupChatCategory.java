@@ -1,5 +1,5 @@
 package com.pams.module.chat.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "group_chat_category")
-public class GroupChatCategory {
+public class GroupChatCategory implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,4 +23,5 @@ public class GroupChatCategory {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    private Long orgId;
 }

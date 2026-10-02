@@ -18,7 +18,9 @@ spring:
         format_sql: true
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # db/migration = 双库通用迁移；db/migration-mysql = MySQL 专有迁移（如 V25 动态 DDL）。
+    # 测试 profile 用 db/migration-h2 对应实现（见下方 test 段）。
+    locations: classpath:db/migration,classpath:db/migration-mysql
     # pams_db 已由 Task 2 建表（非空但无 history 表）。baseline-on-migrate + baseline-version=0
     # 让 Flyway 在空历史上建 baseline(0) 后真实执行 V1（DDL 全部 IF NOT EXISTS，幂等安全），
     # 从而在运行时校验 DDL 兼容性。
@@ -38,6 +40,25 @@ pams:
     secret: ${PAMS_JWT_SECRET:${random.uuid}${random.uuid}}
     expire-hours: 24
   upload-dir: ./uploads
+  # ===================== 灵思（Agent） =====================
+  # 密钥治理口径与 jwt.secret 一致：优先环境变量 PAMS_AGENT_API_KEY。
+  # 若两者都为空，LlmConfig 会自动降级为 stub 规则模式（不阻塞启动，离线可演示）。
+  agent:
+    provider: deepseek
+    base-url: https://api.deepseek.com
+    model: deepseek-chat
+    timeout-ms: 30000
+    max-tokens: 2048
+    temperature: 0.3
+    context-rounds: 6
+    max-tool-iterations: 5
+    stream-buffer-size: 500
+    executor-core-size: 4
+    executor-max-size: 8
+    executor-queue-capacity: 64
+    # 密钥只经环境变量注入，默认值必须为空（仓库/镜像内不存在任何真实密钥，2026-09-22 审计 #10 修复）。
+    # 未设置 PAMS_AGENT_API_KEY 时 LlmConfig 自动降级为 stub 规则模式，不影响启动。
+    api-key: ${PAMS_AGENT_API_KEY:}
 
 # 测试库用 H2(MySQL 模式) + Flyway 同迁移脚本
 ---
@@ -51,7 +72,8 @@ spring:
     username: sa
     password: ""
   flyway:
-    locations: classpath:db/migration
+    # H2 走 db/migration-h2（V25 的 H2 分支），避免 MySQL 专有动态 DDL 在 H2 上失败。
+    locations: classpath:db/migration,classpath:db/migration-h2
 pams:
   jwt:
     secret: test-only-jwt-secret-0123456789abcdef0123456789abcdef

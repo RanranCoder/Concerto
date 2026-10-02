@@ -1,5 +1,5 @@
 package com.pams.module.chat.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -12,7 +12,7 @@ import java.io.Serializable;
 @Entity
 @Table(name = "group_chat_department")
 @IdClass(GroupChatDepartmentId.class)
-public class GroupChatDepartment implements Serializable {
+public class GroupChatDepartment implements Serializable, OrgScoped {
     @Id
     @Column(name = "group_chat_id")
     private Long groupChatId;
@@ -20,4 +20,5 @@ public class GroupChatDepartment implements Serializable {
     @Id
     @Column(length = 50)
     private String department;
+    private Long orgId;
 }

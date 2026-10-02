@@ -1,5 +1,5 @@
 package com.pams.module.chat.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "group_chat")
 @SQLRestriction("deleted = 0")
-public class GroupChat {
+public class GroupChat implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -48,4 +48,5 @@ public class GroupChat {
     private LocalDateTime updatedAt;
 
     private Integer deleted;
+    private Long orgId;
 }

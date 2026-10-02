@@ -1,5 +1,5 @@
 package com.pams.module.party.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "party_register")
-public class PartyRegister {
+public class PartyRegister implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -32,4 +32,5 @@ public class PartyRegister {
     @Column(columnDefinition = "TEXT")
     private String remark;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

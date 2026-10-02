@@ -124,13 +124,13 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* 输入框：无填充、仅下边框的线条样式 */
+/* 输入框：无填充、仅下边框的线条样式（登录页底图为深色壁纸，文本/占位恒用白色） */
 .login-card .ant-input {
   background: transparent !important;
-  color: #fff;
+  color: #fff !important;
 }
 .login-card .ant-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.4) !important;
 }
 .login-card .ant-input-affix-wrapper {
   background: transparent !important;

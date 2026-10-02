@@ -1,5 +1,5 @@
 package com.pams.module.activity.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "task")
 @SQLRestriction("deleted = 0")
-public class Task {
+public class Task implements OrgScoped {
     public enum TaskStatus { TODO, DOING, DONE, DELAYED }
 
     @Id
@@ -33,4 +33,5 @@ public class Task {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
+    private Long orgId;
 }

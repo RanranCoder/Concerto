@@ -1,5 +1,5 @@
 package com.pams.module.party.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "party_transfer")
-public class PartyTransfer {
+public class PartyTransfer implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -26,4 +26,5 @@ public class PartyTransfer {
     private LocalDate signDate;
     private String remark;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

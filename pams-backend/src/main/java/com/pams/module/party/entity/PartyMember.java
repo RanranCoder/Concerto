@@ -1,5 +1,5 @@
 package com.pams.module.party.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLRestriction;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "party_member")
 @SQLRestriction("deleted = 0")
-public class PartyMember {
+public class PartyMember implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -33,4 +33,5 @@ public class PartyMember {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
+    private Long orgId;
 }

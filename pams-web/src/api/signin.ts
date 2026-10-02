@@ -13,6 +13,8 @@ export interface SigninVO {
   location: string | null
   phone: string | null
   remark: string | null
+  /** 扫码提交的自定义表单字段值 JSON（字段名->值） */
+  fieldsJson: string | null
   createdAt: string
 }
 
@@ -46,9 +48,14 @@ export const countSignins = (activityId: number) =>
   get<number>(`/signins/${activityId}/count`)
 export const generateSigninToken = (activityId: number) =>
   post<SigninToken>('/signins/token', { activityId })
-/** 扫码签到（免登录）：无效/过期 token 由后端返回业务错误，http 拦截层统一提示 */
-export const scanSignin = (data: { token: string; name?: string; studentNo?: string; fields?: Record<string, string> }) =>
-  post<SigninVO>('/signins/scan', data)
+/** 扫码签到（免登录）：无效/过期 token 由后端返回业务错误，http 拦截层统一提示。signTime 为浏览器时间，用于自动判时 */
+export const scanSignin = (data: {
+  token: string
+  name?: string
+  studentNo?: string
+  fields?: Record<string, string>
+  signTime?: string
+}) => post<SigninVO>('/signins/scan', data)
 
 export interface ScanConfigVO {
   activityId: number
@@ -138,3 +145,18 @@ export const saveSigninFields = (
 /** 手动补签（幂等）：对未签名单行补建签到记录，返回实际补签条数 */
 export const backfillSignins = (activityId: number, rosterIds: number[]) =>
   post<number>('/signins/backfill', { activityId, rosterIds })
+
+/** 活动级签到凭证（单码）：token 只绑定活动，刷新即作废旧码 */
+export interface ActivitySigninToken {
+  token: string
+  activityId: number
+  expiresAt: string
+  qrContent: string
+}
+
+/** 生成/刷新活动唯一签到码 */
+export const generateActivitySigninToken = (activityId: number) =>
+  post<ActivitySigninToken>('/signins/token', { activityId })
+
+/** 关闭活动签到：使当前码作废（停止扫码），重开即再生成新码 */
+export const closeActivitySignin = (activityId: number) => post<void>(`/signins/${activityId}/close`)

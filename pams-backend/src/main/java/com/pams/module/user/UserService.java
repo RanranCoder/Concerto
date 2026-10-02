@@ -241,6 +241,8 @@ public class UserService {
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         checkResetPasswordLevel(u, currentLevel);
         u.setPassword(passwordEncoder.encode("123456"));
+        // 审计 #3：改密即吊销该用户既有 token（推进失效水位），否则旧 token 仍可调用全部 API
+        u.setTokenInvalidBefore(com.pams.security.JwtUtil.revocationWatermark(LocalDateTime.now(), u.getTokenInvalidBefore()));
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
     }
@@ -266,6 +268,8 @@ public class UserService {
             throw new BizException(1010, "新密码长度不能少于 6 位");
         }
         u.setPassword(passwordEncoder.encode(newPassword));
+        // 审计 #3：改密即吊销该用户既有 token（含改密者当前 token，需重新登录）
+        u.setTokenInvalidBefore(com.pams.security.JwtUtil.revocationWatermark(LocalDateTime.now(), u.getTokenInvalidBefore()));
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
     }

@@ -11,13 +11,16 @@ const SigninScan = lazy(() => import('@/pages/signin/SigninScan'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const Activities = lazy(() => import('@/pages/activity/ActivityList'))
+const KnowledgeBase = lazy(() => import('@/pages/knowledge/KnowledgeBase'))
 
 // 以下页面在后续 Task 逐一实现，路由先全量配好，未实现前用占位组件保证可访问不白屏
 const ActivityDetail = lazy(() => import('@/pages/activity/ActivityDetail'))
 const ActivityEdit = lazy(() => import('@/pages/activity/ActivityEdit'))
 const Gantt = lazy(() => import('@/pages/activity/Gantt'))
 const Schedules = lazy(() => import('@/pages/routine/ScheduleList'))
+const MySchedules = lazy(() => import('@/pages/routine/MyScheduleList'))
 const Attendance = lazy(() => import('@/pages/routine/AttendanceList'))
+const ActivitySchedules = lazy(() => import('@/pages/routine/ActivityScheduleList'))
 const FreeSchedules = lazy(() => import('@/pages/routine/FreeScheduleList'))
 const CourseSchedule = lazy(() => import('@/pages/routine/CourseSchedule'))
 const PartyMembers = lazy(() => import('@/pages/party/PartyMemberList'))
@@ -36,6 +39,9 @@ const Settings = lazy(() => import('@/pages/admin/Settings'))
 const NotificationList = lazy(() => import('@/pages/notification/NotificationList'))
 const MemberList = lazy(() => import('@/pages/member/MemberList'))
 const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
+const AgentHome = lazy(() => import('@/pages/agent/AgentHome'))
+const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
+const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -52,6 +58,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  // 注册组织：免登录公开访问（与 /login 同级，位于 MainLayout / RequireAuth 之外）
+  { path: '/register', element: <OrgRegister /> },
   // 扫码签到落地页：免登录公开访问（与 /login 同级，位于 MainLayout / RequireAuth 之外）
   { path: '/signin/:token', element: <SigninScan /> },
   {
@@ -64,6 +72,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
 
+      // 灵思（Agent）：对话页对所有登录用户开放。
+      // 注意：这里不加 RequirePerm —— 权限控制在**工具层**（D3 三层防护）：
+      // 每个工具声明 requiredPermissions，ToolRegistry.dispatch 派发前断言，
+      // 且 /api/agent/tools 只返回当前用户可见的工具。所以干事进来只会看到自己有权做的事。
+      { path: '/agent', element: <AgentHome /> },
+
       // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
       { path: '/activities', element: <Activities /> },
       { path: '/activities/:id', element: <ActivityDetail /> },
@@ -72,7 +86,9 @@ export const router = createBrowserRouter([
 
       // 排班考勤
       { path: '/routine/schedules', element: <Schedules /> },
+      { path: '/routine/my-schedules', element: <MySchedules /> },
       { path: '/routine/attendance', element: <Attendance /> },
+      { path: '/routine/activity-schedules', element: <ActivitySchedules /> },
       { path: '/routine/course-schedule', element: <CourseSchedule /> },
       { path: '/routine/free-schedules', element: <FreeSchedules /> },
 
@@ -110,6 +126,20 @@ export const router = createBrowserRouter([
 
       // 通知中心
       { path: '/notifications', element: <NotificationList /> },
+
+      // 知识库（V27）：灵思「对话」档位能检索到的全部资料。
+      // kb:read 种子给了全部角色 —— 知识问答本身人人可用，
+      // 能看到哪些内容由各知识源的可见范围决定，不由这个码决定（与 /agent 同一立场）。
+      {
+        path: '/knowledge',
+        element: <RequirePerm codes={['kb:read']}><KnowledgeBase /></RequirePerm>,
+      },
+
+      // 组织架构：ADMIN（主任 / 指导老师）可编辑本组织架构树
+      {
+        path: '/org/structure',
+        element: <RequireRole roles={ADMIN_ROLES}><OrgStructure /></RequireRole>,
+      },
 
       // 用户管理：拥有 user:view 权限码可访问（默认主任/指导老师）
       { path: '/admin/users', element: <RequirePerm codes={['user:view']}><Users /></RequirePerm> },

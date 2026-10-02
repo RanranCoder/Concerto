@@ -50,6 +50,8 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/ping").permitAll()
+                // 组织注册：免登录（新组织尚无账号），限流在 OrgService 内做
+                .requestMatchers(HttpMethod.POST, "/api/orgs/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/signins/scan").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/signins/scan-config").permitAll()
                 // 静态文件目录不再匿名直出（2026-08 审计 M4）：<img>/<a> 直链由登录时下发的

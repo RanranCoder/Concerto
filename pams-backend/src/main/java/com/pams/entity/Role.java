@@ -1,5 +1,5 @@
 package com.pams.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "sys_role")
-public class Role {
+public class Role implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -16,4 +16,5 @@ public class Role {
     private Integer level;
     private String dataScope;
     private LocalDateTime createdAt;
+    private Long orgId;
 }

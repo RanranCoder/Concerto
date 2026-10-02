@@ -4,7 +4,9 @@ import SockJS from 'sockjs-client'
 import { App } from 'antd'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
+import { useAgentStore } from '@/stores/agent'
 import type { NotificationVO } from '@/api/notification'
+import type { AgentStreamEvent } from '@/api/agent'
 
 export function useWebSocket() {
   const { notification } = App.useApp()
@@ -48,6 +50,31 @@ export function useWebSocket() {
             console.error('[WS] 解析通知消息失败', e)
           }
         })
+
+        // 灵思过程事件流（D7）——厚载荷：携带工具名/耗时/状态，供前端渲染时间轴。
+        // 与上面通知队列的"薄载荷 + 回拉 REST"策略有意不同。
+        client.subscribe('/user/queue/agent/stream', (msg) => {
+          try {
+            const event = JSON.parse(msg.body) as AgentStreamEvent
+            useAgentStore.getState().applyStreamEvent(event)
+          } catch (e) {
+            console.error('[WS] 解析灵思过程事件失败', e)
+          }
+        })
+
+        // 灵思写操作执行完成（确认后落库的结果）
+        // 体验约定（用户反馈）：**不弹通知**——结果由 store 写进对话框（原地变结果块 / 追加结果消息），
+        // 这里只做状态收敛（关卡片、刷新待确认计数），不再产生任何 corner 弹窗。
+        client.subscribe('/user/queue/agent', (msg) => {
+          try {
+            const data = JSON.parse(msg.body) as Record<string, unknown>
+            if (data.type === 'AGENT_TASK_DONE') {
+              useAgentStore.getState().applyTaskDone(data)
+            }
+          } catch (e) {
+            console.error('[WS] 解析灵思任务事件失败', e)
+          }
+        })
       },
       onDisconnect: () => {
         console.log('[WS] 已断开')
@@ -62,5 +89,5 @@ export function useWebSocket() {
     return () => {
       client.deactivate()
     }
-  }, [token, addRealtime, setUnreadCount])
+  }, [token, addRealtime, setUnreadCount, notification])
 }

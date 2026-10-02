@@ -1,5 +1,5 @@
 package com.pams.module.schedule.entity;
-
+import com.pams.common.OrgScoped;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "course_schedule")
-public class CourseSchedule {
+public class CourseSchedule implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -35,4 +35,5 @@ public class CourseSchedule {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    private Long orgId;
 }

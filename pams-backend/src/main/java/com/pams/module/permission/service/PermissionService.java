@@ -104,7 +104,8 @@ public class PermissionService {
                     "quality:view","quality:add","quality:activity_add",
                     "chat:view","chat:manage",
                     "notice:view","notice:publish",
-                    "schedule:view","schedule:manage","schedule:check","schedule:free_table",
+                    "schedule:view","schedule:manage","schedule:check","schedule:free_table","schedule:generate",
+                    "attendance:view","attendance:manage",
                     "party:view","party:manage","party:letter","party:entry",
                     "member:view","member:manage","member:export",
                     "notification:view","notification:preference"), null);
@@ -119,6 +120,7 @@ public class PermissionService {
                 "chat:view",
                 "notice:view",
                 "schedule:view","schedule:check","schedule:free_table",
+                "attendance:view","attendance:manage",
                 "party:view",
                 "notification:view","notification:preference"), null);
     }

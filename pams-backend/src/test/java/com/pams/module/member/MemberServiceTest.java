@@ -47,7 +47,9 @@ class MemberServiceTest {
         creditRepo = mock(CreditRecordRepository.class);
         attRepo = mock(AttendanceRepository.class);
         spRepo = mock(SchedulePersonRepository.class);
-        service = new MemberService(memberRepo, sessionRepo, deptRepo, creditRepo, attRepo, spRepo);
+        // 第 7 个参数（事件发布器）传 null：本测试只验业务校验，不涉及知识库索引联动
+        // （服务内部对 eventPublisher 做了空判断，与本项目其他服务同一约定）
+        service = new MemberService(memberRepo, sessionRepo, deptRepo, creditRepo, attRepo, spRepo, null);
     }
 
     @Test

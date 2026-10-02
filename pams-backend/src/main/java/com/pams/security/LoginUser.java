@@ -13,4 +13,6 @@ public class LoginUser {
     private Integer roleLevel;
     private Long deptId;
     private String deptName;
+    /** 所属组织（租户）。阶段 1 只用于写入归属，不参与查询过滤。 */
+    private Long orgId;
 }

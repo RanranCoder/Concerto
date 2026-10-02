@@ -7,6 +7,7 @@ import com.pams.module.activity.dto.ActivityRequest;
 import com.pams.module.activity.dto.StatusChangeRequest;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.service.ActivityService;
+import com.pams.security.RoleExprs;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +23,24 @@ public class ActivityController {
     /**
      * 部长及以上角色宏（历史遗留，逐步收敛为权限码——PRD-v5 S2）。
      * 新代码请使用下方权限码常量，与 V7 权限种子（附录B）一致。
+     *
+     * <p>2026-09-14：字面量已收敛到 {@link RoleExprs#LEADER}，避免各模块各写一份。
      */
-    public static final String LEADER = "hasAnyRole('TEACHER','DIRECTOR','ORG_LEADER','SECRETARY_LEADER','MEDIA_LEADER','TECH_LEADER')";
+    public static final String LEADER = RoleExprs.LEADER;
 
+    /**
+     * 活动列表。
+     *
+     * <p><b>2026-09-14 补注解（权限审计 A1 配套）</b>：此前无 {@code @PreAuthorize}，
+     * 而前端 `MainLayout` 用 {@code hasPerm('activity:view')} 决定菜单显隐 ——
+     * 即"只在前端挡"。补齐后**行为不变**（7 个角色的权限种子全都含 {@code activity:view}），
+     * 目的是把这道门变成真的：一旦将来活动改为受限，不会有未被覆盖的调用方。
+     *
+     * <p>同样重要的是：{@code ChatRefsResolver}（输入框 `+` 附加上下文）曾直调
+     * {@code ActivityService.getEntity(id)} 且不校验权限 —— 那条链路不经过本 Controller。
+     * 两处必须同口径，见该方法注释。
+     */
+    @PreAuthorize("hasAuthority('activity:view')")
     @GetMapping
     public Result<PageResult<Map<String, Object>>> page(
             @RequestParam(required = false) String keyword,
@@ -35,6 +51,8 @@ public class ActivityController {
         return Result.ok(service.page(keyword, status, type, page, size));
     }
 
+    /** 活动详情。注解理由同上（名单口径与列表一致，避免"列表能看详情不能看"的裂缝）。 */
+    @PreAuthorize("hasAuthority('activity:view')")
     @GetMapping("/{id}")
     public Result<Map<String, Object>> detail(@PathVariable Long id) {
         return Result.ok(service.detail(id));

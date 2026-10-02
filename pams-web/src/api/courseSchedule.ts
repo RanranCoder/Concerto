@@ -107,3 +107,7 @@ export interface NoClassScheduleGeneratedVO {
 /** 读取某部门+学期最新生成的无课表（无记录返回 null） */
 export const getGeneratedNoClassSchedule = (deptId?: number, semester?: string) =>
   get<NoClassScheduleGeneratedVO | null>('/course-schedules/generated', { deptId, semester })
+
+/** 最近一次导入无课表的部门+学期（供无课表页默认选中；无则 null） */
+export const getLatestNoClassSchedule = () =>
+  get<{ deptId: number; deptName: string; semester: string } | null>('/course-schedules/generated/latest')

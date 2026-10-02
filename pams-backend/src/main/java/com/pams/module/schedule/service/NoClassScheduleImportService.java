@@ -169,6 +169,19 @@ public class NoClassScheduleImportService {
         }
     }
 
+    /** 最近一次导入的无课表 {deptId, deptName, semester}；无则 null。 */
+    public Map<String, Object> latestImport() {
+        return recordRepository.findFirstByOrderByIdDesc()
+                .map(r -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("deptId", r.getDeptId());
+                    m.put("deptName", r.getDeptName());
+                    m.put("semester", r.getSemester());
+                    return m;
+                })
+                .orElse(null);
+    }
+
     /** 校验下载路径归一化后位于 uploadDir 内，返回绝对路径。 */
     public Path resolveDownload(String path) {
         if (path == null || path.isBlank()) throw new BizException(2705, "非法路径");

@@ -106,6 +106,9 @@ public class MemberImportService {
         }
 
         if (!toSave.isEmpty()) memberRepo.saveAll(toSave);
+        // V27：导入是批量写入 → 通知知识库按"整源重建"更新成员投影。
+        // 不逐条发事件：几百人会往执行队列塞几百个任务。见 MemberService#publishBulkChanged
+        if (memberService != null) memberService.publishBulkChanged();
         int total = toSave.size() + failed.size();
         return new MemberImportResultVO(total, toSave.size(), 0, failed);
     }

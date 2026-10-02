@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ public class SigninController {
         return Result.ok(service.create(req));
     }
 
-    /** 生成扫码签到码：checkin:manage（签到组织动作） */
+    /** 生成活动唯一扫码签到码：checkin:manage（刷新即作新旧码） */
     @PreAuthorize("hasAuthority('checkin:manage')")
     @PostMapping("/token")
     public Result<Map<String, Object>> generateToken(@RequestBody Map<String, Long> body,
@@ -66,10 +67,19 @@ public class SigninController {
         return Result.ok(resp);
     }
 
+    /** 关闭签到：使该活动当前码作废（停止扫码）；重开即再次生成新码 */
+    @PreAuthorize("hasAuthority('checkin:manage')")
+    @PostMapping("/{activityId}/close")
+    public Result<Void> close(@PathVariable Long activityId) {
+        service.revokeToken(activityId);
+        return Result.ok();
+    }
+
     /**
      * 扫码签到（公开接口，免登录）。兼容两种 body：
      *   旧格式：{token, name, studentNo}
      *   新格式：{token, fields: {姓名, 学号, 手机号, 班级, 身份}}
+     * 可选 signTime：浏览器当前时间（ISO 字符串），用于自动判时（无则用服务器时间）。
      */
     @PostMapping("/scan")
     public Result<Signin> scan(@RequestBody Map<String, Object> body) {
@@ -96,7 +106,16 @@ public class SigninController {
         if (trimmed.length() > 50) {
             throw new BizException(400, "姓名长度不能超过50个字符");
         }
-        return Result.ok(service.scanSignin(token, trimmed, studentNo, fields));
+        LocalDateTime browserTime = null;
+        String rawTime = asString(body.get("signTime"));
+        if (rawTime != null && !rawTime.isBlank()) {
+            try {
+                browserTime = LocalDateTime.parse(rawTime);
+            } catch (Exception ignored) {
+                browserTime = null;
+            }
+        }
+        return Result.ok(service.scanSignin(token, trimmed, studentNo, fields, browserTime));
     }
 
     private static String asString(Object o) {

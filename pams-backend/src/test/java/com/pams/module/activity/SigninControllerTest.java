@@ -46,14 +46,14 @@ class SigninControllerTest {
         assertThatThrownBy(() -> controller.scan(body))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo(400));
-        verify(service, never()).scanSignin(any(), any(), any(), anyMap());
+        verify(service, never()).scanSignin(any(), any(), any(), anyMap(), any());
     }
 
     @Test
     void scan_nameExactly50_ok() {
         Signin saved = new Signin();
         saved.setName("乙".repeat(50));
-        when(service.scanSignin(eq("some-token"), eq("乙".repeat(50)), eq("2025001"), anyMap()))
+        when(service.scanSignin(eq("some-token"), eq("乙".repeat(50)), eq("2025001"), anyMap(), any()))
                 .thenReturn(saved);
         Map<String, Object> body = new HashMap<>();
         body.put("token", "some-token");
@@ -72,17 +72,17 @@ class SigninControllerTest {
         assertThatThrownBy(() -> controller.scan(body))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo(400));
-        verify(service, never()).scanSignin(any(), any(), any(), anyMap());
+        verify(service, never()).scanSignin(any(), any(), any(), anyMap(), any());
     }
 
     @Test
     void scan_trimsWhitespaceBeforeService() {
-        when(service.scanSignin(eq("t"), eq("张三"), isNull(), anyMap())).thenReturn(new Signin());
+        when(service.scanSignin(eq("t"), eq("张三"), isNull(), anyMap(), any())).thenReturn(new Signin());
         Map<String, Object> body = new HashMap<>();
         body.put("token", "t");
         body.put("name", "  张三  ");
         controller.scan(body);
-        verify(service).scanSignin(eq("t"), eq("张三"), isNull(), anyMap());
+        verify(service).scanSignin(eq("t"), eq("张三"), isNull(), anyMap(), any());
     }
 
     @Test
@@ -105,7 +105,7 @@ class SigninControllerTest {
         saved.setClassName("一班");
         saved.setIdentityType("党员");
         saved.setRemark("（应签名单）");
-        when(service.scanSignin(eq("t"), eq("张三"), eq("2025001"), anyMap())).thenReturn(saved);
+        when(service.scanSignin(eq("t"), eq("张三"), eq("2025001"), anyMap(), any())).thenReturn(saved);
 
         var result = controller.scan(body);
         assertThat(result.getCode()).isEqualTo(200);
@@ -116,7 +116,7 @@ class SigninControllerTest {
         assertThat(result.getData().getIdentityType()).isEqualTo("党员");
         // 宽松匹配命中名单 → remark 含"应签名单"
         assertThat(result.getData().getRemark()).isEqualTo("（应签名单）");
-        verify(service).scanSignin(eq("t"), eq("张三"), eq("2025001"), argThat(fields::equals));
+        verify(service).scanSignin(eq("t"), eq("张三"), eq("2025001"), argThat(fields::equals), any());
     }
 
     @Test
@@ -130,7 +130,7 @@ class SigninControllerTest {
 
         Signin saved = new Signin();
         saved.setName("李四");
-        when(service.scanSignin(eq("t"), eq("李四"), isNull(), anyMap())).thenReturn(saved);
+        when(service.scanSignin(eq("t"), eq("李四"), isNull(), anyMap(), any())).thenReturn(saved);
 
         var result = controller.scan(body);
         assertThat(result.getCode()).isEqualTo(200);
@@ -150,7 +150,7 @@ class SigninControllerTest {
         Signin saved = new Signin();
         saved.setName("王五");
         saved.setStudentNo("9999999");
-        when(service.scanSignin(eq("t"), eq("王五"), eq("9999999"), anyMap())).thenReturn(saved);
+        when(service.scanSignin(eq("t"), eq("王五"), eq("9999999"), anyMap(), any())).thenReturn(saved);
 
         var result = controller.scan(body);
         assertThat(result.getCode()).isEqualTo(200);
@@ -169,7 +169,7 @@ class SigninControllerTest {
         assertThatThrownBy(() -> controller.scan(body))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo(400));
-        verify(service, never()).scanSignin(any(), any(), any(), anyMap());
+        verify(service, never()).scanSignin(any(), any(), any(), anyMap(), any());
     }
 
     // ==================== scan-config（扫码落地页公开配置接口） ====================

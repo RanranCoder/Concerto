@@ -78,6 +78,17 @@
       <artifactId>poi-ooxml</artifactId>
       <version>5.4.1</version>
     </dependency>
+    <!--
+      灵思 B0.5：服务端 HTML 净化（业务设计方案 D10）。
+      Agent 会把 LLM 输出写入库（策划书章节 / 推文正文），写库内容不再经过任何前端防线，
+      前端 DOMPurify 只保护"自己的渲染路径"。故此依赖是"文书生成"能力的硬前置。
+      选 Jsoup 而非自研正则：HTML 解析不能用正则做（明确的反模式）；Safelist 白名单 API 成熟、单 jar 无传递依赖。
+    -->
+    <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>1.18.3</version>
+    </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
