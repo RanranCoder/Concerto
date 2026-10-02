@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { lazy, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
 import { meApi } from '@/api/auth'
 import MainLayout from '@/layouts/MainLayout'
 import RequireRole, { LEADER_ROLES, ADMIN_ROLES, RequirePerm } from '@/components/glass/RequireRole'
@@ -50,6 +51,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token) {
       meApi().then((u) => refreshUser(u)).catch(() => { /* 401 由 http 拦截器登出 */ })
+      // 拉取当前组织（品牌/主题色），驱动 App.tsx 的 colorPrimary
+      useOrgStore.getState().load()
     }
   }, [token, refreshUser])
   if (!token) return <Navigate to="/login" replace />

@@ -9,8 +9,10 @@ import com.pams.module.org.dto.OrgRegisterRequest;
 import com.pams.module.org.dto.OrgUnitVO;
 import com.pams.module.org.dto.UnitSaveRequest;
 import com.pams.module.org.entity.OrgInvitation;
+import com.pams.module.org.entity.OrgPosition;
 import com.pams.module.org.entity.Organization;
 import com.pams.module.org.repository.OrgInvitationRepository;
+import com.pams.module.org.repository.OrgPositionRepository;
 import com.pams.module.org.repository.OrganizationRepository;
 import com.pams.repository.DepartmentRepository;
 import com.pams.repository.RoleRepository;
@@ -22,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -40,6 +44,7 @@ public class OrgService {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final OrgInvitationRepository invitationRepository;
+    private final OrgPositionRepository positionRepository;
     private final PasswordEncoder passwordEncoder;
 
     public OrgService(OrganizationRepository organizationRepository,
@@ -47,12 +52,14 @@ public class OrgService {
                       RoleRepository roleRepository,
                       UserRepository userRepository,
                       OrgInvitationRepository invitationRepository,
+                      OrgPositionRepository positionRepository,
                       PasswordEncoder passwordEncoder) {
         this.organizationRepository = organizationRepository;
         this.departmentRepository = departmentRepository;
         this.roleRepository = roleRepository;
         this.userRepository = userRepository;
         this.invitationRepository = invitationRepository;
+        this.positionRepository = positionRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -105,6 +112,9 @@ public class OrgService {
                 }
             }
         }
+
+        // 2.5 架构 → 岗位映射（org_position）：按节点类型套默认角色
+        initPositions(orgId, req.getUnits());
 
         // 3. 管理员账号（显式 orgId；DIRECTOR 角色）
         Role director = roleRepository.findAll().stream()
@@ -272,6 +282,64 @@ public class OrgService {
             throw new BizException(2012, "该节点下还有成员，无法删除");
         }
         departmentRepository.delete(d);
+    }
+
+    // ==================== 岗位（架构 → 角色映射） ====================
+
+    /**
+     * 按架构节点类型生成岗位（org_position）。「架构 → 角色」的默认模板：
+     * 中心 → DIRECTOR、部门 → ORG_LEADER、小组/分队 → STAFF。
+     * 复用全局内置角色，不新建角色体系（见策划 §2.3.4）。
+     */
+    private void initPositions(Long orgId, List<OrgRegisterRequest.UnitNode> units) {
+        Set<String> types = new LinkedHashSet<>();
+        collectUnitTypes(units, types);
+        int sort = 0;
+        savePosition(orgId, "总负责人", 5, "DIRECTOR", sort++);
+        for (String t : types) {
+            savePosition(orgId, t + "负责人", levelOfUnitType(t), roleOfUnitType(t), sort++);
+        }
+    }
+
+    private void collectUnitTypes(List<OrgRegisterRequest.UnitNode> nodes, Set<String> out) {
+        if (nodes == null) {
+            return;
+        }
+        for (OrgRegisterRequest.UnitNode n : nodes) {
+            out.add(isBlank(n.getUnitType()) ? "部门" : n.getUnitType());
+            collectUnitTypes(n.getChildren(), out);
+        }
+    }
+
+    private String roleOfUnitType(String unitType) {
+        return switch (unitType) {
+            case "中心" -> "DIRECTOR";
+            case "部门" -> "ORG_LEADER";
+            default -> "STAFF";
+        };
+    }
+
+    private int levelOfUnitType(String unitType) {
+        return switch (unitType) {
+            case "中心" -> 4;
+            case "部门" -> 3;
+            default -> 1;
+        };
+    }
+
+    private void savePosition(Long orgId, String name, int level, String roleCode, int sortOrder) {
+        OrgPosition p = new OrgPosition();
+        p.setOrgId(orgId);
+        p.setName(name);
+        p.setLevel(level);
+        p.setRoleCode(roleCode);
+        p.setSortOrder(sortOrder);
+        positionRepository.save(p);
+    }
+
+    /** 当前组织的岗位列表。 */
+    public List<OrgPosition> listPositions() {
+        return positionRepository.findByOrgIdOrderBySortOrderAsc(OrgContext.getOrDefault());
     }
 
     // ==================== 邀请 ====================

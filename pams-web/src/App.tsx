@@ -3,8 +3,18 @@ import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { RouterProvider } from 'react-router-dom'
 import { useThemeStore, getAntdTheme } from '@/stores/theme'
+import { useOrgStore } from '@/stores/org'
 import { router } from '@/router'
 import { FeedbackBridge } from '@/utils/feedback'
+
+/** #RRGGBB（或 #RGB）→ [r,g,b]，用于生成 rgba(...) 派生色。 */
+function hexToRgb(hex: string): [number, number, number] {
+  const raw = hex.replace('#', '')
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
+  const n = Number.parseInt(full, 16)
+  if (Number.isNaN(n)) return [222, 41, 16]
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
 
 function ThemeConfigProvider() {
   const [mode, setMode] = useState(useThemeStore.getState().mode)
@@ -18,6 +28,10 @@ function ThemeConfigProvider() {
   }, [])
 
   const antd = getAntdTheme(mode)
+  // 主题主色由当前组织的 theme_json 驱动（见 stores/org.ts），未配置时回退党建红
+  const primary = useOrgStore((s) => s.primaryColor)
+  const [pr, pg, pb] = hexToRgb(primary)
+  const rgba = (a: number) => `rgba(${pr},${pg},${pb},${a})`
 
   return (
     <ConfigProvider
@@ -27,9 +41,9 @@ function ThemeConfigProvider() {
         cssVar: true,
         hashed: false,
         token: {
-          colorPrimary: '#DE2910',
+          colorPrimary: primary,
           colorInfo: '#2b6cb8',
-          colorLink: '#DE2910',
+          colorLink: primary,
           colorBgContainer: mode === 'dark' ? '#1b1e26' : '#f7f8fa',
           colorBgElevated: mode === 'dark' ? '#23262f' : '#fbfcfe',
           colorBorder: mode === 'dark' ? '#2e313a' : '#e4e8ef',
@@ -41,8 +55,8 @@ function ThemeConfigProvider() {
           Menu: {
             // 透明侧边栏上选中项高亮：用主题自适应红系 token，避免 antd 默认选中背景
             // （hashed:false 下固定 #ffede6）在 dark 主题下退化成浅粉白块
-            itemSelectedBg: mode === 'dark' ? 'rgba(222,41,16,0.28)' : 'rgba(222,41,16,0.14)',
-            itemSelectedColor: '#DE2910',
+            itemSelectedBg: rgba(mode === 'dark' ? 0.28 : 0.14),
+            itemSelectedColor: primary,
             itemColor: mode === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.92)',
           },
           Button: {
@@ -54,10 +68,10 @@ function ThemeConfigProvider() {
           },
           Select: {
             optionSelectedFontWeight: 600,
-            optionSelectedBg: 'rgba(222,41,16,0.14)',
+            optionSelectedBg: rgba(0.14),
           },
           Input: {
-            activeShadow: '0 0 0 3px rgba(222,41,16,0.12)',
+            activeShadow: `0 0 0 3px ${rgba(0.12)}`,
           },
         },
       }}

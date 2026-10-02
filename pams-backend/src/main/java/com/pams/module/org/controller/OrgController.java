@@ -6,7 +6,10 @@ import com.pams.module.org.dto.OrgUnitVO;
 import com.pams.module.org.dto.OrgUpdateRequest;
 import com.pams.module.org.dto.UnitSaveRequest;
 import com.pams.module.org.entity.OrgInvitation;
+import com.pams.module.org.entity.OrgPosition;
+import com.pams.module.org.service.OrgRegisterRateLimiter;
 import com.pams.module.org.service.OrgService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,15 +28,28 @@ import java.util.Map;
 public class OrgController {
 
     private final OrgService orgService;
+    private final OrgRegisterRateLimiter rateLimiter;
 
-    public OrgController(OrgService orgService) {
+    public OrgController(OrgService orgService, OrgRegisterRateLimiter rateLimiter) {
         this.orgService = orgService;
+        this.rateLimiter = rateLimiter;
     }
 
-    /** 注册组织（含架构树）。免登录。 */
+    /** 注册组织（含架构树）。免登录 + 按来源限流。 */
     @PostMapping("/register")
-    public Result<Map<String, Object>> register(@RequestBody OrgRegisterRequest req) {
+    public Result<Map<String, Object>> register(@RequestBody OrgRegisterRequest req,
+                                                HttpServletRequest request) {
+        rateLimiter.checkAllowed(clientKey(request));
         return Result.ok(orgService.register(req));
+    }
+
+    /** 取来源标识：优先 X-Forwarded-For 首段，其次 remoteAddr。 */
+    private String clientKey(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /** 当前组织信息（品牌 / 术语 / 领域包）。 */
@@ -65,6 +81,12 @@ public class OrgController {
     @GetMapping("/current/units")
     public Result<List<OrgUnitVO>> units() {
         return Result.ok(orgService.listUnits());
+    }
+
+    /** 岗位列表（架构 → 角色映射）。 */
+    @GetMapping("/current/positions")
+    public Result<List<OrgPosition>> positions() {
+        return Result.ok(orgService.listPositions());
     }
 
     @PostMapping("/current/units")
