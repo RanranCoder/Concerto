@@ -18,6 +18,8 @@ public final class AgentCatalog {
     public static final String SCHEDULING = "scheduling";
     public static final String DATA = "data";
     public static final String REVIEWER = "reviewer";
+    /** 单 Agent 基线（对比实验专用）：一个 Agent 使用全部可见工具。 */
+    public static final String GENERALIST = "generalist";
 
     private AgentCatalog() {
     }
@@ -63,6 +65,10 @@ public final class AgentCatalog {
                         "质量 / 事实 / 合规审查",
                         "你是审查专家。只读黑板与产物，检查完整性、事实一致性、合规与越权风险，"
                                 + "输出 PASS 或 REVISE（含理由）。你没有任何业务工具。",
-                        List.of()));
+                        List.of()),
+                new Def(GENERALIST, "通才助手",
+                        "单 Agent 基线（对比实验）：一个 Agent 使用全部可见工具",
+                        "你是学生组织工作台的通才助手，可使用全部可见工具独立完成用户目标。",
+                        null));
     }
 }

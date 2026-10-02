@@ -93,12 +93,15 @@ public class AgentEventPublisher {
      */
     public void publish(String username, AgentStreamEvent event) {
         if (event == null) return;
-        // 1) 缓冲
-        List<AgentStreamEvent> buf = buffers.computeIfAbsent(event.streamId(), k -> new ArrayList<>());
-        synchronized (buf) {
-            buf.add(event);
-            if (buf.size() > props.getStreamBufferSize()) {
-                buf.remove(0);
+        // 1) 缓冲（streamId 为空时不缓冲——例如协作基准等非会话场景，避免 ConcurrentHashMap 空键 NPE）
+        String sid = event.streamId();
+        if (sid != null) {
+            List<AgentStreamEvent> buf = buffers.computeIfAbsent(sid, k -> new ArrayList<>());
+            synchronized (buf) {
+                buf.add(event);
+                if (buf.size() > props.getStreamBufferSize()) {
+                    buf.remove(0);
+                }
             }
         }
         // 2) 推送（失败不阻断编排——推送是增值能力，不是主链路）
