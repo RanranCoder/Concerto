@@ -1,0 +1,96 @@
+/* ==========================================================================
+   多 Agent 协作视图（批次 D）
+   沿用灵思 v2 设计语言：灰阶为主、品牌红点缀、文档流而非气泡。
+   作用域：.at-page
+   ========================================================================== */
+.at-page {
+  --at-border: #e8eaed;
+  --at-border-soft: #eef0f2;
+  --at-text: #1f2328;
+  --at-text-2: #6b7280;
+  --at-text-3: #9aa1ab;
+  --at-soft: #f6f7f9;
+  --at-ok: #3f8f4f;
+  --at-ok-bg: #f2f8f3;
+  --at-warn: #a9701a;
+  --at-warn-bg: #fdf7ec;
+  --at-warn-line: #f0d9ab;
+  --at-run: #2b6cb8;
+  --at-run-bg: #eef4fb;
+  --at-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  display: flex;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+  color: var(--at-text);
+}
+
+/* ---- 中栏 ---- */
+.at-main { flex: 1; display: flex; flex-direction: column; min-width: 0 }
+.at-top { padding: 14px 20px 12px; border-bottom: 1px solid var(--at-border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+.at-top .at-input { flex: 1; min-width: 240px }
+.at-stream { flex: 1; overflow: auto; padding: 20px 0 60px }
+.at-wrap { max-width: 720px; margin: 0 auto; padding: 0 24px }
+
+.at-user { display: flex; justify-content: flex-end; margin-bottom: 20px }
+.at-user .at-bubble { background: #eef0f2; border-radius: 12px 12px 3px 12px; padding: 9px 13px; max-width: 78% }
+
+.at-block { border-left: 2px solid var(--at-border); padding-left: 16px; margin-bottom: 18px }
+.at-block.coord { border-left-color: rgba(222, 41, 16, 0.35) }
+
+.at-who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px }
+.at-who b { font-size: 12.5px }
+.at-who .at-sub { font-size: 11px; color: var(--at-text-3) }
+.at-av { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; flex-shrink: 0 }
+
+.at-badge { font-size: 10.5px; border-radius: 999px; padding: 0 7px; line-height: 17px; display: inline-block }
+.at-badge.ok { color: var(--at-ok); background: var(--at-ok-bg) }
+.at-badge.warn { color: var(--at-warn); background: var(--at-warn-bg) }
+.at-badge.run { color: var(--at-run); background: var(--at-run-bg) }
+.at-badge.idle { color: var(--at-text-3); background: #f0f1f3 }
+
+.at-plan { border: 1px solid var(--at-border); border-radius: 10px; overflow: hidden; margin-top: 8px }
+.at-plan-h { background: var(--at-soft); padding: 8px 12px; font-size: 12px; color: var(--at-text-2) }
+.at-plan-step { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--at-border-soft) }
+.at-plan-step .n { width: 18px; height: 18px; border-radius: 50%; background: var(--at-soft); color: var(--at-text-2); font-size: 10.5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0 }
+.at-plan-step .agent { font-weight: 500; min-width: 64px }
+.at-plan-step .task { color: var(--at-text-2); flex: 1 }
+
+.at-tool { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--at-text-2); padding: 3px 0 }
+.at-tool code { font-family: var(--at-mono); font-size: 11.5px; color: var(--at-text); background: var(--at-soft); border: 1px solid var(--at-border-soft); border-radius: 5px; padding: 0 5px }
+.at-tool .dur { margin-left: auto; font-family: var(--at-mono); font-size: 11px; color: var(--at-text-3) }
+.at-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0 }
+.at-dot.ok { background: var(--at-ok) }
+.at-dot.warn { background: var(--at-warn) }
+.at-dot.run { background: #de2910; box-shadow: 0 0 0 3px rgba(222, 41, 16, 0.09) }
+
+.at-review { border: 1px solid var(--at-warn-line); background: var(--at-warn-bg); border-radius: 10px; padding: 10px 12px; margin-top: 8px }
+.at-review.pass { border-color: #cfe3d3; background: var(--at-ok-bg) }
+.at-review .rv-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600 }
+.at-review.pass .rv-h { color: var(--at-ok) }
+.at-review:not(.pass) .rv-h { color: var(--at-warn) }
+.at-review ul { margin: 6px 0 0; padding-left: 18px; color: var(--at-text-2); font-size: 12px }
+
+.at-result { border: 1px solid var(--at-border); border-radius: 10px; padding: 10px 12px; margin-top: 8px; display: flex; align-items: center; gap: 10px }
+.at-result .rt { flex: 1 }
+.at-result .rt b { font-size: 12.5px }
+.at-result .rt div { font-size: 11.5px; color: var(--at-text-3) }
+
+.at-dim { color: var(--at-text-2) }
+
+/* ---- 右栏 ---- */
+.at-panel { width: 320px; flex: 0 0 320px; border-left: 1px solid var(--at-border); background: #f7f7f8; display: flex; flex-direction: column; overflow: auto }
+.at-ph { padding: 12px 14px 8px; font-size: 12px; color: var(--at-text-3); letter-spacing: .04em }
+.at-team { padding: 0 10px 8px }
+.at-agent { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 9px; background: #fff; border: 1px solid var(--at-border-soft); margin-bottom: 6px }
+.at-agent .info { flex: 1; min-width: 0 }
+.at-agent .nm { font-size: 12.5px; font-weight: 500 }
+.at-agent .rl { font-size: 11px; color: var(--at-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.at-agent .calls { font-size: 10.5px; color: var(--at-text-3); font-family: var(--at-mono) }
+
+.at-topo { background: #fff; border: 1px solid var(--at-border-soft); border-radius: 10px; margin: 6px 10px 12px; padding: 6px }
+
+.at-bb { margin: 0 10px 14px; background: #fff; border: 1px solid var(--at-border-soft); border-radius: 10px; padding: 10px 12px }
+.at-bb h4 { margin: 0 0 6px; font-size: 11.5px; color: var(--at-text-3); font-weight: 600; letter-spacing: .04em }
+.at-bb .ev { font-size: 11.5px; color: var(--at-text-2); padding: 2px 0 2px 12px; position: relative }
+.at-bb .ev::before { content: ""; position: absolute; left: 2px; top: 8px; width: 4px; height: 4px; border-radius: 50%; background: var(--at-text-3) }

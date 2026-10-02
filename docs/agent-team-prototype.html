@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>灵思 · 多 Agent 协作视图（高保真原型）</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",system-ui,sans-serif;
+    font-size:13px;line-height:1.6;color:var(--text);background:var(--bg-app);
+    -webkit-font-smoothing:antialiased;
+  }
+  :root{
+    --red:#DE2910; --red-soft:rgba(222,41,16,.09); --red-line:rgba(222,41,16,.35);
+    --bg-app:#f2f3f5; --bg:#fff; --bg-sider:#f7f7f8; --bg-soft:#f6f7f9;
+    --border:#e8eaed; --border-soft:#eef0f2;
+    --text:#1f2328; --text-2:#6b7280; --text-3:#9aa1ab;
+    --ok:#3f8f4f; --ok-bg:#f2f8f3; --warn:#a9701a; --warn-bg:#fdf7ec; --warn-line:#f0d9ab;
+    --run:#2b6cb8; --run-bg:#eef4fb;
+    --r-lg:14px; --r-md:10px; --r-sm:7px;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  .app{display:flex;height:100vh;background:var(--bg);overflow:hidden}
+
+  /* ---------------------------------------------------------------- 左栏 */
+  .sider{width:236px;flex:0 0 236px;background:var(--bg-sider);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:12px 10px}
+  .brand{display:flex;align-items:center;gap:8px;padding:2px 6px 12px}
+  .brand-mark{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#DE2910,#c2220c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.28)}
+  .brand-name{font-size:13.5px;font-weight:600}
+  .brand-sub{font-size:11px;color:var(--text-3);margin-left:auto}
+  .side-btn{display:flex;align-items:center;gap:9px;height:34px;padding:0 10px;border-radius:8px;background:#fff;border:1px solid var(--border);font-weight:500;cursor:pointer;margin-bottom:12px}
+  .side-btn .plus{color:var(--red);font-weight:700}
+  .conv-group{font-size:11px;color:var(--text-3);padding:8px 8px 4px}
+  .conv{display:flex;flex-direction:column;gap:1px;padding:7px 9px;border-radius:8px;cursor:pointer;position:relative}
+  .conv:hover{background:rgba(0,0,0,.04)}
+  .conv.active{background:#fff;border:1px solid var(--border)}
+  .conv.active::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--red)}
+  .conv-t{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conv-m{font-size:11px;color:var(--text-3)}
+
+  /* ---------------------------------------------------------------- 中栏 */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:48px;flex:0 0 48px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 18px}
+  .topbar h1{font-size:13.5px;font-weight:600;margin:0}
+  .tag{font-size:11px;color:var(--text-2);border:1px solid var(--border);border-radius:999px;padding:1px 8px}
+  .tag.mode{color:var(--red);border-color:var(--red-line);background:var(--red-soft)}
+  .stream{flex:1;overflow:auto;padding:22px 0 60px}
+  .wrap{max-width:720px;margin:0 auto;padding:0 24px}
+
+  .msg-user{display:flex;justify-content:flex-end;margin-bottom:20px}
+  .bubble{background:#eef0f2;border-radius:12px 12px 3px 12px;padding:9px 13px;max-width:78%}
+
+  .reply{border-left:2px solid var(--border);padding-left:16px;margin-bottom:18px}
+  .reply.coord{border-left-color:var(--red-line)}
+
+  .who{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .av{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;flex-shrink:0}
+  .av.retrieval{background:#4a6fa5}.av.planning{background:#5a7a5a}
+  .av.writing{background:#8a6d3b}.av.reviewer{background:#7a4a5a}
+  .who b{font-size:12.5px}.who .sub{font-size:11px;color:var(--text-3)}
+  .badge{font-size:10.5px;border-radius:999px;padding:0 7px;line-height:17px;display:inline-block}
+  .badge.ok{color:var(--ok);background:var(--ok-bg)}
+  .badge.warn{color:var(--warn);background:var(--warn-bg)}
+  .badge.run{color:var(--run);background:var(--run-bg)}
+
+  .txt{color:var(--text)}
+  .txt .dim{color:var(--text-2)}
+
+  /* 计划卡 */
+  .plan{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-top:8px}
+  .plan-h{background:var(--bg-soft);padding:8px 12px;font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px}
+  .plan-step{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--border-soft)}
+  .plan-step .n{width:18px;height:18px;border-radius:50%;background:var(--bg-soft);color:var(--text-2);font-size:10.5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .plan-step .agent{font-weight:500;min-width:64px}
+  .plan-step .task{color:var(--text-2);flex:1}
+  .plan-step .st{font-size:11px}
+
+  /* 工具行 */
+  .toolrow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:3px 0}
+  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .dot.ok{background:var(--ok)}.dot.run{background:var(--red);box-shadow:0 0 0 3px var(--red-soft)}.dot.warn{background:var(--warn)}
+  .toolrow code{font-family:var(--mono);font-size:11.5px;color:var(--text);background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:5px;padding:0 5px}
+  .dur{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  /* 审查卡 */
+  .review{border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:var(--r-md);padding:10px 12px;margin-top:8px}
+  .review.pass{border-color:#cfe3d3;background:var(--ok-bg)}
+  .review .rv-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+  .review.pass .rv-h{color:var(--ok)}.review:not(.pass) .rv-h{color:var(--warn)}
+  .review ul{margin:6px 0 0;padding-left:18px;color:var(--text-2);font-size:12px}
+
+  /* 结果卡 */
+  .result{border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-top:8px;display:flex;align-items:center;gap:10px}
+  .result .ic{width:26px;height:26px;border-radius:8px;background:var(--bg-soft);display:flex;align-items:center;justify-content:center}
+  .result .rt{flex:1}
+  .result .rt b{font-size:12.5px}
+  .result .rt div{font-size:11.5px;color:var(--text-3)}
+  .ref{font-size:11px;color:var(--red);border:1px solid var(--red-line);border-radius:999px;padding:0 8px;background:var(--red-soft)}
+
+  /* ---------------------------------------------------------------- 右栏 */
+  .panel{width:320px;flex:0 0 320px;border-left:1px solid var(--border);background:var(--bg-sider);display:flex;flex-direction:column;overflow:auto}
+  .ph{padding:12px 14px 8px;font-size:12px;color:var(--text-3);letter-spacing:.04em}
+  .team{padding:0 10px 8px}
+  .agent{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;background:#fff;border:1px solid var(--border-soft);margin-bottom:6px}
+  .agent .info{flex:1;min-width:0}
+  .agent .nm{font-size:12.5px;font-weight:500}
+  .agent .rl{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agent .calls{font-size:10.5px;color:var(--text-3);font-family:var(--mono)}
+
+  .topo{background:#fff;border:1px solid var(--border-soft);border-radius:var(--r-md);margin:6px 10px 12px;padding:6px}
+
+  .bb{margin:0 10px 14px;background:#fff;border:1px solid var(--border-soft);border-radius:var(--r-md);padding:10px 12px}
+  .bb h4{margin:0 0 6px;font-size:11.5px;color:var(--text-3);font-weight:600;letter-spacing:.04em}
+  .bb .kv{display:flex;gap:8px;font-size:11.5px;padding:2px 0}
+  .bb .kv span:first-child{color:var(--text-3);min-width:44px}
+  .bb .ev{font-size:11.5px;color:var(--text-2);padding:2px 0 2px 12px;position:relative}
+  .bb .ev::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 左栏 -->
+  <aside class="sider">
+    <div class="brand">
+      <div class="brand-mark">✦</div>
+      <div class="brand-name">灵思 · 协作</div>
+      <div class="brand-sub">v2</div>
+    </div>
+    <div class="side-btn"><span class="plus">＋</span> 新建协作</div>
+    <div class="conv-group">今天</div>
+    <div class="conv active">
+      <div class="conv-t">为迎新晚会准备报道</div>
+      <div class="conv-m">4 位专家 · 已完成</div>
+    </div>
+    <div class="conv">
+      <div class="conv-t">这月活动还有哪些没归档</div>
+      <div class="conv-m">检索专家 · 已完成</div>
+    </div>
+    <div class="conv">
+      <div class="conv-t">生成第四十期培训班排班</div>
+      <div class="conv-m">排班专家 · 已完成</div>
+    </div>
+  </aside>
+
+  <!-- 中栏 -->
+  <main class="main">
+    <div class="topbar">
+      <h1>为迎新晚会准备报道</h1>
+      <span class="tag mode">P1 串行</span>
+      <span class="tag">4 位专家参与</span>
+      <span class="tag">Run #1027</span>
+    </div>
+    <div class="stream">
+      <div class="wrap">
+
+        <div class="msg-user"><div class="bubble">帮我给「迎新晚会」准备一篇报道推文</div></div>
+
+        <!-- 协调者 -->
+        <div class="reply coord">
+          <div class="who">
+            <div class="av" style="background:#c2220c">协</div>
+            <b>协调者</b><span class="sub">规划 · 0.4s</span>
+            <span class="badge ok">已完成</span>
+          </div>
+          <div class="txt">我理解目标后，拆成 <b>4 步</b>协作计划并委派给专家：</div>
+          <div class="plan">
+            <div class="plan-h">协作计划 · 黑板已记录</div>
+            <div class="plan-step"><div class="n">1</div><div class="agent">检索专家</div><div class="task">收集「迎新晚会」活动素材</div><div class="st" style="color:var(--ok)">✓</div></div>
+            <div class="plan-step"><div class="n">2</div><div class="agent">文书专家</div><div class="task">撰写报道推文草稿</div><div class="st" style="color:var(--ok)">✓</div></div>
+            <div class="plan-step"><div class="n">3</div><div class="agent">审查专家</div><div class="task">事实与合规审查</div><div class="st" style="color:var(--warn)">↻</div></div>
+            <div class="plan-step"><div class="n">4</div><div class="agent">文书专家</div><div class="task">按审查意见修订</div><div class="st" style="color:var(--ok)">✓</div></div>
+          </div>
+        </div>
+
+        <!-- 检索专家 -->
+        <div class="reply">
+          <div class="who">
+            <div class="av retrieval">检</div>
+            <b>检索专家</b><span class="sub">委派自 · 协调者</span>
+            <span class="badge ok">已完成</span>
+          </div>
+          <div class="toolrow"><span class="dot ok"></span>活动概览 <code>queryActivityOverview</code><span class="dur">184ms</span></div>
+          <div class="toolrow"><span class="dot ok"></span>材料检索 <code>searchMaterials</code><span class="dur">96ms</span></div>
+          <div class="txt dim" style="margin-top:4px">找到活动「迎新晚会」（2026-09-20，大学生活动中心）及相关材料 3 份。</div>
+        </div>
+
+        <!-- 文书专家 -->
+        <div class="reply">
+          <div class="who">
+            <div class="av writing">文</div>
+            <b>文书专家</b><span class="sub">委派自 · 协调者</span>
+            <span class="badge ok">已完成</span>
+          </div>
+          <div class="toolrow"><span class="dot ok"></span>生成报道推文 <code>draftArticleFromActivity</code><span class="dur">312ms</span></div>
+          <div class="txt dim" style="margin-top:4px">草稿已生成（约 520 字），落 <b>DRAFT</b>，未提交审核。<span class="ref">查看全文</span></div>
+        </div>
+
+        <!-- 审查专家 REVISE -->
+        <div class="reply">
+          <div class="who">
+            <div class="av reviewer">审</div>
+            <b>审查专家</b><span class="sub">委派自 · 协调者</span>
+            <span class="badge warn">REVISE</span>
+          </div>
+          <div class="review">
+            <div class="rv-h">↻ REVISE · 需修订</div>
+            <ul>
+              <li>草稿中「9 月 18 日」与活动详情「9 月 20 日」不符</li>
+              <li>未提及活动地点，建议补充</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 文书专家修订 -->
+        <div class="reply">
+          <div class="who">
+            <div class="av writing">文</div>
+            <b>文书专家</b><span class="sub">按审查意见修订</span>
+            <span class="badge ok">已完成</span>
+          </div>
+          <div class="toolrow"><span class="dot ok"></span>生成报道推文 <code>draftArticleFromActivity</code><span class="dur">268ms</span></div>
+          <div class="txt dim" style="margin-top:4px">已修正日期为 9 月 20 日并补充地点。</div>
+        </div>
+
+        <!-- 审查专家 PASS -->
+        <div class="reply">
+          <div class="who">
+            <div class="av reviewer">审</div>
+            <b>审查专家</b><span class="sub">复审</span>
+            <span class="badge ok">PASS</span>
+          </div>
+          <div class="review pass">
+            <div class="rv-h">✓ PASS · 通过</div>
+            <ul><li>已核对 4 条证据，事实与活动详情一致</li></ul>
+          </div>
+        </div>
+
+        <!-- 结果 -->
+        <div class="reply coord">
+          <div class="who"><div class="av" style="background:#c2220c">协</div><b>汇总</b><span class="sub">Run #1027 完成 · 3.6s</span></div>
+          <div class="result">
+            <div class="ic">📄</div>
+            <div class="rt"><b>报道推文草稿</b><div>已落 DRAFT，可在推文编辑页继续修改并走原有审核流</div></div>
+            <span class="ref">／迎新晚会（ID 88）</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 右栏 -->
+  <aside class="panel">
+    <div class="ph">专家团队</div>
+    <div class="team">
+      <div class="agent"><div class="av" style="background:#c2220c">协</div><div class="info"><div class="nm">协调者</div><div class="rl">规划 · 调度 · 汇总裁决</div></div><span class="badge ok">已完成</span></div>
+      <div class="agent"><div class="av retrieval">检</div><div class="info"><div class="nm">检索专家</div><div class="rl">查询数据与知识库</div></div><span class="badge ok">已完成</span><span class="calls">2</span></div>
+      <div class="agent"><div class="av writing">文</div><div class="info"><div class="nm">文书专家</div><div class="rl">推文 / 新闻 / 公告</div></div><span class="badge ok">已完成</span><span class="calls">2</span></div>
+      <div class="agent"><div class="av reviewer">审</div><div class="info"><div class="nm">审查专家</div><div class="rl">质量 · 事实 · 合规</div></div><span class="badge ok">已完成</span><span class="calls">0</span></div>
+      <div class="agent" style="opacity:.6"><div class="av planning">策</div><div class="info"><div class="nm">策划专家</div><div class="rl">活动方案 / 策划书</div></div><span class="badge" style="background:#f0f1f3;color:var(--text-3)">空闲</span></div>
+      <div class="agent" style="opacity:.6"><div class="av scheduling" style="background:#5a6a7a">排</div><div class="info"><div class="nm">排班专家</div><div class="rl">排班 / 筹备任务</div></div><span class="badge" style="background:#f0f1f3;color:var(--text-3)">空闲</span></div>
+      <div class="agent" style="opacity:.6"><div class="av data" style="background:#6a6a6a">事</div><div class="info"><div class="nm">事务专家</div><div class="rl">批量事务（须确认）</div></div><span class="badge" style="background:#f0f1f3;color:var(--text-3)">空闲</span></div>
+    </div>
+
+    <div class="ph">协作拓扑</div>
+    <div class="topo">
+      <svg viewBox="0 0 296 170" width="100%" height="170">
+        <defs>
+          <marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 z" fill="#c9ced6"/>
+          </marker>
+        </defs>
+        <!-- coordinator -->
+        <g>
+          <rect x="112" y="8" width="72" height="30" rx="8" fill="#fff1ee" stroke="#DE2910"/>
+          <text x="148" y="27" text-anchor="middle" font-size="11" fill="#c2220c">协调者</text>
+        </g>
+        <!-- edges -->
+        <path d="M130 38 C 90 62, 60 70, 52 92" stroke="#c9ced6" fill="none" marker-end="url(#a)"/>
+        <path d="M166 38 C 206 62, 240 70, 248 92" stroke="#c9ced6" fill="none" marker-end="url(#a)"/>
+        <path d="M148 38 L148 92" stroke="#c9ced6" fill="none" marker-end="url(#a)"/>
+        <!-- children -->
+        <g>
+          <rect x="14" y="94" width="72" height="28" rx="8" fill="#fff" stroke="#e8eaed"/>
+          <text x="50" y="112" text-anchor="middle" font-size="10.5" fill="#1f2328">检索专家</text>
+        </g>
+        <g>
+          <rect x="112" y="94" width="72" height="28" rx="8" fill="#fff" stroke="#e8eaed"/>
+          <text x="148" y="112" text-anchor="middle" font-size="10.5" fill="#1f2328">文书专家</text>
+        </g>
+        <g>
+          <rect x="210" y="94" width="72" height="28" rx="8" fill="#fff" stroke="#e8eaed"/>
+          <text x="246" y="112" text-anchor="middle" font-size="10.5" fill="#1f2328">审查专家</text>
+        </g>
+        <!-- review loop -->
+        <path d="M210 108 C 196 134, 160 140, 148 138" stroke="#f0d9ab" fill="none" marker-end="url(#a)"/>
+        <path d="M148 138 C 136 140, 116 134, 104 122" stroke="#f0d9ab" fill="none" marker-end="url(#a)"/>
+        <text x="150" y="160" text-anchor="middle" font-size="9.5" fill="#a9701a">反思回路 ×1（REVISE → 修订）</text>
+      </svg>
+    </div>
+
+    <div class="ph">黑板 · Blackboard</div>
+    <div class="bb">
+      <h4>目标</h4>
+      <div class="kv"><span></span><span>为「迎新晚会」准备报道推文</span></div>
+      <h4 style="margin-top:8px">证据 · Findings</h4>
+      <div class="ev">检索专家：找到活动 + 材料 3 份（0.9）</div>
+      <div class="ev">文书专家：草稿 520 字，落 DRAFT（0.8）</div>
+      <h4 style="margin-top:8px">裁决 · Decisions</h4>
+      <div class="ev">审查专家：REVISE（日期不符）</div>
+      <div class="ev">审查专家：PASS（复审通过）</div>
+    </div>
+  </aside>
+
+</div>
+</body>
+</html>

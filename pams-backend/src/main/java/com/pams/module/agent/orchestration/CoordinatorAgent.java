@@ -126,8 +126,8 @@ public class CoordinatorAgent {
                 step.getId(), AgentStep.STATUS_SUCCESS, planDuration));
         bb.addFinding(AgentCatalog.COORDINATOR, "已生成 " + bb.getPlan().size() + " 步协作计划", 1.0);
 
-        // 逐步委派专家执行（P1 串行）
-        specialistExecutor.executePlan(run, bb, ctx, streamId);
+        // 逐步委派专家执行（P1 串行 / P2 并行 / P3 反思 / P4 委派）
+        specialistExecutor.executePlan(run, bb, ctx, streamId, mode);
 
         return runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
     }

@@ -72,6 +72,8 @@ export default function MainLayout() {
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
       // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限
       { key: '/agent', label: '灵思', icon: <RobotOutlined /> },
+      // 多 Agent 协作视图（批次 D）：专家团队协作与拓扑
+      { key: '/agent/team', label: '协作', icon: <TeamOutlined /> },
     ]
     // 知识库（V27）：灵思「对话」档位能检索到的资料。
     // kb:read 种子给了全部角色 —— 与 /agent 同一立场：问答人人可用，
@@ -162,6 +164,7 @@ export default function MainLayout() {
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
+    if (p.startsWith('/agent/team')) return '/agent/team'
     if (p.startsWith('/agent')) return '/agent'
     if (p.startsWith('/routine/attendance')) return '/routine/attendance'
     if (p.startsWith('/routine/my-schedules')) return '/routine/my-schedules'

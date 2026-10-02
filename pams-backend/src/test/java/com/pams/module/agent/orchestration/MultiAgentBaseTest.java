@@ -157,6 +157,42 @@ class MultiAgentBaseTest {
                 .isInstanceOf(BizException.class);
     }
 
+    // ---------- D：协作模式 P2 / P3 / P4 ----------
+
+    private static final String MULTI_INTENT = "迎新晚会先做策划，再写一篇推文，最后给参加者加分";
+
+    @Test
+    void mode_P2_parallel_runsAllProducers() {
+        ToolContext c = ctx(1L);
+        AgentRun run = coordinator.run(MULTI_INTENT, c, null, "P2", c.getStreamId());
+        List<AgentStep> steps = runService.steps(run.getId());
+        assertThat(steps).extracting(AgentStep::getAgentName)
+                .contains(AgentCatalog.PLANNING, AgentCatalog.WRITING, AgentCatalog.DATA, AgentCatalog.REVIEWER);
+        assertThat(steps).allMatch(s -> AgentStep.STATUS_SUCCESS.equals(s.getStatus()));
+    }
+
+    @Test
+    void mode_P3_reflection_loopsToMaxWhenRevise() {
+        ToolContext c = ctx(1L);
+        AgentRun run = coordinator.run("给新生写一篇推文", c, null, "P3", c.getStreamId());
+        long reviewSteps = runService.steps(run.getId()).stream()
+                .filter(s -> AgentCatalog.REVIEWER.equals(s.getAgentName())).count();
+        // Stub 模式下专家不产出工具调用 → 无产物 → 审查 REVISE → 反思回路跑满上限
+        assertThat(reviewSteps).isEqualTo(SpecialistExecutor.MAX_REFLECTION_ROUNDS);
+
+        Blackboard bb = parse(run.getBlackboardJson());
+        assertThat(bb.getDecisions()).isNotEmpty();
+        assertThat(bb.getDecisions()).allMatch(d -> "REVISE".equals(d.getVerdict()));
+    }
+
+    @Test
+    void mode_P4_delegation_setsParentStep() {
+        ToolContext c = ctx(1L);
+        AgentRun run = coordinator.run(MULTI_INTENT, c, null, "P4", c.getStreamId());
+        // 牵头专家之外的产出步骤应挂在牵头步骤之下（parentStepId 非空）
+        assertThat(runService.steps(run.getId())).anyMatch(s -> s.getParentStepId() != null);
+    }
+
     private List<String> names(Blackboard bb) {
         return bb.getPlan().stream().map(Blackboard.PlanItem::getAgent).toList();
     }

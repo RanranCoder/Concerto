@@ -41,6 +41,7 @@ const NotificationList = lazy(() => import('@/pages/notification/NotificationLis
 const MemberList = lazy(() => import('@/pages/member/MemberList'))
 const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
 const AgentHome = lazy(() => import('@/pages/agent/AgentHome'))
+const AgentTeam = lazy(() => import('@/pages/agent/AgentTeam'))
 const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
 const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
 
@@ -80,6 +81,9 @@ export const router = createBrowserRouter([
       // 每个工具声明 requiredPermissions，ToolRegistry.dispatch 派发前断言，
       // 且 /api/agent/tools 只返回当前用户可见的工具。所以干事进来只会看到自己有权做的事。
       { path: '/agent', element: <AgentHome /> },
+
+      // 多 Agent 协作视图（批次 D）：专家团队、协作拓扑、黑板
+      { path: '/agent/team', element: <AgentTeam /> },
 
       // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
       { path: '/activities', element: <Activities /> },
