@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
 public class MemberSession implements OrgScoped {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false, unique = true, length = 50)
+    // 唯一性由 V34 的复合键 (org_id, name, deleted) 保证（组织内唯一）
+    @Column(nullable = false, length = 50)
     private String name;
     @Column(name = "is_current")
     private Integer isCurrent = 0;

@@ -1,6 +1,7 @@
 package com.pams.module.user;
 
 import com.pams.common.BizException;
+import com.pams.common.OrgContext;
 import com.pams.common.PageResult;
 import com.pams.entity.Department;
 import com.pams.entity.Role;
@@ -47,6 +48,7 @@ public class UserService {
      */
     public java.util.List<Map<String, Object>> options() {
         return userRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream()
+                .filter(u -> OrgContext.getOrDefault().equals(u.getOrgId())) // 显式按组织过滤（A3）
                 .map(u -> {
                     Map<String, Object> m = new HashMap<>();
                     m.put("id", u.getId());
@@ -85,6 +87,8 @@ public class UserService {
         Long filterDept = forceOwnDept ? currentDeptId : deptId;
         Page<User> p = userRepository.findAll((root, q, cb) -> {
             var preds = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+            // 账号表未参与 @TenantId 自动过滤（注册需跨租户供给），此处显式按组织过滤（A3）
+            preds.add(cb.equal(root.get("orgId"), OrgContext.getOrDefault()));
             if (filterDept != null) preds.add(cb.equal(root.get("dept").get("id"), filterDept));
             if (keyword != null && !keyword.isBlank()) {
                 String like = "%" + keyword.trim() + "%";

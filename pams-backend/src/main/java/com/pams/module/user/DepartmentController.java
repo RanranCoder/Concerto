@@ -1,5 +1,6 @@
 package com.pams.module.user;
 
+import com.pams.common.OrgContext;
 import com.pams.common.Result;
 import com.pams.entity.Department;
 import com.pams.repository.DepartmentRepository;
@@ -17,6 +18,7 @@ public class DepartmentController {
 
     @GetMapping
     public Result<List<Department>> list() {
-        return Result.ok(departmentRepository.findAll());
+        // 组织架构表未参与 @TenantId 自动过滤（注册需跨租户供给），此处显式按组织过滤（A3）
+        return Result.ok(departmentRepository.findByOrgIdOrderBySortOrderAscIdAsc(OrgContext.getOrDefault()));
     }
 }

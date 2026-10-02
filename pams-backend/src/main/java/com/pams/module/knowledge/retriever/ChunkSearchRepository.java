@@ -1,5 +1,6 @@
 package com.pams.module.knowledge.retriever;
 
+import com.pams.common.OrgContext;
 import com.pams.module.agent.core.ToolContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -148,6 +149,10 @@ public class ChunkSearchRepository {
      */
     private String permClause(ToolContext ctx, List<Object> args) {
         StringBuilder sb = new StringBuilder(" c.deleted = 0 ");
+        // 租户谓词（A3）：kb_chunk 标了 @TenantId，但裸 SQL 不受 Hibernate 过滤覆盖，
+        // 必须在此显式补上，否则跨组织知识会在检索中互相可见。
+        sb.append(" AND c.org_id = ? ");
+        args.add(OrgContext.getOrDefault());
 
         if (ctx != null && ctx.isLeader()) {
             sb.append(" AND c.visibility IN ('ALL','LEADER') ");
