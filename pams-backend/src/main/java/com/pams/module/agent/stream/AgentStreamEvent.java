@@ -48,6 +48,53 @@ public record AgentStreamEvent(String streamId, int seq, String type,
      */
     public static final String MESSAGE_DELTA = "MESSAGE_DELTA";
 
+    // —— 多 Agent 协作事件（B 批次） ——
+    /** 某专家 Agent 开始执行 */
+    public static final String AGENT_START = "AGENT_START";
+    /** 某专家 Agent 执行结束 */
+    public static final String AGENT_END = "AGENT_END";
+    /** Agent 间委派（from → to） */
+    public static final String AGENT_DELEGATE = "AGENT_DELEGATE";
+    /** 审查结论（PASS / REVISE） */
+    public static final String REVIEW_RESULT = "REVIEW_RESULT";
+
+    public static AgentStreamEvent agentStart(String streamId, int seq, String agent,
+                                              Long stepId, Long parentStepId) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("agent", agent);
+        p.put("stepId", stepId);
+        if (parentStepId != null) p.put("parentStepId", parentStepId);
+        return of(streamId, seq, AGENT_START, p);
+    }
+
+    public static AgentStreamEvent agentEnd(String streamId, int seq, String agent, Long stepId,
+                                            String status, long durationMs) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("agent", agent);
+        p.put("stepId", stepId);
+        p.put("status", status);
+        p.put("durationMs", durationMs);
+        return of(streamId, seq, AGENT_END, p);
+    }
+
+    public static AgentStreamEvent agentDelegate(String streamId, int seq, String from, String to,
+                                                 String reason) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("from", from);
+        p.put("to", to);
+        if (reason != null) p.put("reason", reason);
+        return of(streamId, seq, AGENT_DELEGATE, p);
+    }
+
+    public static AgentStreamEvent reviewResult(String streamId, int seq, String verdict,
+                                                String reason, int round) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("verdict", verdict);
+        p.put("reason", reason == null ? "" : reason);
+        p.put("round", round);
+        return of(streamId, seq, REVIEW_RESULT, p);
+    }
+
     public static AgentStreamEvent messageDelta(String streamId, int seq, int round, String text) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("round", round);
