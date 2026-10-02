@@ -104,5 +104,6 @@ public class KbChunk implements OrgScoped {
     public static String key(String sourceType, Long sourceId) {
         return sourceType + ":" + sourceId;
     }
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

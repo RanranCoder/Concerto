@@ -44,5 +44,6 @@ public class AgentAuditLog implements OrgScoped {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

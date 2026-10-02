@@ -20,6 +20,7 @@ public class Department implements OrgScoped {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 说明：组织架构表不参与 @TenantId 自动过滤（注册流程需跨租户供给；见 A3 边界）
     private Long orgId;
     private Long parentId;
 

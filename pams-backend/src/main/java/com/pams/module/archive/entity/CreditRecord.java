@@ -30,5 +30,6 @@ public class CreditRecord implements OrgScoped {
     private String remark;
     private Long recordBy;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

@@ -90,5 +90,6 @@ public class KbSnapshot implements OrgScoped {
 
     /** 引用/展示用：{@code snapshot:{id}} */
     public String sourceKey() { return "snapshot:" + id; }
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

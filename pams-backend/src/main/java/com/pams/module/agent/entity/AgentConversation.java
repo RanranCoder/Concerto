@@ -29,5 +29,6 @@ public class AgentConversation implements OrgScoped {
 
     @Column(nullable = false)
     private Integer deleted = 0;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

@@ -30,5 +30,6 @@ public class Signin implements OrgScoped {
     @Column(columnDefinition = "TEXT")
     private String fieldsJson;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

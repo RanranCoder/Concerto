@@ -19,5 +19,6 @@ public class SigninFieldConfig implements OrgScoped {
     private String fieldType;
     private Integer sortOrder;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

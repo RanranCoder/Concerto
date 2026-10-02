@@ -22,5 +22,6 @@ public class PartyInvestigation implements OrgScoped {
     private String relativeBranch;
     private String relativeBranchAddr;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

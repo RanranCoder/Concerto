@@ -53,5 +53,6 @@ public class Notification implements OrgScoped {
     private LocalDateTime createdAt;
 
     private Integer deleted;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

@@ -27,5 +27,6 @@ public class ScheduleConfig implements OrgScoped {
 
     @Column(length = 20)
     private String label;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

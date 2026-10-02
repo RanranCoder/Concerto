@@ -51,5 +51,6 @@ public class ActivityPlan implements OrgScoped {
     private String reviewComment;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

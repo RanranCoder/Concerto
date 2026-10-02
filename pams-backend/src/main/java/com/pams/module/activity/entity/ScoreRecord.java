@@ -20,5 +20,6 @@ public class ScoreRecord implements OrgScoped {
     private Integer rankNo;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

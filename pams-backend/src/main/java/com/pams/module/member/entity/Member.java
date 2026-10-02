@@ -42,5 +42,6 @@ public class Member implements OrgScoped {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     private Long deleted = 0L;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

@@ -78,5 +78,6 @@ public class AgentTask implements OrgScoped {
 
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

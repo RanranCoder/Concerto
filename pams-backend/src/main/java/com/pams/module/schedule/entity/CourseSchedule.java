@@ -35,5 +35,6 @@ public class CourseSchedule implements OrgScoped {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

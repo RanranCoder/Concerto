@@ -102,5 +102,6 @@ public class KbRetrievalLog implements OrgScoped {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

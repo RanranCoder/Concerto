@@ -30,5 +30,6 @@ public class User implements OrgScoped {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long deleted;
+    // 说明：账号表不参与 @TenantId 自动过滤（注册流程需跨租户供给；见 A3 边界）
     private Long orgId;
 }

@@ -32,5 +32,6 @@ public class Activity implements OrgScoped {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

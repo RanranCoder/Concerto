@@ -24,5 +24,6 @@ public class FileRecord implements OrgScoped {
     private String bizType;
     private Long uploaderId;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

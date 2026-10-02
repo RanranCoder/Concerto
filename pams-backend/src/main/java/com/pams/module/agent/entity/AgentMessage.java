@@ -87,5 +87,6 @@ public class AgentMessage implements OrgScoped {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

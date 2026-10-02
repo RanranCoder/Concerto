@@ -20,5 +20,6 @@ public class NoClassScheduleRecord implements OrgScoped {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String gridJson;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

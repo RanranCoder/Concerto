@@ -19,5 +19,6 @@ public class SchedulePerson implements OrgScoped {
     /** 1 主班 / 0 副班 */
     private Integer isPrimary;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

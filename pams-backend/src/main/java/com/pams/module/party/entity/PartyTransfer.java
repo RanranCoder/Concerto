@@ -26,5 +26,6 @@ public class PartyTransfer implements OrgScoped {
     private LocalDate signDate;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

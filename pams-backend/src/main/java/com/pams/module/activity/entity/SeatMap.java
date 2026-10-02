@@ -19,5 +19,6 @@ public class SeatMap implements OrgScoped {
     private String personName;
     private String seatType;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

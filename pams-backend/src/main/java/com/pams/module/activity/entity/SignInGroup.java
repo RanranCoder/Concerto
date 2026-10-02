@@ -17,5 +17,6 @@ public class SignInGroup implements OrgScoped {
     private String sourceFilename;
     private Integer sortOrder;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

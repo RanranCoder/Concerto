@@ -45,5 +45,6 @@ public class Attendance implements OrgScoped {
     private LocalDateTime checkedInAt;
     private LocalDateTime recordTime;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

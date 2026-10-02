@@ -27,5 +27,6 @@ public class Material implements OrgScoped {
     private Long fileId;
     private LocalDateTime createdAt;
     private Integer deleted;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

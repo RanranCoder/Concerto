@@ -21,5 +21,6 @@ public class PartyStage implements OrgScoped {
     private LocalDate endDate;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

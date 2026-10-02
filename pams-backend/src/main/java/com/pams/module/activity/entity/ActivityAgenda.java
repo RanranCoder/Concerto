@@ -16,5 +16,6 @@ public class ActivityAgenda implements OrgScoped {
     private String title;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

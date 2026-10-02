@@ -16,6 +16,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        # 多租户判别器（A3）：标了 @TenantId 的实体按 OrgContext 自动过滤/回填
+        tenant_identifier_resolver: com.pams.config.OrgTenantIdentifierResolver
   flyway:
     enabled: true
     # db/migration = 双库通用迁移；db/migration-mysql = MySQL 专有迁移（如 V25 动态 DDL）。

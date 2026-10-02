@@ -101,40 +101,49 @@ public class OrgService {
         org = organizationRepository.save(org);
         Long orgId = org.getId();
 
-        // 2. 架构树
-        Department rootUnit = null;
-        if (req.getUnits() != null) {
-            int i = 0;
-            for (OrgRegisterRequest.UnitNode node : req.getUnits()) {
-                Department saved = saveUnitRecursive(orgId, null, null, node, i++);
-                if (rootUnit == null) {
-                    rootUnit = saved;
+        // 2/3. 新组织的架构与管理员属于「新租户」。多租户判别器按 OrgContext 取值，
+        //      故在供给期临时把租户上下文切到新组织，写完恢复（A3）。
+        Long previousOrg = OrgContext.get();
+        OrgContext.set(orgId);
+        User admin;
+        try {
+            Department rootUnit = null;
+            if (req.getUnits() != null) {
+                int i = 0;
+                for (OrgRegisterRequest.UnitNode node : req.getUnits()) {
+                    Department saved = saveUnitRecursive(orgId, null, null, node, i++);
+                    if (rootUnit == null) {
+                        rootUnit = saved;
+                    }
                 }
             }
+            initPositions(orgId, req.getUnits());
+
+            Role director = roleRepository.findAll().stream()
+                    .filter(r -> "DIRECTOR".equals(r.getCode()))
+                    .findFirst()
+                    .orElseThrow(() -> new BizException(2005, "系统角色 DIRECTOR 不存在，请先初始化基础数据"));
+            admin = new User();
+            admin.setUsername(req.getAdmin().getUsername().trim());
+            admin.setPassword(passwordEncoder.encode(req.getAdmin().getPassword()));
+            admin.setRealName(isBlank(req.getAdmin().getRealName())
+                    ? req.getAdmin().getUsername().trim() : req.getAdmin().getRealName());
+            admin.setPhone(req.getAdmin().getPhone());
+            admin.setRole(director);
+            admin.setDept(rootUnit);
+            admin.setStatus(1);
+            admin.setOrgId(orgId);
+            admin.setDeleted(0L);
+            admin.setCreatedAt(LocalDateTime.now());
+            admin.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(admin);
+        } finally {
+            if (previousOrg == null) {
+                OrgContext.clear();
+            } else {
+                OrgContext.set(previousOrg);
+            }
         }
-
-        // 2.5 架构 → 岗位映射（org_position）：按节点类型套默认角色
-        initPositions(orgId, req.getUnits());
-
-        // 3. 管理员账号（显式 orgId；DIRECTOR 角色）
-        Role director = roleRepository.findAll().stream()
-                .filter(r -> "DIRECTOR".equals(r.getCode()))
-                .findFirst()
-                .orElseThrow(() -> new BizException(2005, "系统角色 DIRECTOR 不存在，请先初始化基础数据"));
-        User admin = new User();
-        admin.setUsername(req.getAdmin().getUsername().trim());
-        admin.setPassword(passwordEncoder.encode(req.getAdmin().getPassword()));
-        admin.setRealName(isBlank(req.getAdmin().getRealName())
-                ? req.getAdmin().getUsername().trim() : req.getAdmin().getRealName());
-        admin.setPhone(req.getAdmin().getPhone());
-        admin.setRole(director);
-        admin.setDept(rootUnit);
-        admin.setStatus(1);
-        admin.setOrgId(orgId);
-        admin.setDeleted(0L);
-        admin.setCreatedAt(LocalDateTime.now());
-        admin.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(admin);
 
         org.setOwnerUserId(admin.getId());
         organizationRepository.save(org);

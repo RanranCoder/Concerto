@@ -20,5 +20,6 @@ public class GroupChatDepartment implements Serializable, OrgScoped {
     @Id
     @Column(length = 50)
     private String department;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

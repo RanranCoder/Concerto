@@ -20,5 +20,6 @@ public class PartyRoster implements OrgScoped {
     private String branchName;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

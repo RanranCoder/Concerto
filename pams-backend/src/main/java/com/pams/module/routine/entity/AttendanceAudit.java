@@ -21,5 +21,6 @@ public class AttendanceAudit implements OrgScoped {
     private LocalDateTime operateTime;
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

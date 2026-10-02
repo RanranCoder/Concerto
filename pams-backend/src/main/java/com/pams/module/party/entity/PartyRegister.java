@@ -32,5 +32,6 @@ public class PartyRegister implements OrgScoped {
     @Column(columnDefinition = "TEXT")
     private String remark;
     private LocalDateTime createdAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

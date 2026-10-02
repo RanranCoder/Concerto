@@ -14,5 +14,6 @@ public class ScoreRule implements OrgScoped {
     private String dimensionName;
     private Integer fullMarks;
     private Integer sortOrder;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

@@ -16,5 +16,6 @@ public class AnnouncementRead implements OrgScoped {
     private Long userId;
     @Column(insertable = false, updatable = false)
     private LocalDateTime readAt;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

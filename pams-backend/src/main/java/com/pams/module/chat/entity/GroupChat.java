@@ -48,5 +48,6 @@ public class GroupChat implements OrgScoped {
     private LocalDateTime updatedAt;
 
     private Integer deleted;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

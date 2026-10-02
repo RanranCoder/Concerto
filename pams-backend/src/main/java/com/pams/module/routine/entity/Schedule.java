@@ -59,5 +59,6 @@ public class Schedule implements OrgScoped {
     /** 值班人员（服务层组装，非持久化） */
     @Transient
     private List<SchedulePerson> persons = new ArrayList<>();
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

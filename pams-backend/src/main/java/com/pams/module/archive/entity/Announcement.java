@@ -21,5 +21,6 @@ public class Announcement implements OrgScoped {
     private LocalDateTime publishTime;
     private LocalDateTime createdAt;
     private Integer deleted;
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }

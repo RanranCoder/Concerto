@@ -114,5 +114,6 @@ public class KbDocument implements OrgScoped {
     public boolean indexable() {
         return STATUS_PUBLISHED.equals(status) && (deleted == null || deleted == 0);
     }
+    @org.hibernate.annotations.TenantId
     private Long orgId;
 }
