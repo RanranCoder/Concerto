@@ -23,6 +23,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore, isPackEnabled, term } from '@/stores/org'
 import ThemeSwitch from '@/components/glass/ThemeSwitch'
 import NotificationBell from '@/components/notification/NotificationBell'
 import { NotificationToast } from '@/components/notification/NotificationToast'
@@ -35,6 +36,9 @@ export default function MainLayout() {
   const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  // 领域包与术语（A2）：驱动菜单显隐与文案
+  const packs = useOrgStore((s) => s.enabledPacks)
+  const terminology = useOrgStore((s) => s.terminology)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -83,7 +87,7 @@ export default function MainLayout() {
       items.push({ key: '/knowledge', label: '知识库', icon: <BookOutlined /> })
     }
     if (hasPerm('activity:view')) {
-      items.push({ key: '/activities', label: '活动管理', icon: <CalendarOutlined /> })
+      items.push({ key: '/activities', label: term(terminology, 'activity', '活动管理'), icon: <CalendarOutlined /> })
     }
     if (hasPerm('schedule:view')) {
       items.push({
@@ -106,8 +110,9 @@ export default function MainLayout() {
       items.push({ key: '/archive/materials', label: '材料库', icon: <FolderOutlined /> })
     }
     // 党务台账路由守卫是 RequireRole(LEADER_ROLES) 不含 STAFF，菜单按角色对齐避免干事点进去 403
-    if (isMinisterOrAbove) {
-      items.push({ key: '/party/members', label: '党务台账', icon: <IdcardOutlined /> })
+    // 党务台账 = party 领域包；组织未启用该包时整块隐藏（A2：按领域包装配）
+    if (isMinisterOrAbove && isPackEnabled(packs, 'party')) {
+      items.push({ key: '/party/members', label: term(terminology, 'partyLedger', '党务台账'), icon: <IdcardOutlined /> })
     }
     if (hasPerm('member:view')) {
       items.push({ key: '/members', label: '成员管理', icon: <IdcardOutlined /> })
@@ -158,7 +163,7 @@ export default function MainLayout() {
       items.push({ key: '/org/structure', label: '组织架构', icon: <ApartmentOutlined /> })
     }
     return items
-  }, [user?.roleCode, user?.roleLevel, user?.permissions])
+  }, [user?.roleCode, user?.roleLevel, user?.permissions, packs, terminology])
 
   // 选中态：/routine/* → 排班考勤；/party/* → 党务台账；/content/* → 内容宣传子菜单项；
   // /archive/* → 材料库；/admin/users → 用户管理、/admin/permissions → 权限管理、

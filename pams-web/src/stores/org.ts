@@ -4,11 +4,17 @@ import { getCurrentOrg } from '@/api/org'
 /** 默认主题色（党建红）——组织未配置主题时回退。 */
 export const DEFAULT_PRIMARY_COLOR = '#DE2910'
 
+/** 已知领域包（A2）：组织未显式配置时视为全部启用（兼容默认组织）。 */
+export const ALL_PACKS = ['party', 'volunteer', 'club']
+
 interface OrgState {
   orgName: string | null
   primaryColor: string
+  /** 启用的领域包；未配置 = ALL_PACKS */
+  enabledPacks: string[]
+  /** 术语表：key → 展示名 */
+  terminology: Record<string, string>
   loaded: boolean
-  /** 拉取当前组织信息（品牌/主题）。失败保持默认，不阻塞。 */
   load: () => Promise<void>
   reset: () => void
 }
@@ -25,17 +31,63 @@ function parsePrimaryColor(themeJson: string | null): string {
   }
 }
 
+function parsePacks(json: string | null): string[] {
+  if (!json || !json.trim()) return ALL_PACKS
+  try {
+    const a = JSON.parse(json) as unknown
+    return Array.isArray(a) ? a.map(String) : ALL_PACKS
+  } catch {
+    return ALL_PACKS
+  }
+}
+
+function parseTerminology(json: string | null): Record<string, string> {
+  if (!json || !json.trim()) return {}
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>
+    const out: Record<string, string> = {}
+    Object.entries(o).forEach(([k, v]) => { if (typeof v === 'string') out[k] = v })
+    return out
+  } catch {
+    return {}
+  }
+}
+
 export const useOrgStore = create<OrgState>((set) => ({
   orgName: null,
   primaryColor: DEFAULT_PRIMARY_COLOR,
+  enabledPacks: ALL_PACKS,
+  terminology: {},
   loaded: false,
   load: async () => {
     try {
       const org = await getCurrentOrg()
-      set({ orgName: org.name, primaryColor: parsePrimaryColor(org.themeJson), loaded: true })
+      set({
+        orgName: org.name,
+        primaryColor: parsePrimaryColor(org.themeJson),
+        enabledPacks: parsePacks(org.enabledPacks),
+        terminology: parseTerminology(org.terminologyJson),
+        loaded: true,
+      })
     } catch {
-      /* 未登录或接口失败：保持默认主题 */
+      /* 未登录或接口失败：保持默认 */
     }
   },
-  reset: () => set({ orgName: null, primaryColor: DEFAULT_PRIMARY_COLOR, loaded: false }),
+  reset: () => set({
+    orgName: null,
+    primaryColor: DEFAULT_PRIMARY_COLOR,
+    enabledPacks: ALL_PACKS,
+    terminology: {},
+    loaded: false,
+  }),
 }))
+
+/** 领域包是否启用（组件内用 selector 取 enabledPacks 后调用）。 */
+export function isPackEnabled(packs: string[], pack: string): boolean {
+  return packs.includes(pack)
+}
+
+/** 术语：优先组织自定义，回退默认文案。 */
+export function term(terminology: Record<string, string>, key: string, fallback: string): string {
+  return terminology[key] ?? fallback
+}
