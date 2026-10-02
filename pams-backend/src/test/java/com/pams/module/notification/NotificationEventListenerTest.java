@@ -64,7 +64,8 @@ class NotificationEventListenerTest {
         User member1 = userWithIdAndRole(2L, "MEMBER");
         User member2 = userWithIdAndRole(3L, "MEMBER");
         User sender = userWithIdAndRole(1L, "TEACHER");
-        when(userRepo.findByDeptId(10L)).thenReturn(List.of(member1, member2, sender));
+        when(userRepo.findByOrgIdAndDeptId(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq(10L)))
+                .thenReturn(List.of(member1, member2, sender));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handleTaskAssigned(new TaskAssignedEvent(1L, 100L, 10L, "布置会场", 1L));
@@ -82,7 +83,8 @@ class NotificationEventListenerTest {
 
     @Test
     void handleTaskAssigned_noDeptMembers_noNotifications() {
-        when(userRepo.findByDeptId(10L)).thenReturn(List.of());
+        when(userRepo.findByOrgIdAndDeptId(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq(10L)))
+                .thenReturn(List.of());
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handleTaskAssigned(new TaskAssignedEvent(1L, 100L, 10L, "布置会场", 1L));
@@ -95,8 +97,10 @@ class NotificationEventListenerTest {
     void handlePlanSubmitted_notifiesTeacherAndDirectorRoles() {
         User teacher = userWithIdAndRole(10L, "TEACHER");
         User director = userWithIdAndRole(11L, "DIRECTOR");
-        when(userRepo.findByRoleCode("TEACHER")).thenReturn(List.of(teacher));
-        when(userRepo.findByRoleCode("DIRECTOR")).thenReturn(List.of(director));
+        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("TEACHER")))
+                .thenReturn(List.of(teacher));
+        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("DIRECTOR")))
+                .thenReturn(List.of(director));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanSubmitted(new PlanSubmittedEvent(1L, 100L, "策划书", 5L));
@@ -115,8 +119,10 @@ class NotificationEventListenerTest {
 
     @Test
     void handlePlanSubmitted_noReviewers_noNotifications() {
-        when(userRepo.findByRoleCode("TEACHER")).thenReturn(List.of());
-        when(userRepo.findByRoleCode("DIRECTOR")).thenReturn(List.of());
+        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("TEACHER")))
+                .thenReturn(List.of());
+        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("DIRECTOR")))
+                .thenReturn(List.of());
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanSubmitted(new PlanSubmittedEvent(1L, 100L, "策划书", 5L));
@@ -128,7 +134,8 @@ class NotificationEventListenerTest {
     @Test
     void handlePlanApproved_notifiesAllUsersExceptReviewer() {
         User reviewer = userWithIdAndRole(1L, "TEACHER");
-        when(userRepo.findByRoleCode(org.mockito.ArgumentMatchers.anyString())).thenReturn(List.of(reviewer));
+        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(List.of(reviewer));
         when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
 
         listener.handlePlanReviewed(new PlanReviewedEvent(
@@ -176,7 +183,8 @@ class NotificationEventListenerTest {
     @Test
     void handleTaskAssigned_activityNotFound_usesFallbackName() {
         User member = userWithIdAndRole(2L, "MEMBER");
-        when(userRepo.findByDeptId(10L)).thenReturn(List.of(member));
+        when(userRepo.findByOrgIdAndDeptId(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq(10L)))
+                .thenReturn(List.of(member));
         when(activityRepo.findById(999L)).thenReturn(Optional.empty());
 
         listener.handleTaskAssigned(new TaskAssignedEvent(1L, 999L, 10L, "布置会场", 1L));

@@ -13,6 +13,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     boolean existsByUsername(String username);
     List<User> findByDeptId(Long deptId);
     List<User> findByRoleCode(String roleCode);
+
+    // 多租户（A3）：账号表未自动过滤，通知广播等按组织取收件人，避免跨组织触达
+    List<User> findByOrgIdAndDeptId(Long orgId, Long deptId);
+    List<User> findByOrgIdAndRoleCode(Long orgId, String roleCode);
     List<User> findByStudentNo(String studentNo);
 
     /** 查已软删的同名账号（native query 绕过 @SQLRestriction，供 createUser 复活用）。 */

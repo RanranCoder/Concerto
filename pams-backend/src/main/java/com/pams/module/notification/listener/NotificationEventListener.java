@@ -77,7 +77,7 @@ public class NotificationEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleTaskAssigned(TaskAssignedEvent event) {
         String activityName = getActivityName(event.getActivityId());
-        List<User> members = userRepo.findByDeptId(event.getDeptId());
+        List<User> members = userRepo.findByOrgIdAndDeptId(com.pams.common.OrgContext.getOrDefault(), event.getDeptId());
         for (User member : members) {
             if (!member.getId().equals(event.getSenderId())) {
                 notificationService.createAndSave(
@@ -96,8 +96,8 @@ public class NotificationEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePlanSubmitted(PlanSubmittedEvent event) {
         String activityName = getActivityName(event.getActivityId());
-        List<User> teachers = userRepo.findByRoleCode("TEACHER");
-        List<User> directors = userRepo.findByRoleCode("DIRECTOR");
+        List<User> teachers = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "TEACHER");
+        List<User> directors = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "DIRECTOR");
 
         Set<String> roles = new java.util.LinkedHashSet<>();
         for (User u : teachers) {
@@ -172,7 +172,7 @@ public class NotificationEventListener {
         boolean isDirector = editor.map(u -> "DIRECTOR".equals(u.getRole().getCode())).orElse(false);
         if (isDirector) {
             // 链路2：主任修改策划书 → 通知组织部全员
-            List<User> orgLeaders = userRepo.findByRoleCode("ORG_LEADER");
+            List<User> orgLeaders = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "ORG_LEADER");
             for (User u : orgLeaders) {
                 if (!u.getId().equals(event.getEditorId())) {
                     notificationService.createAndSave(
@@ -351,7 +351,7 @@ public class NotificationEventListener {
             pushed.add(senderId);
         }
         for (String role : roles) {
-            for (User u : userRepo.findByRoleCode(role)) {
+            for (User u : userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), role)) {
                 if (!pushed.contains(u.getId())) {
                     pushToUser(u);
                     pushed.add(u.getId());
