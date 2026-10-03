@@ -45,15 +45,15 @@ function periodRowIndex(sessionName?: string | null): number {
 const cellHeader: CSSProperties = {
   padding: 10,
   textAlign: 'center',
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-bg-2)',
-  color: 'var(--color-text-secondary)',
+  border: '1px solid var(--border)',
+  background: 'var(--soft)',
+  color: 'var(--text-secondary)',
   fontWeight: 600,
 }
 const cellBody: CSSProperties = {
   padding: 10,
   verticalAlign: 'top',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   minWidth: 120,
   minHeight: 44,
 }
@@ -250,7 +250,7 @@ export default function ScheduleList() {
 
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space wrap>
-          <span style={{ color: 'var(--color-text-secondary)' }}>活动名称</span>
+          <span style={{ color: 'var(--text-secondary)' }}>活动名称</span>
           <Select
             placeholder="选择活动"
             allowClear
@@ -261,7 +261,7 @@ export default function ScheduleList() {
             value={activityId}
             onChange={setActivityId}
           />
-          <span style={{ color: 'var(--color-text-secondary)' }}>第几周</span>
+          <span style={{ color: 'var(--text-secondary)' }}>第几周</span>
           <InputNumber
             placeholder="周次"
             min={1}
@@ -287,7 +287,7 @@ export default function ScheduleList() {
       <GlassCard style={{ padding: 16 }}>
         <Spin spinning={loading}>
           {list.length === 0 && !loading ? (
-            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 32 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>
               当前筛选条件下暂无排班，点击右上角「新增排班」创建
             </div>
           ) : (
@@ -317,7 +317,7 @@ export default function ScheduleList() {
                             style={{
                               ...cellBody,
                               cursor: schedules.length ? 'pointer' : 'default',
-                              background: schedules.length ? 'var(--color-bg-2)' : 'transparent',
+                              background: schedules.length ? 'var(--soft)' : 'transparent',
                             }}
                             onClick={() => schedules.length && openCell(wd, rowIdx)}
                           >
@@ -325,10 +325,10 @@ export default function ScheduleList() {
                               {names.length > 0 ? (
                                 <div style={{ lineHeight: 1.6, wordBreak: 'break-word' }}>{names.join('、')}</div>
                               ) : (
-                                <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                                <span style={{ color: 'var(--text-tertiary)' }}>—</span>
                               )}
                               {schedules.length > 0 && (
-                                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                                   {schedules.length} 条排班
                                 </div>
                               )}
@@ -353,12 +353,12 @@ export default function ScheduleList() {
         footer={<Button onClick={() => setCellSchedules(null)}>关闭</Button>}
       >
         {(cellSchedules ?? []).length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 24 }}>该格暂无排班</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>该格暂无排班</div>
         ) : (
           (cellSchedules ?? []).map((s) => (
             <div
               key={s.id}
-              style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 12, marginBottom: 10 }}
+              style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 10 }}
             >
               <Space wrap style={{ marginBottom: 6 }}>
                 <Tag color="red">{SCHEDULE_TYPE_MAP[s.scheduleType] ?? s.scheduleType}</Tag>
@@ -366,9 +366,9 @@ export default function ScheduleList() {
                 {s.weekNo != null && <Tag>第{s.weekNo}周</Tag>}
                 {s.sessionName && <span>{s.sessionName}</span>}
               </Space>
-              {s.location && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>地点：{s.location}</div>}
+              {s.location && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>地点：{s.location}</div>}
               {s.scheduleDate && (
-                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   日期：{dayjs(s.scheduleDate).format('YYYY-MM-DD')}
                 </div>
               )}
@@ -502,7 +502,7 @@ export default function ScheduleList() {
                           placeholder="主班"
                         />
                       </Form.Item>
-                      <MinusCircleOutlined onClick={() => remove(field.name)} style={{ color: 'var(--color-text-secondary)' }} />
+                      <MinusCircleOutlined onClick={() => remove(field.name)} style={{ color: 'var(--text-secondary)' }} />
                     </Space>
                   ))}
                   <Form.Item>

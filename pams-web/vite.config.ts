@@ -21,5 +21,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // e2e 目录是 Playwright 用例（npm run test:e2e），不能被 vitest 收集：
+    // 两者 test()/describe() 签名不兼容，混跑会直接报 "did not expect test.describe() to be called here"。
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
 })

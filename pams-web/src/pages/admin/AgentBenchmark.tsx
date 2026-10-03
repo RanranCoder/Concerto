@@ -46,7 +46,7 @@ export default function AgentBenchmark() {
           单 Agent 臂 = 一个通才 Agent（工具不限）；多 Agent 臂 = 协调者规划 + 专家 + 审查。
           内置 5 类任务（检索 / 策划 / 文书 / 排班 / 事务）。
         </Typography.Paragraph>
-        <Typography.Paragraph type="warning" style={{ marginBottom: 0, fontSize: 12 }}>
+        <Typography.Paragraph type="warning" style={{ marginBottom: 0, fontSize: 13 }}>
           注：离线（未配置 LLM Key）下专家不产出工具调用，内容质量类指标（工具调用数、审查通过率）会退化；
           真实对比请在有 Key 的环境运行。
         </Typography.Paragraph>
@@ -88,9 +88,9 @@ function BarGroup({ label, single, multi }: { label: string; single: number; mul
   const max = Math.max(single, multi, 1)
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{label}</div>
-      <Bar color="#8a93a0" value={single} max={max} tag={`SINGLE ${fmt(single)}`} />
-      <Bar color="#DE2910" value={multi} max={max} tag={`MULTI ${fmt(multi)}`} />
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
+      <Bar color="var(--text-tertiary)" value={single} max={max} tag={`SINGLE ${fmt(single)}`} />
+      <Bar color="var(--brand)" value={multi} max={max} tag={`MULTI ${fmt(multi)}`} />
     </div>
   )
 }
@@ -99,10 +99,10 @@ function Bar({ color, value, max, tag }: { color: string; value: number; max: nu
   const pct = Math.max(2, Math.round((value / max) * 100))
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-      <div style={{ flex: 1, height: 14, background: '#f2f3f5', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 14, background: 'var(--soft)', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4 }} />
       </div>
-      <span style={{ width: 130, fontSize: 11.5, color: '#6b7280', fontFamily: 'monospace' }}>{tag}</span>
+      <span style={{ width: 130, fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{tag}</span>
     </div>
   )
 }

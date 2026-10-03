@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { theme as antdTheme } from 'antd'
+import type { ThemeMode } from '@/styles/tokens'
 
-type ThemeMode = 'dark' | 'light'
+export type { ThemeMode }
 
 interface ThemeState {
   mode: ThemeMode
@@ -26,7 +26,3 @@ export const useThemeStore = create<ThemeState>()(
     { name: 'pams_theme' },
   ),
 )
-
-export const getAntdTheme = (mode: ThemeMode) => ({
-  algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-})

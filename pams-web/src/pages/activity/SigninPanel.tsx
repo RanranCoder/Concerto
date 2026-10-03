@@ -196,7 +196,7 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
         <GlassCard style={{ padding: 16, marginBottom: 12 }}>
           <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Space wrap>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-red)' }}>应签名单</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)' }}>应签名单</span>
               <Tag color="red">应签 {summary?.expected ?? 0}</Tag>
               <Tag color="green">已签 {summary?.signed ?? 0}</Tag>
               <Tag color="orange">未签 {summary?.unsigned ?? 0}</Tag>
@@ -222,7 +222,7 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
             <Tag color="red" style={{ fontSize: 14, padding: '2px 12px' }}>
               总签到 {count} 人
             </Tag>
-            <SearchOutlined style={{ color: 'var(--color-text-secondary)' }} />
+            <SearchOutlined style={{ color: 'var(--text-secondary)' }} />
           </Space>
           <Space wrap>
             <Button icon={<DownloadOutlined />} onClick={() => exportCsv(list)} disabled={list.length === 0}>

@@ -33,6 +33,8 @@ function loginAs(roleCode: string, permissions: string[] = []) {
       roleLevel: 3,
       deptId: null,
       deptName: null,
+      orgId: null,
+      orgName: null,
       permissions,
     },
   })

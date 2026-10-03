@@ -423,7 +423,7 @@ export default function WordEditor({
       {/* 控制栏：纸张大小 + 页边距（Word 预设）+ 分页导航 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>纸张大小</span>
+          <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>纸张大小</span>
           <Select
             size="middle"
             style={{ width: 110 }}
@@ -431,12 +431,12 @@ export default function WordEditor({
             onChange={changePaper}
             options={PAPER_SIZES.map((p) => ({ value: p.key, label: p.label }))}
           />
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             {paper.width}×{paper.height}{paper.unit}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>页边距</span>
+          <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>页边距</span>
           <Select
             size="middle"
             style={{ width: 96 }}
@@ -449,7 +449,7 @@ export default function WordEditor({
           <Button size="small" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>
             上一页
           </Button>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 64, textAlign: 'center' }}>
+          <span style={{ fontSize: 14, color: 'var(--text-secondary)', minWidth: 64, textAlign: 'center' }}>
             第 {currentPage} / {pageCount} 页
           </span>
           <Button size="small" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>
@@ -461,7 +461,7 @@ export default function WordEditor({
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* 左侧章节导航：由文档标题实时生成，点击跳转 */}
         <div style={{ width: 200, flexShrink: 0, position: 'sticky', top: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 8 }}>章节导航</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>章节导航</div>
           {navTitles.map((label, i) => (
             <div
               key={`${label}-${i}`}
@@ -480,7 +480,7 @@ export default function WordEditor({
 
         {/* 右侧：功能栏固定 + 逐页分页纸张（单个 wangEditor）；min-width 防止窄窗把纸张压塌 */}
         <div style={{ flex: 1, minWidth: 480, maxWidth: '100%' }} ref={editorWrapRef}>
-          <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>编辑器加载中...</div>}>
+          <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>编辑器加载中...</div>}>
             <PlanRichEditor
               value={docHtml}
               onChange={handleDocChange}
@@ -493,7 +493,7 @@ export default function WordEditor({
               pageStarts={pageStarts}
             />
           </Suspense>
-          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
             提示：内容超过一页会自动排到下一页，可点「上一页/下一页」翻页；点击左侧章节可跳转；章节标题可用「标题」下拉设置；活动名称/主题/时间/地点/组织单位/对象修改后保存可同步更新活动基本信息。
           </div>
         </div>

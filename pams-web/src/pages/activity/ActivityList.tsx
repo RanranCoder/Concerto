@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Space } from 'antd'
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
+import { App, Button, DatePicker, Drawer, Dropdown, Form, Grid, Input, Select, Space, Tag } from 'antd'
+import type { MenuProps } from 'antd'
+import { DeleteOutlined, EditOutlined, EllipsisOutlined, EyeOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -49,9 +50,11 @@ function toFormValues(detail?: ActivityVO & { description?: string }): FormValue
 }
 
 export default function ActivityList() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const hasPerm = useHasPerm()
+  const screens = Grid.useBreakpoint()
+  const compactFilters = screens.md === false
 
   const [data, setData] = useState<ActivityRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -59,8 +62,10 @@ export default function ActivityList() {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(10)
   const [keyword, setKeyword] = useState('')
+  const [keywordDraft, setKeywordDraft] = useState('')
   const [status, setStatus] = useState<string | undefined>()
   const [type, setType] = useState<string | undefined>()
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ActivityVO | null>(null)
   const [formInit, setFormInit] = useState<FormValues | undefined>(undefined)
@@ -84,6 +89,21 @@ export default function ActivityList() {
     fetchList()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, size, keyword, status, type])
+
+  const activeFilterCount = Number(Boolean(keyword)) + Number(Boolean(status)) + Number(Boolean(type))
+  const applyKeyword = () => {
+    setKeyword(keywordDraft.trim())
+    setPage(1)
+    if (compactFilters) setFilterDrawerOpen(false)
+  }
+  const clearFilters = () => {
+    setKeyword('')
+    setKeywordDraft('')
+    setStatus(undefined)
+    setType(undefined)
+    setPage(1)
+    setFilterDrawerOpen(false)
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -166,6 +186,48 @@ export default function ActivityList() {
     }
   }
 
+  const filterControls = (
+    <div className="activity-filter-controls">
+      <Input.Search
+        className="activity-filter-keyword"
+        placeholder="搜索活动名称 / 主题"
+        allowClear
+        value={keywordDraft}
+        onChange={(event) => {
+          const value = event.target.value
+          setKeywordDraft(value)
+          if (!value && keyword) {
+            setKeyword('')
+            setPage(1)
+          }
+        }}
+        onSearch={applyKeyword}
+      />
+      <Select
+        className="activity-filter-select"
+        placeholder="状态筛选"
+        allowClear
+        options={ACTIVITY_STATUS_OPTIONS}
+        value={status}
+        onChange={(value) => {
+          setStatus(value)
+          setPage(1)
+        }}
+      />
+      <Select
+        className="activity-filter-select"
+        placeholder="类型筛选"
+        allowClear
+        options={TYPE_OPTIONS}
+        value={type}
+        onChange={(value) => {
+          setType(value)
+          setPage(1)
+        }}
+      />
+    </div>
+  )
+
   const columns = [
     { title: '活动名称', dataIndex: 'name', key: 'name' },
     { title: '类型', dataIndex: 'type', key: 'type', render: (t: string) => TYPE_MAP[t] ?? t },
@@ -185,30 +247,51 @@ export default function ActivityList() {
     {
       title: '操作',
       key: 'action',
-      render: (_: unknown, r: ActivityRecord) => (
-        <Space size="small" wrap>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/activities/${r.id}`)}>
-            详情
-          </Button>
-          {hasPerm('activity:edit') && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-              编辑
+      width: 144,
+      fixed: 'right' as const,
+      render: (_: unknown, r: ActivityRecord) => {
+        const items: MenuProps['items'] = []
+        if (hasPerm('activity:edit')) items.push({ key: 'edit', icon: <EditOutlined />, label: '编辑' })
+        if (hasPerm('activity:edit') && NEXT_STATUS[r.status]) {
+          items.push({ key: 'advance', label: `推进至${ACTIVITY_STATUS_LABEL[NEXT_STATUS[r.status]]}` })
+        }
+        if (hasPerm('activity:delete')) {
+          items.push({ key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true })
+        }
+
+        return (
+          <Space size="small" wrap={false}>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/activities/${r.id}`)}>
+              详情
             </Button>
-          )}
-          {hasPerm('activity:edit') && NEXT_STATUS[r.status] && (
-            <Button type="link" size="small" onClick={() => handleAdvance(r)}>
-              推进状态
-            </Button>
-          )}
-          {hasPerm('activity:delete') && (
-            <Popconfirm title="确认删除该活动？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+            {items.length > 0 && (
+              <Dropdown
+                trigger={['click']}
+                placement="bottomRight"
+                menu={{
+                  items,
+                  onClick: ({ key }) => {
+                    if (key === 'edit') void openEdit(r)
+                    if (key === 'advance') void handleAdvance(r)
+                    if (key === 'delete') {
+                      modal.confirm({
+                        title: '确认删除该活动？',
+                        content: `删除后「${r.name}」将无法恢复。`,
+                        okText: '删除',
+                        cancelText: '取消',
+                        okButtonProps: { danger: true },
+                        onOk: () => handleDelete(r.id),
+                      })
+                    }
+                  },
+                }}
+              >
+                <Button type="text" size="small" icon={<EllipsisOutlined />} aria-label={`更多操作：${r.name}`} />
+              </Dropdown>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
@@ -227,44 +310,52 @@ export default function ActivityList() {
       />
 
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <Input.Search
-            placeholder="搜索活动名称 / 主题"
-            allowClear
-            style={{ width: 240 }}
-            onSearch={(v) => {
-              setKeyword(v)
-              setPage(1)
-            }}
-          />
-          <Select
-            placeholder="状态筛选"
-            allowClear
-            options={ACTIVITY_STATUS_OPTIONS}
-            style={{ width: 140 }}
-            value={status}
-            onChange={(v) => {
-              setStatus(v)
-              setPage(1)
-            }}
-          />
-          <Select
-            placeholder="类型筛选"
-            allowClear
-            options={TYPE_OPTIONS}
-            style={{ width: 140 }}
-            value={type}
-            onChange={(v) => {
-              setType(v)
-              setPage(1)
-            }}
-          />
-        </Space>
+        {compactFilters ? (
+          <>
+            <div className="activity-filter-summary">
+              <Button icon={<FilterOutlined />} onClick={() => setFilterDrawerOpen(true)}>
+                筛选{activeFilterCount > 0 ? `（${activeFilterCount}）` : ''}
+              </Button>
+              {keyword && (
+                <Tag closable onClose={(event) => { event.preventDefault(); setKeyword(''); setKeywordDraft(''); setPage(1) }}>
+                  关键词：{keyword}
+                </Tag>
+              )}
+              {status && (
+                <Tag closable onClose={(event) => { event.preventDefault(); setStatus(undefined); setPage(1) }}>
+                  {ACTIVITY_STATUS_LABEL[status] ?? status}
+                </Tag>
+              )}
+              {type && (
+                <Tag closable onClose={(event) => { event.preventDefault(); setType(undefined); setPage(1) }}>
+                  {TYPE_MAP[type] ?? type}
+                </Tag>
+              )}
+              {activeFilterCount > 0 && <Button type="link" onClick={clearFilters}>清除</Button>}
+            </div>
+            <Drawer
+              className="activity-filter-drawer"
+              title="筛选活动"
+              placement="right"
+              open={filterDrawerOpen}
+              onClose={() => setFilterDrawerOpen(false)}
+              footer={<Space style={{ display: 'flex', justifyContent: 'space-between' }}><Button onClick={clearFilters}>清除条件</Button><Button type="primary" onClick={() => setFilterDrawerOpen(false)}>完成</Button></Space>}
+            >
+              {filterControls}
+            </Drawer>
+          </>
+        ) : (
+          <div className="activity-filter-desktop">
+            {filterControls}
+            <Button type="link" disabled={activeFilterCount === 0} onClick={clearFilters}>清除筛选</Button>
+          </div>
+        )}
       </GlassCard>
 
       <GlassTable<ActivityRecord>
         columns={columns}
         dataSource={data}
+        scroll={{ x: 1000 }}
         loading={loading}
         pagination={{
           current: page,

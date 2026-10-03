@@ -1,4 +1,4 @@
-import { App, Layout, Menu, Dropdown, Space, Avatar, Typography, Spin, Form, Input, Button } from 'antd'
+import { App, Layout, Menu, Dropdown, Space, Avatar, Spin, Form, Input, Button } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, useMemo, startTransition, useState } from 'react'
@@ -75,10 +75,9 @@ export default function MainLayout() {
 
     const items: MenuProps['items'] = [
       { key: '/', label: '仪表盘', icon: <DashboardOutlined /> },
-      // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限
+      // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限。
+      // 「协作」不再单独占一个菜单项：它已内聚为灵思标准模式里自动启用的执行策略。
       { key: '/agent', label: '灵思', icon: <RobotOutlined /> },
-      // 多 Agent 协作视图（批次 D）：专家团队协作与拓扑
-      { key: '/agent/team', label: '协作', icon: <TeamOutlined /> },
     ]
     // 知识库（V27）：灵思「对话」档位能检索到的资料。
     // kb:read 种子给了全部角色 —— 与 /agent 同一立场：问答人人可用，
@@ -171,7 +170,6 @@ export default function MainLayout() {
   // 注意：/content/news 等 query 参数不会进入 pathname，前缀匹配即可命中子菜单项。
   const selectedKey = useMemo(() => {
     const p = location.pathname
-    if (p.startsWith('/agent/team')) return '/agent/team'
     if (p.startsWith('/agent')) return '/agent'
     if (p.startsWith('/routine/attendance')) return '/routine/attendance'
     if (p.startsWith('/routine/my-schedules')) return '/routine/my-schedules'
@@ -198,52 +196,27 @@ export default function MainLayout() {
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <NotificationToast />
-      <Sider
-        width={220}
-        className="glass-card"
-        style={{
-          height: 'calc(100vh - 24px)',
-          margin: 12,
-          borderRadius: 16,
-          overflowY: 'auto',
-        }}
-      >
-        <div style={{ padding: '20px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img
-            src="/hello-kitty.png"
-            alt=""
-            width={36}
-            height={36}
-            style={{ display: 'block', flexShrink: 0, objectFit: 'contain' }}
-          />
-          <div>
-            <Typography.Title level={5} style={{ color: 'var(--color-text)', margin: 0 }}>
-              党建工作台
-            </Typography.Title>
-            <Typography.Text style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
-              信息与智能工程学院党建办公室
-            </Typography.Text>
+      <Sider width={200} className="app-sider">
+        <div className="app-brand">
+          <img src="/hello-kitty.png" alt="" className="app-brand-logo" />
+          <div className="app-brand-text">
+            <div className="app-brand-name">党建工作台</div>
+            <div className="app-brand-sub">信息与智能工程学院党建办公室</div>
           </div>
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          onClick={(e) => navigate(e.key)}
-          items={menuItems}
-          style={{ background: 'transparent', borderInlineEnd: 'none' }}
-        />
+        {/* 菜单独立滚动：品牌区固定在顶部不跟着滚 */}
+        <div className="app-nav">
+          <Menu
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            onClick={(e) => navigate(e.key)}
+            items={menuItems}
+            style={{ borderInlineEnd: 'none' }}
+          />
+        </div>
       </Sider>
       <Layout style={{ height: '100vh', minWidth: 0 }}>
-        <Header
-          style={{
-            background: 'transparent',
-            padding: '0 24px',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
+        <Header className="app-header">
           <ThemeSwitch />
           <NotificationBell />
           <Dropdown
@@ -263,19 +236,13 @@ export default function MainLayout() {
               },
             }}
           >
-            <Space style={{ cursor: 'pointer', color: 'var(--color-text)' }}>
-              <Avatar style={{ background: 'var(--color-red)' }} icon={<UserOutlined />} />
+            <Space className="app-user">
+              <Avatar size={26} style={{ background: 'var(--brand)' }} icon={<UserOutlined />} />
               <span>{user?.realName}（{user?.deptName ?? user?.roleCode}）</span>
             </Space>
           </Dropdown>
         </Header>
-        <Content
-          style={{
-            minHeight: 0,
-            overflowY: 'auto',
-            padding: '0 24px 24px',
-          }}
-        >
+        <Content className="app-content">
           <Suspense
             fallback={
               <div style={{ textAlign: 'center', padding: 80 }}>
@@ -284,7 +251,7 @@ export default function MainLayout() {
             }
           >
             {/* key 用 pathname：路由切换时整个页面重挂载，触发 .page-transition 淡入动画 */}
-            <div key={location.pathname} className="page-transition">
+            <div key={location.pathname} className="page-transition content-inner">
               <Outlet />
             </div>
           </Suspense>

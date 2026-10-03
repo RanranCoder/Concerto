@@ -152,11 +152,11 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          background: 'var(--surface)',
-          border: '1px solid var(--surface-border)',
+          background: 'var(--canvas)',
+          border: '1px solid var(--border)',
           borderRadius: 8,
           marginBottom: 16,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          boxShadow: 'var(--shadow-1)',
         }}
       >
         {ready ? <div ref={toolbarRef} /> : <div style={{ height: 40 }} />}
@@ -171,7 +171,7 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
           overflowY: 'auto',
           borderRadius: 8,
           padding: '12px 8px',
-          background: 'rgba(0,0,0,0.12)',
+          background: 'var(--soft-strong)',
         }}
       >
         <div
@@ -184,7 +184,7 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
             boxSizing: 'border-box',
             background: sheetBg,
             borderRadius: 6,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.10)',
+            boxShadow: 'var(--shadow-1)',
             padding: `${margin.t}px ${margin.r}px ${margin.b}px ${margin.l}px`,
             position: 'relative',
           }}
@@ -203,7 +203,7 @@ export default function PlanRichEditor({ value, onChange, placeholder, editorRef
                 pointerEvents: 'none',
               }}
             >
-              <span style={{ fontSize: 11, color: '#8c9198' }}>— 第 {k + 2} 页 —</span>
+              <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>— 第 {k + 2} 页 —</span>
             </div>
           ))}
 

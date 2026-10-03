@@ -12,8 +12,13 @@ import com.pams.module.agent.core.ToolResult;
 import com.pams.module.agent.core.WriteAgentTool;
 import com.pams.module.agent.entity.AgentConversation;
 import com.pams.module.agent.entity.AgentMessage;
+import com.pams.module.agent.entity.AgentRun;
 import com.pams.module.agent.entity.AgentTask;
 import com.pams.module.agent.llm.LlmProvider;
+import com.pams.module.agent.orchestration.Blackboard;
+import com.pams.module.agent.orchestration.CollaborationRouter;
+import com.pams.module.agent.orchestration.CoordinatorAgent;
+import com.pams.module.agent.registry.AgentCatalog;
 import com.pams.module.agent.stream.AgentEventPublisher;
 import com.pams.module.agent.stream.AgentStreamEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -80,6 +85,10 @@ public class AgentOrchestrator {
     private final AgentLlmCaller llmCaller;
     /** 知识库问答流水线（对话档位） */
     private final KbPipeline kbPipeline;
+    /** 协作路由器（标准模式下判定是否升级为多 Agent 协作） */
+    private final CollaborationRouter collaborationRouter;
+    /** 协调者（升级为协作时执行协作 Run；与 AgentTeamController 共用同一实现） */
+    private final CoordinatorAgent coordinatorAgent;
 
     public AgentOrchestrator(ToolRegistry registry,
                              LlmProvider primaryProvider,
@@ -92,7 +101,9 @@ public class AgentOrchestrator {
                              @Qualifier("agentExecutor") Executor agentExecutor,
                              ChatRefsResolver refsResolver,
                              AgentLlmCaller llmCaller,
-                             KbPipeline kbPipeline) {
+                             KbPipeline kbPipeline,
+                             CollaborationRouter collaborationRouter,
+                             CoordinatorAgent coordinatorAgent) {
         this.registry = registry;
         this.primaryProvider = primaryProvider;
         this.conversations = conversations;
@@ -105,6 +116,8 @@ public class AgentOrchestrator {
         this.refsResolver = refsResolver;
         this.llmCaller = llmCaller;
         this.kbPipeline = kbPipeline;
+        this.collaborationRouter = collaborationRouter;
+        this.coordinatorAgent = coordinatorAgent;
     }
 
     /* ===================================================================== 对外入口 */
@@ -131,7 +144,19 @@ public class AgentOrchestrator {
                                         List<Map<String, Object>> refs) {
         // streamId 记归属：补拉接口要校验"这个流是不是你的"（权限审计 A5）
         String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
-        return run(message, conversationId, ctx, streamId, refs);
+        return run(message, conversationId, ctx, streamId, refs, true);
+    }
+
+    /**
+     * 带「自动协作开关」的问答（C 批次协作内聚）。
+     *
+     * <p>{@code collabEnabled=false} 时标准模式也不会升级为协作 —— 这是用户在输入框上的否决权。
+     * 其余入口（{@link #chatSync} 的两参/四参重载）默认开启。
+     */
+    public Map<String, Object> chatSync(String message, Long conversationId, ToolContext ctx,
+                                        List<Map<String, Object>> refs, boolean collabEnabled) {
+        String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
+        return run(message, conversationId, ctx, streamId, refs, collabEnabled);
     }
 
     /** 发起异步编排（用于显式要求后台执行的场景），立即返回 streamId */
@@ -139,7 +164,7 @@ public class AgentOrchestrator {
         String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
         agentExecutor.execute(() -> {
             try {
-                run(message, conversationId, ctx, streamId, List.of());
+                run(message, conversationId, ctx, streamId, List.of(), true);
             } catch (Exception e) {
                 log.error("灵思异步编排失败：stream={}", streamId, e);
             }
@@ -150,7 +175,7 @@ public class AgentOrchestrator {
     /* ===================================================================== 主流程 */
 
     private Map<String, Object> run(String message, Long conversationId, ToolContext ctx, String streamId,
-                                    List<Map<String, Object>> refs) {
+                                    List<Map<String, Object>> refs, boolean collabEnabled) {
         long startedAt = System.currentTimeMillis();
 
         // ===== ① TTFE：进入编排的第一时间就推 THINKING，不得等首个工具出结果 =====
@@ -203,7 +228,24 @@ public class AgentOrchestrator {
             degraded = kb.degraded();
         }
 
-        if (!kbMode)
+        // ===== 多 Agent 协作分流（C 批次：协作内聚进灵思）=====
+        // 标准模式下由路由器判定是否升级；命中则整轮交给协调者执行，**不再进单 Agent 工具循环**。
+        // 与 kbMode 同样是"前置分流"而非嵌进循环 —— 单 Agent 那段代码保持零改动。
+        //
+        // 协作与单 Agent 共用**同一条流**（streamId）与同一套事件：
+        // 前端因此不需要知道"这次是协作"，过程区自然就把专家进度与审查结论显示出来了。
+        boolean collabMode = false;
+        if (!kbMode) {
+            CollaborationRouter.Decision decision =
+                    collaborationRouter.route(message, ctx.getMode(), collabEnabled);
+            if (decision.upgrade()) {
+                collabMode = true;
+                reply = runCollaboration(decision, message, convId, ctx, streamId);
+                providerName = "multi-agent";
+            }
+        }
+
+        if (!kbMode && !collabMode)
         try {
             // ===== ② 组装 LLM 上下文 =====
             List<LlmProvider.ChatMessage> messages = buildContext(convId, message, ctx, attached.note());
@@ -577,5 +619,83 @@ public class AgentOrchestrator {
     void emit(ToolContext ctx, AgentStreamEvent event) {
         if (ctx.getLoginUser() == null) return;
         publisher.publish(ctx.getLoginUser().getUsername(), event);
+    }
+
+    /**
+     * 执行一次协作 Run 并组装成给用户的回复（C 批次）。
+     *
+     * <p>协作复用**当前会话的 streamId**，不另开一条流 —— 这样专家进度、委派边、审查结论
+     * 与单 Agent 的工具行落在同一条时间轴上，前端无需区分两种执行策略。
+     *
+     * <p>失败一律降级为可读文案而不抛异常：协作是增强路径，不能因为它出错就让对话不可用。
+     */
+    private String runCollaboration(CollaborationRouter.Decision decision, String message, Long convId,
+                                    ToolContext ctx, String streamId) {
+        // 先声明判定结果：否则用户会看到专家行突然出现却不知道原因
+        emit(ctx, AgentStreamEvent.collabDecision(
+                streamId, publisher.nextSeq(streamId), convId, decision.mode(), decision.reason()));
+
+        AgentRun run = null;
+        try {
+            // 用 runWithBlackboard：既落库 Run，又把黑板拿回来组织回复
+            long t0 = System.currentTimeMillis();
+            CoordinatorAgent.RunOutcome outcome =
+                    coordinatorAgent.runWithBlackboard(message, ctx, convId, decision.mode(), streamId);
+            run = outcome.run();
+            Blackboard bb = outcome.blackboard();
+            log.info("协作完成：runId={} mode={} 专家={} 耗时={}ms",
+                    run == null ? null : run.getId(), decision.mode(), decision.experts(),
+                    System.currentTimeMillis() - t0);
+            return composeCollabReply(bb, decision);
+        } catch (Exception e) {
+            log.warn("协作执行失败，本轮不产出结果：runId={}",
+                    run == null ? null : run.getId(), e);
+            return "这次协作没能完成。你可以换一种说法，或把任务拆成一步再试。";
+        }
+    }
+
+    /**
+     * 把黑板整理成用户可读的回复。
+     *
+     * <p>刻意做成「按专家分段的要点」而不是把黑板原样倒出来：
+     * 黑板是给系统看的工作记忆（findings/artifacts/decisions 三套结构），
+     * 直接序列化会把内部字段名暴露给用户。
+     */
+    private String composeCollabReply(Blackboard bb, CollaborationRouter.Decision decision) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("已由 ").append(decision.experts().size()).append(" 个专家协作完成");
+        if (decision.mode() != null) {
+            sb.append("（").append(decision.mode()).append("）");
+        }
+        sb.append("。\n");
+
+        if (bb == null) {
+            return sb.toString();
+        }
+
+        List<Blackboard.Finding> findings = bb.getFindings();
+        if (findings != null && !findings.isEmpty()) {
+            sb.append("\n**结果要点**\n");
+            for (Blackboard.Finding f : findings) {
+                // 协调者自己的规划说明不进正文（它不是"结果"）
+                if (AgentCatalog.COORDINATOR.equals(f.getAgent())) continue;
+                String summary = f.getSummary() == null ? "" : f.getSummary().trim();
+                if (summary.isEmpty()) continue;
+                sb.append("- **").append(AgentCatalog.displayName(f.getAgent())).append("**：")
+                        .append(summary).append('\n');
+            }
+        }
+
+        List<Blackboard.Decision> decisions = bb.getDecisions();
+        if (decisions != null && !decisions.isEmpty()) {
+            sb.append("\n**审查结论**\n");
+            for (Blackboard.Decision d : decisions) {
+                boolean pass = "PASS".equalsIgnoreCase(d.getVerdict());
+                sb.append("- ").append(pass ? "✅ 通过" : "↻ 需修订")
+                        .append("：").append(d.getReason() == null ? "—" : d.getReason()).append('\n');
+            }
+        }
+
+        return sb.toString().trim();
     }
 }

@@ -291,7 +291,7 @@ export default function ArticleList() {
       key: 'deadline',
       width: 110,
       render: (_: unknown, r: ArticleRecord) => (
-        <span style={{ color: isOverdue(r) ? 'var(--color-red)' : undefined }}>
+        <span style={{ color: isOverdue(r) ? 'var(--brand)' : undefined }}>
           {r.deadline ? dayjs(r.deadline).format('YYYY-MM-DD') : '-'}
         </span>
       ),
@@ -305,7 +305,7 @@ export default function ArticleList() {
           /^https?:\/\//i.test(r.wxUrl) ? (
             <a href={r.wxUrl} target="_blank" rel="noreferrer">打开</a>
           ) : (
-            <span title={r.wxUrl} style={{ color: 'var(--color-text-secondary)' }}>链接</span>
+            <span title={r.wxUrl} style={{ color: 'var(--text-secondary)' }}>链接</span>
           )
         ) : (
           '-'
@@ -649,7 +649,7 @@ export default function ArticleList() {
           <>
             <div style={{ marginBottom: 8 }}>
               <StatusTag status={preview.status} />
-              <span style={{ marginLeft: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+              <span style={{ marginLeft: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
                 {ARTICLE_TYPE_MAP[preview.articleType] ?? preview.articleType} · {userNameOf(preview.authorId)}
                 {preview.publishTime ? ` · ${dayjs(preview.publishTime).format('YYYY-MM-DD HH:mm')}` : ''}
               </span>

@@ -94,7 +94,7 @@ export default function KnowledgeBase() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
           <h2 style={{ margin: 0 }}>知识库</h2>
-          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
             灵思「对话」档位能检索到的全部资料。内容来自平台各业务数据与人工录入，
             均按来源各自的可见范围过滤。
           </div>
@@ -136,7 +136,7 @@ export default function KnowledgeBase() {
             message={
               <span>
                 检索模式：<b>{stats.retriever}</b>
-                <span style={{ marginLeft: 12, color: 'var(--color-text-secondary)' }}>
+                <span style={{ marginLeft: 12, color: 'var(--text-secondary)' }}>
                   知识库更新于 {ago(stats.lastIndexedAt)}
                   {stats.staleMinutes != null && `（${stats.staleMinutes} 分钟前）`}
                 </span>
@@ -160,7 +160,7 @@ export default function KnowledgeBase() {
             <Descriptions.Item label="事实快照">
               {stats.snapshotCount ?? 0}
               {stats.snapshotSpecCount != null && stats.snapshotSpecCount > 0 && (
-                <span style={{ marginLeft: 6, color: 'var(--color-text-tertiary)', fontSize: 12 }}>
+                <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontSize: 13 }}>
                   来自 {stats.snapshotSpecCount} 个模板
                 </span>
               )}
@@ -168,7 +168,7 @@ export default function KnowledgeBase() {
             <Descriptions.Item label="累计检索" span={2}>
               {stats.retrievalTotal}
               {stats.retrievalNoHit > 0 && (
-                <span style={{ marginLeft: 6, color: 'var(--color-text-tertiary)', fontSize: 12 }}>
+                <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontSize: 13 }}>
                   其中无依据 {stats.retrievalNoHit}
                 </span>
               )}
@@ -182,7 +182,7 @@ export default function KnowledgeBase() {
                 <Tag color="orange">
                   有 {stats.retrievalFiltered} 次检索出现"命中但无权查看"
                 </Tag>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   这是正常的兜底行为（索引粗筛偏宽、复核拦下）。若持续增长，
                   说明某些源的可见性配置需要收紧。
                 </span>
@@ -281,9 +281,9 @@ function LedgerTab({
       key: 'title',
       render: (_, r) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13 }}>{r.title || '（无标题）'}</div>
+          <div style={{ fontSize: 14 }}>{r.title || '（无标题）'}</div>
           {r.path && (
-            <div style={{ fontSize: 11.5, color: 'var(--color-text-tertiary)' }}>{r.path}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{r.path}</div>
           )}
         </div>
       ),
@@ -319,14 +319,14 @@ function LedgerTab({
       dataIndex: 'indexedAt',
       width: 150,
       render: (v: string | null) => (
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{fmt(v)}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fmt(v)}</span>
       ),
     },
     {
       title: '片段',
       dataIndex: 'snippet',
       render: (v: string) => (
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{v}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{v}</span>
       ),
     },
   ]
@@ -357,7 +357,7 @@ function LedgerTab({
         {canManage && (
           <Button onClick={() => setCreateOpen(true)}>录入制度文档</Button>
         )}
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
           共 {total} 个分块
         </span>
       </Space>
@@ -386,8 +386,8 @@ function LedgerTab({
             const list = expanded[key]
             if (!list) return <Spin size="small" />
             return (
-              <div style={{ maxHeight: 320, overflow: 'auto', fontSize: 12.5, lineHeight: 1.7 }}>
-                <div style={{ marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+              <div style={{ maxHeight: 320, overflow: 'auto', fontSize: 13, lineHeight: 1.7 }}>
+                <div style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>
                   该来源共产出 {list.length} 个分块。点「查看」在右侧通读单个分块原文。
                 </div>
                 {list.map((c) => (
@@ -395,17 +395,17 @@ function LedgerTab({
                     key={c.id}
                     style={{
                       padding: '8px 10px',
-                      borderBottom: '1px solid var(--surface-border)',
+                      borderBottom: '1px solid var(--border)',
                       display: 'flex',
                       gap: 10,
                     }}
                   >
-                    <span style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
+                    <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>
                       #{c.seq}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {c.path && (
-                        <div style={{ color: 'var(--color-text-tertiary)', fontSize: 11.5 }}>
+                        <div style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>
                           {c.path}
                         </div>
                       )}
@@ -448,7 +448,7 @@ function LedgerTab({
         width={620}
       >
         {detail?.map((c) => (
-          <div key={c.id} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: 13 }}>
+          <div key={c.id} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: 14 }}>
             {c.content ?? c.snippet}
           </div>
         ))}
@@ -572,23 +572,23 @@ function RetrievalTab() {
       title: '时间',
       dataIndex: 'createdAt',
       width: 150,
-      render: (v: string) => <span style={{ fontSize: 12 }}>{fmt(v)}</span>,
+      render: (v: string) => <span style={{ fontSize: 13 }}>{fmt(v)}</span>,
     },
     {
       title: '问题',
       dataIndex: 'queryText',
-      render: (v: string) => <span style={{ fontSize: 12.5 }}>{v}</span>,
+      render: (v: string) => <span style={{ fontSize: 13 }}>{v}</span>,
     },
     {
       title: '命中 / 放行 / 拦下',
       key: 'counts',
       width: 160,
       render: (_, r) => (
-        <span style={{ fontSize: 12 }}>
+        <span style={{ fontSize: 13 }}>
           <span>{r.hitCount}</span>
-          <span style={{ color: 'var(--color-text-tertiary)' }}> / </span>
+          <span style={{ color: 'var(--text-tertiary)' }}> / </span>
           <span>{r.allowedCount}</span>
-          <span style={{ color: 'var(--color-text-tertiary)' }}> / </span>
+          <span style={{ color: 'var(--text-tertiary)' }}> / </span>
           <span style={{ color: r.filteredCount > 0 ? 'var(--ls-warn)' : 'inherit' }}>
             {r.filteredCount}
           </span>
@@ -616,7 +616,7 @@ function RetrievalTab() {
       dataIndex: 'provider',
       width: 110,
       render: (v: string | null, r) =>
-        r.degraded ? <Tag color="orange">规则模式</Tag> : <span style={{ fontSize: 12 }}>{v ?? '—'}</span>,
+        r.degraded ? <Tag color="orange">规则模式</Tag> : <span style={{ fontSize: 13 }}>{v ?? '—'}</span>,
     },
   ]
 
@@ -641,7 +641,7 @@ function RetrievalTab() {
         <Button onClick={() => void load()} loading={loading}>
           刷新
         </Button>
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
           共 {total} 条。命中/放行/拦下三个数字合起来才能解释一次问答：
           命中很多但放行 0 条 = 有内容但当前账号无权查看。
         </span>
@@ -658,19 +658,19 @@ function RetrievalTab() {
           expandedRowRender: (r) => {
             const hits = parseHits(r.hitsJson)
             return (
-              <div style={{ fontSize: 12.5 }}>
-                <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+              <div style={{ fontSize: 13 }}>
+                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>
                   放行的 {hits.length} 条依据（进入模型上下文的部分）
                 </div>
                 {hits.length === 0 ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>无</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>无</span>
                 ) : (
                   hits.map((h, i) => (
                     <div key={i} style={{ padding: '3px 0' }}>
                       <Tag style={{ marginRight: 6 }}>{String(h['sourceType'])}</Tag>
                       #{String(h['seq'])}
                       {h['path'] ? ` · ${String(h['path'])}` : ''}
-                      <span style={{ color: 'var(--color-text-tertiary)' }}>
+                      <span style={{ color: 'var(--text-tertiary)' }}>
                         {' '}
                         相关度 {Number(h['score'] ?? 0).toFixed(3)}
                       </span>
@@ -767,9 +767,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       dataIndex: 'title',
       render: (v: string, r) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13 }}>{v}</div>
+          <div style={{ fontSize: 14 }}>{v}</div>
           {r.description && (
-            <div style={{ fontSize: 11.5, color: 'var(--color-text-tertiary)' }}>{r.description}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{r.description}</div>
           )}
         </div>
       ),
@@ -803,14 +803,14 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       dataIndex: 'generatedAt',
       width: 150,
       render: (v: string | null) => (
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{fmt(v)}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fmt(v)}</span>
       ),
     },
     {
       title: '内容',
       dataIndex: 'content',
       render: (v: string) => (
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
           {v.length > 90 ? v.slice(0, 90) + '…' : v}
         </span>
       ),
@@ -828,24 +828,24 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
               flex: '1 1 260px',
               minWidth: 240,
               padding: '10px 12px',
-              border: '1px solid var(--surface-border)',
+              border: '1px solid var(--border)',
               borderRadius: 8,
-              background: 'var(--surface-strong)',
+              background: 'var(--soft)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 500 }}>{s.titleTemplate.replace('%s', '').trim()}</span>
-              <Tag style={{ margin: 0, fontSize: 11 }}>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{s.titleTemplate.replace('%s', '').trim()}</span>
+              <Tag style={{ margin: 0, fontSize: 13 }}>
                 {s.visibility === 'LEADER' ? '部长及以上' : '全员'}
               </Tag>
               {s.requiredPermission && (
-                <Tag style={{ margin: 0, fontSize: 11 }}>{s.requiredPermission}</Tag>
+                <Tag style={{ margin: 0, fontSize: 13 }}>{s.requiredPermission}</Tag>
               )}
             </div>
-            <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'var(--color-text-secondary)' }}>
+            <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
               {s.description}
             </div>
-            <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-tertiary)' }}>
               {s.refreshHint} · 覆盖 {s.scopeCount} 个作用域
             </div>
           </div>
@@ -888,7 +888,7 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
             </Button>
           </Tooltip>
         )}
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
           共 {total} 份。快照是聚合数字，<b>不含个人明细</b>；逐人数据请到成员管理页查看。
         </span>
       </Space>
@@ -903,7 +903,7 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
         expandable={{
           // 内容只有一段，直接展开看全文 —— 它存在的意义就是让人核对数字
           expandedRowRender: (r) => (
-            <div style={{ fontSize: 12.5, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
               {r.content}
             </div>
           ),
@@ -936,7 +936,7 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
                 {detail.requiredPermission ? ` + ${detail.requiredPermission}` : ''}
               </Descriptions.Item>
             </Descriptions>
-            <div style={{ fontSize: 13, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 14, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
               {detail.content}
             </div>
           </>

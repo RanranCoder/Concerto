@@ -4,6 +4,7 @@ import { useAgentPanel } from '@/stores/agentPanel'
 import LingsiAvatar from './LingsiAvatar'
 import LingsiMarkdown from './LingsiMarkdown'
 import LingsiProcessZone from './LingsiProcessZone'
+import LingsiTeamPanel from './LingsiTeamPanel'
 import LingsiMetaBar from './LingsiMetaBar'
 import LingsiRefs from './LingsiRefs'
 import LingsiActionCard from './LingsiActionCard'
@@ -80,6 +81,13 @@ export default function LingsiMessageBody({
       <LingsiAvatar size={24} />
 
       <div className="lingsi-turn-body">
+        {/*
+          协作团队面板：仅在标准模式被判定升级为协作时才有内容（单 Agent 轮次整块不渲染）。
+          位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，
+          过程区是「具体每一步做了什么」的明细层，先汇总后明细。
+        */}
+        <LingsiTeamPanel items={timeline} active={active} />
+
         {/* ---------- 过程区（§7.1 上半段） ---------- */}
         {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active} />}
 

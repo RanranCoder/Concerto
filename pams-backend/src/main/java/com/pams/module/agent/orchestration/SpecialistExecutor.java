@@ -78,11 +78,19 @@ public class SpecialistExecutor {
             case "P4" -> runDelegation(run, bb, producers, reviewers, ctx, streamId, username, seq);
             default -> {
                 // P1：保持计划原始顺序
+                ProducerOutcome lastProducer = null;
                 for (Blackboard.PlanItem item : bb.getPlan()) {
                     if (AgentCatalog.REVIEWER.equals(item.getAgent())) {
+                        // 上一个产出专家只是在反问用户 → 没有可审内容，跳过审查（见 runReviewerStep）
+                        if (isClarifyingQuestion(lastProducer)) {
+                            log.debug("跳过审查：{} 在向用户索要信息，未产出内容",
+                                    lastProducer.res().agent());
+                            continue;
+                        }
                         applyReview(bb, runReviewerStep(run, bb, item, ctx, streamId, username, seq, null));
                     } else {
-                        applyProducer(bb, runProducerStep(run, bb, item, ctx, streamId, username, seq, null));
+                        lastProducer = applyProducer(bb,
+                                runProducerStep(run, bb, item, ctx, streamId, username, seq, null));
                     }
                 }
             }
@@ -100,17 +108,23 @@ public class SpecialistExecutor {
             futures.add(CompletableFuture.supplyAsync(
                     () -> runProducerStep(run, null, item, ctx, streamId, username, seq, null), executor));
         }
+        boolean allClarifying = !producers.isEmpty();
         for (CompletableFuture<ProducerOutcome> f : futures) {
             try {
                 ProducerOutcome out = f.join();
                 applyProducer(bb, out);
+                allClarifying = allClarifying && isClarifyingQuestion(out);
             } catch (Exception e) {
                 log.warn("P2 并行子任务失败", e);
+                allClarifying = false;
             }
         }
+        if (allClarifying) {
+            log.debug("跳过审查：所有产出专家都在向用户索要信息，未产出内容");
+            return;
+        }
         for (Blackboard.PlanItem item : reviewers) {
-            ReviewOutcome ro = runReviewerStep(run, null, item, ctx, streamId, username, seq, null);
-            applyReview(bb, ro);
+            applyReview(bb, runReviewerStep(run, null, item, ctx, streamId, username, seq, null));
         }
     }
 
@@ -120,11 +134,18 @@ public class SpecialistExecutor {
                                List<Blackboard.PlanItem> reviewers, ToolContext ctx, String streamId,
                                String username, AtomicInteger seq) {
         Long lastProducerStep = null;
+        ProducerOutcome lastProducer = null;
         for (Blackboard.PlanItem item : producers) {
-            lastProducerStep = applyProducer(bb,
-                    runProducerStep(run, bb, item, ctx, streamId, username, seq, null)).step().getId();
+            lastProducer = applyProducer(bb,
+                    runProducerStep(run, bb, item, ctx, streamId, username, seq, null));
+            lastProducerStep = lastProducer.step().getId();
         }
         if (reviewers.isEmpty()) {
+            return;
+        }
+        // 产出专家只是在反问用户 → 没有可审内容，不进入反思回路（避免误报 REVISE）
+        if (isClarifyingQuestion(lastProducer)) {
+            log.debug("跳过反思回路：{} 在向用户索要信息，未产出内容", lastProducer.res().agent());
             return;
         }
         for (int round = 1; round <= MAX_REFLECTION_ROUNDS; round++) {
@@ -160,7 +181,7 @@ public class SpecialistExecutor {
             } else if (leadStep != null) {
                 emit(username, streamId, AgentStreamEvent.agentDelegate(
                         streamId, publisher.nextSeq(streamId), producers.get(0).getAgent(),
-                        item.getAgent(), item.getTask()));
+                        item.getAgent(), item.getTask(), ctx.getConversationId()));
             }
         }
         for (Blackboard.PlanItem item : reviewers) {
@@ -180,9 +201,11 @@ public class SpecialistExecutor {
                                             AtomicInteger seq, Long parentStepId) {
         String agent = item.getAgent();
         emit(username, streamId, AgentStreamEvent.agentDelegate(
-                streamId, publisher.nextSeq(streamId), AgentCatalog.COORDINATOR, agent, item.getTask()));
+                streamId, publisher.nextSeq(streamId), AgentCatalog.COORDINATOR, agent, item.getTask(),
+                ctx.getConversationId()));
         emit(username, streamId, AgentStreamEvent.agentStart(
-                streamId, publisher.nextSeq(streamId), agent, null, parentStepId));
+                streamId, publisher.nextSeq(streamId), agent, null, parentStepId,
+                ctx.getConversationId()));
 
         long t0 = System.currentTimeMillis();
         String status = AgentStep.STATUS_SUCCESS;
@@ -201,20 +224,42 @@ public class SpecialistExecutor {
         AgentStep step = runService.recordStep(run.getId(), agent, seq.getAndIncrement(), parentStepId,
                 runService.toJson(Map.of("task", item.getTask())), output, status, duration);
         emit(username, streamId, AgentStreamEvent.agentEnd(
-                streamId, publisher.nextSeq(streamId), agent, step.getId(), status, duration));
+                streamId, publisher.nextSeq(streamId), agent, step.getId(), status, duration,
+                ctx.getConversationId()));
         return new ProducerOutcome(step, res);
     }
 
+    /**
+     * 跑一次审查（P 系列的反思环节）。
+     *
+     * <p><b>只跳过「专家在反问用户」这一种情况</b>（实测修正）：当产出专家
+     * <b>没有调用任何工具、却回了文字</b>，说明它在向用户索要信息（如文书专家问
+     * "要推文还是公告？活动信息给我"）—— 这属于**正常交互，不是产出失败**。
+     * 原实现只看「黑板里有没有产物」，于是这种正常追问会被判成 REVISE
+     * （"尚无可用产物，需修订"），用户会在普通对话里看到一条刺眼的修订结论。
+     *
+     * <p><b>刻意不扩大到「无产物就跳过」</b>：专家确实尝试了工作却没产出时，
+     * REVISE 是诚实且有价值的信号（反思回路据此重跑）。这个边界由
+     * {@code noWorkAttempted} 精确收窄，避免把真正的失败一起静默掉。
+     *
+     * <p>调用方用 {@code noWorkAttempted} 决定要不要调用本方法；返回 null 表示本次未审查。
+     */
     private ReviewOutcome runReviewerStep(AgentRun run, Blackboard bb, Blackboard.PlanItem item,
                                           ToolContext ctx, String streamId, String username,
                                           AtomicInteger seq, Long parentStepId) {
         String agent = item.getAgent();
         emit(username, streamId, AgentStreamEvent.agentDelegate(
-                streamId, publisher.nextSeq(streamId), AgentCatalog.COORDINATOR, agent, item.getTask()));
+                streamId, publisher.nextSeq(streamId), AgentCatalog.COORDINATOR, agent, item.getTask(),
+                ctx.getConversationId()));
         emit(username, streamId, AgentStreamEvent.agentStart(
-                streamId, publisher.nextSeq(streamId), agent, null, parentStepId));
+                streamId, publisher.nextSeq(streamId), agent, null, parentStepId,
+                ctx.getConversationId()));
 
         long t0 = System.currentTimeMillis();
+        // 有产物才算通过；没有产物就是「该产出却没产出」→ REVISE（触发反思回路重做）。
+        // ⚠️ 这条判定必须保留：它是审查真正起作用的唯一依据，删掉就等于审查永远 PASS、
+        // 安全机制失效（协作内聚改造中一度删过，被回归测试当场抓住）。
+        // 「专家在反问用户」不属于本情形 —— 那种情况根本不该走到审查（由调用方预先跳过）。
         boolean hasArtifact = bb != null && !bb.getArtifacts().isEmpty();
         String verdict = hasArtifact ? "PASS" : "REVISE";
         String reason = hasArtifact ? "产物完整，审查通过" : "尚无可用产物，需修订";
@@ -226,8 +271,38 @@ public class SpecialistExecutor {
         emit(username, streamId, AgentStreamEvent.reviewResult(
                 streamId, publisher.nextSeq(streamId), verdict, reason, 1));
         emit(username, streamId, AgentStreamEvent.agentEnd(
-                streamId, publisher.nextSeq(streamId), agent, step.getId(), AgentStep.STATUS_SUCCESS, duration));
+                streamId, publisher.nextSeq(streamId), agent, step.getId(), AgentStep.STATUS_SUCCESS, duration,
+                ctx.getConversationId()));
         return new ReviewOutcome(step, verdict, reason);
+    }
+
+    /**
+     * 产出专家是否「在向用户索要信息」：没有调用任何工具，回了一段**问句**。
+     *
+     * <p>为什么必须同时看「问句」信号：只凭「无工具调用 + 有文字」会误伤 ——
+     * Stub/降级模式下专家也会回一段非空文字（模板输出），那属于「尝试了但没产出」，
+     * 应该让审查判 REVISE 并触发反思回路（既有回归测试固定了这条）。
+     * 加上问句判定后，只有真正的反问（如文书专家问"要推文还是公告？"）才被跳过。
+     */
+    private boolean isClarifyingQuestion(ProducerOutcome out) {
+        if (out == null || out.res() == null) {
+            return false;
+        }
+        boolean noToolCall = out.res().invocations() == null || out.res().invocations().isEmpty();
+        if (!noToolCall) {
+            return false;
+        }
+        String text = out.res().text();
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String t = text.trim();
+        // 问句信号：以问号收尾，或正文含疑问词/「请提供」类索要措辞
+        boolean endsWithQuestion = t.endsWith("?") || t.endsWith("？");
+        boolean asksForInput = t.contains("？") || t.contains("?")
+                || t.contains("请提供") || t.contains("请补充") || t.contains("告诉")
+                || t.contains("还是") || t.contains("哪些") || t.contains("什么");
+        return endsWithQuestion || asksForInput;
     }
 
     private ProducerOutcome applyProducer(Blackboard bb, ProducerOutcome out) {
@@ -252,7 +327,8 @@ public class SpecialistExecutor {
     }
 
     private void applyReview(Blackboard bb, ReviewOutcome ro) {
-        if (bb == null) {
+        // ro == null：本次没有可审产物，审查被跳过（见 runReviewerStep 的说明），不是失败
+        if (bb == null || ro == null) {
             return;
         }
         synchronized (bb) {

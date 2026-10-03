@@ -83,8 +83,13 @@ public class AgentController {
         }
         Long conversationId = lng(body.get("conversationId"));
 
+        // 自动协作开关（前端输入框，默认开）。缺失时按 true —— 老客户端不发这个字段，
+        // 不能让它突然失去协作能力（与 mode 缺省即 standard 同一约定）。
+        Object collabRaw = body.get("collab");
+        boolean collab = !(collabRaw instanceof Boolean) || (Boolean) collabRaw;
+
         return Result.ok(orchestrator.chatSync(message, conversationId,
-                ctx(user, conversationId, str(body.get("mode"))), extractRefs(body.get("refs"))));
+                ctx(user, conversationId, str(body.get("mode"))), extractRefs(body.get("refs")), collab));
     }
 
     /** 中止一次进行中的回答（编排器在下一个阶段边界退出） */

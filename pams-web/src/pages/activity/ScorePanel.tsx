@@ -273,7 +273,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Space wrap>
             <Tag color="red">评分规则</Tag>
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               {rules.length ? `${rules.length} 个维度` : '暂无评分维度'}
             </span>
           </Space>
@@ -294,7 +294,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Space wrap>
             <Tag color="blue">评分记录</Tag>
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>{records.length} 支队伍</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{records.length} 支队伍</span>
           </Space>
           {rules.length ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={openRecord}>
@@ -380,7 +380,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
               <Input maxLength={100} placeholder="如 第一组" />
             </Form.Item>
           </Space>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+          <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>
             各维度得分（0 ~ 满分）
           </div>
           {rules.map((rule) => (

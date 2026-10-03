@@ -145,9 +145,9 @@ export default function MaterialList() {
 
   const leafIcon = (m: MaterialVO) =>
     m.bizType === 'PHOTO' ? (
-      <FileOutlined style={{ color: 'var(--color-primary)' }} />
+      <FileOutlined style={{ color: 'var(--brand)' }} />
     ) : (
-      <FileOutlined style={{ color: 'var(--color-text-secondary)' }} />
+      <FileOutlined style={{ color: 'var(--text-secondary)' }} />
     )
 
   // 树数据：活动（或未关联）→ 类型 → 材料叶子
@@ -157,7 +157,7 @@ export default function MaterialList() {
         key: `activity-${activityNode.activityId ?? 'none'}`,
         title: (
           <Space size={4}>
-            <FolderOutlined style={{ color: 'var(--color-primary)' }} />
+            <FolderOutlined style={{ color: 'var(--brand)' }} />
             {activityNode.activityId == null ? '未关联活动' : activityNameOf(activityNode.activityId)}
           </Space>
         ),
@@ -165,9 +165,9 @@ export default function MaterialList() {
           key: `activity-${activityNode.activityId ?? 'none'}-type-${typeNode.bizType}`,
           title: (
             <Space size={4}>
-              <FolderOpenOutlined style={{ color: 'var(--color-primary)' }} />
+              <FolderOpenOutlined style={{ color: 'var(--brand)' }} />
               <span>{MATERIAL_BIZ_TYPE_MAP[typeNode.bizType] ?? typeNode.bizType}</span>
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                 （{typeNode.materials.length}）
               </span>
             </Space>
@@ -178,7 +178,7 @@ export default function MaterialList() {
               <Space size={8}>
                 {leafIcon(m)}
                 <span>{m.name}</span>
-                <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                   {m.tag ? `#${m.tag}` : ''} · {dayjs(m.createdAt).format('MM-DD')}
                 </span>
                 {m.fileId && (
@@ -233,7 +233,7 @@ export default function MaterialList() {
             prefix={<SearchOutlined />}
             onSearch={(v) => setKeyword(v)}
           />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
             {keyword.trim() ? `按名称搜索到 ${flatTotal} 条` : '当前按活动 / 类型分组展示全部材料'}
           </span>
         </Space>
@@ -246,11 +246,11 @@ export default function MaterialList() {
               <Empty description="未找到匹配材料" />
             ) : (
               flat.map((m) => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--color-border)' }}>
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border)' }}>
                   {leafIcon(m)}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                       {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {activityNameOf(m.activityId)}
                       {m.tag ? ` · #${m.tag}` : ''} · {dayjs(m.createdAt).format('YYYY-MM-DD')}
                     </div>

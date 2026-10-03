@@ -11,6 +11,13 @@ interface Props {
   /** 运行模式（UI v2 §E）：只读 / 标准，由 store 持有 */
   mode: AgentMode
   onModeChange: (m: AgentMode) => void
+  /**
+   * 自动协作开关（仅标准档位有效）。
+   * 标准模式下后端会自动判断「这次要不要派专家团队」；这个开关是用户的否决权，
+   * 误判时能立刻关掉，不用忍着变慢。
+   */
+  autoCollab: boolean
+  onAutoCollabChange: (v: boolean) => void
   /** 当前模型标识（来自最近一轮的返回）；空串 = 尚未产生过回答 */
   provider?: string
   /** 规则模式（Stub 兜底） */
@@ -54,6 +61,8 @@ export default function LingsiComposer({
   disabled,
   mode,
   onModeChange,
+  autoCollab,
+  onAutoCollabChange,
   provider,
   degraded,
   pendingRefs,
@@ -280,6 +289,32 @@ export default function LingsiComposer({
                 </button>
               </Tooltip>
             </span>
+
+            {/*
+              自动协作开关：只在标准档位出现 —— 只读不会升级协作，对话档位走的是
+              完全不同的问答流水线（KbPipeline），两者都不涉及「派不派专家」。
+              关闭时给一个显式状态，而不是让开关消失，否则用户会以为功能坏了。
+            */}
+            {mode === 'standard' && (
+              <Tooltip
+                title={
+                  autoCollab
+                    ? '遇到跨领域的复合任务时，灵思会自动派专家团队协作（检索/策划/写作/审查）。'
+                      + '简单问题仍然单 Agent 处理。'
+                    : '已关闭：所有任务都由单个 Agent 处理。'
+                }
+              >
+                <button
+                  type="button"
+                  className={`lingsi-collab-toggle${autoCollab ? ' lingsi-collab-toggle-on' : ''}`}
+                  aria-pressed={autoCollab}
+                  onClick={() => onAutoCollabChange(!autoCollab)}
+                >
+                  <Rules size={11.5} />
+                  自动协作
+                </button>
+              </Tooltip>
+            )}
 
             {modelNode}
 

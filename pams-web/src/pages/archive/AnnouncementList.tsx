@@ -191,7 +191,7 @@ export default function AnnouncementList() {
 
       {!hasPerm('notice:publish') && (
         <GlassCard style={{ padding: 12, marginBottom: 16 }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
             您当前仅可查看公告，发布需部长及以上权限。
           </Typography.Text>
         </GlassCard>
@@ -238,7 +238,7 @@ export default function AnnouncementList() {
       >
         {detail && (
           <>
-            <div style={{ marginBottom: 12, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+            <div style={{ marginBottom: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
               {publisherNameOf(detail.publisherId)}
               {detail.publishTime ? ` · ${dayjs(detail.publishTime).format('YYYY-MM-DD HH:mm')}` : ''}
               {readIds.includes(detail.id) ? ' · 已读' : ' · 未读'}

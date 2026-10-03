@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { App, Button, ColorPicker, Input, Space } from 'antd'
 import { RevoGrid, type BeforeSaveDataDetails, type ColumnRegular } from '@revolist/react-datagrid'
 import type { SeatMapVO } from '@/api/activity'
+import { SEAT_UNKNOWN_COLOR } from '@/styles/categoryColors'
 import { updateSeat, type SeatSave } from '@/api/seat'
 
 interface SeatExcelEditorProps {
@@ -139,7 +140,7 @@ export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChang
       message.warning('该座位类型已存在')
       return
     }
-    onChangeLegend({ ...legend, [t]: '#8C9AAB' })
+    onChangeLegend({ ...legend, [t]: SEAT_UNKNOWN_COLOR })
     setNewType('')
   }
 
@@ -156,8 +157,8 @@ export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChang
               gap: 4,
               padding: '2px 8px 2px 4px',
               borderRadius: 8,
-              border: '1px solid var(--surface-border)',
-              background: 'var(--surface-strong)',
+              border: '1px solid var(--border)',
+              background: 'var(--soft)',
             }}
           >
             <ColorPicker
@@ -165,7 +166,7 @@ export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChang
               value={color}
               onChangeComplete={(c) => onChangeLegend({ ...legend, [type]: c.toHexString() })}
             />
-            <span style={{ fontSize: 12, color: 'var(--color-text)' }}>{type}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{type}</span>
           </span>
         ))}
         <Space.Compact style={{ marginLeft: 4 }}>
@@ -194,7 +195,7 @@ export default function SeatExcelEditor({ seats, legend, onChangeLegend, onChang
         autoSizeColumn
         readonly={false}
       />
-      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
         双击或回车进入单元格编辑，修改后逐格保存到后端（保存成功格子才保留，失败自动回滚）；切视图或刷新后仍然保留。
       </div>
     </div>

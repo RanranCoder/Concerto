@@ -5,10 +5,8 @@ import { App } from 'antd'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useAgentStore } from '@/stores/agent'
-import { useAgentTeamStore } from '@/stores/agentTeam'
 import type { NotificationVO } from '@/api/notification'
 import type { AgentStreamEvent } from '@/api/agent'
-import type { TeamStreamEvent } from '@/api/agentTeam'
 
 export function useWebSocket() {
   const { notification } = App.useApp()
@@ -55,12 +53,14 @@ export function useWebSocket() {
 
         // 灵思过程事件流（D7）——厚载荷：携带工具名/耗时/状态，供前端渲染时间轴。
         // 与上面通知队列的"薄载荷 + 回拉 REST"策略有意不同。
+        //
+        // 协作内聚后：COLLAB_DECISION / AGENT_START / AGENT_END / REVIEW_RESULT 也走这条流、
+        // 同一个 applyStreamEvent，由 mergeTimeline 并入过程区时间轴 ——
+        // 因此不再需要把它另行转发给一个「协作页专用」的 store。
         client.subscribe('/user/queue/agent/stream', (msg) => {
           try {
             const event = JSON.parse(msg.body) as AgentStreamEvent
             useAgentStore.getState().applyStreamEvent(event)
-            // 多 Agent 协作视图（批次 D）：过程事件实时驱动协作页
-            useAgentTeamStore.getState().applyEvent(event as unknown as TeamStreamEvent)
           } catch (e) {
             console.error('[WS] 解析灵思过程事件失败', e)
           }

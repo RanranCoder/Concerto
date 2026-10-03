@@ -41,7 +41,6 @@ const NotificationList = lazy(() => import('@/pages/notification/NotificationLis
 const MemberList = lazy(() => import('@/pages/member/MemberList'))
 const MemberDetail = lazy(() => import('@/pages/member/MemberDetail'))
 const AgentHome = lazy(() => import('@/pages/agent/AgentHome'))
-const AgentTeam = lazy(() => import('@/pages/agent/AgentTeam'))
 const AgentBenchmark = lazy(() => import('@/pages/admin/AgentBenchmark'))
 const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
 const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
@@ -83,8 +82,9 @@ export const router = createBrowserRouter([
       // 且 /api/agent/tools 只返回当前用户可见的工具。所以干事进来只会看到自己有权做的事。
       { path: '/agent', element: <AgentHome /> },
 
-      // 多 Agent 协作视图（批次 D）：专家团队、协作拓扑、黑板
-      { path: '/agent/team', element: <AgentTeam /> },
+      // 多 Agent 协作不再是独立页面：它由灵思在标准模式下自动判定启用，
+      // 协作过程（专家进度、审查结论）内联呈现在对话流的过程区。
+      // 原 /agent/team 页面与路由已删除，见 docs/PAMS-协作内聚进灵思-修改计划.md
 
       // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
       { path: '/activities', element: <Activities /> },

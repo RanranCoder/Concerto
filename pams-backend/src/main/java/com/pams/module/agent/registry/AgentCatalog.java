@@ -24,6 +24,25 @@ public final class AgentCatalog {
     private AgentCatalog() {
     }
 
+    /**
+     * Agent 名称 → 中文展示名（前端过程区/团队面板显示用）。
+     *
+     * <p>为什么需要它：协作事件原本只带 {@code agent: "retrieval"} 这样的英文 id，
+     * 前端只能把 id 原样贴到界面上，用户看到的是「retrieval」而不是「检索专家」。
+     * 这里以 {@link #defaults()} 为准做映射（库内改名仍可用 {@code /agent/team/agents} 覆盖展示）。
+     */
+    public static String displayName(String name) {
+        if (name == null || name.isBlank()) {
+            return "";
+        }
+        for (Def d : defaults()) {
+            if (d.name().equals(name)) {
+                return d.displayName();
+            }
+        }
+        return name;
+    }
+
     /** 一条默认定义。 */
     public record Def(String name, String displayName, String description,
                       String rolePrompt, List<String> toolScope) {

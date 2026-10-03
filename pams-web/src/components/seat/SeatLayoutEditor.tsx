@@ -11,6 +11,11 @@ import {
   DeleteOutlined,
 } from '@ant-design/icons'
 import type { ColorLabel, SeatCell, SeatLayoutVO } from '@/api/seatLayout'
+import {
+  SEAT_AISLE_HATCH,
+  SEAT_DEFAULT_COLOR,
+  SEAT_ZONE_COLORS,
+} from '@/styles/categoryColors'
 
 /**
  * 座位表可视化编辑器（PRD F01）
@@ -18,18 +23,18 @@ import type { ColorLabel, SeatCell, SeatLayoutVO } from '@/api/seatLayout'
  * 数据模型：seat_data JSON 数组 [{row, col, type, color, label, state, personName}]
  */
 
-// 预设色板（含无障碍友好色）
+// 预设色板：分类 identity 色，集中定义在 styles/categoryColors.ts
 export const PRESET_COLORS = [
-  { color: '#f5222d', label: '嘉宾区' },
-  { color: '#fa541c', label: '党员区' },
-  { color: '#faad14', label: '积极分子区' },
-  { color: '#52c41a', label: '发展对象区' },
-  { color: '#13c2c2', label: '预备党员区' },
-  { color: '#1677ff', label: '正式党员区' },
-  { color: '#722ed1', label: '工作人员区' },
-  { color: '#eb2f96', label: '媒体区' },
-  { color: '#8c8c8c', label: '观众区' },
-  { color: '#597ef7', label: '特邀区' },
+  { color: SEAT_ZONE_COLORS.guest, label: '嘉宾区' },
+  { color: SEAT_ZONE_COLORS.party, label: '党员区' },
+  { color: SEAT_ZONE_COLORS.activist, label: '积极分子区' },
+  { color: SEAT_ZONE_COLORS.develop, label: '发展对象区' },
+  { color: SEAT_ZONE_COLORS.probationary, label: '预备党员区' },
+  { color: SEAT_ZONE_COLORS.full, label: '正式党员区' },
+  { color: SEAT_ZONE_COLORS.staff, label: '工作人员区' },
+  { color: SEAT_ZONE_COLORS.media, label: '媒体区' },
+  { color: SEAT_ZONE_COLORS.audience, label: '观众区' },
+  { color: SEAT_ZONE_COLORS.invited, label: '特邀区' },
 ]
 
 interface SeatLayoutEditorProps {
@@ -52,7 +57,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   const [selectedColor, setSelectedColor] = useState<string>(PRESET_COLORS[0].color)
   const [selectedLabel, setSelectedLabel] = useState<string>(PRESET_COLORS[0].label)
   const [colorManageOpen, setColorManageOpen] = useState(false)
-  const [newColor, setNewColor] = useState('#1677ff')
+  const [newColor, setNewColor] = useState(SEAT_DEFAULT_COLOR)
   const [newLabel, setNewLabel] = useState('')
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [dragStart, setDragStart] = useState<string | null>(null)
@@ -425,7 +430,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
     <div ref={editorRef}>
       {/* 工具栏 */}
       {!readOnly && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12, padding: 12, background: 'var(--color-bg-2)', borderRadius: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12, padding: 12, background: 'var(--soft)', borderRadius: 10 }}>
           <Input
             value={layoutName}
             onChange={(e) => setLayoutName(e.target.value)}
@@ -434,9 +439,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             size="small"
           />
           <Space size={4}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>行</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>行</span>
             <InputNumber min={1} max={100} value={rows} onChange={changeRows} size="small" style={{ width: 70 }} />
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>列</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>列</span>
             <InputNumber min={1} max={100} value={cols} onChange={changeCols} size="small" style={{ width: 70 }} />
           </Space>
 
@@ -445,7 +450,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             trigger="click"
             content={
               <div style={{ maxWidth: 260 }}>
-                <div style={{ fontSize: 12, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+                <div style={{ fontSize: 13, marginBottom: 8, color: 'var(--text-secondary)' }}>
                   点击列号切换过道（过道列不可设座位，宽度自动加宽）
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 260 }}>
@@ -461,7 +466,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                   ))}
                 </div>
                 <Space size={6} style={{ marginTop: 10 }}>
-                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>过道宽度</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>过道宽度</span>
                   <InputNumber
                     min={1.5}
                     max={2}
@@ -471,7 +476,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                     size="small"
                     style={{ width: 80 }}
                   />
-                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>倍</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>倍</span>
                 </Space>
               </div>
             }
@@ -484,7 +489,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             trigger="click"
             content={
               <div style={{ width: 260 }}>
-                <div style={{ fontSize: 12, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+                <div style={{ fontSize: 13, marginBottom: 8, color: 'var(--text-secondary)' }}>
                   点击色板 → 点击格子或拖拽批量上色
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
@@ -494,20 +499,20 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                       onClick={() => selectColor(p)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer',
-                        borderRadius: 6, border: selectedColor === p.color ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                        fontSize: 12,
+                        borderRadius: 6, border: selectedColor === p.color ? '2px solid var(--brand)' : '1px solid var(--border)',
+                        fontSize: 13,
                       }}
                     >
                       <span style={{ width: 16, height: 16, borderRadius: 4, background: p.color, flexShrink: 0 }} />
                       {p.label}
-                      {selectedColor === p.color && <CheckOutlined style={{ color: 'var(--color-primary)', marginLeft: 'auto' }} />}
+                      {selectedColor === p.color && <CheckOutlined style={{ color: 'var(--brand)', marginLeft: 'auto' }} />}
                     </div>
                   ))}
                 </div>
                 <Button size="small" type="link" icon={<EditOutlined />} onClick={() => setColorManageOpen(true)} style={{ padding: 0, marginTop: 8 }}>
                   配色管理
                 </Button>
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>当前区域：{selectedLabel}</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>当前区域：{selectedLabel}</div>
               </div>
             }
           >
@@ -550,7 +555,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>缩放</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>缩放</span>
             <Slider
               min={50}
               max={200}
@@ -558,7 +563,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
               onChange={setZoom}
               style={{ width: 100, margin: '0 8px' }}
             />
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{zoom}%</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{zoom}%</span>
           </div>
         </div>
       )}
@@ -568,7 +573,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
         style={{
           overflow: 'auto',
           maxHeight: '60vh',
-          background: 'var(--color-bg-2)',
+          background: 'var(--soft)',
           borderRadius: 10,
           padding: 12,
         }}
@@ -594,7 +599,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                     width: isAisle ? cellSize * aisleRatio + 2 : cellSize + 2,
                     height: colHeaderH,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, color: isAisle ? 'var(--color-red)' : 'var(--color-text-secondary)',
+                    fontSize: 13, color: isAisle ? 'var(--brand)' : 'var(--text-secondary)',
                     fontWeight: isAisle ? 600 : 400,
                     cursor: readOnly ? 'default' : 'pointer',
                   }}
@@ -609,7 +614,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
           {/* 行 */}
           {Array.from({ length: rows }, (_, ri) => ri + 1).map((r) => (
             <div key={r} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-              <div style={{ width: rowLabelWidth, textAlign: 'center', fontSize: 10, color: 'var(--color-text-secondary)' }}>
+              <div style={{ width: rowLabelWidth, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
                 {r}
               </div>
               {Array.from({ length: cols }, (_, ci) => ci + 1).map((c) => {
@@ -630,16 +635,16 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                       marginRight: 2,
                       borderRadius: 4,
                       background: isAisle
-                        ? 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 4px, #d1d5db 4px, #d1d5db 8px)'
+                        ? SEAT_AISLE_HATCH
                         : cell?.type === 'seat'
-                          ? (cell.color || '#1677ff')
+                          ? (cell.color || SEAT_DEFAULT_COLOR)
                           : 'transparent',
-                      border: isAisle ? 'none' : isSelected ? '2px solid var(--color-red)' : '1px solid var(--color-border)',
+                      border: isAisle ? 'none' : isSelected ? '2px solid var(--brand)' : '1px solid var(--border)',
                       boxSizing: 'border-box',
                       cursor: readOnly ? 'default' : isAisle ? 'not-allowed' : 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: Math.max(8, cellSize * 0.35),
-                      color: isAisle || cell?.type === 'empty' ? 'var(--color-text-secondary)' : '#fff',
+                      color: isAisle || cell?.type === 'empty' ? 'var(--text-secondary)' : '#fff',
                       overflow: 'hidden',
                     }}
                   >
@@ -655,17 +660,17 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
       {/* 图例 */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
         {colorLabels.map((p) => (
-          <span key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <span key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
             <span style={{ width: 12, height: 12, borderRadius: 3, background: p.color }} />
             {p.label}
           </span>
         ))}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <span style={{ width: 12, height: 12, borderRadius: 3, border: '1px solid var(--color-border)' }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, border: '1px solid var(--border)' }} />
           空座
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <span style={{ width: 12, height: 12, borderRadius: 3, background: 'repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 3px,#d1d5db 3px,#d1d5db 6px)' }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: SEAT_AISLE_HATCH }} />
           过道
         </span>
       </div>
@@ -678,7 +683,7 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
         footer={<Button onClick={() => setTemplateOpen(false)}>关闭</Button>}
       >
         {templates.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--color-text-secondary)' }}>暂无可用模板</div>
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>暂无可用模板</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {templates.map((t) => (
@@ -686,12 +691,12 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                 key={t.id}
                 onClick={() => applyTemplate(t)}
                 style={{
-                  border: '1px solid var(--color-border)', borderRadius: 8, padding: 12, cursor: 'pointer',
+                  border: '1px solid var(--border)', borderRadius: 8, padding: 12, cursor: 'pointer',
                   transition: 'all .15s',
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                   {t.rows} × {t.cols} · {t.templateCategory || '自定义'}
                 </div>
               </div>

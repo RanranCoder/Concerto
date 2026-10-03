@@ -189,7 +189,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
           onClick={(e) => e.stopPropagation()}
         />
         <span>{g.groupName}</span>
-        <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
           {g.signedCount}/{g.count} 已签
         </span>
       </Space>
@@ -208,7 +208,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
                 padding: '6px 4px',
                 cursor: 'pointer',
                 borderRadius: 6,
-                background: checkedPeople.has(key) ? 'var(--color-primary-weak, rgba(22,119,255,.08))' : 'transparent',
+                background: checkedPeople.has(key) ? 'var(--brand-soft)' : 'transparent',
               }}
               onClick={() =>
                 togglePerson({
@@ -220,7 +220,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
             >
               <Checkbox checked={checkedPeople.has(key)} />
               <span>{p.fields['姓名'] ?? '未知'}</span>
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                 {p.fields['学号'] ?? ''} · {p.signed ? '已签' : '未签'}
               </span>
             </div>
@@ -278,7 +278,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
             onChange={handleActivityChange}
             options={activities.map((a) => ({ value: a.id, label: a.name }))}
           />
-          <div style={{ marginTop: 12, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
             仅显示已完成 / 已归档的活动，将按活动的签到名单批量加分
           </div>
         </div>
@@ -286,7 +286,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
 
       {step === 1 && (
         <div>
-          <div style={{ marginBottom: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <div style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             勾选要参与加分的名单分组（共 {groups.length} 组）
           </div>
           <Spin spinning={loadingGroups}>
@@ -306,7 +306,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
       {step === 2 && (
         <div>
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
               人员池 {peoplePool.length} 人 · 已选 {selectedPeople.length} 人
             </span>
             <Space>
@@ -318,7 +318,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
               </Button>
             </Space>
           </div>
-          <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid var(--color-border)', borderRadius: 8, padding: 8 }}>
+          <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
             {peoplePool.map((p, i) => {
               const key = `${p.personName}|${p.studentNo ?? ''}`
               return (
@@ -331,13 +331,13 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
                     padding: '6px 4px',
                     cursor: 'pointer',
                     borderRadius: 6,
-                    background: checkedPeople.has(key) ? 'var(--color-primary-weak, rgba(22,119,255,.08))' : 'transparent',
+                    background: checkedPeople.has(key) ? 'var(--brand-soft)' : 'transparent',
                   }}
                   onClick={() => togglePerson(p)}
                 >
                   <Checkbox checked={checkedPeople.has(key)} />
                   <span>{p.personName}</span>
-                  <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{p.studentNo ?? ''}</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{p.studentNo ?? ''}</span>
                 </div>
               )
             })}
@@ -374,13 +374,13 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
 
       {step === 4 && (
         <div style={{ textAlign: 'center', padding: '24px 0' }}>
-          <div style={{ fontSize: 28, fontWeight: 600, color: 'var(--color-primary)' }}>
+          <div style={{ fontSize: 'var(--fs-statXl)', fontWeight: 600, color: 'var(--brand)' }}>
             将为 {totalSelected} 人各加 {credit ?? 0} 分
           </div>
-          <div style={{ marginTop: 8, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
             共计 {totalCredit} 分 · 每人一条加分记录，可整体撤回
           </div>
-          <div style={{ marginTop: 12, color: 'var(--color-text-secondary)', fontSize: 13 }}>
+          <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 14 }}>
             来源活动：{activities.find((a) => a.id === selectedActivity)?.name}
           </div>
         </div>

@@ -81,16 +81,16 @@ export default function PartyMemberDetail() {
         color: 'red',
         children: (
           <div>
-            <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
               {STAGE_LABEL_MAP[s.stage] ?? s.stage}
               {s.issueNo ? <Tag style={{ marginLeft: 8 }}>第 {s.issueNo} 期</Tag> : null}
               {s.status === 'CURRENT' ? <Tag color="red" style={{ marginLeft: 4 }}>当前</Tag> : null}
             </div>
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: 12, marginTop: 2 }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 2 }}>
               {s.startDate ? `${s.startDate}${s.endDate ? ` ~ ${s.endDate}` : ''}` : (s.createdAt ? dayjs(s.createdAt).format('YYYY-MM-DD') : '')}
             </div>
             {s.remark ? (
-              <div style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{s.remark}</div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>{s.remark}</div>
             ) : null}
           </div>
         ),
@@ -123,14 +123,14 @@ export default function PartyMemberDetail() {
           />
           {member?.remark ? (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>备注</div>
-              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text)', lineHeight: 1.8 }}>{member.remark}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>备注</div>
+              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', lineHeight: 1.8 }}>{member.remark}</div>
             </div>
           ) : null}
         </GlassCard>
 
         <GlassCard style={{ padding: 20, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 12 }}>阶段流转历史</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 12 }}>阶段流转历史</div>
           {timelineItems.length ? (
             <Timeline items={timelineItems} />
           ) : (

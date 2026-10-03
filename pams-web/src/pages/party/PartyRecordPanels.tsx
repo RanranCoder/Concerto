@@ -186,7 +186,7 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
           key={editing ? `inv-edit-${editing.id}` : 'inv-create'}
           initialValues={formInit}
         >
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 8 }}>父亲</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>父亲</div>
           <Space size="middle" wrap style={{ marginBottom: 8 }}>
             <Form.Item name="fatherName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
@@ -198,7 +198,7 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
           <Form.Item name="fatherBranchAddr" label="党支部地址">
             <Input maxLength={255} placeholder="函调寄送地址" />
           </Form.Item>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 8 }}>母亲</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>母亲</div>
           <Space size="middle" wrap style={{ marginBottom: 8 }}>
             <Form.Item name="motherName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
@@ -210,7 +210,7 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
           <Form.Item name="motherBranchAddr" label="党支部地址">
             <Input maxLength={255} placeholder="函调寄送地址" />
           </Form.Item>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 8 }}>其他社会关系人</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>其他社会关系人</div>
           <Space size="middle" wrap style={{ marginBottom: 8 }}>
             <Form.Item name="relativeName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />

@@ -90,13 +90,13 @@ export default function SigninFieldConfig({
           </Space>
         }
       >
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
           选择需要核验的字段，勾选的字段在扫码签到时为必填项。
         </div>
         {loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>加载中…</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>加载中…</div>
         ) : headers.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>请先上传应签名单</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>请先上传应签名单</div>
         ) : (
           <Form form={form} layout="vertical">
             <Form.Item name="fields" style={{ marginBottom: 0 }}>

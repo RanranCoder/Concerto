@@ -145,11 +145,11 @@ export default function FilePreviewModal({ open, onClose, fileId, fileName, extr
           <div className="file-preview-word-wrap" dangerouslySetInnerHTML={{ __html: wordHtml }} />
         )}
         {!loading && !error && isExcel && excelRows && (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
                 {excelRows.headers.map((h, i) => (
-                  <th key={i} style={{ border: '1px solid var(--color-border)', padding: '6px 8px', background: 'var(--color-bg-2)' }}>
+                  <th key={i} style={{ border: '1px solid var(--border)', padding: '6px 8px', background: 'var(--soft)' }}>
                     {h}
                   </th>
                 ))}
@@ -159,7 +159,7 @@ export default function FilePreviewModal({ open, onClose, fileId, fileName, extr
               {excelRows.rows.map((r, ri) => (
                 <tr key={ri}>
                   {excelRows.headers.map((_, ci) => (
-                    <td key={ci} style={{ border: '1px solid var(--color-border)', padding: '6px 8px' }}>
+                    <td key={ci} style={{ border: '1px solid var(--border)', padding: '6px 8px' }}>
                       {r[ci] ?? ''}
                     </td>
                   ))}

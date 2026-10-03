@@ -21,9 +21,9 @@ export default function Forbidden() {
             height: 64,
             margin: '0 auto 16px',
             borderRadius: '50%',
-            background: 'var(--color-red)',
+            background: 'var(--brand)',
             color: '#fff',
-            fontSize: 30,
+            fontSize: 'var(--fs-display)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -31,11 +31,11 @@ export default function Forbidden() {
         >
           <LockOutlined />
         </div>
-        <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>
+        <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
           403
         </div>
-        <div style={{ fontSize: 16, color: 'var(--color-text)', margin: '8px 0 4px' }}>无权访问</div>
-        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 24 }}>
+        <div style={{ fontSize: 16, color: 'var(--text-primary)', margin: '8px 0 4px' }}>无权访问</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24 }}>
           您的当前角色没有访问该页面的权限，请联系指导老师或主任开通。
         </div>
         <Button type="primary" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>

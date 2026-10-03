@@ -80,7 +80,7 @@ export default function NotificationBell() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
       ) : notifications.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 20, color: 'var(--color-text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-secondary)' }}>
           暂无通知
         </div>
       ) : (
@@ -92,22 +92,22 @@ export default function NotificationBell() {
               style={{
                 cursor: 'pointer',
                 padding: '8px 12px',
-                backgroundColor: n.read ? 'transparent' : 'var(--color-bg-elevated)',
+                backgroundColor: n.read ? 'transparent' : 'var(--canvas)',
                 borderRadius: 6,
               }}
             >
               <Space direction="vertical" size={2} style={{ width: '100%' }}>
                 <Space>
                   <span>{getNotificationIcon(n.type)}</span>
-                  <Text strong={!n.read} style={{ fontSize: 13 }}>{n.title}</Text>
+                  <Text strong={!n.read} style={{ fontSize: 14 }}>{n.title}</Text>
                   {!n.read && (
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1677ff', display: 'inline-block' }} />
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--brand)', display: 'inline-block' }} />
                   )}
                 </Space>
-                <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: n.content }}>
+                <Text type="secondary" style={{ fontSize: 13 }} ellipsis={{ tooltip: n.content }}>
                   {n.content}
                 </Text>
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: 13 }}>
                   {dayjs(n.createdAt).format('MM-DD HH:mm')}
                 </Text>
               </Space>
@@ -128,7 +128,7 @@ export default function NotificationBell() {
       arrow={false}
     >
       <Badge count={unreadCount} size="small" offset={[-2, 2]}>
-        <BellOutlined style={{ fontSize: 18, cursor: 'pointer', color: 'var(--color-text)' }} />
+        <BellOutlined style={{ fontSize: 16, cursor: 'pointer', color: 'var(--text-primary)' }} />
       </Badge>
     </Popover>
   )

@@ -40,6 +40,8 @@ export default function AgentHome() {
   const pendingTaskCount = useAgentStore((s) => s.pendingTaskCount)
   const mode = useAgentStore((s) => s.mode)
   const setMode = useAgentStore((s) => s.setMode)
+  const autoCollab = useAgentStore((s) => s.autoCollab)
+  const setAutoCollab = useAgentStore((s) => s.setAutoCollab)
   const pendingRefs = useAgentStore((s) => s.pendingRefs)
   const addRef = useAgentStore((s) => s.addRef)
   const removeRef = useAgentStore((s) => s.removeRef)
@@ -317,6 +319,8 @@ export default function AgentHome() {
           disabled={messagesLoading}
           mode={mode}
           onModeChange={(m) => void setMode(m)}
+          autoCollab={autoCollab}
+          onAutoCollabChange={setAutoCollab}
           provider={lastProvider?.provider}
           degraded={lastProvider?.degraded}
           pendingRefs={pendingRefs}

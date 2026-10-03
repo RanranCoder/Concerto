@@ -30,6 +30,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
+import { SEAT_ZONE_COLORS } from '@/styles/categoryColors'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
@@ -87,17 +88,12 @@ const TYPE_MAP = ACTIVITY_TYPE_MAP
 
 // ==================== 座位表图例 ====================
 
-/** 座位类型默认色板：国旗红系 + 灰阶 + 强调色（按列表顺序逐个分配） */
-const SEAT_LEGEND_PALETTE = [
-  '#DE2910', // 国旗红（领导席/主席台）
-  '#C0392B', // 深红
-  '#E67E22', // 橙（嘉宾席）
-  '#E9C46A', // 金黄（礼仪/引导）
-  '#2A9D8F', // 青绿（签到/工作组）
-  '#457B9D', // 深蓝（媒体/摄影）
-  '#6C757D', // 中灰（观众席）
-  '#8C9AAB', // 浅灰（机动座）
-]
+/**
+ * 座位类型默认色板：与座位表编辑器（SeatLayoutEditor 的 PRESET_COLORS）共用
+ * styles/categoryColors.ts 的 SEAT_ZONE_COLORS，避免同一系统出现两套座位配色
+ * （原实现这里是一套「国旗红系」8 色、编辑器是另一套 10 色，同一活动两处颜色对不上）。
+ */
+const SEAT_LEGEND_PALETTE = Object.values(SEAT_ZONE_COLORS)
 
 const SEAT_LEGEND_KEY_PREFIX = 'pams_seat_legend_'
 
@@ -508,7 +504,7 @@ function PlanTab({
         />
 
         {/* 活动流程字段不在 12 章模板中，导出 docx 不含流程 */}
-        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
           提示：活动流程已在编辑页提供，但不含在 Word 导出中；如需单独调整各字段可用「字段编辑」。
         </div>
 
@@ -546,7 +542,7 @@ function PlanTab({
                   justifyContent: 'space-between',
                   padding: '10px 12px',
                   marginBottom: 8,
-                  border: '1px solid var(--surface-border)',
+                  border: '1px solid var(--border)',
                   borderRadius: 8,
                 }}
               >
@@ -554,7 +550,7 @@ function PlanTab({
                   <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {t.name}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     {TEMPLATE_CATEGORY_MAP[t.category] ?? t.category}
                     {t.description ? ` · ${t.description}` : ''}
                   </div>
@@ -572,7 +568,7 @@ function PlanTab({
             ))
           )}
         </Spin>
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
           提示：模板内容将按章节标题自动填充到当前策划书，导入后可继续编辑。
         </div>
       </GlassModal>
@@ -961,12 +957,12 @@ function SeatTab({ activityId }: { activityId: number }) {
       {/* F6 座位表双轨收敛：已存在可视化布局（seat_layout）时旧版座位表（seat_map）转只读归档；
           仅有旧数据时提示迁移，写入口统一收敛到可视化编辑 */}
       {layout && allSeats.length > 0 && (
-        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--color-primary)', background: 'var(--surface-strong)', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--brand)', background: 'var(--soft)', fontSize: 13, color: 'var(--text-secondary)' }}>
           该活动已启用可视化座位表（新版），下方旧版座位表转为只读归档；编辑请在「可视化编辑」中进行。
         </div>
       )}
       {!layout && allSeats.length > 0 && (
-        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid #faad14', background: 'var(--surface-strong)', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--warn)', background: 'var(--soft)', fontSize: 13, color: 'var(--text-secondary)' }}>
           检测到旧版座位表数据（{allSeats.length} 个座位）。建议切换到「可视化编辑」重建并保存新布局，旧版编辑入口将在新布局创建后转为只读。
         </div>
       )}
@@ -996,7 +992,7 @@ function SeatTab({ activityId }: { activityId: number }) {
       ) : view === 'matrix' ? (
         <SeatMapView seats={allSeats} legend={legend} onSelect={layout ? undefined : openEdit} />
       ) : layout ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
           旧版 Excel 编辑已锁定：该活动已启用可视化座位表，请使用「可视化编辑」。
         </div>
       ) : (
@@ -1184,15 +1180,15 @@ export default function ActivityDetail() {
             ]}
           />
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>活动描述</div>
-            <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text)', lineHeight: 1.8 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>活动描述</div>
+            <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', lineHeight: 1.8 }}>
               {activity.description || '暂无描述'}
             </div>
           </div>
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface-border)' }}>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <Space wrap>
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>状态操作：</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>状态操作：</span>
               {prevStatus && (
                 <Popconfirm
                   title={`确认回退到「${ACTIVITY_STATUS_LABEL[prevStatus]}」？`}
@@ -1222,8 +1218,8 @@ export default function ActivityDetail() {
             </Space>
           </div>
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--surface-border)' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>
               任务甘特图预览
               <Button type="link" size="small" onClick={() => navigate(`/activities/${activityId}/gantt`)}>
                 查看完整甘特图 →
@@ -1234,11 +1230,11 @@ export default function ActivityDetail() {
           </div>
 
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-red)', marginBottom: 6 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>
               关联文件（{materials.length}）
             </div>
             {materials.length === 0 ? (
-              <div style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>暂无关联文件，可在材料库上传</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>暂无关联文件，可在材料库上传</div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {materials.map((m) => (

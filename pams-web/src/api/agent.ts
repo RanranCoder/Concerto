@@ -16,6 +16,18 @@ export type AgentStreamEventType =
   | 'ERROR'
   | 'ABORTED'
   | 'MESSAGE_DELTA'
+  /**
+   * 多 Agent 协作事件（协作内聚进灵思后，由标准模式自动升级产生）。
+   *
+   * 与单 Agent 事件共用同一条 WebSocket 流与同一个 seq 序列 —— 前端因此可以
+   * 把「哪个专家在干活」直接并入过程区时间轴，而不需要另开一屏。
+   * 旧前端遇到未知类型会在 mergeTimeline 的 default 分支忽略，向后兼容。
+   */
+  | 'COLLAB_DECISION'
+  | 'AGENT_START'
+  | 'AGENT_END'
+  | 'AGENT_DELEGATE'
+  | 'REVIEW_RESULT'
 
 /**
  * 过程事件。
@@ -306,7 +318,12 @@ export const agentChat = (
   conversationId?: number | null,
   mode: AgentMode = 'standard',
   refs: AgentChatRef[] = [],
-) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs })
+  /**
+   * 自动协作开关（C 批次）：标准模式下由后端判定是否派专家团队。
+   * 省略时后端按 true 处理（老客户端不受影响）。
+   */
+  collab: boolean = true,
+) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab })
 
 export const agentAbort = (streamId: string) =>
   post<{ streamId: string; aborted: boolean }>(`/agent/chat/${streamId}/abort`)

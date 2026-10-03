@@ -58,7 +58,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
   const renderGroup = (title: string, items: AgentToolVO[]) =>
     items.length > 0 && (
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--color-text)' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
           {title}（{items.length}）
         </div>
         {items.map((t) => {
@@ -68,11 +68,11 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="lingsi-tool-name">
                   {t.label}
-                  <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 11 }}>{t.name}</span>
+                  <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 13 }}>{t.name}</span>
                 </div>
                 <div className="lingsi-tool-desc">{t.description}</div>
               </div>
-              <Tag color={s.color} style={{ margin: 0, flexShrink: 0, fontSize: 11 }}>
+              <Tag color={s.color} style={{ margin: 0, flexShrink: 0, fontSize: 13 }}>
                 {s.text}
               </Tag>
             </div>
@@ -100,7 +100,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
             <Empty description="知识库暂时没有可检索的内容" />
           ) : (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--color-text)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
                 可检索的资料（{sources.length} 类）
               </div>
               {sources.map((s) => (
@@ -108,13 +108,13 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="lingsi-tool-name">
                       {s.label}
-                      <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 11 }}>
+                      <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 13 }}>
                         {s.chunkCount} 条
                       </span>
                     </div>
                     <div className="lingsi-tool-desc">{s.description}</div>
                   </div>
-                  <Tag style={{ margin: 0, flexShrink: 0, fontSize: 11 }}>
+                  <Tag style={{ margin: 0, flexShrink: 0, fontSize: 13 }}>
                     {s.tier === 'T2' ? '仅标题' : '全文'}
                   </Tag>
                 </div>

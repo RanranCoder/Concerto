@@ -4,8 +4,8 @@ import GlassCard from '@/components/glass/GlassCard'
 export default function Building({ module }: { module: string }) {
   return (
     <GlassCard style={{ padding: 40, textAlign: 'center' }}>
-      <h3 style={{ color: 'var(--color-text)', marginBottom: 8 }}>{module}</h3>
-      <p style={{ color: 'var(--color-text-secondary)' }}>建设中，敬请期待。</p>
+      <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>{module}</h3>
+      <p style={{ color: 'var(--text-secondary)' }}>建设中，敬请期待。</p>
     </GlassCard>
   )
 }

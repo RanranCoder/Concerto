@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Button, Empty, Result, Skeleton, Tooltip, Typography } from 'antd'
 import {
   BellOutlined,
   CalendarOutlined,
@@ -16,20 +16,20 @@ import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import Masonry from '@/components/glass/Masonry'
 import PageHeader from '@/components/glass/PageHeader'
+import StatusTag from '@/components/glass/StatusTag'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listSchedules, SCHEDULE_TYPE_MAP, WEEKDAY_NAMES, type ScheduleVO } from '@/api/schedule'
 import { MATERIAL_BIZ_TYPE_MAP } from '@/api/material'
 import { ARTICLE_TYPE_MAP } from '@/api/article'
-import { ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
 
-/** 统计卡配色（图标底色圆角块）。注意：不用 var(--color-red) 拼 alpha 后缀，CSS 变量替换是 token 级不会合并成 8 位 hex，渐变会失效 */
+/** 统计卡图标配色：统一用语义 token，明暗主题与组织主色自动跟随 */
 const CARD_ACCENT: Record<string, string> = {
-  red: '#DE2910',
-  orange: '#FA8C16',
-  green: '#52A052',
-  blue: '#2F6FB0',
+  red: 'var(--brand)',
+  orange: 'var(--warn)',
+  green: 'var(--ok)',
+  blue: 'var(--info)',
 }
 
 const fmt = (t?: string | null) => (t ? dayjs(t).format('MM-DD HH:mm') : '—')
@@ -42,13 +42,16 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<ActivityVO[]>([])
   const [schedules, setSchedules] = useState<ScheduleVO[]>([])
   const [loading, setLoading] = useState(true)
-  const [cleared, setCleared] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const today = dayjs()
   const todayWeekday = today.day() === 0 ? 7 : today.day() // 周一=1 … 周日=7
 
   useEffect(() => {
     let alive = true
+    setLoading(true)
+    setLoadError(false)
     ;(async () => {
       try {
         const [d, acts, scheds] = await Promise.all([
@@ -61,7 +64,7 @@ export default function Dashboard() {
         setActivities(acts.records ?? [])
         setSchedules(scheds ?? [])
       } catch {
-        /* http 拦截已提示 */
+        if (alive) setLoadError(true)
       } finally {
         if (alive) setLoading(false)
       }
@@ -69,7 +72,7 @@ export default function Dashboard() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [reloadKey])
 
   const stats = useMemo(() => {
     const s = dash?.activityStats
@@ -124,11 +127,42 @@ export default function Dashboard() {
       .slice(0, 8)
   }, [activities])
 
+  const prioritizedTasks = useMemo(() => {
+    const priority: Record<string, number> = { DELAYED: 0, TODO: 1, DOING: 2, DONE: 3 }
+    return [...(dash?.myTasks ?? [])]
+      .sort((a, b) => {
+        const statusDiff = (priority[a.status] ?? 4) - (priority[b.status] ?? 4)
+        if (statusDiff !== 0) return statusDiff
+        return (a.endDate ?? '9999-12-31').localeCompare(b.endDate ?? '9999-12-31')
+      })
+      .slice(0, 5)
+  }, [dash?.myTasks])
+
   if (loading) {
     return (
-      <div style={{ display: 'grid', placeItems: 'center', padding: 120 }}>
-        <Spin size="large" />
+      <div aria-busy="true" aria-label="正在加载仪表盘">
+        <PageHeader title={`你好，${user?.realName ?? ''}`} description="正在加载今日工作信息…" />
+        <div className="dashboard-stats-grid">
+          {Array.from({ length: 4 }, (_, i) => (
+            <GlassCard key={i} style={{ padding: 20 }}><Skeleton active title={false} paragraph={{ rows: 2, width: ['65%', '35%'] }} /></GlassCard>
+          ))}
+        </div>
+        <section className="dashboard-work-grid" aria-hidden="true">
+          {[0, 1].map((i) => <GlassCard key={i} style={{ padding: 20, minHeight: 260 }}><Skeleton active paragraph={{ rows: 5 }} /></GlassCard>)}
+        </section>
+        <GlassCard style={{ padding: 20, marginTop: 16, minHeight: 240 }}><Skeleton active paragraph={{ rows: 6 }} /></GlassCard>
       </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <Result
+        status="error"
+        title="仪表盘暂时无法加载"
+        subTitle="请检查网络或服务状态，然后重试。"
+        extra={<Button type="primary" onClick={() => setReloadKey((key) => key + 1)}>重试</Button>}
+      />
     )
   }
 
@@ -140,14 +174,7 @@ export default function Dashboard() {
       />
 
       {/* 顶部 4 个统计卡 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
+      <div className="dashboard-stats-grid">
         {stats.map((s) => (
           <GlassCard
             key={s.key}
@@ -160,7 +187,7 @@ export default function Dashboard() {
                 position: 'absolute',
                 right: -4,
                 bottom: -10,
-                fontSize: 72,
+                fontSize: 'var(--fs-watermark)',
                 lineHeight: 1,
                 color: CARD_ACCENT[s.accent],
                 opacity: 0.08,
@@ -171,16 +198,15 @@ export default function Dashboard() {
             </span>
             <div
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 14,
+                width: 36,
+                height: 36,
+                borderRadius: 'var(--r-md)',
                 display: 'grid',
                 placeItems: 'center',
                 color: '#fff',
-                fontSize: 22,
+                fontSize: 16,
                 flexShrink: 0,
-                background: `linear-gradient(135deg, ${CARD_ACCENT[s.accent]}, ${CARD_ACCENT[s.accent]}bb)`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 8px 18px ${CARD_ACCENT[s.accent]}55`,
+                background: CARD_ACCENT[s.accent],
               }}
             >
               {s.icon}
@@ -188,244 +214,163 @@ export default function Dashboard() {
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 28,
+                  fontSize: 'var(--fs-statXl)',
                   fontWeight: 700,
                   lineHeight: 1.15,
-                  color: 'var(--color-text)',
+                  color: 'var(--text-primary)',
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
                 {s.value}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
             </div>
           </GlassCard>
         ))}
       </div>
 
-      <Masonry gap={16} minColWidth={300}>
-        <GlassCard style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Typography.Title level={5} style={{ margin: 0 }}>
-                <ScheduleOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
-                本周排班
-              </Typography.Title>
-              <Button type="link" onClick={() => navigate('/routine/schedules')}>
-                管理排班
-              </Button>
-            </div>
-            {weekGrid.length === 0 ? (
-              <Empty description="本周暂无排班" style={{ padding: 24 }} />
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th
-                        style={{
-                          padding: '6px 8px',
-                          textAlign: 'left',
-                          borderBottom: '1px solid var(--color-border)',
-                          color: 'var(--color-text-secondary)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        节次 / 时间段
-                      </th>
-                      {WEEKDAY_NAMES.map((name, idx) => {
-                        const isToday = todayWeekday === idx + 1
-                        return (
-                          <th
-                            key={name}
-                            style={{
-                              padding: '6px 8px',
-                              textAlign: 'center',
-                              borderBottom: '1px solid var(--color-border)',
-                              color: 'var(--color-text-secondary)',
-                              background: isToday ? 'var(--color-red-soft)' : 'transparent',
-                              borderRadius: isToday ? 6 : 0,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {name}
-                            {isToday && <span style={{ color: 'var(--color-red)', marginLeft: 4 }}>今</span>}
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weekGrid.map((row) => (
-                      <tr key={row.sessionName}>
-                        <td
-                          style={{
-                            padding: '6px 8px',
-                            fontWeight: 500,
-                            verticalAlign: 'top',
-                            borderBottom: '1px solid var(--color-border)',
-                            whiteSpace: 'nowrap',
-                            color: 'var(--color-text)',
-                          }}
-                        >
-                          {row.sessionName}
-                        </td>
-                        {row.cells.map((list, idx) => {
-                          const isToday = todayWeekday === idx + 1
-                          return (
-                            <td
-                              key={`${row.sessionName}-${idx}`}
-                              style={{
-                                padding: '6px 8px',
-                                verticalAlign: 'top',
-                                borderBottom: '1px solid var(--color-border)',
-                                minWidth: 96,
-                                background: isToday ? 'var(--color-red-soft)' : 'transparent',
-                              }}
-                            >
-                              {list.map((s) => {
-                                const primary = (s.persons ?? [])
-                                  .filter((p) => p.isPrimary !== 0)
-                                  .map((p) => p.personName)
-                                const deputy = (s.persons ?? [])
-                                  .filter((p) => p.isPrimary === 0)
-                                  .map((p) => p.personName)
-                                return (
-                                  <div key={s.id} style={{ marginBottom: 6 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--color-red)' }}>
-                                      {SCHEDULE_TYPE_MAP[s.scheduleType] ?? s.scheduleType}
-                                    </div>
-                                    <div style={{ color: 'var(--color-text)', lineHeight: 1.3 }}>
-                                      {primary.join('、') || deputy.join('、') || '—'}
-                                    </div>
-                                    {deputy.length > 0 && primary.length > 0 && (
-                                      <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                        {deputy.join('、')}
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </GlassCard>
-
+      <section className="dashboard-work-section" aria-label="今日工作重点">
+        <div className="dashboard-section-heading">
+          <Typography.Title level={4} style={{ margin: 0 }}>今日工作重点</Typography.Title>
+          <span>优先处理待办任务，并关注近期活动</span>
+        </div>
+        <div className="dashboard-work-grid">
           <GlassCard style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div className="dashboard-card-heading">
               <Typography.Title level={5} style={{ margin: 0 }}>
-                <CalendarOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
-                活动动态
+                <CheckCircleOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
+                我的待办（{dash?.myTasks?.length ?? 0}）
               </Typography.Title>
-              <Space size={4}>
-                {!cleared && (
-                  <Button type="link" size="small" onClick={() => setCleared(true)}>
-                    清除
-                  </Button>
-                )}
-                <Button type="link" onClick={() => navigate('/activities')}>
-                  全部活动
-                </Button>
-              </Space>
+              <Button type="link" size="small" onClick={() => navigate('/activities')}>活动列表</Button>
             </div>
-            {cleared || upcomingActivities.length === 0 ? (
-              <Empty description={cleared ? '已清除活动动态' : '暂无进行中的活动'} style={{ padding: 24 }} />
-            ) : (
-              <div className="hide-scrollbar" style={{ display: 'grid', gap: 8, maxHeight: 194, overflowY: 'auto', paddingRight: 6 }}>
-                {upcomingActivities.map((a) => {
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => navigate(`/activities/${a.id}`)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        padding: '10px 12px',
-                        borderRadius: 10,
-                        border: '1px solid var(--surface-border)',
-                        background: 'var(--surface)',
-                        cursor: 'pointer',
-                        transition: 'border-color 0.2s var(--easing)',
-                      }}
-                      className="dash-activity-item"
-                    >
-                      <div style={{ minWidth: 52, textAlign: 'center' }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-red)' }}>
-                          {a.startDate ? dayjs(a.startDate).format('MM-DD') : '—'}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                          {a.startDate ? dayjs(a.startDate).format('ddd') : '待定'}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: 'var(--color-text)', fontWeight: 500 }} className="ellipsis">
-                          {a.name}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }} className="ellipsis">
-                          {a.location || a.organizer || a.theme || '—'}
-                        </div>
-                      </div>
-                      <Tag color={ACTIVITY_STATUS_COLOR[a.status] ?? '#8C8C8C'} style={{ marginInlineEnd: 0 }}>
-                        {ACTIVITY_STATUS_LABEL[a.status] ?? a.status}
-                      </Tag>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </GlassCard>
-
-          {/* 我的待办 */}
-          <GlassCard style={{ padding: 20 }}>
-            <Typography.Title level={5} style={{ margin: 0, marginBottom: 12 }}>
-              <CheckCircleOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
-              我的待办（{dash?.myTasks?.length ?? 0}）
-            </Typography.Title>
-            {!dash?.myTasks || dash.myTasks.length === 0 ? (
+            {prioritizedTasks.length === 0 ? (
               <Empty description="暂无指派给你的任务" style={{ padding: 24 }} />
             ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {dash.myTasks.map((t) => (
-                  <div
-                    key={t.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: '1px solid var(--surface-border)',
-                      background: 'var(--surface)',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="ellipsis" style={{ color: 'var(--color-text)', fontWeight: 500 }}>
-                        {t.name}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        截止 {t.endDate ? dayjs(t.endDate).format('MM-DD') : '—'} · 进度 {t.progress ?? 0}%
+              <div className="dashboard-task-list">
+                {prioritizedTasks.map((task) => (
+                  <div key={task.id} className="dashboard-task-item">
+                    <div className="dashboard-task-copy">
+                      <div className="dashboard-item-title">{task.name}</div>
+                      <div className="dashboard-item-meta">
+                        截止 {task.endDate ? dayjs(task.endDate).format('MM-DD') : '未设置'} · 进度 {task.progress ?? 0}%
                       </div>
                     </div>
-                    <Tooltip title={t.status}>
-                      <Tag color={t.status === 'DONE' ? 'green' : t.status === 'DELAYED' ? 'red' : 'gold'}>
-                        {{ TODO: '待办', DOING: '进行中', DONE: '完成', DELAYED: '延期' }[t.status]}
-                      </Tag>
+                    <Tooltip title={task.status}>
+                      <span className={`tone-tag tone-${task.status === 'DONE' ? 'success' : task.status === 'DELAYED' ? 'danger' : task.status === 'DOING' ? 'processing' : 'warning'}`}>
+                        {{ TODO: '待办', DOING: '进行中', DONE: '完成', DELAYED: '延期' }[task.status]}
+                      </span>
                     </Tooltip>
+                    <Button type="text" size="small" onClick={() => navigate(`/activities/${task.activityId}/gantt`)}>
+                      查看
+                    </Button>
                   </div>
                 ))}
               </div>
             )}
           </GlassCard>
+
+          <GlassCard style={{ padding: 20 }}>
+            <div className="dashboard-card-heading">
+              <Typography.Title level={5} style={{ margin: 0 }}>
+                <CalendarOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
+                近期活动
+              </Typography.Title>
+              <Button type="link" size="small" onClick={() => navigate('/activities')}>全部活动</Button>
+            </div>
+            {upcomingActivities.length === 0 ? (
+              <Empty description="暂无进行中的活动" style={{ padding: 24 }} />
+            ) : (
+              <div className="dashboard-activity-list">
+                {upcomingActivities.slice(0, 5).map((activity) => (
+                  <button
+                    key={activity.id}
+                    type="button"
+                    className="dashboard-activity-item"
+                    onClick={() => navigate(`/activities/${activity.id}`)}
+                  >
+                    <span className="dashboard-activity-date">
+                      <strong>{activity.startDate ? dayjs(activity.startDate).format('MM-DD') : '—'}</strong>
+                      <small>{activity.startDate ? dayjs(activity.startDate).format('ddd') : '待定'}</small>
+                    </span>
+                    <span className="dashboard-activity-copy">
+                      <span className="dashboard-item-title">{activity.name}</span>
+                      <span className="dashboard-item-meta">{activity.location || activity.organizer || activity.theme || '未填写地点'}</span>
+                    </span>
+                    <StatusTag status={activity.status} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </div>
+
+        <GlassCard style={{ padding: 20, marginTop: 16 }}>
+          <div className="dashboard-card-heading">
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              <ScheduleOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
+              本周排班
+            </Typography.Title>
+            <Button type="link" onClick={() => navigate('/routine/schedules')}>管理排班</Button>
+          </div>
+          {weekGrid.length === 0 ? (
+            <Empty description="本周暂无排班" style={{ padding: 24 }} />
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      节次 / 时间段
+                    </th>
+                    {WEEKDAY_NAMES.map((name, idx) => {
+                      const isToday = todayWeekday === idx + 1
+                      return (
+                        <th key={name} style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', background: isToday ? 'var(--brand-soft)' : 'transparent', borderRadius: isToday ? 6 : 0, whiteSpace: 'nowrap' }}>
+                          {name}
+                          {isToday && <span style={{ color: 'var(--brand)', marginLeft: 4 }}>今</span>}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {weekGrid.map((row) => (
+                    <tr key={row.sessionName}>
+                      <td style={{ padding: '6px 8px', fontWeight: 500, verticalAlign: 'top', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                        {row.sessionName}
+                      </td>
+                      {row.cells.map((list, idx) => {
+                        const isToday = todayWeekday === idx + 1
+                        return (
+                          <td key={`${row.sessionName}-${idx}`} style={{ padding: '6px 8px', verticalAlign: 'top', borderBottom: '1px solid var(--border)', minWidth: 96, background: isToday ? 'var(--brand-soft)' : 'transparent' }}>
+                            {list.map((schedule) => {
+                              const primary = (schedule.persons ?? []).filter((person) => person.isPrimary !== 0).map((person) => person.personName)
+                              const deputy = (schedule.persons ?? []).filter((person) => person.isPrimary === 0).map((person) => person.personName)
+                              return (
+                                <div key={schedule.id} style={{ marginBottom: 6 }}>
+                                  <div style={{ fontSize: 13, color: 'var(--brand)' }}>{SCHEDULE_TYPE_MAP[schedule.scheduleType] ?? schedule.scheduleType}</div>
+                                  <div style={{ color: 'var(--text-primary)', lineHeight: 1.3 }}>{primary.join('、') || deputy.join('、') || '—'}</div>
+                                  {deputy.length > 0 && primary.length > 0 && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{deputy.join('、')}</div>}
+                                </div>
+                              )
+                            })}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </GlassCard>
+      </section>
+
+      <Masonry gap={16} minColWidth={300}>
         <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
-                <FileTextOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
+                <FileTextOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
                 最新推文
               </Typography.Title>
               <Button type="link" onClick={() => navigate('/content/articles')}>
@@ -441,15 +386,12 @@ export default function Dashboard() {
                     <div className="dash-side-title ellipsis">
                       {a.title}
                       {a.articleType && (
-                        <Tag
-                          style={{ marginLeft: 6, fontSize: 10, lineHeight: '16px' }}
-                          color="blue"
-                        >
+                        <span className="tone-tag tone-processing" style={{ marginLeft: 6 }}>
                           {ARTICLE_TYPE_MAP[a.articleType] ?? a.articleType}
-                        </Tag>
+                        </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                       {fmt(a.publishTime)}
                     </div>
                   </div>
@@ -461,7 +403,7 @@ export default function Dashboard() {
           <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
-                <FolderOpenOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
+                <FolderOpenOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
                 最新材料
               </Typography.Title>
               <Button type="link" onClick={() => navigate('/archive/materials')}>
@@ -477,15 +419,12 @@ export default function Dashboard() {
                     <div className="dash-side-title ellipsis">
                       {m.name}
                       {m.bizType && (
-                        <Tag
-                          style={{ marginLeft: 6, fontSize: 10, lineHeight: '16px' }}
-                          color="geekblue"
-                        >
+                        <span className="tone-tag tone-neutral" style={{ marginLeft: 6 }}>
                           {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType}
-                        </Tag>
+                        </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{fmt(m.createdAt)}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fmt(m.createdAt)}</div>
                   </div>
                 ))}
               </div>
@@ -495,7 +434,7 @@ export default function Dashboard() {
           <GlassCard style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Typography.Title level={5} style={{ margin: 0 }}>
-                <BellOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
+                <BellOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
                 最新公告
               </Typography.Title>
               <Button type="link" onClick={() => navigate('/archive/announcements')}>
@@ -509,7 +448,7 @@ export default function Dashboard() {
                 {(dash?.recentAnnouncements ?? []).map((an) => (
                   <div key={an.id} onClick={() => navigate('/archive/announcements')} className="dash-side-link">
                     <div className="dash-side-title ellipsis">{an.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                       {fmt(an.publishTime ?? an.createdAt)}
                     </div>
                   </div>
@@ -520,18 +459,18 @@ export default function Dashboard() {
       </Masonry>
 
       <style>{`
-        .dash-activity-item:hover { border-color: rgba(222,41,16,0.4); }
+        .dash-activity-item:hover { border-color: var(--brand-hover); }
         .dash-side-link {
           display: block;
           padding: 8px 10px;
           border-radius: 8px;
-          border: 1px solid var(--surface-border);
-          background: var(--surface);
+          border: 1px solid var(--border);
+          background: var(--canvas);
           cursor: pointer;
-          transition: border-color 0.2s var(--easing);
+          transition: border-color 0.2s var(--ease);
         }
-        .dash-side-link:hover { border-color: rgba(222,41,16,0.4); }
-        .dash-side-title { color: var(--color-text); font-size: 13px; }
+        .dash-side-link:hover { border-color: var(--brand-hover); }
+        .dash-side-title { color: var(--text-primary); font-size: 13px; }
         .ellipsis {
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }

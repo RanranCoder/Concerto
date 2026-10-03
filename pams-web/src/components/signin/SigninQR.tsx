@@ -71,7 +71,7 @@ export default function SigninQR({ activityId, onSigned, active = true }: Signin
       ) : (
         <div style={{ height: 180 }} />
       )}
-      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
         扫码签到 · 有效期至 {expiresAt ? new Date(expiresAt).toLocaleTimeString() : '-'}
         <Tag style={{ marginLeft: 8 }} color="green">
           未刷新长期有效

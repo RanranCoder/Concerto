@@ -136,7 +136,7 @@ export default function NotificationList() {
       ellipsis: true,
       render: (v: string, r: NotificationRow) => (
         <Space size={6}>
-          {!r.read && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--color-red)' }} />}
+          {!r.read && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--brand)' }} />}
           {r.priority === 'URGENT' && <Tag color="red">紧急</Tag>}
           <span style={{ fontWeight: r.read ? 400 : 600 }}>{v}</span>
         </Space>
@@ -157,7 +157,7 @@ export default function NotificationList() {
       width: 100,
       render: (_: unknown, r: NotificationRow) =>
         r.read ? (
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>已读</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>已读</span>
         ) : (
           <Button type="link" size="small" onClick={() => handleMarkRead(r.id)}>
             标记已读
@@ -220,9 +220,9 @@ export default function NotificationList() {
             {prefs.map((p) => (
               <div
                 key={p.type}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 8 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8 }}
               >
-                <span style={{ fontSize: 13 }}>
+                <span style={{ fontSize: 14 }}>
                   {TYPE_LABEL[p.type] ?? p.type}
                   {p.system && <Tag color="red" style={{ marginLeft: 6 }}>系统</Tag>}
                 </span>
@@ -230,7 +230,7 @@ export default function NotificationList() {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <div style={{ marginTop: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             系统级通知（如密码重置）不可关闭
           </div>
         </Spin>

@@ -288,7 +288,7 @@ export default function NewsList() {
           <>
             <div style={{ marginBottom: 8 }}>
               <StatusTag status={preview.status} />
-              <span style={{ marginLeft: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+              <span style={{ marginLeft: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
                 作者：{userNameOf(preview.authorId)}
                 {preview.publishDate ? ` · ${preview.publishDate}` : ''}
               </span>

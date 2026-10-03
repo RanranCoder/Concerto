@@ -393,7 +393,7 @@ export default function UserList() {
             />
           </Form.Item>
         </Form>
-        <p style={{ color: '#999', fontSize: 12 }}>
+        <p style={{ color: '#999', fontSize: 13 }}>
           仅显示「学号」且未注册账号的成员；用户名 = 学号，默认密码 123456，角色按职位自动映射（可后续在用户管理中调整）。
         </p>
         <Table
@@ -455,7 +455,7 @@ export default function UserList() {
             rules={[{ required: true, message: '请选择角色' }]}
             extra={
               selectedRole && LEADER_DEPT_MAP[selectedRole.code] ? (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
                   已自动绑定部门：{LEADER_DEPT_MAP[selectedRole.code]}（可手动修改）
                 </Typography.Text>
               ) : null

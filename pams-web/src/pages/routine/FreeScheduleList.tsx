@@ -75,7 +75,7 @@ export default function FreeScheduleList() {
             onChange={setSemester}
           />
           <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
-          {data && <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>生成时间：{data.createdAt?.replace('T', ' ')}</span>}
+          {data && <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>生成时间：{data.createdAt?.replace('T', ' ')}</span>}
         </Space>
       </GlassCard>
       <GlassCard style={{ padding: 16 }}>
@@ -84,21 +84,21 @@ export default function FreeScheduleList() {
             <Empty description="该部门+学期还没有生成的无课表，请到「无课表制作 → 批量导入」生成" />
           ) : (
             <div style={{ overflow: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 14, minWidth: 720 }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>节次</th>
+                    <th style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>节次</th>
                     {WEEKDAYS.map((d) => (
-                      <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>{d}</th>
+                      <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>{d}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {data.rows.map((row) => (
                     <tr key={row.period}>
-                      <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{row.label}</td>
+                      <td style={{ padding: '6px 10px', border: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{row.label}</td>
                       {[1, 2, 3, 4, 5].map((day) => (
-                        <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', verticalAlign: 'top', minWidth: 140 }}>
+                        <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--border)', verticalAlign: 'top', minWidth: 140 }}>
                           {(row.days[String(day)] ?? []).map((c, idx) => (
                             <div key={`${row.period}-${day}-${idx}`}>{c.name}（{c.freeWeeks}）</div>
                           ))}

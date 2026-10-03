@@ -222,7 +222,7 @@ export default function CreditList() {
         <Space size="large" wrap>
           <Statistic title="总加分人次" value={summaryCount} suffix="人次" />
           <Statistic title="总分值" value={summaryCreditTotal} precision={2} />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
             汇总按当前搜索条件（忽略分页）
           </span>
         </Space>

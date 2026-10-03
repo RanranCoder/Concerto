@@ -91,7 +91,7 @@ export default function SigninFieldsConfig({ activityId }: { activityId: number 
           </Space>
         }
       >
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
           定义扫码时要求填写的字段（姓名/学号为基础字段）。签到完成后这些字段值会回显到「签到记录」列表。
         </div>
         <Form form={form} layout="vertical" preserve={false}>
@@ -115,7 +115,7 @@ export default function SigninFieldsConfig({ activityId }: { activityId: number 
                     </Form.Item>
                     <MinusCircleOutlined
                       onClick={() => remove(field.name)}
-                      style={{ color: 'var(--color-text-secondary)' }}
+                      style={{ color: 'var(--text-secondary)' }}
                     />
                   </Space>
                 ))}

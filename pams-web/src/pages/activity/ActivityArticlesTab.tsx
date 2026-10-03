@@ -337,9 +337,9 @@ export default function ActivityArticlesTab({
                     </Space>
                   </div>
 
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
                     负责人：{userNameOf(a.authorId)} · 截止：
-                    <span style={{ color: isOverdue(a) ? 'var(--color-red)' : undefined }}>
+                    <span style={{ color: isOverdue(a) ? 'var(--brand)' : undefined }}>
                       {a.deadline ? dayjs(a.deadline).format('YYYY-MM-DD HH:mm') : '-'}
                     </span>
                   </div>
@@ -358,7 +358,7 @@ export default function ActivityArticlesTab({
                     </div>
                   ) : null}
 
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
                     {a.wxUrl ? (
                       <a href={a.wxUrl} target="_blank" rel="noreferrer">
                         公众号链接

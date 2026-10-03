@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Empty, Tooltip } from 'antd'
 import type { SeatMapVO } from '@/api/activity'
+import { SEAT_UNKNOWN_COLOR } from '@/styles/categoryColors'
 
 interface SeatMapViewProps {
   seats: SeatMapVO[]
@@ -48,9 +49,9 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
       {groups.map(({ zone, seats: zoneSeats, maxCol, maxRow }) => (
         <div key={zone} style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
               {zone}
-              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 400, color: 'var(--text-secondary)' }}>
                 共 {zoneSeats.length} 座
               </span>
             </div>
@@ -67,8 +68,8 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 11,
-                    color: 'var(--color-text-secondary)',
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   {i + 1}排
@@ -84,8 +85,8 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                     style={{
                       width: SEAT_SIZE,
                       textAlign: 'center',
-                      fontSize: 11,
-                      color: 'var(--color-text-secondary)',
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
                     }}
                   >
                     {i + 1}列
@@ -116,22 +117,21 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                         gridRow: s.rowNo ?? 'auto',
                         gridColumn: s.colNo ?? 'auto',
                         borderRadius: 8,
-                        border: taken ? '2px solid var(--color-red)' : '1px solid var(--surface-border)',
-                        background: color || 'rgba(148, 158, 175, 0.55)',
+                        border: taken ? '2px solid var(--brand)' : '1px solid var(--border)',
+                        background: color || SEAT_UNKNOWN_COLOR,
                         color: '#fff',
                         cursor: 'pointer',
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 600,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         boxSizing: 'border-box',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.35)',
-                        transition: 'transform 0.12s var(--easing), box-shadow 0.12s var(--easing)',
+                        transition: 'transform 0.12s var(--ease), box-shadow 0.12s var(--ease)',
                       }}
                       onMouseEnter={(e) => {
                         ;(e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.08)'
-                        ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 14px rgba(31,38,60,0.25)'
+                        ;(e.currentTarget as HTMLButtonElement).style.boxShadow = 'var(--shadow-2)'
                       }}
                       onMouseLeave={(e) => {
                         ;(e.currentTarget as HTMLButtonElement).style.transform = ''
@@ -163,12 +163,12 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
             gap: 12,
             marginTop: 8,
             paddingTop: 12,
-            borderTop: '1px solid var(--surface-border)',
+            borderTop: '1px solid var(--border)',
           }}
         >
           {legendEntries.map(([type, color]) => (
-            <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: color, border: '1px solid var(--surface-border)' }} />
+            <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: color, border: '1px solid var(--border)' }} />
               {type}
             </span>
           ))}

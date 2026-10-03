@@ -59,16 +59,41 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
   const [antdForm] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const openedFor = useRef<number | null>(null)
+  const openedFor = useRef<string | null>(null)
 
-  // 表单到达（taskId 变化）自动弹出一次——引导式填写是本机制的目的；
-  // 用户关闭后可随时点"打开表单"重开，不会反复骚扰
+  /**
+   * 表单到达（或预填值变化）自动弹出一次——引导式填写是本机制的目的；
+   * 用户关闭后可随时点「打开表单」重开，不会反复骚扰。
+   *
+   * <p>⚠️ 识别键**不能只用 taskId**：首次下发的表单没有 taskId（后端只在 submitInput
+   * 的返回里补它），早期实现因此判定为「无表单」→ 自动弹出根本不触发，
+   * 用户必须手动点「打开表单」，而那一路径又拿不到预填值。
+   * 改用 formKey + 预填值指纹：首次下发、重新下发、补全后重发都能正确触发一次。
+   */
+  const formKey = `${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`
   useEffect(() => {
-    if (form.taskId && openedFor.current !== form.taskId) {
-      openedFor.current = form.taskId
+    if (openedFor.current !== formKey) {
+      openedFor.current = formKey
       setOpen(true)
     }
-  }, [form.taskId])
+  }, [formKey])
+
+  /**
+   * 把预填值写进表单。
+   *
+   * <p>为什么不只靠 `initialValues`（实测）：antd 的 `initialValues` **只在 Form 挂载那一刻**
+   * 读取一次；而本弹窗原先设了 `destroyOnHidden`（关闭即卸载），且预填值往往在弹窗打开之后
+   * 才随表单一起到达。两者一叠加，预填值经常进不去控件 —— 用户看到日期框是空的却被标 `*` 必填，
+   * 提交时报「开始日期为必填」，正是反馈的那条现象。
+   *
+   * <p>对应措施三条，缺一不可：
+   * ① 本弹窗改用 `forceRender`（表单常驻，不再反复卸载重建）；
+   * ② 这里显式 `setFieldsValue`，表单规格一变就重写一次，与挂载时序无关；
+   * ③ 控件（见 {@link FormFieldControl}）从 form 实例显式读写值，不依赖 value 注入。
+   */
+  useEffect(() => {
+    antdForm.setFieldsValue(toInitialValues(form))
+  }, [formKey, antdForm, form])
 
   const prefilled = form.fields.filter((f) => {
     const v = form.values?.[f.name]
@@ -136,7 +161,7 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
         open={open}
         onOk={handleOk}
         onCancel={() => setOpen(false)}
-        destroyOnHidden
+        forceRender
         maskClosable={false}
         width={520}
         okText="提交并生成清单"
@@ -144,7 +169,20 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
         confirmLoading={submitting || Boolean(busy)}
         okButtonProps={{ disabled: busy }}
       >
-        <Form form={antdForm} layout="vertical" initialValues={toInitialValues(form)} requiredMark>
+        <Form
+          /*
+            key 不能只跟 taskId 走：**首次下发的表单没有 taskId**（后端只在 submitInput
+            的返回里补 taskId），而本弹窗设了 destroyOnHidden —— 关闭时 Form 卸载，
+            下次打开重新挂载。若 key 用 undefined，重挂载时 initialValues 可能来自旧对象，
+            用户会看到「日期是空的却被标必填」，提交时报「开始日期为必填」（实测复现）。
+            用「表单标识 + 预填值指纹」做 key：预填值一变就重建，保证 initialValues 永远是最新的。
+          */
+          key={`${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`}
+          form={antdForm}
+          layout="vertical"
+          initialValues={toInitialValues(form)}
+          requiredMark
+        >
           {form.fields.map((f) => (
             <Form.Item
               key={f.name}
@@ -161,26 +199,73 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
   )
 }
 
-/** 按 schema 类型渲染控件（select 允许自由输入自定义值） */
+/**
+ * 按 schema 类型渲染控件（select 允许自由输入自定义值）。
+ *
+ * <p><b>所有控件都从 form 实例显式读写值</b>，不依赖 `Form.Item` 自动注入。
+ * 原因（实测）：在「弹窗先挂载、预填值后到」的场景下，注入的 value 不一定被控件认作受控值，
+ * 会出现**表单 store 里有值、输入框却显示为空**——用户看到空框却被标 `*` 必填，
+ * 提交时报「开始日期为必填」。显式受控绕开该时序问题，也让预填值必然可见可改。
+ */
 function FormFieldControl({ field }: { field: AgentFormField }) {
   const { placeholder } = field
+  const { getFieldValue, setFieldValue } = Form.useFormInstance()
+  const v = getFieldValue(field.name)
+
+  /** 日期值归一：store 里可能是 dayjs、字符串或空 */
+  const asDayjs = () => (dayjs.isDayjs(v) ? v : v ? dayjs(String(v)) : null)
+
   switch (field.type) {
     case 'textarea':
-      return <Input.TextArea rows={3} placeholder={placeholder} maxLength={1000} />
+      return (
+        <Input.TextArea
+          rows={3}
+          placeholder={placeholder}
+          maxLength={1000}
+          value={v == null ? '' : String(v)}
+          onChange={(e) => setFieldValue(field.name, e.target.value)}
+        />
+      )
     case 'date':
-      return <DatePicker style={{ width: '100%' }} placeholder={placeholder ?? '选择日期'} />
-    case 'select':
+      return (
+        <DatePicker
+          style={{ width: '100%' }}
+          placeholder={placeholder ?? '选择日期'}
+          value={asDayjs()}
+          onChange={(d) => setFieldValue(field.name, d)}
+        />
+      )
+    case 'select': {
+      // mode="tags" 的值为数组；store 里可能是字符串或数组，统一成数组
+      const arr = Array.isArray(v) ? (v as string[]) : v ? [String(v)] : []
       return (
         <Select
           mode="tags"
           maxCount={1}
+          value={arr}
           options={(field.options ?? []).map((o) => ({ value: o, label: o }))}
           placeholder={placeholder ?? '选择或输入'}
+          onChange={(next) => setFieldValue(field.name, next)}
         />
       )
+    }
     case 'number':
-      return <InputNumber style={{ width: '100%' }} placeholder={placeholder} />
+      return (
+        <InputNumber
+          style={{ width: '100%' }}
+          placeholder={placeholder}
+          value={v == null || v === '' ? null : Number(v)}
+          onChange={(n) => setFieldValue(field.name, n)}
+        />
+      )
     default:
-      return <Input placeholder={placeholder} maxLength={200} />
+      return (
+        <Input
+          placeholder={placeholder}
+          maxLength={200}
+          value={v == null ? '' : String(v)}
+          onChange={(e) => setFieldValue(field.name, e.target.value)}
+        />
+      )
   }
 }

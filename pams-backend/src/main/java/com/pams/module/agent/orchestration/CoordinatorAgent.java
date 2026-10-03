@@ -96,12 +96,30 @@ public class CoordinatorAgent {
     }
 
     /**
+     * 一次协作执行的结果：Run（已落库）+ 内存里的黑板。
+     *
+     * <p>为什么两个都要返回：灵思需要黑板来组织回复，而基准服务需要 Run 的 id 去查步骤。
+     * 只在 Run 上存 {@code blackboardJson}、让调用方再反序列化一次是多余的往返。
+     */
+    public record RunOutcome(AgentRun run, Blackboard blackboard) {
+    }
+
+    /**
      * 执行一次协作 Run（C 批次：规划 → 逐步委派专家 → 落库）。
      *
      * @param ctx      工具执行上下文（含发起用户与权限）；为专家执行时以「发起用户身份」鉴权
      * @param streamId 可空；非空时推送协作事件（前端协作视图）
      */
     public AgentRun run(String goal, ToolContext ctx, Long conversationId, String mode, String streamId) {
+        return executeRun(start(goal, ctx, conversationId, mode), goal, ctx, streamId, mode).run();
+    }
+
+    /**
+     * 同 {@link #run}，但把黑板一并返回 —— 灵思需要黑板内容来组织给用户的回复。
+     * 与只取 Run 的版本分开，是为了不改变既有调用点与测试的签名。
+     */
+    public RunOutcome runWithBlackboard(String goal, ToolContext ctx, Long conversationId,
+                                        String mode, String streamId) {
         return executeRun(start(goal, ctx, conversationId, mode), goal, ctx, streamId, mode);
     }
 
@@ -111,8 +129,8 @@ public class CoordinatorAgent {
         return runService.startRun(conversationId, userId, goal, mode);
     }
 
-    /** 执行已创建的 Run：规划 → 委派专家 → 落库。 */
-    public AgentRun executeRun(AgentRun run, String goal, ToolContext ctx, String streamId, String mode) {
+    /** 执行已创建的 Run：规划 → 委派专家 → 落库，返回 Run 与黑板。 */
+    public RunOutcome executeRun(AgentRun run, String goal, ToolContext ctx, String streamId, String mode) {
         Blackboard bb = plan(goal);
         bb.setGoal(goal);
         bb.setMode(mode);
@@ -122,7 +140,8 @@ public class CoordinatorAgent {
 
         // 协调者：规划步骤
         emit(username, streamId, AgentStreamEvent.agentStart(
-                streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR, null, null));
+                streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR, null, null,
+                run.getConversationId()));
         long t0 = System.currentTimeMillis();
         AgentStep step = runService.recordStep(run.getId(), AgentCatalog.COORDINATOR,
                 runService.nextSeq(run.getId()), null,
@@ -131,13 +150,14 @@ public class CoordinatorAgent {
         long planDuration = System.currentTimeMillis() - t0;
         emit(username, streamId, AgentStreamEvent.agentEnd(
                 streamId, eventPublisher.nextSeq(streamId), AgentCatalog.COORDINATOR,
-                step.getId(), AgentStep.STATUS_SUCCESS, planDuration));
+                step.getId(), AgentStep.STATUS_SUCCESS, planDuration, run.getConversationId()));
         bb.addFinding(AgentCatalog.COORDINATOR, "已生成 " + bb.getPlan().size() + " 步协作计划", 1.0);
 
         // 逐步委派专家执行（P1 串行 / P2 并行 / P3 反思 / P4 委派）
         specialistExecutor.executePlan(run, bb, ctx, streamId, mode);
 
-        return runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
+        runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
+        return new RunOutcome(run, bb);
     }
 
     private void emit(String username, String streamId, AgentStreamEvent event) {

@@ -59,7 +59,7 @@ export default function Settings() {
           <Space direction="vertical" size={16} style={{ display: 'flex' }}>
             <GlassCard style={{ padding: 24 }}>
               <Typography.Title level={5} style={{ margin: '0 0 16px' }}>
-                <SettingOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
+                <SettingOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
                 系统信息
               </Typography.Title>
               <Descriptions column={1} size="middle" bordered>
@@ -71,7 +71,7 @@ export default function Settings() {
 
             <GlassCard style={{ padding: 24 }}>
               <Typography.Title level={5} style={{ margin: '0 0 16px' }}>
-                <SyncOutlined style={{ color: 'var(--color-red)', marginRight: 8 }} />
+                <SyncOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
                 存储与健康
               </Typography.Title>
               <Descriptions column={1} size="middle" bordered>
@@ -82,8 +82,8 @@ export default function Settings() {
                 </Descriptions.Item>
                 <Descriptions.Item label="系统健康">
                   <Space size={4}>
-                    <CheckCircleOutlined style={{ color: '#52A052' }} />
-                    <span style={{ color: '#52A052' }}>正常（pong）</span>
+                    <CheckCircleOutlined style={{ color: 'var(--ok)' }} />
+                    <span style={{ color: 'var(--ok)' }}>正常（pong）</span>
                   </Space>
                 </Descriptions.Item>
                 <Descriptions.Item label="服务时间">{dayjs().format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>

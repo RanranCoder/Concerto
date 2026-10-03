@@ -141,7 +141,7 @@ export default function SigninRosterList({ activityId, status, onStatusChange, r
           补签（{selectedIds.length}）
         </Button>
         {selectedIds.length > 0 && (
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>已勾选 {selectedIds.length} 行未签名单</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>已勾选 {selectedIds.length} 行未签名单</span>
         )}
       </Space>
       <GlassTable<SigninRosterVO>

@@ -1,27 +1,31 @@
-import { Tag } from 'antd'
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_COLOR } from '@/api/activityStatus'
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_TONE } from '@/api/activityStatus'
 
-/** 党员政治面貌（红系） */
-const PARTY_STATUS_MAP: Record<string, { text: string; color: string }> = {
-  共青团员: { text: '共青团员', color: '#FA8C16' },
-  入党申请人: { text: '入党申请人', color: '#FA8C16' },
-  入党积极分子: { text: '入党积极分子', color: '#F5222D' },
-  重点发展对象: { text: '重点发展对象', color: '#D4380D' },
-  预备党员: { text: '预备党员', color: '#CF1322' },
-  正式党员: { text: '正式党员', color: '#DE2910' },
-  群众: { text: '群众', color: '#8C8C8C' },
+/**
+ * 状态标签色调：浅底 + 同色文字 + 无边框（设计方案 §6.2）。
+ * 一律用 CSS 变量取值，明暗主题与组织主色都能自动跟随；
+ * 页面里不要再写实底彩色标签（太重，且主题切换会失真）。
+ */
+export type StatusTone = 'neutral' | 'brand' | 'processing' | 'success' | 'warning' | 'danger'
+
+/** 党员政治面貌 → 色调 */
+const PARTY_STATUS_MAP: Record<string, { text: string; tone: StatusTone }> = {
+  共青团员: { text: '共青团员', tone: 'warning' },
+  入党申请人: { text: '入党申请人', tone: 'warning' },
+  入党积极分子: { text: '入党积极分子', tone: 'processing' },
+  重点发展对象: { text: '重点发展对象', tone: 'processing' },
+  预备党员: { text: '预备党员', tone: 'brand' },
+  正式党员: { text: '正式党员', tone: 'brand' },
+  群众: { text: '群众', tone: 'neutral' },
 }
 
-/** 活动状态（Task 13 minor 去重：共享常量）。多一层展开保证 StatusTag 的 text/color 结构。 */
-const ACTIVITY_STATUS_MAP: Record<string, { text: string; color: string }> = Object.fromEntries(
-  Object.keys(ACTIVITY_STATUS_LABEL).map((key) => [
-    key,
-    { text: ACTIVITY_STATUS_LABEL[key], color: ACTIVITY_STATUS_COLOR[key] ?? '#8C8C8C' },
-  ]),
-)
-
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  ...ACTIVITY_STATUS_MAP,
+/** 活动状态（唯一来源在 api/activityStatus.ts）+ 党务状态 */
+const STATUS_MAP: Record<string, { text: string; tone: StatusTone }> = {
+  ...Object.fromEntries(
+    Object.keys(ACTIVITY_STATUS_LABEL).map((key) => [
+      key,
+      { text: ACTIVITY_STATUS_LABEL[key], tone: (ACTIVITY_STATUS_TONE[key] ?? 'neutral') as StatusTone },
+    ]),
+  ),
   ...PARTY_STATUS_MAP,
 }
 
@@ -31,6 +35,6 @@ interface StatusTagProps {
 
 export default function StatusTag({ status }: StatusTagProps) {
   const meta = STATUS_MAP[status]
-  if (!meta) return <Tag>{status}</Tag>
-  return <Tag color={meta.color}>{meta.text}</Tag>
+  if (!meta) return <span className="tone-tag tone-neutral">{status}</span>
+  return <span className={`tone-tag tone-${meta.tone}`}>{meta.text}</span>
 }

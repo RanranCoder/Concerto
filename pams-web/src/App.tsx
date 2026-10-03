@@ -2,22 +2,17 @@ import { useEffect, useState } from 'react'
 import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { RouterProvider } from 'react-router-dom'
-import { useThemeStore, getAntdTheme } from '@/stores/theme'
+import { useThemeStore } from '@/stores/theme'
 import { useOrgStore } from '@/stores/org'
+import { buildAntdTheme } from '@/styles/theme'
+import { installTokenCss } from '@/styles/tokens'
 import { router } from '@/router'
 import { FeedbackBridge } from '@/utils/feedback'
 
-/** #RRGGBB（或 #RGB）→ [r,g,b]，用于生成 rgba(...) 派生色。 */
-function hexToRgb(hex: string): [number, number, number] {
-  const raw = hex.replace('#', '')
-  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
-  const n = Number.parseInt(full, 16)
-  if (Number.isNaN(n)) return [222, 41, 16]
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
 function ThemeConfigProvider() {
   const [mode, setMode] = useState(useThemeStore.getState().mode)
+  // 主题主色由当前组织的 theme_json 驱动（stores/org.ts），未配置时回退院校主蓝
+  const primary = useOrgStore((s) => s.primaryColor)
 
   useEffect(() => {
     // persist 在 store 创建时同步 rehydrate 了 mode，但 data-theme 只在 setMode 里写入，
@@ -27,55 +22,14 @@ function ThemeConfigProvider() {
     return unsub
   }, [])
 
-  const antd = getAntdTheme(mode)
-  // 主题主色由当前组织的 theme_json 驱动（见 stores/org.ts），未配置时回退党建红
-  const primary = useOrgStore((s) => s.primaryColor)
-  const [pr, pg, pb] = hexToRgb(primary)
-  const rgba = (a: number) => `rgba(${pr},${pg},${pb},${a})`
+  // CSS 变量与 antd theme 同源重建：主色/明暗变化都能同时生效，
+  // 不会出现「antd 组件换了色、自定义 CSS 还是旧色」。见设计方案 §4.1
+  useEffect(() => {
+    installTokenCss(primary)
+  }, [primary])
 
   return (
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        algorithm: antd.algorithm,
-        cssVar: true,
-        hashed: false,
-        token: {
-          colorPrimary: primary,
-          colorInfo: '#2b6cb8',
-          colorLink: primary,
-          colorBgContainer: mode === 'dark' ? '#1b1e26' : '#f7f8fa',
-          colorBgElevated: mode === 'dark' ? '#23262f' : '#fbfcfe',
-          colorBorder: mode === 'dark' ? '#2e313a' : '#e4e8ef',
-          borderRadius: 12,
-          controlHeight: 30,
-          fontFamily: "'PingFang SC','Microsoft YaHei','HarmonyOS Sans SC','Noto Sans SC',sans-serif",
-        },
-        components: {
-          Menu: {
-            // 透明侧边栏上选中项高亮：用主题自适应红系 token，避免 antd 默认选中背景
-            // （hashed:false 下固定 #ffede6）在 dark 主题下退化成浅粉白块
-            itemSelectedBg: rgba(mode === 'dark' ? 0.28 : 0.14),
-            itemSelectedColor: primary,
-            itemColor: mode === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(17,24,39,0.92)',
-          },
-          Button: {
-            fontWeight: 500,
-          },
-          Form: {
-            itemMarginBottom: 16,
-            labelColor: mode === 'dark' ? 'rgba(240,244,250,0.55)' : 'rgba(17,24,39,0.6)',
-          },
-          Select: {
-            optionSelectedFontWeight: 600,
-            optionSelectedBg: rgba(0.14),
-          },
-          Input: {
-            activeShadow: `0 0 0 3px ${rgba(0.12)}`,
-          },
-        },
-      }}
-    >
+    <ConfigProvider locale={zhCN} theme={buildAntdTheme(mode, primary)}>
       <AntApp>
         <FeedbackBridge />
         <RouterProvider router={router} />

@@ -266,11 +266,11 @@ export default function CourseSchedulePage() {
   const heatColor = (free: number) => {
     const ratio = free / maxFree
     // 深色 = 空闲人数多
-    if (ratio >= 0.9) return 'var(--color-primary)'
-    if (ratio >= 0.7) return 'var(--color-primary-weak, #4096ff)'
-    if (ratio >= 0.5) return 'rgba(64,150,255,.45)'
-    if (ratio >= 0.3) return 'rgba(64,150,255,.22)'
-    return 'rgba(148,158,175,.12)'
+    if (ratio >= 0.9) return 'var(--brand)'
+    if (ratio >= 0.7) return 'color-mix(in srgb, var(--brand) 45%, transparent)'
+    if (ratio >= 0.5) return 'color-mix(in srgb, var(--brand) 32%, transparent)'
+    if (ratio >= 0.3) return 'color-mix(in srgb, var(--brand) 18%, transparent)'
+    return 'var(--soft)'
   }
 
   const editTab = (
@@ -279,7 +279,7 @@ export default function CourseSchedulePage() {
         <Space wrap>
           <span style={{ fontWeight: 600 }}>我的课程表</span>
           <Select value={semester} onChange={setSemester} style={{ width: 200 }} options={SEMESTERS.map((s) => ({ value: s, label: s }))} />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
             点击时间格标记有课（只能编辑自己的课程表）
           </span>
         </Space>
@@ -287,12 +287,12 @@ export default function CourseSchedulePage() {
       <GlassCard style={{ padding: 16 }}>
         <Spin spinning={loadingMine}>
           <div style={{ overflow: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 14, minWidth: 720 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>节次</th>
+                  <th style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>节次</th>
                   {WEEKDAYS.map((d) => (
-                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
+                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>
                       {d}
                     </th>
                   ))}
@@ -301,9 +301,9 @@ export default function CourseSchedulePage() {
               <tbody>
                 {(configs.length > 0 ? configs : Array.from({ length: 5 }, (_, i) => ({ id: i + 1, period: i + 1, label: `第${i * 2 + 1}-${i * 2 + 2}节`, startTime: null, endTime: null }))).map((cfg) => (
                   <tr key={cfg.period}>
-                    <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+                    <td style={{ padding: '6px 10px', border: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                       {cfg.label}
-                      {cfg.startTime ? <span style={{ fontSize: 11 }}> {cfg.startTime.slice(0, 5)}-{cfg.endTime?.slice(0, 5)}</span> : null}
+                      {cfg.startTime ? <span style={{ fontSize: 13 }}> {cfg.startTime.slice(0, 5)}-{cfg.endTime?.slice(0, 5)}</span> : null}
                     </td>
                     {WEEKDAYS.map((_, di) => {
                       const day = di + 1
@@ -315,11 +315,11 @@ export default function CourseSchedulePage() {
                           onClick={() => toggleCell(day, cfg.period)}
                           style={{
                             padding: '6px 10px',
-                            border: '1px solid var(--color-border)',
+                            border: '1px solid var(--border)',
                             textAlign: 'center',
                             cursor: 'pointer',
-                            background: has ? 'var(--color-primary)' : 'transparent',
-                            color: has ? '#fff' : 'var(--color-text-secondary)',
+                            background: has ? 'var(--brand)' : 'transparent',
+                            color: has ? '#fff' : 'var(--text-secondary)',
                             minWidth: 80,
                           }}
                         >
@@ -336,7 +336,7 @@ export default function CourseSchedulePage() {
             <Button type="primary" onClick={saveMine} loading={savingMine}>
               保存课程表
             </Button>
-            <span style={{ marginLeft: 12, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+            <span style={{ marginLeft: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
               已标记 {myMatrix.size} 个时间格
             </span>
           </div>
@@ -378,19 +378,19 @@ export default function CourseSchedulePage() {
         </GlassCard>
       ) : (
         <GlassCard style={{ padding: 16 }}>
-          <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginBottom: 12, fontSize: 14, color: 'var(--text-secondary)' }}>
             参与 {analysis.users.length} 人 · {analysis.semester || '未选学期'}
             <Tag style={{ marginLeft: 8 }} color="blue">
               AI 推荐：{analysis.optimal[0] ? `${WEEKDAYS[analysis.optimal[0].dayOfWeek - 1]} ${analysis.optimal[0].label}（${analysis.optimal[0].freeCount}/${analysis.users.length} 人空闲）` : '-'}
             </Tag>
           </div>
           <div style={{ overflow: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 14, minWidth: 720 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>节次</th>
+                  <th style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>节次</th>
                   {WEEKDAYS.map((d) => (
-                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
+                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>
                       {d}
                     </th>
                   ))}
@@ -399,7 +399,7 @@ export default function CourseSchedulePage() {
               <tbody>
                 {analysis.periods.map((cfg) => (
                   <tr key={cfg.period}>
-                    <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+                    <td style={{ padding: '6px 10px', border: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                       {cfg.label}
                     </td>
                     {WEEKDAYS.map((_, di) => {
@@ -411,10 +411,10 @@ export default function CourseSchedulePage() {
                           <td
                             style={{
                               padding: '10px',
-                              border: '1px solid var(--color-border)',
+                              border: '1px solid var(--border)',
                               textAlign: 'center',
                               background: heatColor(free),
-                              color: free / maxFree >= 0.9 ? '#fff' : 'var(--color-text)',
+                              color: free / maxFree >= 0.9 ? '#fff' : 'var(--text-primary)',
                               fontWeight: allFree ? 700 : 400,
                               minWidth: 80,
                             }}
@@ -429,7 +429,7 @@ export default function CourseSchedulePage() {
               </tbody>
             </table>
           </div>
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
             图例：
             {[0.1, 0.3, 0.5, 0.7, 1].map((r) => (
               <span key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -443,7 +443,7 @@ export default function CourseSchedulePage() {
             <div style={{ marginTop: 16 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>最优时间段推荐</div>
               {analysis.optimal.slice(0, 5).map((o, i) => (
-                <div key={i} style={{ padding: '6px 0', borderBottom: '1px dashed var(--color-border)', fontSize: 13 }}>
+                <div key={i} style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)', fontSize: 14 }}>
                   <span style={{ marginRight: 8 }}>{i + 1}.</span>
                   {WEEKDAYS[o.dayOfWeek - 1]} {o.label} —— 空闲 {o.freeCount}/{analysis.users.length} 人
                   {o.allFree && <Tag color="red" style={{ marginLeft: 8 }}>全部到齐</Tag>}
@@ -502,7 +502,7 @@ export default function CourseSchedulePage() {
           )}
         </Space>
         {fileList.length > 0 && (
-          <div style={{ marginTop: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <div style={{ marginTop: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             已选 {fileList.length} 个文件，文件名为「姓名-班级-班级课表.xlsx」时自动识别姓名
           </div>
         )}
@@ -510,27 +510,27 @@ export default function CourseSchedulePage() {
 
       {importResult && (
         <GlassCard style={{ padding: 16 }}>
-          <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+          <div style={{ marginBottom: 12, fontSize: 14, color: 'var(--text-secondary)' }}>
             {importResult.deptName} · {importResult.semester} · 成功 {importResult.successCount}/{importResult.totalFiles}
             {importResult.failed.length > 0 && (
-              <span style={{ color: 'var(--color-red)', marginLeft: 8 }}>
+              <span style={{ color: 'var(--brand)', marginLeft: 8 }}>
                 失败 {importResult.failed.length}：
                 {importResult.failed.map((f) => `${f.fileName}（${f.reason}）`).join('；')}
               </span>
             )}
           </div>
           {importResult.warnings.map((w) => (
-            <div key={w} style={{ fontSize: 12, color: '#d48806', marginBottom: 4 }}>
+            <div key={w} style={{ fontSize: 13, color: 'var(--warn)', marginBottom: 4 }}>
               {w}
             </div>
           ))}
           <div style={{ overflow: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 14, minWidth: 720 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>节次</th>
+                  <th style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>节次</th>
                   {WEEKDAYS.slice(0, 5).map((d) => (
-                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
+                    <th key={d} style={{ padding: '6px 10px', border: '1px solid var(--border)', background: 'var(--soft)' }}>
                       {d}
                     </th>
                   ))}
@@ -539,11 +539,11 @@ export default function CourseSchedulePage() {
               <tbody>
                 {importResult.rows.map((row) => (
                   <tr key={row.period}>
-                    <td style={{ padding: '6px 10px', border: '1px solid var(--color-border)', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+                    <td style={{ padding: '6px 10px', border: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                       {row.label}
                     </td>
                     {[1, 2, 3, 4, 5].map((day) => (
-                      <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--color-border)', verticalAlign: 'top', minWidth: 140 }}>
+                      <td key={day} style={{ padding: '6px 10px', border: '1px solid var(--border)', verticalAlign: 'top', minWidth: 140 }}>
                         {(row.days[String(day)] ?? []).map((c) => (
                           <div key={c.name}>
                             {c.name}（{c.freeWeeks}）
@@ -568,8 +568,8 @@ export default function CourseSchedulePage() {
         description="录入个人课程表，AI 计算共同空闲时间，生成热力图推荐最佳会议/排班时段"
         extra={
           <Space>
-            <CalendarOutlined style={{ color: 'var(--color-text-secondary)' }} />
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+            <CalendarOutlined style={{ color: 'var(--text-secondary)' }} />
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
               当前用户：{user?.realName}
             </span>
           </Space>

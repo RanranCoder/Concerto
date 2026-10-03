@@ -14,12 +14,23 @@ import type {
 } from '@/api/agent'
 import * as api from '@/api/agent'
 
+/** 协作过程事件：需要按会话归属过滤的那几类（见 applyStreamEvent） */
+const COLLAB_EVENT_TYPES = new Set([
+  'COLLAB_DECISION', 'AGENT_START', 'AGENT_END', 'AGENT_DELEGATE', 'REVIEW_RESULT',
+])
+
 /** 过程区时间轴的一行（由 AgentStreamEvent 归并而成） */
 export interface TimelineItem {
   /** TOOL_START 先入，TOOL_END 到位后合并为 completed */
   key: string
   seq: number
-  kind: 'thinking' | 'tool' | 'plan' | 'error' | 'aborted'
+  /**
+   * 协作内聚后新增两类行：
+   *  - `agent`：某个专家 Agent 的开始/结束（协作时才出现，单 Agent 轮次不会有）
+   *  - `review`：审查结论（PASS / REVISE）
+   *  - `collab`：本次为何升级为协作的判定说明
+   */
+  kind: 'thinking' | 'tool' | 'plan' | 'error' | 'aborted' | 'agent' | 'review' | 'collab'
   tool?: string
   label: string
   status?: string
@@ -28,6 +39,11 @@ export interface TimelineItem {
   note?: string
   completed: boolean
   ts: number
+  /** kind==='agent'：专家标识（retrieval / writing …），用于头像与身份色 */
+  agent?: string
+  /** kind==='review'：裁决结论 PASS / REVISE 与理由 */
+  verdict?: string
+  reason?: string
 }
 
 /** 结果区的一条助手消息 */
@@ -223,6 +239,17 @@ interface AgentState {
   setMode: (m: AgentMode) => Promise<void>
 
   /**
+   * 自动协作开关（协作内聚后新增，默认开）。
+   *
+   * 标准模式下由后端判定「这次要不要派专家团队」；这个开关是用户的**否决权**——
+   * 判定可能出错（简单问题被升级成协作会变慢），所以留一个能立刻关掉的入口，
+   * 而不是让用户只能忍受。它只在 standard 档位有意义：readonly 不许写、
+   * kb 走的是完全不同的问答流水线，两者都不会升级为协作。
+   */
+  autoCollab: boolean
+  setAutoCollab: (v: boolean) => void
+
+  /**
    * 待附加的上下文引用（UI v2 输入框 `+`）。
    * 放 store 而不是 Composer 本地：发送时要一起带走，且「删除上一条消息里的引用」
    * 这类操作不该依赖组件实例的生命周期。
@@ -359,6 +386,70 @@ function mergeTimeline(list: TimelineItem[], e: AgentStreamEvent): TimelineItem[
           ts: e.ts,
         },
       ]
+
+    /* ===== 多 Agent 协作事件（标准模式自动升级时出现）===== */
+
+    case 'COLLAB_DECISION':
+      // 判定为协作时先给一行说明，用户才知道「为什么这次不只一个 Agent」
+      return [
+        ...list,
+        {
+          key: `collab-${e.seq}`,
+          seq: e.seq,
+          kind: 'collab',
+          label: String(p.reason ?? '这个任务需要多个专家协作'),
+          status: String(p.mode ?? ''),
+          completed: true,
+          ts: e.ts,
+        },
+      ]
+
+    case 'AGENT_START':
+      return [
+        ...list,
+        {
+          key: `agent-${e.seq}`,
+          seq: e.seq,
+          kind: 'agent',
+          agent: String(p.agent ?? ''),
+          label: String(p.displayName ?? p.agent ?? ''),
+          completed: false,
+          ts: e.ts,
+        },
+      ]
+
+    case 'AGENT_END': {
+      const agent = String(p.agent ?? '')
+      // 与 TOOL_END 同样的配对策略：从后往前找最近的、同名且未完成的专家行
+      const idx = [...list].reverse().findIndex((x) => x.kind === 'agent' && x.agent === agent && !x.completed)
+      if (idx === -1) return list
+      const realIdx = list.length - 1 - idx
+      const next = [...list]
+      next[realIdx] = {
+        ...next[realIdx],
+        status: String(p.status ?? ''),
+        durationMs: typeof p.durationMs === 'number' ? p.durationMs : undefined,
+        completed: true,
+      }
+      return next
+    }
+
+    case 'REVIEW_RESULT':
+      return [
+        ...list,
+        {
+          key: `review-${e.seq}`,
+          seq: e.seq,
+          kind: 'review',
+          agent: 'reviewer',
+          label: String(p.verdict ?? ''),
+          verdict: String(p.verdict ?? ''),
+          reason: String(p.reason ?? ''),
+          completed: true,
+          ts: e.ts,
+        },
+      ]
+
     default:
       return list
   }
@@ -411,6 +502,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     // 可确认性由卡片自己按 readonly 禁用（见 LingsiActionCard）。
     set({ mode: m })
   },
+
+  autoCollab: true,
+  setAutoCollab: (v) => set({ autoCollab: v }),
 
   addRef: (r) =>
     set((s) => {
@@ -556,7 +650,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     }))
 
     try {
-      const res = await api.agentChat(content, get().currentConversationId, get().mode, refs)
+      const res = await api.agentChat(
+        content, get().currentConversationId, get().mode, refs, get().autoCollab,
+      )
       set((s) => {
         // 用真实结果替换最后那条占位
         const list = [...s.outcomes]
@@ -643,6 +739,22 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
 
   applyStreamEvent: (e) => {
     set((s) => {
+      /*
+        协作事件的归属校验（C 批次）。
+        过程事件按**用户**广播（后端 publish(username, ...)），所以别人/后台发起的协作会把
+        AGENT_START 之类事件推到这个用户身上。若不加判断，这些事件会串进当前正在看的会话时间轴。
+        判定依据用 conversationId 而不是 streamId：前者在发请求时就知道，
+        后者要等 REST 返回，而事件可能先到（两者时序不保证）。
+        后端已在这几类事件的 payload 上统一带 conversationId（见 AgentStreamEvent.withConversation）。
+      */
+      if (COLLAB_EVENT_TYPES.has(e.type)) {
+        const evConv = e.payload?.['conversationId']
+        if (evConv != null && s.currentConversationId != null
+            && Number(evConv) !== Number(s.currentConversationId)) {
+          return {}
+        }
+      }
+
       const next: Partial<AgentState> = {
         timeline: mergeTimeline(s.timeline, e),
       }

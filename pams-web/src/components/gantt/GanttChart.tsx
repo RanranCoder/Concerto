@@ -19,7 +19,7 @@ const BAR_H = 26
 
 // 黑白灰层级（按部门名散列取灰阶），关键任务（里程碑）红色描边
 function barFill(deptName?: string): string {
-  if (!deptName) return 'rgba(130, 140, 155, 0.55)'
+  if (!deptName) return 'var(--text-secondary)'
   let h = 0
   for (let i = 0; i < deptName.length; i++) h = (h * 31 + deptName.charCodeAt(i)) % 360
   const v = 120 + (h % 5) * 18 // 120-192 灰阶
@@ -122,16 +122,16 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             y={HEADER_H}
             width={pxPerDay}
             height={tasks.length * ROW_HEIGHT}
-            fill={d % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'}
+            fill={d % 2 === 0 ? 'var(--soft)' : 'transparent'}
           />
         ))}
 
         {/* 顶部时间轴：月刻度 */}
-        <rect x={0} y={0} width={width} height={HEADER_H} fill="rgba(255,255,255,0.05)" />
+        <rect x={0} y={0} width={width} height={HEADER_H} fill="var(--soft)" />
         {months.map((m) => (
           <g key={m.label}>
-            <line x1={m.x} y1={0} x2={m.x} y2={HEADER_H} stroke="rgba(140,150,165,0.35)" strokeDasharray="3 3" />
-            <text x={m.x + 4} y={20} fill="var(--color-text-secondary)" fontSize={11}>
+            <line x1={m.x} y1={0} x2={m.x} y2={HEADER_H} stroke="var(--border)" strokeDasharray="3 3" />
+            <text x={m.x + 4} y={20} fill="var(--text-secondary)" fontSize={11}>
               {m.label}
             </text>
           </g>
@@ -141,7 +141,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             key={d}
             x={LABEL_W + d * pxPerDay + pxPerDay / 2}
             y={HEADER_H - 8}
-            fill="rgba(140,150,165,0.55)"
+            fill="var(--text-tertiary)"
             fontSize={10}
             textAnchor="middle"
           >
@@ -155,11 +155,11 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
           y1={0}
           x2={todayX}
           y2={height}
-          stroke="var(--color-red)"
+          stroke="var(--brand)"
           strokeWidth={1.5}
           strokeDasharray="4 3"
         />
-        <text x={todayX - 6} y={HEADER_H - 14} fill="var(--color-red)" fontSize={10} textAnchor="end">
+        <text x={todayX - 6} y={HEADER_H - 14} fill="var(--brand)" fontSize={10} textAnchor="end">
           今日
         </text>
 
@@ -178,14 +178,14 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
               <path
                 d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
                 fill="none"
-                stroke="rgba(150,160,175,0.6)"
+                stroke="var(--text-disabled)"
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
               />
               <path
                 d={`M ${x2 - 5} ${y2 - 4} L ${x2} ${y2} L ${x2 - 5} ${y2 + 4}`}
                 fill="none"
-                stroke="rgba(150,160,175,0.8)"
+                stroke="var(--text-disabled)"
                 strokeWidth={1.5}
               />
             </g>
@@ -202,7 +202,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             onClick={() => (onEdit ? onEdit(t) : setEditing(t))}
           >
             <g clipPath="url(#label-clip)">
-              <text x={8} y={y + 16} fill="var(--color-text)" fontSize={12} style={{ userSelect: 'none' }}>
+              <text x={8} y={y + 16} fill="var(--text-primary)" fontSize={12} style={{ userSelect: 'none' }}>
                 {t.name}
               </text>
             </g>
@@ -213,7 +213,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
               height={BAR_H}
               rx={6}
               fill={barFill(t.deptName)}
-              stroke={t.isMilestone ? 'var(--color-red)' : 'transparent'}
+              stroke={t.isMilestone ? 'var(--brand)' : 'transparent'}
               strokeWidth={t.isMilestone ? 2 : 0}
               strokeDasharray={t.isMilestone ? '5 3' : undefined}
             />
@@ -225,7 +225,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
                 width={Math.max((px.width * (t.progress ?? 0)) / 100, 0)}
                 height={BAR_H}
                 rx={6}
-                fill="var(--color-red)"
+                fill="var(--brand)"
                 opacity={0.75}
               />
             )}
@@ -237,7 +237,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
                 width={12}
                 height={12}
                 rx={1.5}
-                fill="var(--color-red)"
+                fill="var(--brand)"
                 transform={`rotate(45 ${px.left + px.width / 2} ${y + BAR_H / 2})`}
               />
             )}
@@ -269,7 +269,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
         {editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>任务名称</div>
+              <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>任务名称</div>
               <Input
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
@@ -278,7 +278,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>开始日期</div>
+                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>开始日期</div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={dayjs(editing.startDate)}
@@ -286,7 +286,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>结束日期</div>
+                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>结束日期</div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={dayjs(editing.endDate)}
@@ -295,7 +295,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
               </div>
             </div>
             <div>
-              <div style={{ marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+              <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>
                 进度：{editing.progress ?? 0}%
               </div>
               <Slider

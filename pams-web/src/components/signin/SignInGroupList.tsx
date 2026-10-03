@@ -153,13 +153,13 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <FolderOutlined style={{ color: 'var(--color-primary)' }} />
+          <FolderOutlined style={{ color: 'var(--brand)' }} />
         )}
         <span style={{ fontWeight: 600 }}>{g.groupName}</span>
         <Tag color="blue">{g.count} 人</Tag>
         <Tag color="green">已签 {g.signedCount}</Tag>
         <Tag color="orange">未签 {g.unsignedCount}</Tag>
-        <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
           上传于 {g.createdAt ? new Date(g.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
         </span>
         {!batchMode && (
@@ -184,7 +184,7 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
       <div>
         <div style={{ marginBottom: 8 }}>
           <Space wrap size={8}>
-            <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>选择要删除的人员：</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>选择要删除的人员：</span>
             {(personSelection[g.id] ?? []).length > 0 && (
               <Popconfirm
                 title={`确认删除选中的 ${(personSelection[g.id] ?? []).length} 名人员？`}
@@ -211,11 +211,11 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
                   alignItems: 'center',
                   gap: 4,
                   padding: '2px 8px',
-                  border: '1px solid var(--color-border)',
+                  border: '1px solid var(--border)',
                   borderRadius: 6,
-                  background: checked ? 'rgba(245,34,45,.08)' : 'transparent',
+                  background: checked ? 'var(--brand-soft)' : 'transparent',
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 13,
                 }}
                 onClick={() => {
                   setPersonSelection((prev) => {
@@ -227,7 +227,7 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
               >
                 <Checkbox checked={checked} style={{ marginRight: 2 }} />
                 <span>{p.fields['姓名'] ?? '-'}</span>
-                <span style={{ color: 'var(--color-text-secondary)' }}>{p.fields['学号'] ?? ''}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{p.fields['学号'] ?? ''}</span>
                 {p.signed ? <Tag color="green" style={{ margin: 0 }}>已签</Tag> : <Tag color="red" style={{ margin: 0 }}>未签</Tag>}
                 <Popconfirm title="确认删除该人员？" onConfirm={() => handleDeletePerson(p.id)} okText="删除" cancelText="取消">
                   <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: 0, height: 20 }} />
@@ -252,7 +252,7 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
           prefix={<SearchOutlined />}
           onSearch={(v) => setKeyword(v)}
         />
-        <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
           共 {summary?.groupCount ?? 0} 组 · {summary?.total ?? 0} 人（已签 {summary?.signed ?? 0} / 未签 {summary?.unsigned ?? 0}）
         </span>
         {isMinisterOrAbove && (
@@ -294,11 +294,11 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
               alignItems: 'center',
               gap: 6,
               padding: '6px 16px',
-              border: '1px dashed var(--color-primary)',
+              border: '1px dashed var(--brand)',
               borderRadius: 8,
-              color: 'var(--color-primary)',
+              color: 'var(--brand)',
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 14,
             }}
           >
             <UploadOutlined />
@@ -315,7 +315,7 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
               }}
             />
           </label>
-          <span style={{ marginLeft: 8, color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <span style={{ marginLeft: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             支持 .xlsx / .xls，上传后自动按文件名分组
           </span>
         </div>

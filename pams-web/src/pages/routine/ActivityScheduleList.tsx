@@ -37,11 +37,11 @@ const STATUS_TEXT: Record<string, { text: string; color: string }> = {
 const thStyle: CSSProperties = {
   textAlign: 'left',
   padding: '6px 8px',
-  borderBottom: '1px solid var(--color-border)',
-  color: 'var(--color-text-secondary)',
+  borderBottom: '1px solid var(--border)',
+  color: 'var(--text-secondary)',
   fontWeight: 600,
 }
-const tdStyle: CSSProperties = { padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }
+const tdStyle: CSSProperties = { padding: '6px 8px', borderBottom: '1px solid var(--border)' }
 
 const SIGN_PAGE_SIZE = 8
 
@@ -331,10 +331,10 @@ export default function ActivityScheduleList() {
             onChange={setSelActivityId}
           />
           {!selActivityId ? (
-            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 20 }}>请先选择活动</div>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>请先选择活动</div>
           ) : closed ? (
             <div style={{ textAlign: 'center', padding: 16 }}>
-              <div style={{ color: 'var(--color-red)', marginBottom: 12 }}>签到已关闭，扫码已停止</div>
+              <div style={{ color: 'var(--brand)', marginBottom: 12 }}>签到已关闭，扫码已停止</div>
               <Button type="primary" icon={<PlayCircleOutlined />} loading={qrLoading} onClick={() => refreshQr(selActivityId)}>
                 重新开启签到
               </Button>
@@ -345,7 +345,7 @@ export default function ActivityScheduleList() {
                 {/* 用前端 origin 拼扫码链接，避免后端拼出的 host（vite changeOrigin）指向 8080 而非 SPA */}
                 <QRCodeSVG value={`${window.location.origin}/signin/${qr.token}`} size={170} level="M" />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 8 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
                 有效期至 {qr.expiresAt ? new Date(qr.expiresAt).toLocaleTimeString() : '-'}
               </div>
               <Space style={{ marginTop: 10 }} wrap>
@@ -368,7 +368,7 @@ export default function ActivityScheduleList() {
         <GlassCard style={{ padding: 16, flex: 1.6, minWidth: 380 }}>
           <div style={{ fontWeight: 600, marginBottom: 12 }}>签到记录</div>
           {!selActivityId ? (
-            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 20 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>
               选择左侧活动后显示其签到记录
             </div>
           ) : signLoading && signRows.length === 0 ? (
@@ -376,10 +376,10 @@ export default function ActivityScheduleList() {
               <Spin />
             </div>
           ) : signRows.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 20 }}>该活动暂无签到记录</div>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>该活动暂无签到记录</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, whiteSpace: 'nowrap' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr>
                     <th style={thStyle}>姓名</th>
@@ -440,7 +440,7 @@ export default function ActivityScheduleList() {
 
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space wrap>
-          <span style={{ color: 'var(--color-text-secondary)' }}>状态</span>
+          <span style={{ color: 'var(--text-secondary)' }}>状态</span>
           <Select
             placeholder="全部状态"
             allowClear
@@ -452,7 +452,7 @@ export default function ActivityScheduleList() {
           <Button type="primary" icon={<ThunderboltOutlined />} onClick={doPublishAll}>
             一键发布
           </Button>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
             {selActivityId ? '将发布所选活动的全部草稿排班' : '将发布全部活动下的草稿排班'}
           </span>
         </Space>
@@ -460,7 +460,7 @@ export default function ActivityScheduleList() {
 
       <GlassCard style={{ padding: 16 }}>
         {list.length === 0 && !loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 32 }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>
             暂无活动排班，点击右上角「一键生成排班」
           </div>
         ) : (
@@ -476,16 +476,16 @@ export default function ActivityScheduleList() {
                     alignItems: 'center',
                     gap: 12,
                     padding: 12,
-                    borderBottom: '1px solid var(--color-border)',
+                    borderBottom: '1px solid var(--border)',
                     flexWrap: 'wrap',
                   }}
                 >
                   <span style={{ fontWeight: 500, minWidth: 110 }}>{s.scheduleDate ?? '-'}</span>
-                  <span style={{ color: 'var(--color-text)', width: 130 }}>
+                  <span style={{ color: 'var(--text-primary)', width: 130 }}>
                     {s.startTime ? s.startTime.slice(0, 5) : ''}-{s.endTime ? s.endTime.slice(0, 5) : ''}
                   </span>
                   <Tag color={st.color}>{st.text}</Tag>
-                  <span style={{ color: 'var(--color-text-secondary)', flex: 1 }}>{names || '无人员'}</span>
+                  <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{names || '无人员'}</span>
                   <Space>
                     {s.activityId && (
                       <Button
@@ -592,19 +592,19 @@ export default function ActivityScheduleList() {
           </Button>
         </Form>
         {preview && (
-          <div style={{ marginTop: 16, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8, padding: 12 }}>
+          <div style={{ marginTop: 16, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>生成结果预览</div>
-            {preview.length === 0 && <div style={{ color: 'var(--color-text-secondary)' }}>无课表无匹配或未上传，未生成任何排班</div>}
+            {preview.length === 0 && <div style={{ color: 'var(--text-secondary)' }}>无课表无匹配或未上传，未生成任何排班</div>}
             {preview.map((p) => (
               <div key={p.date} style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 500, fontSize: 13 }}>{p.date}：共命中 {p.count} 人</div>
+                <div style={{ fontWeight: 500, fontSize: 14 }}>{p.date}：共命中 {p.count} 人</div>
                 {(p.slots ?? []).map((slot, i) => (
-                  <div key={`${p.date}-${i}`} style={{ marginLeft: 12, fontSize: 13, marginBottom: 4 }}>
-                    <span style={{ color: 'var(--color-red)', fontWeight: 500 }}>
+                  <div key={`${p.date}-${i}`} style={{ marginLeft: 12, fontSize: 14, marginBottom: 4 }}>
+                    <span style={{ color: 'var(--brand)', fontWeight: 500 }}>
                       {slot.label || `第${slot.period}节`}
                     </span>
                     {slot.startTime ? ` ${(slot.startTime ?? '').slice(0, 5)}-${(slot.endTime ?? '').slice(0, 5)}` : ''}
-                    <span style={{ marginLeft: 8, color: 'var(--color-text-secondary)' }}>
+                    <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>
                       {slot.count} 人：{slot.persons.map((x) => x.name).join('、')}
                     </span>
                   </div>
@@ -631,7 +631,7 @@ export default function ActivityScheduleList() {
       >
         <Form form={manualForm} layout="vertical">
           {!manualEditing && (
-            <div style={{ color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: 12 }}>
               手动新增建议从活动详情页创建场次；此处仅按所选活动新增草稿排班。
             </div>
           )}

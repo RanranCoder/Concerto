@@ -119,7 +119,7 @@ export default function PermissionManage() {
       <div style={{ display: 'flex', gap: 16 }}>
         {/* 左侧角色列表 */}
         <GlassCard style={{ padding: 12, width: 200, flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, padding: '4px 8px', marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, padding: '4px 8px', marginBottom: 8, color: 'var(--text-secondary)' }}>
             角色列表
           </div>
           <Spin spinning={loading}>
@@ -132,14 +132,14 @@ export default function PermissionManage() {
                     padding: '8px 12px',
                     borderRadius: 8,
                     cursor: 'pointer',
-                    fontSize: 13,
-                    background: currentRole === r.role ? 'var(--color-primary)' : 'transparent',
-                    color: currentRole === r.role ? '#fff' : 'var(--color-text)',
+                    fontSize: 14,
+                    background: currentRole === r.role ? 'var(--brand)' : 'transparent',
+                    color: currentRole === r.role ? '#fff' : 'var(--text-primary)',
                     transition: 'all .15s',
                   }}
                 >
                   {ROLE_LABEL[r.role] ?? r.role}
-                  <span style={{ float: 'right', fontSize: 11, opacity: 0.7 }}>{r.permissions.length} 项</span>
+                  <span style={{ float: 'right', fontSize: 13, opacity: 0.7 }}>{r.permissions.length} 项</span>
                 </div>
               ))}
             </div>
@@ -151,7 +151,7 @@ export default function PermissionManage() {
           <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontWeight: 600 }}>
               {ROLE_LABEL[currentRole] ?? currentRole} 的权限
-              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 400, color: 'var(--text-secondary)' }}>
                 勾选 {checkedCodes.filter((c) => !c.startsWith('mod-')).length} 项
               </span>
             </span>

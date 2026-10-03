@@ -281,18 +281,18 @@ export default function GroupChatList() {
           </Space>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
           <div>
             <Tag color="blue">{categoryNameOf(c.categoryId)}</Tag>
             {c.departments?.map((d) => (
               <Tag key={d}>{d}</Tag>
             ))}
           </div>
-          <div style={{ color: 'var(--color-text-secondary)' }}>
+          <div style={{ color: 'var(--text-secondary)' }}>
             负责人：{ownerNameOf(c.ownerId)}
           </div>
-          {c.activityName && <div style={{ color: 'var(--color-text-secondary)' }}>关联活动：{c.activityName}</div>}
-          {c.remark && <div style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>备注：{c.remark}</div>}
+          {c.activityName && <div style={{ color: 'var(--text-secondary)' }}>关联活动：{c.activityName}</div>}
+          {c.remark && <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>备注：{c.remark}</div>}
           {c.qrCodeUrl && (
             <Tooltip title="点击查看群二维码">
               <a href={c.qrCodeUrl} target="_blank" rel="noreferrer">
@@ -433,11 +433,11 @@ export default function GroupChatList() {
           {filtered.length === 0 ? (
             <Empty description="暂无群聊" />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--color-text-secondary)' }}>
+                <tr style={{ textAlign: 'left', color: 'var(--text-secondary)' }}>
                   {columns.map((c) => (
-                    <th key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)' }}>
+                    <th key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
                       {c.title}
                     </th>
                   ))}
@@ -457,7 +457,7 @@ export default function GroupChatList() {
                         cell = null
                       }
                       return (
-                        <td key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)' }}>
+                        <td key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
                           {cell}
                         </td>
                       )
@@ -540,11 +540,11 @@ export default function GroupChatList() {
                   alignItems: 'center',
                   gap: 6,
                   padding: '8px 16px',
-                  border: '1px dashed var(--color-primary)',
+                  border: '1px dashed var(--brand)',
                   borderRadius: 8,
-                  color: 'var(--color-primary)',
+                  color: 'var(--brand)',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  fontSize: 14,
                 }}
               >
                 <QrcodeOutlined /> {qrUrl ? '重新上传' : '上传二维码图片（可选）'}
@@ -560,7 +560,7 @@ export default function GroupChatList() {
                 />
               </label>
               {qrUrl && (
-                <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
                   已上传
                 </span>
               )}
@@ -592,7 +592,7 @@ export default function GroupChatList() {
         </Space>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {categories.map((c) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
               <span style={{ flex: 1 }}>{c.name}</span>
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleRenameCategory(c.id, c.name)} />
               <Popconfirm title="删除该分类？" onConfirm={() => handleDeleteCategory(c.id)} okText="删除" cancelText="取消">

@@ -30,15 +30,15 @@ function effWeekday(s: ScheduleVO): number | undefined {
 const thStyle: CSSProperties = {
   padding: 10,
   textAlign: 'center',
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-bg-2)',
+  border: '1px solid var(--border)',
+  background: 'var(--soft)',
   fontWeight: 600,
-  color: 'var(--color-text-secondary)',
+  color: 'var(--text-secondary)',
 }
 const tdStyle: CSSProperties = {
   padding: 10,
   verticalAlign: 'top',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   minWidth: 150,
   minHeight: 44,
 }
@@ -87,7 +87,7 @@ export default function MyScheduleList() {
       <PageHeader title="我的排班" description="当前账号被排到的值班/活动班次（行为周次，列为节次）" />
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space wrap>
-          <span style={{ color: 'var(--color-text-secondary)' }}>活动名称</span>
+          <span style={{ color: 'var(--text-secondary)' }}>活动名称</span>
           <Select
             placeholder="全部活动"
             allowClear
@@ -98,7 +98,7 @@ export default function MyScheduleList() {
             value={activityId}
             onChange={setActivityId}
           />
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>共被排 {filtered.length} 个班次</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>共被排 {filtered.length} 个班次</span>
         </Space>
       </GlassCard>
       <GlassCard style={{ padding: 16 }}>
@@ -127,10 +127,10 @@ export default function MyScheduleList() {
                         return (
                           <td key={p.key} style={tdStyle}>
                             {shifts.length === 0 ? (
-                              <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                              <span style={{ color: 'var(--text-tertiary)' }}>—</span>
                             ) : (
                               shifts.map((s) => (
-                                <div key={s.id} style={{ paddingBottom: 6, marginBottom: 6, borderBottom: '1px dashed var(--color-border)' }}>
+                                <div key={s.id} style={{ paddingBottom: 6, marginBottom: 6, borderBottom: '1px dashed var(--border)' }}>
                                   <Space size={4} wrap>
                                     <span style={{ fontWeight: 500 }}>
                                       {effWeekday(s) != null ? WEEKDAY_NAMES[effWeekday(s)! - 1] : ''}
@@ -138,13 +138,13 @@ export default function MyScheduleList() {
                                     <Tag color="red">{SCHEDULE_TYPE_MAP[s.scheduleType] ?? s.scheduleType}</Tag>
                                   </Space>
                                   {s.sessionName && (
-                                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{s.sessionName}</div>
+                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.sessionName}</div>
                                   )}
                                   {s.location && (
-                                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{s.location}</div>
+                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.location}</div>
                                   )}
                                   {s.scheduleDate && (
-                                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                                       {dayjs(s.scheduleDate).format('YYYY-MM-DD')}
                                     </div>
                                   )}

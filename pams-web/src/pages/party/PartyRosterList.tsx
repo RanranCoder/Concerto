@@ -317,7 +317,7 @@ export default function PartyRosterList() {
               <Button icon={<UploadOutlined />}>选择文件</Button>
             </Upload>
           </Form.Item>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             支持 .xlsx / .xls；表头需含「姓名」「学号」列（性别/班级/支部可选，列顺序不限，可跳过标题行）；
             与已有名单按「类型 + 姓名 + 学号」自动去重，重复行跳过不重复入库。
           </div>

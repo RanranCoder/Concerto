@@ -129,15 +129,15 @@ export default function SigninScan() {
   return (
     <div className="login-page">
       <div className="glass-card login-card">
-        <Typography.Title level={3} style={{ textAlign: 'center', color: 'var(--color-text)' }}>
+        <Typography.Title level={3} style={{ textAlign: 'center', color: 'var(--text-primary)' }}>
           活动签到
         </Typography.Title>
-        <Typography.Paragraph style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+        <Typography.Paragraph style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
           扫码签到 · 信息与智能工程学院党建办公室
         </Typography.Paragraph>
         {done ? (
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22, color: 'var(--color-red)', marginBottom: 8 }}>✓ 签到成功</div>
+            <div style={{ fontSize: 'var(--fs-symbol)', color: 'var(--brand)', marginBottom: 8 }}>✓ 签到成功</div>
             <Button onClick={() => window.location.reload()}>继续</Button>
           </div>
         ) : configured === null ? (

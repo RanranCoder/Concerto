@@ -46,15 +46,15 @@ function StatCard({ label, value, color }: { label: string; value: number; color
       style={{
         flex: 1,
         minWidth: 100,
-        background: 'var(--color-bg-card, #fff)',
-        border: '1px solid var(--color-border)',
+        background: 'var(--canvas)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '12px 16px',
         textAlign: 'center',
       }}
     >
-      <div style={{ fontSize: 22, fontWeight: 700, color: color ?? 'var(--color-text)' }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-symbol)', fontWeight: 700, color: color ?? 'var(--text-primary)' }}>{value}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</div>
     </div>
   )
 }
@@ -234,7 +234,7 @@ export default function AttendanceList() {
 
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space wrap style={{ display: 'flex' }}>
-          <StatCard label="今日活动" value={stats.totalActivities} color="var(--color-red)" />
+          <StatCard label="今日活动" value={stats.totalActivities} color="var(--brand)" />
           <StatCard label="应签到" value={stats.shouldAttend} />
           <StatCard label="已签到" value={stats.signed} color="green" />
           <StatCard label="正常" value={stats.normal} color="green" />
@@ -324,7 +324,7 @@ export default function AttendanceList() {
         width={560}
       >
         {audits.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: 24 }}>暂无人工修改记录</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>暂无人工修改记录</div>
         ) : (
           <Table<AttendanceAuditVO>
             size="small"

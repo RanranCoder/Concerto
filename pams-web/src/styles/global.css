@@ -1,101 +1,418 @@
+/* ============================================================
+   全局基础样式 + antd 收口
+   变量全部来自 tokens.ts 生成的 CSS 变量（明暗两套自动跟随）
+   ============================================================ */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #root { height: 100%; }
+
 body {
-  background: var(--color-bg-page);
-  color: var(--color-text);
-  font-family: "PingFang SC", "Microsoft YaHei", "HarmonyOS Sans SC", "Noto Sans SC", sans-serif;
+  /* 纯色页面底：删除原三段渐变与红色氛围光（设计方案 §3.1） */
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--fs-body);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(1200px 600px at 20% 0%, rgba(222,41,16,0.06), transparent 60%),
-              radial-gradient(900px 500px at 90% 10%, rgba(255,255,255,0.08), transparent 55%);
-  pointer-events: none;
-}
-
+/* 滚动条：细、低对比、不抢视线 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(120, 130, 150, 0.35); border-radius: 8px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-lg);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* 布局容器透明，露出 body 的 --color-bg-page 渐变 */
-.ant-layout, .ant-layout-header, .ant-layout-sider, .ant-card {
-  background: transparent !important;
+/* ============ 主壳层 ============ */
+/* 侧边栏：贴边实心面板，明暗两种主题都用深底（白字才可读，见 tokens.ts 的 siderBg 说明）。
+   结构 = 固定品牌头 + 独立滚动的菜单区；背景同时铺在容器与滚动区，
+   否则内容不足一屏、或滚到底时会露出没有底色的空白。 */
+.app-sider {
+  background: var(--sider-bg) !important;
+  border-right: 1px solid var(--sider-border);
+  height: 100vh;
+  overflow: hidden;           /* 内部滚动区自己滚，整块不跟着滚 */
+  display: flex;
+  flex-direction: column;
 }
-/* 左侧菜单透明，露出实底 Sider 表面 */
-.ant-menu {
-  background: transparent !important;
-}
-/* 收起态的零宽触发条（<lg 断点）跟随表面色，避免 light 下残留 antd 深色 #002140 */
-.ant-layout-sider-zero-width-trigger {
-  background: var(--surface) !important;
-  color: var(--color-text) !important;
-}
-.ant-table {
-  background: transparent !important;
-}
-.ant-table-thead > tr > th {
-  background: var(--surface-strong) !important;
-  color: var(--color-text-secondary);
-  border-bottom: 1px solid var(--surface-border) !important;
-}
-.ant-table-tbody > tr > td {
-  border-bottom: 1px solid var(--surface-border) !important;
+/* antd 会在 Sider 里包一层 .ant-layout-sider-children，它必须撑满并纵向排布 */
+.app-sider > .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--sider-bg);
 }
 
+/* 品牌区：固定在顶部，不随菜单滚动 */
+.app-brand {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--sider-border);
+  background: var(--sider-bg);
+  overflow: hidden;
+}
+/* 极淡的品牌色光晕：让品牌区与菜单分开，又不抢内容注意力 */
+.app-brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--brand) 0%, transparent 100%);
+  opacity: 0.1;
+  pointer-events: none;
+}
+.app-brand-logo {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-md);
+  object-fit: contain;
+  flex: 0 0 30px;
+}
+.app-brand-text {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.app-brand-name {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  color: var(--sider-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-brand-sub {
+  font-size: var(--fs-micro);
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+  color: var(--sider-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 菜单滚动区：占满剩余高度并自身滚动（顺手隐藏滚动条） */
+.app-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--sider-bg);
+  padding-bottom: var(--sp-2);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.app-nav::-webkit-scrollbar { display: none; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.app-user {
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+}
+.app-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--sp-5) var(--sp-5);
+}
+.content-inner { max-width: 1440px; margin: 0 auto; }
+
+/* 布局容器透明，露出页面纯色底 */
+.ant-layout, .ant-layout-content { background: transparent; }
+
+/* ============ 侧边栏菜单 ============ */
+/* 文字与图标取 --sider-text：浅色主题是深墨、深色主题是白，两套各自达标。
+   不要用页面级 --text-primary 硬编码某一套色值，否则切换主题就会不跟随。 */
+.app-sider .ant-menu,
+.app-sider .ant-menu-item,
+.app-sider .ant-menu-submenu-title {
+  background: transparent;
+}
+.app-sider .ant-menu-item,
+.app-sider .ant-menu-submenu-title {
+  color: var(--sider-text) !important;
+}
+.app-sider .ant-menu-item .anticon,
+.app-sider .ant-menu-item-icon,
+.app-sider .ant-menu-submenu-title .anticon,
+.app-sider .ant-menu-submenu-arrow {
+  color: inherit !important;
+}
+
+/* 选中：选中底色（浅色=浅主色 / 深色=半透白）+ 左侧 3px 主色竖条 + 加粗 */
+.app-sider .ant-menu-item-selected {
+  background: var(--sider-selected) !important;
+  color: var(--sider-text) !important;
+  font-weight: 600;
+}
+/* 蓝色只出现在这一处 3px 竖条。
+   不把选中底做成主色实填：深色下低透蓝会把整行染蓝，正是「不要蓝色遮罩」要避免的观感。 */
+.app-sider .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--brand);
+}
+/* 展开的父级：与选中项同样权重 */
+.app-sider .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: var(--sider-text) !important;
+  font-weight: 600;
+}
+/* 悬停 */
+.app-sider .ant-menu-item:hover,
+.app-sider .ant-menu-submenu-title:hover {
+  background: var(--sider-hover) !important;
+  color: var(--sider-text) !important;
+}
+/* 菜单项节奏：图标与文字拉开一点，行高略增，避免长列表糊成一片 */
+.app-sider .ant-menu-item,
+.app-sider .ant-menu-submenu-title {
+  display: flex;
+  align-items: center;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.app-sider .ant-menu-item .ant-menu-item-icon,
+.app-sider .ant-menu-submenu-title .ant-menu-item-icon {
+  font-size: var(--fs-title);
+  margin-inline-end: 10px;
+}
+/* 展开的子菜单：比父列表再退一层，避免与一级项同权重 */
+.app-sider .ant-menu-sub.ant-menu-inline {
+  background: transparent;
+}
+.app-sider .ant-menu-sub.ant-menu-inline > .ant-menu-item {
+  padding-left: 38px !important;
+  font-size: var(--fs-caption);
+}
+/* 二级项文字用次级色，但仍保持可读 */
+.app-sider .ant-menu-sub.ant-menu-inline > .ant-menu-item:not(.ant-menu-item-selected) {
+  color: var(--sider-text-dim) !important;
+}
+/* 收起态的零宽触发条跟随侧边栏底色 */
+.ant-layout-sider-zero-width-trigger {
+  background: var(--sider-bg) !important;
+  color: var(--sider-text) !important;
+}
+
+/* ============ 表格 ============ */
+.ant-table {
+  background: transparent !important;
+  font-size: var(--fs-body);
+}
+.ant-table-thead > tr > th {
+  background: var(--soft) !important;
+  color: var(--text-secondary) !important;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border) !important;
+}
+/* 表头不做单元格竖分隔线：密集表格里竖线是噪声 */
+.ant-table-thead > tr > th::before { display: none !important; }
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-primary);
+}
+.ant-table-tbody > tr:last-child > td { border-bottom: 0 !important; }
+/* hover 用灰不用主色 */
+.ant-table-tbody > tr.ant-table-row:hover > td,
+.ant-table-tbody > tr > td.ant-table-cell-row-hover {
+  background: var(--soft) !important;
+}
+.ant-table-placeholder:hover > td { background: transparent !important; }
+.ant-table-summary > tr > td { border-bottom: 0 !important; }
+
+/* ============ 弹窗 / 抽屉 ============ */
+.ant-modal-content { border-radius: var(--r-xl); box-shadow: var(--shadow-2); }
+.ant-modal-header { border-bottom: 1px solid var(--border); }
+.ant-modal-title { font-size: var(--fs-title); font-weight: 600; }
+.ant-modal-mask { background: rgba(0, 0, 0, 0.45) !important; }
+.ant-drawer-header { border-bottom: 1px solid var(--border); }
+
+/* 浮层（下拉/气泡）与内容面同色，靠阴影区分 */
+.ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-picker-dropdown .ant-picker-panel-container {
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+}
+
+/* ============ 语义标签收口 ============ */
+/* 页面里偶有直接写 color="red" 等 antd 内置色的 Tag，统一压成浅底色调 */
+.ant-tag:not(.tone-tag) {
+  background: var(--soft-strong);
+  border-color: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-caption);
+  margin-inline-end: var(--sp-0);
+}
+/* 筛选栏里的可关闭 Tag 是「筛选项」，区分于状态标签 */
+.ant-tag-close-icon { color: var(--text-tertiary); }
+
 /* ============ 页面切换过渡动画 ============ */
-/* 每个路由页挂载时淡入 + 上移 + 轻微缩放，克制不花哨 */
+/* 只动 opacity：120ms，克制；不做位移与缩放（设计方案 §4.3） */
 .page-transition {
-  animation: page-fade-in 0.32s var(--easing) both;
+  animation: page-fade-in 0.12s linear both;
 }
 
 @keyframes page-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.995);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* 卡片入场：页面内的卡片逐个淡入，有轻微层次，随父级动画一起呈现 */
-.glass-card {
-  animation: card-fade-in 0.4s var(--easing) both;
-}
-.glass-card:nth-child(2) { animation-delay: 0.05s; }
-.glass-card:nth-child(3) { animation-delay: 0.1s; }
-.glass-card:nth-child(4) { animation-delay: 0.15s; }
-
-@keyframes card-fade-in {
-  /* 只动画 opacity：克制不花哨，避免占用 transform */
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* 尊重系统"减少动态效果"偏好：关闭所有动效 */
-@media (prefers-reduced-motion: reduce) {
-  .page-transition, .glass-card {
-    animation: none !important;
-  }
+/* 卡片入场：仅 opacity，避免占用 transform 与逐帧重绘 */
+.glass-card {
+  animation: card-fade-in 0.2s linear both;
+}
+.glass-card:nth-child(2) { animation-delay: 0.02s; }
+.glass-card:nth-child(3) { animation-delay: 0.04s; }
+.glass-card:nth-child(4) { animation-delay: 0.06s; }
+
+@keyframes card-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* 模板库名称链接：hover 加下划线（默认 antd link 按钮无下划线） */
-.template-name-link:hover {
-  text-decoration: underline;
+/* 尊重系统「减少动态效果」偏好：关闭所有动效 */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition, .glass-card, .login-card { animation: none !important; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* ============ 活动列表筛选 ============ */
+.activity-filter-desktop { display: flex; align-items: center; gap: var(--sp-2); }
+.activity-filter-controls { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
+.activity-filter-keyword { width: min(320px, 100%); }
+.activity-filter-select { width: 150px; }
+.activity-filter-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-height: 32px; }
+.activity-filter-summary .ant-tag { margin: 0; }
+.activity-filter-drawer .activity-filter-controls { flex-direction: column; align-items: stretch; }
+.activity-filter-drawer .activity-filter-keyword,
+.activity-filter-drawer .activity-filter-select { width: 100%; }
+
+/* ============ 仪表盘工作重点 ============ */
+.dashboard-work-section { margin: var(--sp-4) 0; }
+.dashboard-section-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.dashboard-section-heading > span { color: var(--text-secondary); font-size: var(--fs-caption); }
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.dashboard-work-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--sp-3);
+}
+.dashboard-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.dashboard-task-list, .dashboard-activity-list { display: grid; gap: var(--sp-1); }
+.dashboard-task-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dashboard-task-item:last-child { border-bottom: 0; }
+.dashboard-task-copy, .dashboard-activity-copy { flex: 1; min-width: 0; }
+.dashboard-item-title { display: block; overflow: hidden; color: var(--text-primary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-item-meta { display: block; overflow: hidden; margin-top: 2px; color: var(--text-secondary); font-size: var(--fs-caption); text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-activity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--canvas);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.dashboard-activity-item:hover { border-color: var(--border-strong); background: var(--soft); }
+.dashboard-activity-item:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
+.dashboard-activity-date { display: grid; min-width: 48px; text-align: center; }
+.dashboard-activity-date strong { color: var(--brand-text); font-size: var(--fs-title); }
+.dashboard-activity-date small { color: var(--text-secondary); font-size: var(--fs-caption); }
+@media (max-width: 900px) {
+  .dashboard-work-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .dashboard-task-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .dashboard-task-copy { grid-column: 1; grid-row: 1 / 3; }
+  .dashboard-task-item > .tone-tag { grid-column: 2; grid-row: 1; }
+  .dashboard-task-item > .ant-btn { grid-column: 2; grid-row: 2; justify-self: end; }
+  .dashboard-activity-item { align-items: flex-start; }
+  .dashboard-activity-item > .tone-tag { margin-left: auto; }
+}
+
+/* ============ 文字省略 ============ */
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ============ 策划书 Word 纸张 ============ */
 /* A4 白纸：约 595px 宽 / 842px 高，内边距 40，宋体 12pt。
-   明暗主题下始终保持白底黑字（编辑区像真实 Word，不随主题玻璃化）。 */
+   明暗主题下始终保持白底黑字（编辑区要像真实 Word，刻意不跟随主题 token）。
+   尺寸用 pt（打印单位），颜色用下面的 --wp-* 局部变量，避免魔法色值散落。 */
 .word-paper {
-  background: #ffffff;
-  color: #111111;
+  --wp-paper: #ffffff;      /* 纸面 */
+  --wp-ink: #111111;        /* 正文墨色 */
+  --wp-ink-soft: #333333;   /* 次级文字 */
+  --wp-line: #444444;       /* 表格线 */
+  --wp-th-bg: #f2f2f2;      /* 表头底 */
+
+  background: var(--wp-paper);
+  color: var(--wp-ink);
   width: 595px;
   min-height: 842px;
   max-width: 100%;
@@ -105,7 +422,7 @@ body::before {
   font-size: 12pt;
   line-height: 1.8;
   box-shadow: 0 6px 24px rgba(31, 38, 60, 0.16), 0 2px 6px rgba(31, 38, 60, 0.1);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   overflow: hidden;
   /* 白纸内容不受主题文本色影响 */
   color-scheme: light;
@@ -116,12 +433,12 @@ body::before {
 .word-paper .word-sec,
 .word-paper .word-sec-label,
 .word-paper .word-sec-body {
-  background: #ffffff;
-  color: #111111;
+  background: var(--wp-paper);
+  color: var(--wp-ink);
 }
 .word-paper .word-sec-body:focus {
   outline: none;
-  background: #ffffff;
+  background: var(--wp-paper);
 }
 
 /* 抬头与大标题：22pt 居中 */
@@ -141,28 +458,24 @@ body::before {
 .word-header-sub {
   font-size: 12pt;
   text-align: center;
-  color: #333333;
+  color: var(--wp-ink-soft);
   padding: 2px 0 6px;
 }
 
 /* 章节 */
-.word-sec {
-  margin: 10px 0 0;
-}
+.word-sec { margin: 10px 0 0; }
 .word-sec-label {
   font-size: 14pt;
   font-weight: 600;
   margin: 12px 0 4px;
-  color: #111111;
+  color: var(--wp-ink);
 }
 .word-sec-body {
   font-size: 12pt;
   min-height: 24px;
-  color: #111111;
+  color: var(--wp-ink);
 }
-.word-sec-static {
-  white-space: pre-wrap;
-}
+.word-sec-static { white-space: pre-wrap; }
 /* 编辑区空态占位 */
 .word-sec-body:empty::before {
   content: attr(data-placeholder);
@@ -172,13 +485,9 @@ body::before {
   content: attr(data-placeholder);
   color: rgba(17, 17, 17, 0.35);
 }
-/* 当前编辑章节高亮：左侧红条提示 */
-.word-sec-active {
-  position: relative;
-}
-.word-sec-active > .word-sec-label {
-  color: #c0392b;
-}
+/* 当前编辑章节高亮：左侧主色条提示 */
+.word-sec-active { position: relative; }
+.word-sec-active > .word-sec-label { color: var(--brand); }
 .word-sec-active::before {
   content: '';
   position: absolute;
@@ -186,30 +495,30 @@ body::before {
   top: 4px;
   bottom: 4px;
   width: 3px;
-  border-radius: 2px;
-  background: #c0392b;
+  border-radius: var(--r-sm);
+  background: var(--brand);
 }
 
 /* 章节导航 */
 .word-nav-item {
   padding: 5px 8px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
-  border-radius: 6px;
+  font-size: var(--fs-caption);
+  border-radius: var(--r-md);
   margin-bottom: 2px;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .word-nav-item:hover {
-  color: var(--color-text);
-  background: var(--color-red-soft);
+  color: var(--text-primary);
+  background: var(--soft-strong);
 }
 .word-nav-item-active {
-  color: var(--color-red);
-  background: var(--color-red-soft);
+  color: var(--brand-text);
+  background: var(--brand-soft);
   font-weight: 600;
 }
 
@@ -222,34 +531,26 @@ body::before {
 }
 .word-table th,
 .word-table td {
-  border: 1px solid #444444;
+  border: 1px solid var(--wp-line);
   padding: 4px 10px;
   text-align: center;
-  background: #ffffff;
-  color: #111111;
+  background: var(--wp-paper);
+  color: var(--wp-ink);
 }
-.word-table th {
-  font-weight: 700;
-  background: #f2f2f2;
-}
-/* contenteditable 中表格单元格的最小高度（Word 习惯） */
-.word-table td {
-  min-width: 40px;
-}
+.word-table th { font-weight: 700; background: #f2f2f2; }
+.word-table td { min-width: 40px; }
 
 /* 落款 */
-.word-sign > div {
-  margin-bottom: 4px;
-}
+.word-sign > div { margin-bottom: 4px; }
 
 /* 分页容器 */
 .word-page {
   background: #ffffff;
-  color: #111111;
+  color: var(--wp-ink);
   width: 210mm;
   min-height: 297mm;
   margin: 0 auto;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   position: relative;
   overflow: hidden;
 }
@@ -259,9 +560,9 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 16px 0;
-  margin-top: 16px;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  margin-top: var(--sp-3);
 }
 
 /* ============ 策划书逐页编辑器：纸张内容自适应高度（分页由外层视口滚动） ============ */
@@ -278,23 +579,15 @@ body::before {
 }
 
 .word-pagination-info {
-  font-size: 14px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body-lg);
+  color: var(--text-secondary);
   min-width: 60px;
   text-align: center;
 }
 
-/* ============ 侧边栏：隐藏滚动条但保留滚动 ============ */
-.ant-layout-sider {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.ant-layout-sider::-webkit-scrollbar { display: none; }
-
-/* 通用：隐藏滚动条但保留滚动（活动动态卡片等小区域） */
+/* ============ 通用：隐藏滚动条但保留滚动 ============ */
 .hide-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .hide-scrollbar::-webkit-scrollbar { display: none; }
-

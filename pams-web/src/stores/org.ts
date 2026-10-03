@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 import { getCurrentOrg } from '@/api/org'
+import { lightTokens } from '@/styles/tokens'
 
-/** 默认主题色（党建红）——组织未配置主题时回退。 */
-export const DEFAULT_PRIMARY_COLOR = '#DE2910'
+/**
+ * 默认主题色 —— 组织未配置 theme_json 时回退。
+ * 直接取 token 里的 brand，避免「默认主色」在 org.ts 和 tokens.ts 各写一份。
+ */
+export const DEFAULT_PRIMARY_COLOR = lightTokens.brand
 
 /** 已知领域包（A2）：组织未显式配置时视为全部启用（兼容默认组织）。 */
 export const ALL_PACKS = ['party', 'volunteer', 'club']

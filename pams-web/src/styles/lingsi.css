@@ -3,47 +3,39 @@
  * 对应文档：docs/PAMS-灵思UI改版方案-v2.md    原型：docs/lingsi-ui-v2-prototype.html
  *
  * 设计语言四条主干：
- *   1. 灰阶极简    —— 白底 + 浅灰面板 + 深灰字，品牌红收窄到 4 处
+ *   1. 灰阶极简    —— 白底 + 浅灰面板 + 深灰字，主色收窄到 4 处
  *   2. 内容优先    —— AI 回答是"文档流"不是"气泡"；去容器后卡片成为唯一层级
  *   3. 产物分屏    —— 对话里的产物在右栏打开，不遮罩、不打断
  *   4. 单侧控制点  —— 权限档位与模型常驻输入框，不塞设置页
  *
- * 红色只出现在：① 新建任务图标 ② 左栏选中竖条 ③ 发送按钮 ④ 不可逆操作警示
+ * 主色只出现在：① 新建任务图标 ② 左栏选中竖条 ③ 发送按钮 ④ 不可逆操作警示（主色随组织 theme_json 走，默认院校主蓝 #0034A2）
  * （引用 chip 的 hover 描边也算，但那是交互反馈，静态不可见）
  *
  * 坑（源码已踩过，勿重蹈）：
- *   ❌ 不要用 `var(--color-red)55` 这类 alpha 后缀拼接（CSS 变量是 token 级替换，
+ *   ❌ 不要用 `var(--brand)55` 这类 alpha 后缀拼接（CSS 变量是 token 级替换，
  *      不会合成 8 位 hex）。需要透明色时写字面量，见下面的局部变量块。
- *   ❌ 不要在卡片上叠多个 box-shadow；`.glass-card` 已有 --surface-shadow。
- *   ✅ 需要"更深一层"的容器用 --surface-strong，不要用透明度。
+ *   ❌ 不要在卡片上叠多个 box-shadow；`.glass-card` 已有 --shadow-2。
+ *   ✅ 需要"更深一层"的容器用 --soft，不要用透明度。
  * ========================================================================== */
 
 .lingsi-page {
-  /* ---- 局部语义色：一次定义，明暗各一套（写实色字面量，不做 token 拼接） ---- */
-  --ls-ok: #3f8f4f;
-  --ls-ok-bg: #f2f8f3;
-  --ls-ok-line: #d6e8da;
-  --ls-warn: #a9701a;
-  --ls-warn-bg: #fdf7ec;
-  --ls-warn-line: #f0d9ab;
-  --ls-soft: rgba(0, 0, 0, 0.045);
-  --ls-soft-strong: rgba(0, 0, 0, 0.07);
+  /* ---- 语义色别名：指向 tokens.ts 生成的全局 token ----
+     原为本地写实色字面量，会和全站语义色（如 StatusTag 的 tone）各走一套，
+     导致「灵思的成功绿」与「列表页的成功绿」不是同一个绿。现在统一走全局 token，
+     明暗主题自动切换，--ls-* 仅作为本文件的可读别名保留。 */
+  --ls-ok: var(--ok);
+  --ls-ok-bg: var(--ok-soft);
+  --ls-ok-line: var(--ok);
+  --ls-warn: var(--warn);
+  --ls-warn-bg: var(--warn-soft);
+  --ls-warn-line: var(--warn);
+  --ls-soft: var(--soft);
+  --ls-soft-strong: var(--soft-strong);
 
   display: flex;
   gap: 16px;
   height: calc(100vh - 88px);
   min-height: 0;
-}
-
-:root[data-theme='dark'] .lingsi-page {
-  --ls-ok: #7fc48d;
-  --ls-ok-bg: #17251b;
-  --ls-ok-line: #2b4432;
-  --ls-warn: #d8a95c;
-  --ls-warn-bg: #241d12;
-  --ls-warn-line: #4a3a1e;
-  --ls-soft: rgba(255, 255, 255, 0.06);
-  --ls-soft-strong: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================================ 通用小件 */
@@ -53,21 +45,21 @@
   height: 26px;
   flex-shrink: 0;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--r-lg);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .lingsi-icon-btn:hover {
   background: var(--ls-soft);
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 .lingsi-icon-btn-on {
-  color: var(--color-red);
+  color: var(--brand);
 }
 
 /* ============================================================ 左栏：任务栏 */
@@ -92,17 +84,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-body-lg);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-brand-mark {
   width: 22px;
   height: 22px;
-  border-radius: 7px;
+  border-radius: var(--r-lg);
   flex-shrink: 0;
-  background: linear-gradient(135deg, #DE2910, #c2220c);
+  background: var(--brand);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -112,8 +104,8 @@
 
 .lingsi-sider-sub {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.75;
 }
 
@@ -127,20 +119,20 @@
   flex-shrink: 0;
   padding: 0 10px;
   margin-bottom: 4px;
-  border: 1px solid var(--surface-border);
-  border-radius: 8px;
-  background: var(--surface-strong);
-  color: var(--color-text);
-  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--soft);
+  color: var(--text-primary);
+  font-size: var(--fs-body-lg);
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.14s var(--easing), background 0.14s var(--easing);
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
 }
 .lingsi-new-task:hover {
-  border-color: rgba(222, 41, 16, 0.4);
+  border-color: var(--brand-hover);
 }
 .lingsi-new-task svg {
-  color: var(--color-red); /* 红色用途 ① */
+  color: var(--brand); /* 主色用途 ① */
   flex-shrink: 0;
 }
 
@@ -148,22 +140,22 @@
   flex-shrink: 0;
   margin: 6px 2px 2px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   background: var(--ls-warn-bg);
   border: 1px solid var(--ls-warn-line);
   color: var(--ls-warn);
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
 }
 
 /* 任务搜索：纯本地过滤（列表一次只拉 50 条，为前缀过滤再打接口不值当） */
 .lingsi-sider-search.ant-input-affix-wrapper {
   flex-shrink: 0;
   margin: 2px 2px 6px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  border-radius: var(--r-lg);
+  font-size: var(--fs-body);
 }
 .lingsi-sider-search .anticon {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-sider-list {
@@ -184,9 +176,9 @@
   gap: 6px;
   padding: 0 8px;
   margin: 14px 0 4px;
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.8;
   letter-spacing: 0.04em;
 }
@@ -199,24 +191,24 @@
   opacity: 0.8;
 }
 
-/* 任务项：两行（标题 + 相对时间）；选中态 = 白底 + 左侧红色竖条 */
+/* 任务项：两行（标题 + 相对时间）；选中态 = 白底 + 左侧主色竖条 */
 .lingsi-conv {
   position: relative;
   padding: 7px 10px 7px 12px;
   margin-bottom: 1px;
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   cursor: pointer;
-  transition: background 0.14s var(--easing);
+  transition: background 0.14s var(--ease);
 }
 .lingsi-conv:hover {
   background: var(--ls-soft);
 }
 .lingsi-conv-active {
-  background: var(--surface-strong);
-  box-shadow: 0 1px 2px rgba(20, 24, 32, 0.06);
+  background: var(--soft);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 .lingsi-conv-active::before {
-  /* 红色用途 ②：定位当前任务。原设计方案 §3.3 写了这条但实现里漏了，
+  /* 主色用途 ②：定位当前任务。原设计方案 §3.3 写了这条但实现里漏了，
      导致选中态与 hover 态在视觉上几乎分不出来 */
   content: '';
   position: absolute;
@@ -224,13 +216,13 @@
   top: 8px;
   bottom: 8px;
   width: 2.5px;
-  border-radius: 2px;
-  background: var(--color-red);
+  border-radius: var(--r-sm);
+  background: var(--brand);
 }
 
 .lingsi-conv-title {
-  font-size: 12.5px;
-  color: var(--color-text);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -242,8 +234,8 @@
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.8;
 }
 
@@ -254,10 +246,10 @@
   min-width: 15px;
   height: 15px;
   padding: 0 4px;
-  border-radius: 8px;
-  background: var(--color-red);
+  border-radius: var(--r-lg);
+  background: var(--brand);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 600;
 }
 
@@ -289,7 +281,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 9px 16px;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -297,22 +289,22 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-body-lg);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 .lingsi-main-title svg {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-main-mode {
   padding: 0 6px;
   line-height: 17px;
-  border-radius: 5px;
-  border: 1px solid var(--surface-border);
-  font-size: 10.5px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  font-size: var(--fs-caption);
   font-weight: 400;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-main-head-actions {
@@ -322,7 +314,7 @@
 }
 .lingsi-main-pending {
   margin: 0;
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
 }
 
 .lingsi-scroll {
@@ -363,26 +355,26 @@
 .lingsi-hero-avatar {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
-  background: var(--color-red-soft);
-  color: var(--color-red);
+  border-radius: var(--r-xl);
+  background: var(--brand-soft);
+  color: var(--brand);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: var(--fs-stat);
   margin-bottom: 14px;
 }
 
 .lingsi-hero-title {
-  font-size: 19px;
+  font-size: var(--fs-h2);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
   margin: 0 0 6px;
 }
 
 .lingsi-hero-sub {
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body-lg);
+  color: var(--text-secondary);
   margin: 0 0 22px;
   line-height: 1.7;
 }
@@ -396,48 +388,48 @@
 
 .lingsi-suggest {
   padding: 12px 14px;
-  border: 1px solid var(--surface-border);
-  border-radius: 12px;
-  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--soft);
   cursor: pointer;
-  transition: border-color 0.18s var(--easing), transform 0.18s var(--easing);
+  transition: border-color 0.18s var(--ease), transform 0.18s var(--ease);
 }
 .lingsi-suggest:hover {
-  border-color: rgba(222, 41, 16, 0.45);
+  border-color: var(--brand-hover);
   transform: translateY(-2px);
 }
 
 .lingsi-suggest-label {
-  font-size: 13px;
+  font-size: var(--fs-body-lg);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
   margin-bottom: 3px;
 }
 
 .lingsi-suggest-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 /* ============================================================ 用户提问（引用块） */
 
 /* 原来是右对齐红底气泡。改成左对齐引用块：
-   ① 长指令在 76% 宽气泡里会折行、起点参差 ② 红底把"强调"用成了常态
+   ① 长指令在 76% 宽气泡里会折行、起点参差 ② 红底把“强调”用成了常态
    ③ 与 AI 文档流同栏对齐，整条会话读起来像工作记录而不是聊天记录 */
 .lingsi-user-quote {
   position: relative;
   margin: 0 0 18px;
   padding: 11px 14px;
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--canvas);
 }
 
 .lingsi-user-quote-text {
-  font-size: 13.5px;
+  font-size: var(--fs-body-lg);
   line-height: 1.7;
-  color: var(--color-text);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -455,11 +447,11 @@
   align-items: center;
   height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
-  background: var(--surface-strong);
-  border: 1px solid var(--surface-border);
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  border-radius: var(--r-pill);
+  background: var(--soft);
+  border: 1px solid var(--border);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
@@ -473,7 +465,7 @@
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity 0.15s var(--easing);
+  transition: opacity 0.15s var(--ease);
 }
 .lingsi-user-quote:hover .lingsi-user-quote-actions {
   opacity: 1;
@@ -498,8 +490,8 @@
 .lingsi-avatar {
   flex-shrink: 0;
   margin-top: 1px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #DE2910, #c2220c);
+  border-radius: var(--r-lg);
+  background: var(--brand);
   color: #fff;
   display: flex;
   align-items: center;
@@ -518,25 +510,25 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.85;
   cursor: pointer;
   user-select: none;
-  transition: opacity 0.15s var(--easing);
+  transition: opacity 0.15s var(--ease);
 }
 .lingsi-process-head:hover {
   opacity: 1;
 }
 .lingsi-process-head-live {
-  color: var(--color-red);
+  color: var(--brand);
   opacity: 1;
 }
 
 .lingsi-process-body {
   margin: 6px 0 12px 7px;
   padding-left: 12px;
-  border-left: 1px solid var(--surface-border);
+  border-left: 1px solid var(--border);
 }
 
 .lingsi-tl-row {
@@ -544,7 +536,7 @@
   align-items: flex-start;
   gap: 7px;
   padding: 2.5px 0;
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   line-height: 1.6;
 }
 
@@ -552,24 +544,193 @@
   flex-shrink: 0;
   width: 15px;
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   padding-top: 1px;
 }
 
 .lingsi-tl-label {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   word-break: break-word;
 }
 .lingsi-tl-label-active {
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-tl-meta {
   margin-left: auto;
   flex-shrink: 0;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   协作内聚进灵思：过程区里的协作行
+   协作不再是独立页面，所以「哪个专家在干活」「审查过没过」
+   都落在过程区时间轴上，与工具行同一套节奏。
+   ============================================================ */
+
+/* 协作者头像：单字 + 身份色。替代通用图标，让专家身份一眼可辨 */
+.lingsi-tl-agent-av {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  vertical-align: middle;
+}
+
+/* 协作判定行（collab）：一行说明「为什么这次组了队」，右侧带模式标签 */
+.lingsi-tl-mode {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+}
+
+/* 审查结论：值得一块可读的结论区，而不是挤在一行里 */
+.lingsi-tl-row-review {
+  align-items: stretch;
+}
+.lingsi-review {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+  padding: 6px 10px;
+}
+.lingsi-review-pass {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+.lingsi-review-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-caption);
+  color: var(--text-primary);
+}
+.lingsi-review-head b {
+  font-weight: 600;
+}
+.lingsi-review-body {
+  margin-top: 3px;
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+/* ---- 自动协作开关（仅标准档位出现）----
+   与输入框其它控件同为 borderless；开启态用主色描边 + 浅主色底，
+   而不是实底 —— 与「蓝色只做记号」的既定原则一致。 */
+.lingsi-collab-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--fs-caption);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.lingsi-collab-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.lingsi-collab-toggle-on {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+.lingsi-collab-toggle-on:hover {
+  color: var(--brand-text);
+  border-color: var(--brand-hover);
+}
+
+/* ---- 协作团队面板（过程区上方的可折叠块）---- */
+.lingsi-team {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--soft);
+  overflow: hidden;
+}
+.lingsi-team-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.lingsi-team-head:hover {
+  color: var(--text-primary);
+}
+.lingsi-team-head-live {
+  color: var(--brand-text);
+}
+.lingsi-team-body {
+  padding: 4px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+.lingsi-team-reason {
+  margin: 6px 0;
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
+  line-height: 1.6;
+}
+.lingsi-team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.lingsi-team-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-caption);
+}
+.lingsi-team-av {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  flex-shrink: 0;
+}
+.lingsi-team-name {
+  color: var(--text-primary);
+}
+.lingsi-team-dur {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.lingsi-team-agent .tone-tag {
+  margin-left: auto;
 }
 
 /* 思考中的三点脉冲 */
@@ -592,13 +753,13 @@
 /* -------------------------------------------------------------- 正文（文档流） */
 
 .lingsi-reply {
-  font-size: 13.5px;
+  font-size: var(--fs-body-lg);
   line-height: 1.78;
-  color: var(--color-text);
+  color: var(--text-primary);
   word-break: break-word;
 }
 .lingsi-reply-pending {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-reply p {
@@ -615,43 +776,43 @@
 .lingsi-reply li {
   margin: 3px 0;
 }
-/* 行内代码 = 浅灰底 + 细边框（原实现用红底，红色收窄后不再承担这个用途） */
+/* 行内代码 = 浅灰底 + 细边框（原实现用红底，主色收窄后不再承担这个用途） */
 .lingsi-reply code {
   padding: 0.5px 4px;
-  border-radius: 4px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  border-radius: var(--r-sm);
+  background: var(--canvas);
+  border: 1px solid var(--border);
   font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
+  font-size: var(--fs-body);
 }
 .lingsi-reply table {
   width: 100%;
   border-collapse: collapse;
   margin: 10px 0 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 .lingsi-reply th,
 .lingsi-reply td {
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--border);
   padding: 6px 8px;
   text-align: left;
 }
 .lingsi-reply th {
-  background: var(--surface);
+  background: var(--canvas);
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 .lingsi-reply h1,
 .lingsi-reply h2,
 .lingsi-reply h3 {
-  font-size: 14.5px;
+  font-size: var(--fs-body-lg);
   margin: 10px 0 6px;
 }
 .lingsi-reply blockquote {
   margin: 6px 0;
   padding: 4px 10px;
-  border-left: 2px solid var(--surface-border);
-  color: var(--color-text-secondary);
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
 }
 
 /* 流式光标 */
@@ -661,7 +822,7 @@
   height: 15px;
   margin-left: 2px;
   vertical-align: -2px;
-  background: var(--color-red);
+  background: var(--brand);
   animation: lingsi-blink 1s steps(1) infinite;
 }
 
@@ -678,13 +839,13 @@
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.85;
 }
 .lingsi-meta-tag {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   line-height: 18px;
 }
 .lingsi-meta-tag-in {
@@ -693,7 +854,7 @@
   gap: 4px;
 }
 .lingsi-meta-failed {
-  color: var(--color-red);
+  color: var(--brand);
 }
 
 /* -------------------------------------------------------------- 消息动作行 */
@@ -706,15 +867,15 @@
   gap: 2px;
   margin-top: 10px;
   opacity: 0.5;
-  transition: opacity 0.16s var(--easing);
+  transition: opacity 0.16s var(--ease);
 }
 .lingsi-turn:hover .lingsi-msg-actions {
   opacity: 1;
 }
 .lingsi-gen-note {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.85;
 }
 
@@ -733,28 +894,28 @@
   gap: 5px;
   height: 24px;
   padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid var(--surface-border);
-  background: var(--surface-strong);
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--soft);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color 0.15s var(--easing), color 0.15s var(--easing);
+  transition: border-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 .lingsi-ref:hover {
-  /* 红色用途 ④（交互反馈，静态不可见） */
-  border-color: rgba(222, 41, 16, 0.45);
-  color: var(--color-red);
+  /* 主色用途 ④（交互反馈，静态不可见） */
+  border-color: var(--brand-hover);
+  color: var(--brand);
 }
 
 /* ============================================================ 拟执行清单卡 */
 
 .lingsi-plan {
   margin-top: 14px;
-  border: 1px solid rgba(222, 41, 16, 0.45);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--brand-hover);
+  border-radius: var(--r-md);
   overflow: hidden;
-  background: var(--surface-strong);
+  background: var(--soft);
 }
 
 .lingsi-plan-head {
@@ -762,22 +923,22 @@
   align-items: center;
   gap: 8px;
   padding: 10px 13px;
-  background: var(--color-red-soft);
+  background: var(--brand-soft);
 }
 .lingsi-plan-head svg {
-  color: var(--color-red);
+  color: var(--brand);
   flex-shrink: 0;
 }
 
 .lingsi-plan-title {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-plan-summary {
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
 }
 
 .lingsi-plan-sec {
@@ -785,9 +946,9 @@
 }
 
 .lingsi-plan-sec-title {
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.9;
   margin-bottom: 6px;
 }
@@ -797,23 +958,23 @@
   gap: 8px;
   align-items: flex-start;
   padding: 3px 0;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 
 .lingsi-plan-item-no {
   flex-shrink: 0;
   min-width: 17px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.8;
   font-variant-numeric: tabular-nums;
 }
 
 .lingsi-plan-item-label {
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 .lingsi-plan-item-sub {
-  color: var(--color-text-secondary);
-  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
 }
 
 /* 跳过项：必现、不可折叠（§4.3） */
@@ -823,10 +984,10 @@
   align-items: flex-start;
   padding: 7px 10px;
   margin-bottom: 6px;
-  border-radius: 7px;
+  border-radius: var(--r-lg);
   background: var(--ls-warn-bg);
   border: 1px solid var(--ls-warn-line);
-  font-size: 12px;
+  font-size: var(--fs-body);
   color: var(--ls-warn);
 }
 .lingsi-skip-dot {
@@ -841,23 +1002,23 @@
 
 .lingsi-plan-more {
   padding: 5px 13px 0;
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .lingsi-plan-more:hover {
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-plan-detail {
   margin: 8px 13px 0;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  font-size: 12px;
+  border-radius: var(--r-lg);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  font-size: var(--fs-body);
   line-height: 1.8;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   white-space: pre-wrap;
   max-height: 260px;
   overflow-y: auto;
@@ -871,7 +1032,7 @@
   flex-wrap: wrap;
   padding: 10px 13px;
   margin-top: 9px;
-  border-top: 1px solid var(--surface-border);
+  border-top: 1px solid var(--border);
 }
 
 .lingsi-plan-acts {
@@ -883,7 +1044,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   color: var(--ls-warn);
 }
 
@@ -893,9 +1054,9 @@
    "改了哪几样"必须结构化，否则用户得自己回业务页翻一遍才能确认 */
 .lingsi-artifact {
   margin-top: 14px;
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-md);
-  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--soft);
   overflow: hidden;
 }
 
@@ -905,7 +1066,7 @@
   gap: 8px;
   padding: 9px 12px;
   cursor: pointer;
-  transition: background 0.14s var(--easing);
+  transition: background 0.14s var(--ease);
 }
 .lingsi-artifact-head:hover {
   background: var(--ls-soft);
@@ -915,7 +1076,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: var(--ls-ok-bg);
   border: 1px solid var(--ls-ok-line);
   color: var(--ls-ok);
@@ -925,29 +1086,29 @@
 }
 
 .lingsi-artifact-title {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-artifact-deltas {
   margin-left: auto;
   display: flex;
   gap: 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   font-family: Consolas, Monaco, monospace;
 }
 .lingsi-artifact-head > svg {
   flex-shrink: 0;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-delta-add { color: var(--ls-ok); }
 .lingsi-delta-warn { color: var(--ls-warn); }
-.lingsi-delta-mute { color: var(--color-text-secondary); }
+.lingsi-delta-mute { color: var(--text-secondary); }
 
 .lingsi-artifact-rows {
-  border-top: 1px solid var(--surface-border);
+  border-top: 1px solid var(--border);
 }
 
 .lingsi-artifact-row {
@@ -955,9 +1116,9 @@
   align-items: center;
   gap: 9px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: background 0.14s var(--easing);
+  transition: background 0.14s var(--ease);
 }
 .lingsi-artifact-row:last-child {
   border-bottom: none;
@@ -966,14 +1127,14 @@
   background: var(--ls-soft);
 }
 
-/* 类型识别色块：只承担"分辨类型"，不承担强调 —— 所以不用品牌红 */
+/* 类型识别色块：只承担"分辨类型"，不承担强调 —— 所以不用主色 */
 .lingsi-artifact-glyph {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -981,16 +1142,16 @@
 }
 
 .lingsi-artifact-name {
-  font-size: 12.5px;
-  color: var(--color-text);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .lingsi-artifact-sub {
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.85;
   flex-shrink: 0;
 }
@@ -1000,9 +1161,9 @@
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.55;
-  transition: opacity 0.14s var(--easing);
+  transition: opacity 0.14s var(--ease);
 }
 .lingsi-artifact-row:hover .lingsi-artifact-act {
   opacity: 1;
@@ -1016,32 +1177,32 @@
 .lingsi-notice {
   margin-top: 12px;
   padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--surface-border);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
   border-left-width: 3px;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .lingsi-notice-success {
-  border-left-color: #52a052;
-  border-color: #cbe6cb;
-  background: #f6fbf6;
-  color: #2f6b2f;
+  border-left-color: var(--ok);
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 .lingsi-notice-failed {
-  border-left-color: #de2910;
-  border-color: #f6d2cd;
-  background: #fef6f5;
-  color: #a81d0b;
+  border-left-color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .lingsi-notice-partial {
-  border-left-color: #fa8c16;
-  border-color: #fae0bb;
-  background: #fffaf2;
-  color: #93560a;
+  border-left-color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 .lingsi-notice-info {
   border-left-color: #9aa4b2;
@@ -1052,13 +1213,13 @@
 
 /* ============================================================ 表单补全卡（D2.5） */
 
-/* 预留视觉语言：琥珀系 = "等用户输入"，与清单卡的红系区分（遵循 P6 约定） */
+/* 预留视觉语言：琥珀系 = "等用户输入"，与清单卡的主色系区分（遵循 P6 约定） */
 .lingsi-form {
   margin-top: 14px;
   border: 1px solid var(--ls-warn-line);
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   overflow: hidden;
-  background: var(--surface-strong);
+  background: var(--soft);
 }
 
 .lingsi-form-head {
@@ -1073,14 +1234,14 @@
 }
 
 .lingsi-form-title {
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-form-summary {
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
 }
 
 .lingsi-form-sec {
@@ -1088,8 +1249,8 @@
 }
 
 .lingsi-form-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -1105,11 +1266,11 @@
   align-items: center;
   gap: 4px;
   padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  font-size: 12px;
-  color: var(--color-text);
+  border-radius: var(--r-pill);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
 }
 .lingsi-form-field em {
   color: var(--ls-warn);
@@ -1117,7 +1278,7 @@
 }
 
 .lingsi-form-prefill {
-  font-size: 11px;
+  font-size: var(--fs-caption);
   color: var(--ls-ok);
 }
 
@@ -1143,14 +1304,14 @@
 
 .lingsi-composer-box {
   padding: 10px 12px 8px;
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-strong);
-  transition: border-color 0.16s var(--easing), box-shadow 0.16s var(--easing);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--soft);
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
 }
 .lingsi-composer-box:focus-within {
-  border-color: rgba(222, 41, 16, 0.45);
-  box-shadow: 0 0 0 3px rgba(222, 41, 16, 0.07);
+  border-color: var(--brand-hover);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 /* 待附加的上下文 chip：挂在输入框上方，随消息一起发出后从输入区消失、
@@ -1167,11 +1328,11 @@
   gap: 4px;
   height: 22px;
   padding: 0 5px 0 9px;
-  border-radius: 7px;
-  background: var(--color-red-soft);
-  border: 1px solid rgba(222, 41, 16, 0.28);
-  font-size: 11.5px;
-  color: var(--color-text);
+  border-radius: var(--r-lg);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-soft);
+  font-size: var(--fs-caption);
+  color: var(--text-primary);
   max-width: 280px;
 }
 .lingsi-ref-chip-label {
@@ -1187,15 +1348,15 @@
   height: 15px;
   flex-shrink: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .lingsi-ref-chip-x:hover {
   background: rgba(0, 0, 0, 0.07);
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .lingsi-ref-picker {
@@ -1204,9 +1365,9 @@
   gap: 8px;
 }
 .lingsi-ref-picker-hint {
-  font-size: 11.5px;
+  font-size: var(--fs-caption);
   line-height: 1.6;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   max-width: 320px;
 }
 
@@ -1214,14 +1375,14 @@
 .lingsi-composer-ta.ant-input {
   padding: 0;
   background: transparent;
-  font-size: 13.5px;
+  font-size: var(--fs-body-lg);
   line-height: 1.7;
-  color: var(--color-text);
+  color: var(--text-primary);
   resize: none;
   box-shadow: none;
 }
 .lingsi-composer-ta.ant-input::placeholder {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   opacity: 0.7;
 }
 
@@ -1239,9 +1400,9 @@
   align-items: center;
   gap: 1px;
   padding: 1px;
-  border-radius: 8px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
+  border: 1px solid var(--border);
 }
 
 .lingsi-seg-btn {
@@ -1251,21 +1412,21 @@
   height: 24px;
   padding: 0 9px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: transparent;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .lingsi-seg-btn:hover {
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 .lingsi-seg-btn-on {
-  background: var(--surface-strong);
-  color: var(--color-text);
+  background: var(--soft);
+  color: var(--text-primary);
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(20, 24, 32, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
 }
 
 .lingsi-model-pill {
@@ -1274,11 +1435,11 @@
   gap: 5px;
   height: 26px;
   padding: 0 9px;
-  border-radius: 7px;
-  border: 1px solid var(--surface-border);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
   background: transparent;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .lingsi-model-pill-warn {
@@ -1293,27 +1454,27 @@
   margin-left: auto;
   flex-shrink: 0;
   border: none;
-  border-radius: 8px;
-  background: var(--color-red); /* 红色用途 ③：唯一主行动 */
+  border-radius: var(--r-lg);
+  background: var(--brand); /* 主色用途 ③：唯一主行动 */
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.14s var(--easing), opacity 0.14s var(--easing);
+  transition: background 0.14s var(--ease), opacity 0.14s var(--ease);
 }
 .lingsi-send:hover:not(:disabled) {
-  background: #c2220c;
+  background: var(--brand-hover);
 }
 .lingsi-send:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .lingsi-send-stop {
-  background: var(--color-text-secondary);
+  background: var(--text-secondary);
 }
 .lingsi-send-stop:hover:not(:disabled) {
-  background: var(--color-text);
+  background: var(--text-primary);
 }
 
 .lingsi-composer-hint {
@@ -1321,8 +1482,8 @@
   gap: 12px;
   margin-top: 7px;
   padding: 0 2px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   opacity: 0.85;
 }
 .lingsi-composer-hint-r {
@@ -1360,13 +1521,13 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  border-radius: 1px;
+  border-radius: var(--r-sm);
   background: transparent;
-  transition: background 0.14s var(--easing);
+  transition: background 0.14s var(--ease);
 }
 .lingsi-panel-handle:hover::after,
 .lingsi-panel-handle:focus-visible::after {
-  background: rgba(222, 41, 16, 0.35);
+  background: var(--brand-soft);
 }
 .lingsi-panel-handle:focus-visible {
   outline: none;
@@ -1387,9 +1548,9 @@ body.lingsi-resizing {
   align-items: center;
   gap: 6px;
   padding-top: 12px;
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
 }
 .lingsi-panel-rail-count {
   display: inline-flex;
@@ -1398,11 +1559,11 @@ body.lingsi-resizing {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
-  background: var(--surface-strong);
-  border: 1px solid var(--surface-border);
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  border-radius: var(--r-lg);
+  background: var(--soft);
+  border: 1px solid var(--border);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
 }
 
 .lingsi-panel-tabs {
@@ -1411,7 +1572,7 @@ body.lingsi-resizing {
   align-items: center;
   gap: 4px;
   padding: 7px 10px;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
 }
 
@@ -1422,17 +1583,17 @@ body.lingsi-resizing {
   height: 26px;
   padding: 0 6px 0 9px;
   flex-shrink: 0;
-  border-radius: 7px;
-  border: 1px solid var(--surface-border);
-  background: var(--surface);
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--canvas);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.14s var(--easing), color 0.14s var(--easing);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .lingsi-ptab-active {
-  background: var(--surface-strong);
-  color: var(--color-text);
+  background: var(--soft);
+  color: var(--text-primary);
   font-weight: 500;
 }
 .lingsi-ptab-label {
@@ -1448,7 +1609,7 @@ body.lingsi-resizing {
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: inherit;
   opacity: 0.55;
@@ -1472,9 +1633,9 @@ body.lingsi-resizing {
 
 .lingsi-panel-title {
   margin: 0 0 3px;
-  font-size: 14.5px;
+  font-size: var(--fs-body-lg);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
   word-break: break-word;
 }
 
@@ -1483,27 +1644,27 @@ body.lingsi-resizing {
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
 }
 
 .lingsi-panel-tag {
   padding: 0 6px;
   line-height: 16px;
-  border-radius: 5px;
-  border: 1px solid var(--surface-border);
-  font-size: 10.5px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  font-size: var(--fs-caption);
 }
 
 .lingsi-panel-note {
   margin-bottom: 14px;
   padding: 9px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--surface-border);
-  background: var(--surface);
-  font-size: 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--canvas);
+  font-size: var(--fs-body);
   line-height: 1.7;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .lingsi-panel-preview-head {
@@ -1514,7 +1675,7 @@ body.lingsi-resizing {
 }
 
 .lingsi-panel-doc .lingsi-reply {
-  font-size: 13px;
+  font-size: var(--fs-body-lg);
   line-height: 1.85;
 }
 
@@ -1525,24 +1686,24 @@ body.lingsi-resizing {
   gap: 10px;
   align-items: flex-start;
   padding: 10px 0;
-  border-bottom: 1px dashed var(--surface-border);
+  border-bottom: 1px dashed var(--border);
 }
 .lingsi-tool-row:last-child {
   border-bottom: none;
 }
 
 .lingsi-tool-name {
-  font-size: 13px;
+  font-size: var(--fs-body-lg);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text-primary);
   font-family: Consolas, Monaco, monospace;
 }
 
 .lingsi-tool-desc {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-body);
   line-height: 1.6;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 /* ============================================================ 响应式 / 无障碍 */
@@ -1577,7 +1738,7 @@ body.lingsi-resizing {
 /* ============================================================================
    知识库问答（V27 对话档位）—— 依据卡与正文引用角标
    颜色只用既有的 --ls-* 语义变量：快照用 warn（提醒时效）、已不可见用灰阶。
-   不引入新的红色（红只保留在 新建图标 / 选中竖条 / 发送按钮 / 不可逆警示）。
+   不引入新的颜色（主色只保留在 新建图标 / 选中竖条 / 发送按钮 / 不可逆警示）。
    ========================================================================== */
 
 /* 正文里的 [n] 角标：读到哪里就能点哪里 */
@@ -1589,10 +1750,10 @@ body.lingsi-resizing {
   height: 15px;
   padding: 0 3px;
   margin: 0 1px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--ls-soft-strong);
-  color: var(--color-text-secondary);
-  font-size: 10.5px;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
   line-height: 1;
   vertical-align: 1px;
   cursor: pointer;
@@ -1602,7 +1763,7 @@ body.lingsi-resizing {
 .lingsi-cite:hover,
 .lingsi-cite:focus-visible {
   background: var(--ls-soft);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -1617,15 +1778,15 @@ body.lingsi-resizing {
 .lingsi-sources {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--surface-border);
+  border-top: 1px solid var(--border);
 }
 
 .lingsi-sources-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
-  color: var(--color-text-tertiary);
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
   letter-spacing: 0.02em;
 }
 
@@ -1636,9 +1797,9 @@ body.lingsi-resizing {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--ls-soft-strong);
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
 }
 
 .lingsi-sources-list {
@@ -1654,7 +1815,7 @@ body.lingsi-resizing {
   display: flex;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   transition: background 0.12s ease;
 }
 
@@ -1676,10 +1837,10 @@ body.lingsi-resizing {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--ls-soft-strong);
-  color: var(--color-text-secondary);
-  font-size: 10.5px;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
   line-height: 1;
 }
 
@@ -1693,18 +1854,18 @@ body.lingsi-resizing {
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
-  font-size: 12.5px;
-  color: var(--color-text-primary);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
 }
 
 /* 出处类型徽标：让人一眼看出这条依据来自公告还是策划书 */
 .lingsi-source-kind {
   flex: 0 0 auto;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--ls-soft-strong);
-  color: var(--color-text-tertiary);
-  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-caption);
 }
 
 .lingsi-source-meta {
@@ -1712,14 +1873,14 @@ body.lingsi-resizing {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 3px;
-  font-size: 11px;
-  color: var(--color-text-tertiary);
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
 }
 
 /* 快照的时间限定：必须显眼到不会被忽略 —— 这是"某时刻的数字"而不是"当前值" */
 .lingsi-source-asof {
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   background: var(--ls-warn-bg);
   border: 1px solid var(--ls-warn-line);
   color: var(--ls-warn);
@@ -1727,9 +1888,9 @@ body.lingsi-resizing {
 
 .lingsi-source-snippet {
   margin: 5px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-body);
   line-height: 1.6;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1750,14 +1911,14 @@ body.lingsi-resizing {
   padding: 0;
   border: none;
   background: none;
-  font-size: 11.5px;
-  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
   cursor: pointer;
   text-decoration: none;
 }
 
 .lingsi-source-link:hover {
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   text-decoration: underline;
 }
 
@@ -1768,7 +1929,7 @@ body.lingsi-resizing {
 
 /* 已不可见（权限被收回后回看历史）：只说明状态，不展示任何内容 */
 .lingsi-source-revoked .lingsi-source-title {
-  color: var(--color-text-tertiary);
+  color: var(--text-tertiary);
 }
 
 .lingsi-source-revoked-note {
@@ -1776,6 +1937,6 @@ body.lingsi-resizing {
   align-items: center;
   gap: 4px;
   margin-top: 3px;
-  font-size: 11.5px;
-  color: var(--color-text-tertiary);
+  font-size: var(--fs-caption);
+  color: var(--text-tertiary);
 }

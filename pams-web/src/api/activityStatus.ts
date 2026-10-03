@@ -16,7 +16,23 @@ export const ACTIVITY_STATUS_LABEL: Record<string, string> = Object.fromEntries(
   ACTIVITY_STATUS_OPTIONS.map((o) => [o.value, o.label]),
 )
 
-/** status → Tag 红系配色（StatusTag / Dashboard 活动动态共用） */
+/**
+ * status → 色调名（StatusTag 用；取值见 components/glass/StatusTag.tsx 的 StatusTone）。
+ * 状态语义映射：已下达=待办 / 排期中=进行中 / 策划审核=警示 / 执行中=定位 / 已完成=成功 / 已归档=中性。
+ */
+export const ACTIVITY_STATUS_TONE: Record<string, string> = {
+  ASSIGNED: 'warning',
+  PLANNING: 'processing',
+  PLAN_REVIEW: 'warning',
+  EXECUTING: 'brand',
+  FINISHED: 'success',
+  ARCHIVED: 'neutral',
+}
+
+/**
+ * @deprecated 实底彩色标签已废弃（设计方案 §6.2：统一改为浅底 tone 标签）。
+ * 仅保留给尚未迁移的图表/图例（Dashboard 活动动态）使用。新代码请用 ACTIVITY_STATUS_TONE。
+ */
 export const ACTIVITY_STATUS_COLOR: Record<string, string> = {
   ASSIGNED: '#DE2910',
   PLANNING: '#F5222D',

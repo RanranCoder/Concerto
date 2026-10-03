@@ -1,5 +1,7 @@
 package com.pams.module.agent.stream;
 
+import com.pams.module.agent.registry.AgentCatalog;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -49,6 +51,11 @@ public record AgentStreamEvent(String streamId, int seq, String type,
     public static final String MESSAGE_DELTA = "MESSAGE_DELTA";
 
     // —— 多 Agent 协作事件（B 批次） ——
+    /**
+     * 协作判定：标准模式下判定「这一轮升级为协作」时先发出，带 mode 与理由。
+     * 前端据此在过程区顶部显示一行「判定为协作：…」，否则用户不知道为何突然出现专家。
+     */
+    public static final String COLLAB_DECISION = "COLLAB_DECISION";
     /** 某专家 Agent 开始执行 */
     public static final String AGENT_START = "AGENT_START";
     /** 某专家 Agent 执行结束 */
@@ -67,32 +74,71 @@ public record AgentStreamEvent(String streamId, int seq, String type,
         return of(streamId, seq, RUN_DONE, p);
     }
 
+    /**
+     * 给协作事件补上会话归属。
+     *
+     * <p>过程事件按**用户**广播，前端必须能判断「这条事件属不属于我正在看的会话」，
+     * 否则后台或其它会话的协作会把专家行进当前时间轴。
+     * 用会话 id 而不是 streamId：streamId 要等 REST 返回，事件可能先到。
+     */
+    private static void withConversation(Map<String, Object> p, Long conversationId) {
+        if (conversationId != null) {
+            p.put("conversationId", conversationId);
+        }
+    }
+
     public static AgentStreamEvent agentStart(String streamId, int seq, String agent,
-                                              Long stepId, Long parentStepId) {
+                                              Long stepId, Long parentStepId, Long conversationId) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("agent", agent);
+        // 展示名随事件下发：只给英文 id 的话前端只能显示 "retrieval" 而不是「检索专家」
+        p.put("displayName", AgentCatalog.displayName(agent));
         p.put("stepId", stepId);
         if (parentStepId != null) p.put("parentStepId", parentStepId);
+        withConversation(p, conversationId);
         return of(streamId, seq, AGENT_START, p);
     }
 
     public static AgentStreamEvent agentEnd(String streamId, int seq, String agent, Long stepId,
-                                            String status, long durationMs) {
+                                            String status, long durationMs, Long conversationId) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("agent", agent);
+        p.put("displayName", AgentCatalog.displayName(agent));
         p.put("stepId", stepId);
         p.put("status", status);
         p.put("durationMs", durationMs);
+        withConversation(p, conversationId);
         return of(streamId, seq, AGENT_END, p);
     }
 
     public static AgentStreamEvent agentDelegate(String streamId, int seq, String from, String to,
-                                                 String reason) {
+                                                 String reason, Long conversationId) {
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("from", from);
+        p.put("fromName", AgentCatalog.displayName(from));
         p.put("to", to);
+        p.put("toName", AgentCatalog.displayName(to));
         if (reason != null) p.put("reason", reason);
+        withConversation(p, conversationId);
         return of(streamId, seq, AGENT_DELEGATE, p);
+    }
+
+    /**
+     * 协作判定事件：告诉用户「这一轮为什么升级成了协作」。
+     * 没有它的话，用户只会看到突然冒出一堆专家行而不知道为什么。
+     *
+     * <p>带上 {@code conversationId} 是刻意的：过程事件按**用户**广播，
+     * 而前端在 REST 返回之前并不知道本轮 streamId。会话 id 是发请求时就知道的，
+     * 前端据此就能判断「这条协作事件属不属于我正在看的会话」，
+     * 避免后台/其它会话的协作事件串进当前时间轴。
+     */
+    public static AgentStreamEvent collabDecision(String streamId, int seq, Long conversationId,
+                                                  String mode, String reason) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("conversationId", conversationId);
+        p.put("mode", mode);
+        p.put("reason", reason);
+        return of(streamId, seq, COLLAB_DECISION, p);
     }
 
     public static AgentStreamEvent reviewResult(String streamId, int seq, String verdict,

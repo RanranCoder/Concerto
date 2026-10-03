@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { AgentArtifact } from '@/api/agent'
 import type { DeltaChip } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
+import { ARTIFACT_FALLBACK_COLOR, ARTIFACT_TYPE_COLORS } from '@/styles/categoryColors'
 import { Caret, Check, OpenExternal } from './LingsiIcons'
 
 interface Props {
@@ -27,24 +28,17 @@ const TYPE_LABEL: Record<string, string> = {
 /**
  * 实体类型 → 识别色块（首字 + 底色）。
  *
- * 色值写 8 位 hex / rgb 字面量而不是 `var(--color-red)` 那类变量拼接 ——
- * CSS 变量是 token 级替换，`var(--x)55` 不会合成 8 位 hex（项目已踩过）。
- * 这里刻意**不用品牌红**：红色已收窄到 4 处（发送/选中竖条/不可逆警示/引用 hover），
- * 产物行的色块只承担"分辨类型"，不承担强调。
+ * 色值集中在 styles/categoryColors.ts：这是**分类 identity 色**（只承担「分辨类型」），
+ * 不是语义色，所以刻意用固定 hex 而非 var(--brand) 这类变量 ——
+ * ① CSS 变量是 token 级替换，`var(--x)55` 不会合成 8 位 hex（项目已踩过）；
+ * ② 跟着主题/组织主色变会让不同类型之间更难分辨。
  */
-const TYPE_STYLE: Record<string, string> = {
-  activity: '#c8703f',
-  member: '#3f6fbf',
-  article: '#3f6fbf',
-  seatLayout: '#6b7a8f',
-  announcement: '#a9701a',
-  notification: '#7f77dd',
-  plan: '#4f7a52',
-}
-
 function glyph(a: AgentArtifact): { text: string; bg: string } {
   const label = TYPE_LABEL[a.entityType] ?? '产物'
-  return { text: label.slice(0, 1), bg: TYPE_STYLE[a.entityType] ?? '#6b7280' }
+  return {
+    text: label.slice(0, 1),
+    bg: ARTIFACT_TYPE_COLORS[a.entityType] ?? ARTIFACT_FALLBACK_COLOR,
+  }
 }
 
 /**

@@ -12,7 +12,7 @@ export default function ThemeSwitch() {
         shape="circle"
         icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
         onClick={toggle}
-        style={{ color: 'var(--color-text)' }}
+        style={{ color: 'var(--text-primary)' }}
       />
     </Tooltip>
   )
