@@ -1,4 +1,6 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useState } from 'react'
+import { RecordsNav, RecordsName } from '@/components/records/RecordsLayout'
 import {
   App,
   Button,
@@ -20,7 +22,6 @@ import {
 import { useNavigate } from 'react-router-dom'
 import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
@@ -64,13 +65,16 @@ interface StageFormValues {
   remark?: string
 }
 
-const STATUS_OPTIONS = PARTY_STAGES.map((s) => ({ value: s.label, label: s.label }))
+const STATUS_OPTIONS = PARTY_STAGES.map((s) => ({
+  value: s.label,
+  label: s.label,
+}))
 
 export default function PartyMemberList() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+  const isMinisterOrAbove = (user?.permissions ?? []).includes('party:manage')
 
   const [data, setData] = useState<PartyMemberRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -79,6 +83,9 @@ export default function PartyMemberList() {
   const [size, setSize] = useState(10)
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<string | undefined>()
+  const [stageCounts, setStageCounts] = useState<Record<string, number> | null>(
+    null,
+  )
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<PartyMemberVO | null>(null)
@@ -94,7 +101,12 @@ export default function PartyMemberList() {
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await listPartyMembers({ keyword: keyword || undefined, stage, page, size })
+      const res = await listPartyMembers({
+        keyword: keyword || undefined,
+        stage,
+        page,
+        size,
+      })
       setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
       setTotal(res.total)
     } catch {
@@ -103,6 +115,24 @@ export default function PartyMemberList() {
       setLoading(false)
     }
   }, [keyword, stage, page, size])
+
+  useEffect(() => {
+    let live = true
+    Promise.all(
+      PARTY_STAGES.map((s) =>
+        listPartyMembers({ stage: s.label, page: 1, size: 1 }).then(
+          (r) => [s.value, r.total] as const,
+        ),
+      ),
+    )
+      .then((entries) => {
+        if (live) setStageCounts(Object.fromEntries(entries))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [data])
 
   useEffect(() => {
     fetchList()
@@ -149,7 +179,9 @@ export default function PartyMemberList() {
         politicalStatus: values.politicalStatus || null,
         studentNo: values.studentNo || null,
         idCard: isMinisterOrAbove ? values.idCard || null : undefined,
-        birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
+        birthDate: values.birthDate
+          ? values.birthDate.format('YYYY-MM-DD')
+          : null,
         nativePlace: values.nativePlace || null,
         education: values.education || null,
         phone: isMinisterOrAbove ? values.phone || null : undefined,
@@ -196,11 +228,17 @@ export default function PartyMemberList() {
       await changeStage(stageTarget.id, {
         stage: values.stage,
         issueNo: values.issueNo != null ? String(values.issueNo) : undefined,
-        startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : undefined,
-        endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : undefined,
+        startDate: values.startDate
+          ? values.startDate.format('YYYY-MM-DD')
+          : undefined,
+        endDate: values.endDate
+          ? values.endDate.format('YYYY-MM-DD')
+          : undefined,
         remark: values.remark || undefined,
       })
-      message.success(`已流转为「${PARTY_STAGES.find((s) => s.value === values.stage)?.label ?? values.stage}」`)
+      message.success(
+        `已流转为「${PARTY_STAGES.find((s) => s.value === values.stage)?.label ?? values.stage}」`,
+      )
       setStageOpen(false)
       fetchList()
     } catch {
@@ -211,8 +249,25 @@ export default function PartyMemberList() {
   }
 
   const columns = [
-    { title: '姓名', dataIndex: 'name', key: 'name' },
-    { title: '班级', dataIndex: 'className', key: 'className', render: (v: string) => v || '-' },
+    {
+      title: '人员',
+      key: 'name',
+      render: (_: unknown, r: PartyMemberRecord) => (
+        <RecordsName name={r.name} meta={r.studentNo || '未填写学号'} avatar />
+      ),
+    },
+    {
+      title: '班级',
+      dataIndex: 'className',
+      key: 'className',
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '所在党支部',
+      dataIndex: 'branchName',
+      key: 'branch',
+      render: (v: string) => v || '未填写',
+    },
     {
       title: '身份',
       dataIndex: 'politicalStatus',
@@ -227,29 +282,57 @@ export default function PartyMemberList() {
     },
     // 电话为敏感字段：仅部长及以上（roleLevel >= 3）显示
     ...(isMinisterOrAbove
-      ? [{ title: '电话', dataIndex: 'phone', key: 'phone', render: (v: string) => v || '-' }]
+      ? [
+          {
+            title: '电话',
+            dataIndex: 'phone',
+            key: 'phone',
+            render: (v: string) => v || '-',
+          },
+        ]
       : []),
     {
       title: '操作',
       key: 'action',
+      align: 'right' as const,
       width: 260,
       render: (_: unknown, r: PartyMemberRecord) => (
         <Space size="small">
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/party/members/${r.id}`)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/party/members/${r.id}`)}
+          >
             详情
           </Button>
           {isMinisterOrAbove && (
-            <Button type="link" size="small" icon={<RetweetOutlined />} onClick={() => openStage(r)}>
+            <Button
+              type="link"
+              size="small"
+              icon={<RetweetOutlined />}
+              onClick={() => openStage(r)}
+            >
               流转
             </Button>
           )}
           {isMinisterOrAbove && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEdit(r)}
+            >
               编辑
             </Button>
           )}
           {isMinisterOrAbove && (
-            <Popconfirm title="确认删除该成员？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+            <Popconfirm
+              title="确认删除该成员？"
+              onConfirm={() => handleDelete(r.id)}
+              okText="删除"
+              cancelText="取消"
+            >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 删除
               </Button>
@@ -260,11 +343,123 @@ export default function PartyMemberList() {
     },
   ]
 
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="填写身份资料、组织信息与联系方式。"
+        title={editing ? '编辑成员' : '新增成员'}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setModalOpen(false)}>取消</Button>
+            <Button type="primary" loading={saving} onClick={handleSave}>
+              保存
+            </Button>
+          </Space>
+        }
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `edit-${editing.id}` : 'create'}
+          initialValues={formInit}
+        >
+          <FormSection title="基本资料">
+            <Form.Item
+              name="name"
+              label="姓名"
+              rules={[{ required: true, message: '请输入姓名' }]}
+            >
+              <Input maxLength={50} placeholder="请输入姓名" />
+            </Form.Item>
+            <Form.Item name="gender" label="性别">
+              <Select
+                options={GENDER_OPTIONS}
+                style={{ width: 100 }}
+                placeholder="请选择"
+              />
+            </Form.Item>
+            <Form.Item name="nation" label="民族">
+              <Input
+                maxLength={30}
+                style={{ width: 140 }}
+                placeholder="如 汉族"
+              />
+            </Form.Item>
+            <Form.Item name="className" label="班级">
+              <Input maxLength={100} placeholder="如 计科2301" />
+            </Form.Item>
+            <Form.Item name="studentNo" label="学号">
+              <Input maxLength={20} placeholder="请输入学号" />
+            </Form.Item>
+            <Form.Item name="birthDate" label="出生日期">
+              <DatePicker placeholder="选择日期" />
+            </Form.Item>
+            <Form.Item name="education" label="学历">
+              <Input
+                maxLength={50}
+                style={{ width: 120 }}
+                placeholder="如 本科在读"
+              />
+            </Form.Item>
+            <Form.Item name="nativePlace" label="籍贯">
+              <Input maxLength={100} placeholder="如 广东广州" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="组织信息">
+            <Form.Item
+              className="form-field-wide"
+              name="branchName"
+              label="所在党支部"
+            >
+              <Input
+                maxLength={100}
+                placeholder="如 信息与智能工程学院学生第一党支部"
+              />
+            </Form.Item>
+            <Form.Item name="politicalStatus" label="政治面貌">
+              <Select options={POLITICAL_OPTIONS} placeholder="请选择" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="联系资料与备注">
+            {isMinisterOrAbove && (
+              <>
+                <Form.Item name="idCard" label="身份证号">
+                  <Input
+                    maxLength={18}
+                    placeholder="敏感字段，仅部长及以上可见"
+                  />
+                </Form.Item>
+                <Form.Item name="phone" label="联系电话">
+                  <Input
+                    maxLength={20}
+                    placeholder="敏感字段，仅部长及以上可见"
+                  />
+                </Form.Item>
+                <Form.Item name="homeAddress" label="家庭地址">
+                  <Input
+                    maxLength={255}
+                    placeholder="敏感字段，仅部长及以上可见"
+                  />
+                </Form.Item>
+              </>
+            )}
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={3} maxLength={1000} />
+            </Form.Item>
+          </FormSection>
+        </Form>
+      </FormSurface>
+    )
+
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
-        title="党员信息台账"
-        description="入党积极分子 / 发展对象 / 预备党员 / 正式党员名册与阶段流转"
+        title="党务台账"
+        description="围绕个人发展历程维护台账，集中查阅名册与专项记录。"
         extra={
           isMinisterOrAbove && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -274,7 +469,24 @@ export default function PartyMemberList() {
         }
       />
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <RecordsNav section="party" />
+      <div className="records-stage-filters" aria-label="按发展阶段筛选">
+        {PARTY_STAGES.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            aria-pressed={stage === s.label}
+            onClick={() => {
+              setStage(stage === s.label ? undefined : s.label)
+              setPage(1)
+            }}
+          >
+            {s.label}
+            <b>{stageCounts?.[s.value] ?? '—'}</b>
+          </button>
+        ))}
+      </div>
+      <GlassCard className="records-toolbar">
         <Space wrap>
           <Input.Search
             placeholder="姓名 / 学号 / 班级"
@@ -300,6 +512,7 @@ export default function PartyMemberList() {
       </GlassCard>
 
       <GlassTable<PartyMemberRecord>
+        scroll={{ x: 1000 }}
         columns={columns}
         dataSource={data}
         rowKey="id"
@@ -318,81 +531,10 @@ export default function PartyMemberList() {
       />
 
       {/* 新增 / 编辑成员 */}
-      <GlassModal
-        title={editing ? '编辑成员' : '新增成员'}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          key={editing ? `edit-${editing.id}` : 'create'}
-          initialValues={formInit}
-        >
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input maxLength={50} placeholder="请输入姓名" />
-          </Form.Item>
-          <Space size="middle" wrap>
-            <Form.Item name="gender" label="性别">
-              <Select options={GENDER_OPTIONS} style={{ width: 100 }} placeholder="请选择" />
-            </Form.Item>
-            <Form.Item name="nation" label="民族">
-              <Input maxLength={30} style={{ width: 140 }} placeholder="如 汉族" />
-            </Form.Item>
-          </Space>
-          <Form.Item name="className" label="班级">
-            <Input maxLength={100} placeholder="如 计科2301" />
-          </Form.Item>
-          <Form.Item name="branchName" label="所在党支部">
-            <Input maxLength={100} placeholder="如 信息与智能工程学院学生第一党支部" />
-          </Form.Item>
-          <Form.Item name="politicalStatus" label="政治面貌">
-            <Select options={POLITICAL_OPTIONS} placeholder="请选择" />
-          </Form.Item>
-          <Form.Item name="studentNo" label="学号">
-            <Input maxLength={20} placeholder="请输入学号" />
-          </Form.Item>
-          <Space size="middle" wrap>
-            <Form.Item name="birthDate" label="出生日期">
-              <DatePicker placeholder="选择日期" />
-            </Form.Item>
-            <Form.Item name="education" label="学历">
-              <Input maxLength={50} style={{ width: 120 }} placeholder="如 本科在读" />
-            </Form.Item>
-          </Space>
-          <Form.Item name="nativePlace" label="籍贯">
-            <Input maxLength={100} placeholder="如 广东广州" />
-          </Form.Item>
-          {isMinisterOrAbove && (
-            <>
-              <Form.Item name="idCard" label="身份证号">
-                <Input maxLength={18} placeholder="敏感字段，仅部长及以上可见" />
-              </Form.Item>
-              <Form.Item name="phone" label="联系电话">
-                <Input maxLength={20} placeholder="敏感字段，仅部长及以上可见" />
-              </Form.Item>
-              <Form.Item name="homeAddress" label="家庭地址">
-                <Input maxLength={255} placeholder="敏感字段，仅部长及以上可见" />
-              </Form.Item>
-            </>
-          )}
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={3} maxLength={1000} />
-          </Form.Item>
-        </Form>
-      </GlassModal>
 
       {/* 阶段流转 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
         title={`阶段流转 — ${stageTarget?.name ?? ''}`}
         open={stageOpen}
         onCancel={() => setStageOpen(false)}
@@ -406,12 +548,26 @@ export default function PartyMemberList() {
         }
       >
         <Form form={stageForm} layout="vertical" preserve={false}>
-          <Form.Item name="stage" label="流转至" rules={[{ required: true, message: '请选择阶段' }]}>
-            <Select options={PARTY_STAGES as unknown as { value: string; label: string }[]} placeholder="请选择阶段" />
+          <Form.Item
+            name="stage"
+            label="流转至"
+            rules={[{ required: true, message: '请选择阶段' }]}
+          >
+            <Select
+              options={
+                PARTY_STAGES as unknown as { value: string; label: string }[]
+              }
+              placeholder="请选择阶段"
+            />
           </Form.Item>
           <Space size="middle" wrap>
             <Form.Item name="issueNo" label="期数">
-              <InputNumber min={1} max={99} style={{ width: 100 }} placeholder="如 40" />
+              <InputNumber
+                min={1}
+                max={99}
+                style={{ width: 100 }}
+                placeholder="如 40"
+              />
             </Form.Item>
             <Form.Item name="startDate" label="开始日期">
               <DatePicker placeholder="选择日期" />
@@ -424,7 +580,7 @@ export default function PartyMemberList() {
             <Input.TextArea rows={3} maxLength={200} />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

@@ -1,11 +1,29 @@
+import FormSurface from '@/components/form/FormSurface'
+import { FileMark } from '@/components/records/RecordsLayout'
+import { RecordsNav } from '@/components/records/RecordsLayout'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space, Tabs } from 'antd'
-import { DeleteOutlined, DownloadOutlined, EyeOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import {
+  App,
+  Button,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+  Tabs,
+  Empty,
+  Spin,
+} from 'antd'
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
-import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import UploadFile from '@/components/glass/UploadFile'
 import FilePreviewModal from '@/components/file/FilePreviewModal'
@@ -119,7 +137,9 @@ export default function TemplateList() {
   /** F2「使用此模板」：策划书模板引导到活动策划书的「从模板库导入」；其余类型下载后给出使用指引 */
   const handleUse = async (r: TemplateVO) => {
     if (r.category === 'PLAN') {
-      message.info('请打开目标活动 → 策划书 Tab → 编辑 →「从模板库导入」，选中该模板即可自动填充章节')
+      message.info(
+        '请打开目标活动 → 策划书 Tab → 编辑 →「从模板库导入」，选中该模板即可自动填充章节',
+      )
       navigate('/activities')
       return
     }
@@ -137,79 +157,6 @@ export default function TemplateList() {
     message.success(guide[r.category] ?? '模板已下载')
   }
 
-  const columns = [
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-      ellipsis: true,
-      render: (name: string, r: TemplateVO) =>
-        r.fileId ? (
-          <Button
-            type="link"
-            size="small"
-            className="template-name-link"
-            style={{ padding: 0, height: 'auto' }}
-            onClick={() => setPreview(r)}
-          >
-            {name}
-          </Button>
-        ) : (
-          name
-        ),
-    },
-    {
-      title: '分类',
-      dataIndex: 'category',
-      key: 'category',
-      render: (c: string) => TEMPLATE_CATEGORY_MAP[c] ?? c,
-    },
-    {
-      title: '上传人',
-      key: 'createdBy',
-      width: 120,
-      render: (_: unknown, r: TemplateVO) => uploaderNameOf(r.createdBy),
-    },
-    {
-      title: '上传时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 170,
-      render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 220,
-      render: (_: unknown, r: TemplateVO) => (
-        <Space size="small" wrap>
-          {r.fileId && (
-            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleUse(r)}>
-              使用
-            </Button>
-          )}
-          {r.fileId && (
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setPreview(r)}>
-              预览
-            </Button>
-          )}
-          {r.fileId && (
-            <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(r.fileId as number, r.name)}>
-              下载
-            </Button>
-          )}
-          {hasPerm('template:manage') && (
-          <Popconfirm title="确认删除该模板？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        )}
-        </Space>
-      ),
-    },
-  ]
-
   const tabItems = TEMPLATE_CATEGORIES.map((c) => ({
     key: c,
     label: `${TEMPLATE_CATEGORY_MAP[c] ?? c}（${all.filter((t) => t.category === c).length}）`,
@@ -217,40 +164,104 @@ export default function TemplateList() {
   }))
 
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
         title="模板库"
         description="活动常用模板资产：策划书 / 座位表 / 议程表 / 签到表 / 水牌 / LOGO / 党徽 / 新闻稿"
         extra={
           hasPerm('template:manage') && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
-            上传模板
-          </Button>
-        )
+            <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
+              上传模板
+            </Button>
+          )
         }
       />
+      <RecordsNav section="archive" />
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      {/* Tabs 的 nav 自带 16px 下外边距，卡片若也用 16 的下内边距，上下会不对称（16 上 / 32 下） */}
+      <GlassCard style={{ padding: '16px 16px 0', marginBottom: 16 }}>
         <Tabs
           activeKey={category ?? 'ALL'}
           onChange={(key) => setCategory(key === 'ALL' ? undefined : key)}
-          items={[
-            { key: 'ALL', label: '全部' },
-            ...tabItems,
-          ]}
+          items={[{ key: 'ALL', label: '全部' }, ...tabItems]}
         />
       </GlassCard>
 
-      <GlassTable<TemplateVO>
-        columns={columns}
-        dataSource={data.map((r) => ({ ...r, key: r.id }))}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-        locale={{ emptyText: '暂无模板' }}
-      />
+      <Spin spinning={loading}>
+        {data.length ? (
+          <div className="records-template-grid">
+            {data.map((r) => (
+              <GlassCard key={r.id} className="records-template">
+                <FileMark name={r.originFilename || r.name} />
+                <h3>{r.name}</h3>
+                <p>
+                  {TEMPLATE_CATEGORY_MAP[r.category] ?? r.category} /{' '}
+                  {uploaderNameOf(r.createdBy)}
+                </p>
+                <p>{r.description || '组织公共模板'}</p>
+                <p>
+                  {r.createdAt ? dayjs(r.createdAt).format('YYYY-MM-DD') : '—'}
+                </p>
+                <Space size="small" wrap>
+                  {r.fileId && (
+                    <>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EyeOutlined />}
+                        onClick={() => setPreview(r)}
+                      >
+                        预览
+                      </Button>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<ThunderboltOutlined />}
+                        onClick={() => handleUse(r)}
+                      >
+                        使用
+                      </Button>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        onClick={() =>
+                          downloadFile(r.fileId!, r.originFilename || r.name)
+                        }
+                      >
+                        下载
+                      </Button>
+                    </>
+                  )}
+                  {hasPerm('template:manage') && (
+                    <Popconfirm
+                      title="确认删除该模板？"
+                      okText="删除"
+                      cancelText="取消"
+                      onConfirm={() => handleDelete(r.id)}
+                    >
+                      <Button
+                        danger
+                        type="link"
+                        size="small"
+                        icon={<DeleteOutlined />}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  )}
+                </Space>
+              </GlassCard>
+            ))}
+          </div>
+        ) : (
+          <Empty description="暂无该分类模板，可上传组织常用模板" />
+        )}
+      </Spin>
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="上传可复用的文件，并说明模板的用途。"
         title="上传模板"
         open={uploadOpen}
         onCancel={() => setUploadOpen(false)}
@@ -263,21 +274,41 @@ export default function TemplateList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={{ category: 'PLAN' }}>
-          <Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }]}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ category: 'PLAN' }}
+        >
+          <Form.Item
+            name="name"
+            label="模板名称"
+            rules={[{ required: true, message: '请输入模板名称' }]}
+          >
             <Input maxLength={150} placeholder="如 党日活动策划书模板" />
           </Form.Item>
-          <Form.Item name="category" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
-            <Select options={TEMPLATE_CATEGORY_OPTIONS} placeholder="策划书 / 座位表 / …" />
+          <Form.Item
+            name="category"
+            label="分类"
+            rules={[{ required: true, message: '请选择分类' }]}
+          >
+            <Select
+              options={TEMPLATE_CATEGORY_OPTIONS}
+              placeholder="策划书 / 座位表 / …"
+            />
           </Form.Item>
           <Form.Item name="description" label="说明">
-            <Input.TextArea rows={2} maxLength={500} placeholder="模板用途说明（可选）" />
+            <Input.TextArea
+              rows={2}
+              maxLength={500}
+              placeholder="模板用途说明（可选）"
+            />
           </Form.Item>
           <Form.Item label="文件" required>
             <UploadFile onUploaded={(id) => setFileId(id)} />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
 
       {preview?.fileId != null && (
         <FilePreviewModal

@@ -1,345 +1,497 @@
-import { useEffect, useMemo, useState } from 'react'
-import { App, Button, Empty, Form, Input, Popconfirm, Select, Space, Spin, Tree } from 'antd'
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  App,
+  Button,
+  Descriptions,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+} from 'antd'
 import {
   DeleteOutlined,
   DownloadOutlined,
+  EditOutlined,
   EyeOutlined,
-  FileOutlined,
-  FolderOutlined,
-  FolderOpenOutlined,
   PlusOutlined,
-  SearchOutlined,
 } from '@ant-design/icons'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
+import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import { useHasPerm } from '@/components/glass/RequireRole'
+import {
+  FileMark,
+  RecordsDirectory,
+  RecordsName,
+  RecordsNav,
+} from '@/components/records/RecordsLayout'
 import UploadFile from '@/components/glass/UploadFile'
 import FilePreviewModal from '@/components/file/FilePreviewModal'
 import {
   createMaterial,
+  updateMaterial,
   deleteMaterial,
-  getMaterialTree,
   listMaterials,
   MATERIAL_BIZ_TYPE_MAP,
   MATERIAL_BIZ_TYPE_OPTIONS,
-  type MaterialTreeActivityNode,
   type MaterialVO,
 } from '@/api/material'
 import { listActivities, type ActivityVO } from '@/api/activity'
+import { listDepts, type DeptVO } from '@/api/dept'
 import { downloadFile } from '@/api/file'
 
 interface MaterialFormValues {
   name: string
   bizType: string
   activityId?: number
+  deptId?: number
   tag?: string
+  description?: string
 }
-
 export default function MaterialList() {
   const { message } = App.useApp()
   const hasPerm = useHasPerm()
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [keyword, setKeyword] = useState('')
-  const [tree, setTree] = useState<MaterialTreeActivityNode[]>([])
-  const [flat, setFlat] = useState<MaterialVO[]>([])
-  const [flatTotal, setFlatTotal] = useState(0)
-  const [activities, setActivities] = useState<ActivityVO[]>([])
-  const [uploadOpen, setUploadOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [fileId, setFileId] = useState<number | null>(null)
-  const [preview, setPreview] = useState<{ fileId: number; fileName: string } | null>(null)
-  const [form] = Form.useForm<MaterialFormValues>()
-
-  const activityNameOf = (id: number | null): string => {
-    if (id == null) return '未关联活动'
-    return activities.find((a) => a.id === id)?.name ?? `#${id}`
-  }
-  const activityOptions = useMemo(
-    () => activities.map((a) => ({ value: a.id, label: a.name })),
-    [activities],
+  const [query, setQuery] = useState('')
+  const [type, setType] = useState<string>()
+  const [activityId, setActivityId] = useState<number | undefined>(
+    () => Number(params.get('activityId')) || undefined,
   )
-
-  const fetchTree = () => {
+  const [rows, setRows] = useState<MaterialVO[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [size, setSize] = useState(10)
+  const [activities, setActivities] = useState<ActivityVO[]>([])
+  const [depts, setDepts] = useState<DeptVO[]>([])
+  const [loading, setLoading] = useState(false)
+  const [editing, setEditing] = useState<MaterialVO | null>(null)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [fileId, setFileId] = useState<number | null>(null)
+  const [detail, setDetail] = useState<MaterialVO | null>(null)
+  const [preview, setPreview] = useState<MaterialVO | null>(null)
+  const [form] = Form.useForm<MaterialFormValues>()
+  const request = useRef(0)
+  const fetchList = useCallback(async () => {
+    const current = ++request.current
     setLoading(true)
-    getMaterialTree()
-      .then((res) => setTree(res ?? []))
-      .catch(() => {
-        /* http 拦截已提示 */
+    try {
+      const r = await listMaterials({
+        keyword: query || undefined,
+        bizType: type,
+        activityId,
+        page,
+        size,
       })
-      .finally(() => setLoading(false))
-  }
-
-  // 有搜索关键字时后端 tree 不参与过滤，改用分页列表
-  const fetchFlat = () => {
-    setLoading(true)
-    listMaterials({ keyword: keyword || undefined, size: 100 })
-      .then((res) => {
-        setFlat(res.records ?? [])
-        setFlatTotal(res.total)
-      })
-      .catch(() => {
-        /* http 拦截已提示 */
-      })
-      .finally(() => setLoading(false))
-  }
-
+      if (current === request.current) {
+        setRows(r.records ?? [])
+        setTotal(r.total)
+      }
+    } catch {
+      /* HTTP layer reports errors */
+    } finally {
+      if (current === request.current) setLoading(false)
+    }
+  }, [query, type, activityId, page, size])
   useEffect(() => {
-    if (keyword.trim()) fetchFlat()
-    else fetchTree()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword])
-
-  // 树节点只返回 activityId，需另查活动列表做名字映射
+    fetchList()
+  }, [fetchList])
   useEffect(() => {
-    listActivities({ size: 100 })
-      .then((res) => setActivities(res.records ?? []))
-      .catch(() => {
-        /* 干事可能无活动列表权限，树节点以 #id 兜底 */
-      })
+    listActivities({ size: 1000 })
+      .then((r) => setActivities(r.records ?? []))
+      .catch(() => {})
+    listDepts()
+      .then(setDepts)
+      .catch(() => {})
   }, [])
-
-  const openUpload = () => {
-    setFileId(null)
-    form.resetFields()
-    setUploadOpen(true)
+  const activityName = (id: number | null) =>
+    id == null
+      ? '公共资料'
+      : (activities.find((a) => a.id === id)?.name ?? `活动 #${id}`)
+  const startEdit = (row?: MaterialVO) => {
+    setEditing(row ?? null)
+    setFileId(row?.fileId ?? null)
+    setOpen(true)
   }
-
-  const handleSave = async () => {
-    const values = await form.validateFields()
-    if (!fileId) {
+  const save = async () => {
+    const v = await form.validateFields()
+    if (!fileId && !editing) {
       message.warning('请先上传材料文件')
       return
     }
     setSaving(true)
     try {
-      await createMaterial({
-        name: values.name.trim(),
-        bizType: values.bizType,
-        activityId: values.activityId ?? null,
-        tag: values.tag?.trim() || null,
+      const payload = {
+        ...v,
+        name: v.name.trim(),
+        activityId: v.activityId ?? null,
+        deptId: v.deptId ?? null,
+        tag: v.tag?.trim() || null,
+        description: v.description?.trim() || null,
         fileId,
-      })
-      message.success('材料已归档')
-      setUploadOpen(false)
-      if (keyword.trim()) fetchFlat()
-      else fetchTree()
-    } catch {
-      /* 校验失败或 http 拦截已提示 */
+      }
+      if (editing) await updateMaterial(editing.id, payload)
+      else await createMaterial(payload)
+      message.success(editing ? '归档信息已更新' : '材料已归档')
+      setOpen(false)
+      await fetchList()
     } finally {
       setSaving(false)
     }
   }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteMaterial(id)
-      message.success('已删除')
-      if (keyword.trim()) fetchFlat()
-      else fetchTree()
-    } catch {
-      /* http 拦截已提示 */
-    }
+  const remove = async (id: number) => {
+    await deleteMaterial(id)
+    message.success('材料已删除')
+    if (rows.length === 1 && page > 1) setPage(page - 1)
+    else fetchList()
   }
-
-  const leafIcon = (m: MaterialVO) =>
-    m.bizType === 'PHOTO' ? (
-      <FileOutlined style={{ color: 'var(--brand)' }} />
-    ) : (
-      <FileOutlined style={{ color: 'var(--text-secondary)' }} />
-    )
-
-  // 树数据：活动（或未关联）→ 类型 → 材料叶子
-  const treeData = useMemo(() => {
-    return tree.map((activityNode) => {
-      return {
-        key: `activity-${activityNode.activityId ?? 'none'}`,
-        title: (
-          <Space size={4}>
-            <FolderOutlined style={{ color: 'var(--brand)' }} />
-            {activityNode.activityId == null ? '未关联活动' : activityNameOf(activityNode.activityId)}
-          </Space>
-        ),
-        children: (activityNode.bizTypes ?? []).map((typeNode) => ({
-          key: `activity-${activityNode.activityId ?? 'none'}-type-${typeNode.bizType}`,
-          title: (
-            <Space size={4}>
-              <FolderOpenOutlined style={{ color: 'var(--brand)' }} />
-              <span>{MATERIAL_BIZ_TYPE_MAP[typeNode.bizType] ?? typeNode.bizType}</span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                （{typeNode.materials.length}）
-              </span>
-            </Space>
-          ),
-          children: typeNode.materials.map((m) => ({
-            key: `material-${m.id}`,
-            title: (
-              <Space size={8}>
-                {leafIcon(m)}
-                <span>{m.name}</span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                  {m.tag ? `#${m.tag}` : ''} · {dayjs(m.createdAt).format('MM-DD')}
-                </span>
-                {m.fileId && (
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() => setPreview({ fileId: m.fileId as number, fileName: m.originFilename || m.name })}
-                  />
-                )}
-                {m.fileId && (
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<DownloadOutlined />}
-                    onClick={() => downloadFile(m.fileId as number, m.name)}
-                  />
-                )}
-                {hasPerm('material:delete') && (
-                <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              )}
-              </Space>
-            ),
-          })),
-        })),
-      }
-    })
-  }, [tree, activities])
-
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
-        title="材料库"
-        description="活动材料归档，按活动 / 类型分组，替代手工汇总包"
+        title="材料与档案"
+        description="按活动与业务类型归集材料，复用模板，查阅组织工作档案。"
         extra={
           hasPerm('material:upload') && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
-            上传材料
-          </Button>
-        )
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => startEdit()}
+            >
+              上传材料
+            </Button>
+          )
         }
       />
-
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <Input.Search
-            placeholder="搜索材料名称"
-            allowClear
-            style={{ width: 260 }}
-            prefix={<SearchOutlined />}
-            onSearch={(v) => setKeyword(v)}
-          />
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {keyword.trim() ? `按名称搜索到 ${flatTotal} 条` : '当前按活动 / 类型分组展示全部材料'}
-          </span>
-        </Space>
-      </GlassCard>
-
-      <Spin spinning={loading}>
-        {keyword.trim() ? (
-          <GlassCard style={{ padding: 16 }}>
-            {flat.length === 0 ? (
-              <Empty description="未找到匹配材料" />
-            ) : (
-              flat.map((m) => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--border)' }}>
-                  {leafIcon(m)}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                      {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {activityNameOf(m.activityId)}
-                      {m.tag ? ` · #${m.tag}` : ''} · {dayjs(m.createdAt).format('YYYY-MM-DD')}
-                    </div>
+      <RecordsNav section="archive" />
+      <div className="records-layout">
+        <RecordsDirectory
+          title="材料分类"
+          value={type ?? 'ALL'}
+          items={[
+            { key: 'ALL', label: '全部材料' },
+            ...MATERIAL_BIZ_TYPE_OPTIONS.map((o) => ({
+              key: o.value,
+              label: o.label,
+            })),
+          ]}
+          onChange={(v) => {
+            setType(v === 'ALL' ? undefined : v)
+            setPage(1)
+          }}
+        />
+        <div className="records-main">
+          <GlassCard className="records-toolbar">
+            <Space wrap>
+              <Input.Search
+                aria-label="搜索材料"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                allowClear
+                placeholder="搜索材料名称"
+                style={{ width: 260 }}
+                onSearch={(v) => {
+                  setQuery(v)
+                  setPage(1)
+                }}
+              />
+              <Select
+                aria-label="按活动筛选材料"
+                placeholder="全部活动"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                value={activityId}
+                options={activities.map((a) => ({
+                  value: a.id,
+                  label: a.name,
+                }))}
+                style={{ width: 220 }}
+                onChange={(v) => {
+                  setActivityId(v)
+                  setPage(1)
+                }}
+              />
+              <Button
+                type="link"
+                onClick={() => {
+                  setKeyword('')
+                  setQuery('')
+                  setType(undefined)
+                  setActivityId(undefined)
+                  setPage(1)
+                }}
+              >
+                重置
+              </Button>
+            </Space>
+          </GlassCard>
+          <GlassTable<MaterialVO>
+            rowKey="id"
+            loading={loading}
+            dataSource={rows}
+            scroll={{ x: 950 }}
+            pagination={{
+              current: page,
+              pageSize: size,
+              total,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 份材料`,
+              onChange: (p, s) => {
+                setPage(p)
+                setSize(s)
+              },
+            }}
+            locale={{ emptyText: '没有匹配的材料，可调整筛选或上传材料' }}
+            columns={[
+              {
+                title: '文件',
+                width: 300,
+                render: (_, r) => (
+                  <div className="records-name">
+                    <FileMark name={r.originFilename || r.name} />
+                    <RecordsName
+                      name={r.name}
+                      meta={`${MATERIAL_BIZ_TYPE_MAP[r.bizType] ?? r.bizType}${r.tag ? ' / ' + r.tag : ''}`}
+                    />
                   </div>
-                  {m.fileId && (
+                ),
+              },
+              {
+                title: '关联活动',
+                width: 210,
+                render: (_, r) => activityName(r.activityId),
+              },
+              {
+                title: '所属部门',
+                width: 120,
+                render: (_, r) =>
+                  depts.find((d) => d.id === r.deptId)?.name ??
+                  (r.deptId == null ? '公共资料' : `部门 #${r.deptId}`),
+              },
+              {
+                title: '上传日期',
+                width: 120,
+                render: (_, r) => dayjs(r.createdAt).format('YYYY-MM-DD'),
+              },
+              {
+                title: '操作',
+                width: 220,
+                render: (_, r) => (
+                  <Space size="small" wrap>
                     <Button
                       type="link"
                       size="small"
-                      icon={<EyeOutlined />}
-                      onClick={() => setPreview({ fileId: m.fileId as number, fileName: m.originFilename || m.name })}
+                      onClick={() => setDetail(r)}
                     >
-                      预览
+                      详情
                     </Button>
-                  )}
-                  {m.fileId && (
-                    <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => downloadFile(m.fileId as number, m.name)}>
-                      下载
-                    </Button>
-                  )}
-                  {hasPerm('material:delete') && (
-                  <Popconfirm title="确认删除该材料？" onConfirm={() => handleDelete(m.id)} okText="删除" cancelText="取消">
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                )}
-                </div>
-              ))
-            )}
-          </GlassCard>
-        ) : (
-          <GlassCard style={{ padding: 16 }}>
-            {treeData.length === 0 ? (
-              <Empty description="暂无归档材料" />
-            ) : (
-              <Tree
-                showLine
-                defaultExpandAll
-                blockNode
-                treeData={treeData}
-              />
-            )}
-          </GlassCard>
-        )}
-      </Spin>
-
-      <GlassModal
-        title="上传材料"
-        open={uploadOpen}
-        onCancel={() => setUploadOpen(false)}
+                    {r.fileId && (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EyeOutlined />}
+                        onClick={() => setPreview(r)}
+                      >
+                        预览
+                      </Button>
+                    )}
+                    {r.fileId && (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        onClick={() =>
+                          downloadFile(r.fileId!, r.originFilename || r.name)
+                        }
+                      >
+                        下载
+                      </Button>
+                    )}
+                    {hasPerm('material:upload') && (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => startEdit(r)}
+                      >
+                        编辑
+                      </Button>
+                    )}
+                    {hasPerm('material:delete') && (
+                      <Popconfirm
+                        title="确认删除该材料？"
+                        okText="删除"
+                        cancelText="取消"
+                        onConfirm={() => remove(r.id)}
+                      >
+                        <Button
+                          type="link"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                        >
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </div>
+      </div>
+      <FormSurface
+        mode="drawer"
+        description="填写材料信息，便于按活动、类型和部门查找。"
+        title={editing ? '编辑归档信息' : '上传材料'}
+        open={open}
+        onCancel={() => setOpen(false)}
         footer={
           <Space>
-            <Button onClick={() => setUploadOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
+            <Button onClick={() => setOpen(false)}>取消</Button>
+            <Button type="primary" loading={saving} onClick={save}>
               保存
             </Button>
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={{ bizType: 'OTHER' }}>
-          <Form.Item name="name" label="材料名称" rules={[{ required: true, message: '请输入材料名称' }]}>
-            <Input maxLength={150} placeholder="如 第X次党日活动照片" />
-          </Form.Item>
-          <Form.Item name="bizType" label="业务类型" rules={[{ required: true, message: '请选择业务类型' }]}>
-            <Select options={MATERIAL_BIZ_TYPE_OPTIONS} placeholder="策划书 / 签到表 / 照片…" />
-          </Form.Item>
-          <Form.Item name="activityId" label="关联活动">
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={activityOptions}
-              placeholder="选择关联活动（可选）"
-            />
-          </Form.Item>
-          <Form.Item name="tag" label="标签">
-            <Input maxLength={200} placeholder="如 12月26日 / 党日活动（可选）" />
-          </Form.Item>
-          <Form.Item label="文件" required>
-            <UploadFile onUploaded={(id) => setFileId(id)} />
-          </Form.Item>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing?.id ?? 'new'}
+          initialValues={
+            editing
+              ? {
+                  ...editing,
+                  activityId: editing.activityId ?? undefined,
+                  deptId: editing.deptId ?? undefined,
+                }
+              : { bizType: 'OTHER', activityId }
+          }
+        >
+          <FormSection title="材料信息">
+            <Form.Item
+              label="材料名称"
+              name="name"
+              rules={[
+                { required: true, whitespace: true, message: '请输入材料名称' },
+              ]}
+            >
+              <Input maxLength={150} />
+            </Form.Item>
+            <Form.Item
+              label="业务类型"
+              name="bizType"
+              rules={[{ required: true }]}
+            >
+              <Select options={MATERIAL_BIZ_TYPE_OPTIONS} />
+            </Form.Item>
+            <Form.Item label="标签" name="tag">
+              <Input maxLength={200} />
+            </Form.Item>
+            <Form.Item label="说明" name="description">
+              <Input.TextArea rows={3} maxLength={1000} />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="归档位置">
+            <Form.Item label="关联活动" name="activityId">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={activities.map((a) => ({
+                  value: a.id,
+                  label: a.name,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item label="所属部门" name="deptId">
+              <Select
+                allowClear
+                options={depts.map((d) => ({ value: d.id, label: d.name }))}
+              />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="材料文件">
+            {!editing ? (
+              <Form.Item label="文件" required>
+                <UploadFile onUploaded={setFileId} />
+              </Form.Item>
+            ) : (
+              <p className="records-note">
+                当前文件：{editing.originFilename || editing.name}
+              </p>
+            )}
+          </FormSection>
         </Form>
+      </FormSurface>
+      <GlassModal
+        title="归档信息"
+        open={detail != null}
+        onCancel={() => setDetail(null)}
+        footer={<Button onClick={() => setDetail(null)}>关闭</Button>}
+      >
+        {detail && (
+          <div className="records-panel">
+            <Descriptions
+              column={1}
+              layout="vertical"
+              items={[
+                { key: 'name', label: '文件', children: detail.name },
+                {
+                  key: 'activity',
+                  label: '关联活动',
+                  children: activityName(detail.activityId),
+                },
+                {
+                  key: 'type',
+                  label: '业务类型',
+                  children:
+                    MATERIAL_BIZ_TYPE_MAP[detail.bizType] ?? detail.bizType,
+                },
+                {
+                  key: 'uploader',
+                  label: '上传人',
+                  children:
+                    detail.uploaderId == null
+                      ? '未记录'
+                      : `#${detail.uploaderId}`,
+                },
+                { key: 'tag', label: '标签', children: detail.tag || '未填写' },
+                {
+                  key: 'description',
+                  label: '说明',
+                  children: detail.description || '未填写',
+                },
+              ]}
+            />
+            {detail.activityId != null && (
+              <div className="records-related">
+                <Button
+                  type="link"
+                  onClick={() => navigate(`/activities/${detail.activityId}`)}
+                >
+                  查看关联活动
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </GlassModal>
-
       <FilePreviewModal
         open={preview != null}
         onClose={() => setPreview(null)}
         fileId={preview?.fileId ?? 0}
-        fileName={preview?.fileName ?? ''}
+        fileName={preview?.originFilename || preview?.name || ''}
       />
     </div>
   )

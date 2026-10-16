@@ -1,8 +1,23 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space, Upload } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { RecordsNav } from '@/components/records/RecordsLayout'
+import {
+  App,
+  Button,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+  Upload,
+} from 'antd'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import { useAuthStore } from '@/stores/auth'
@@ -34,7 +49,7 @@ interface RosterFormValues {
 export default function PartyRosterList() {
   const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
-  const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+  const isMinisterOrAbove = (user?.permissions ?? []).includes('party:manage')
 
   const [type, setType] = useState<string | undefined>()
   const [issueNo, setIssueNo] = useState<string | undefined>()
@@ -144,7 +159,9 @@ export default function PartyRosterList() {
     setImporting(true)
     try {
       const res = await importRosters(importFile, values.rosterType)
-      message.success(`导入完成：新增 ${res.added} 条，跳过重复 ${res.skipped} 条`)
+      message.success(
+        `导入完成：新增 ${res.added} 条，跳过重复 ${res.skipped} 条`,
+      )
       setImportOpen(false)
       fetchList()
     } catch {
@@ -156,30 +173,71 @@ export default function PartyRosterList() {
 
   const columns = [
     { title: '姓名', dataIndex: 'name', key: 'name' },
-    { title: '性别', dataIndex: 'gender', key: 'gender', render: (v: string) => v || '-' },
-    { title: '学号', dataIndex: 'studentNo', key: 'studentNo', render: (v: string) => v || '-' },
-    { title: '班级', dataIndex: 'className', key: 'className', render: (v: string) => v || '-' },
-    { title: '所在支部', dataIndex: 'branchName', key: 'branchName', render: (v: string) => v || '-' },
+    {
+      title: '性别',
+      dataIndex: 'gender',
+      key: 'gender',
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '学号',
+      dataIndex: 'studentNo',
+      key: 'studentNo',
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '班级',
+      dataIndex: 'className',
+      key: 'className',
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '所在支部',
+      dataIndex: 'branchName',
+      key: 'branchName',
+      render: (v: string) => v || '-',
+    },
     {
       title: '类型',
       dataIndex: 'rosterType',
       key: 'rosterType',
       render: (v: string) => ROSTER_TYPE_MAP[v] ?? v,
     },
-    { title: '期数', dataIndex: 'issueNo', key: 'issueNo', render: (v: string) => v || '-' },
+    {
+      title: '期数',
+      dataIndex: 'issueNo',
+      key: 'issueNo',
+      render: (v: string) => v || '-',
+    },
     ...(isMinisterOrAbove
       ? [
           {
             title: '操作',
             key: 'action',
+            align: 'right' as const,
             width: 140,
             render: (_: unknown, r: RosterRecord) => (
               <Space size="small">
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(r)}
+                >
                   编辑
                 </Button>
-                <Popconfirm title="确认删除该名单？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                <Popconfirm
+                  title="确认删除该名单？"
+                  onConfirm={() => handleDelete(r.id)}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  >
                     删除
                   </Button>
                 </Popconfirm>
@@ -191,9 +249,9 @@ export default function PartyRosterList() {
   ]
 
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
-        title="入党名单台账"
+        title="党务台账"
         description="推优 / 通过 / 汇总 / 发展对象 / 转移名单"
         extra={
           isMinisterOrAbove && (
@@ -201,7 +259,11 @@ export default function PartyRosterList() {
               <Button icon={<UploadOutlined />} onClick={openImport}>
                 导入名单
               </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+              >
                 新增名单
               </Button>
             </Space>
@@ -209,12 +271,15 @@ export default function PartyRosterList() {
         }
       />
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <RecordsNav section="party" />
+      <GlassCard className="records-toolbar">
         <Space wrap>
           <Select
             placeholder="名单类型"
             allowClear
-            options={ROSTER_TYPES as unknown as { value: string; label: string }[]}
+            options={
+              ROSTER_TYPES as unknown as { value: string; label: string }[]
+            }
             style={{ width: 160 }}
             value={type}
             onChange={setType}
@@ -229,6 +294,7 @@ export default function PartyRosterList() {
       </GlassCard>
 
       <GlassTable<RosterRecord>
+        scroll={{ x: 1000 }}
         columns={columns}
         dataSource={list}
         rowKey="id"
@@ -236,7 +302,9 @@ export default function PartyRosterList() {
         pagination={false}
       />
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="核对人员资料与所属党支部后保存。"
         title={editing ? '编辑名单' : '新增名单'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -256,37 +324,73 @@ export default function PartyRosterList() {
           key={editing ? `edit-${editing.id}` : 'create'}
           initialValues={formInit}
         >
-          <Form.Item name="rosterType" label="名单类型" rules={[{ required: true, message: '请选择名单类型' }]}>
-            <Select options={ROSTER_TYPES as unknown as { value: string; label: string }[]} placeholder="请选择" />
-          </Form.Item>
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input maxLength={50} placeholder="请输入姓名" />
-          </Form.Item>
-          <Space size="middle" wrap>
-            <Form.Item name="gender" label="性别">
-              <Select options={GENDER_OPTIONS} style={{ width: 100 }} placeholder="请选择" />
-            </Form.Item>
-            <Form.Item name="studentNo" label="学号">
-              <Input maxLength={20} style={{ width: 180 }} placeholder="请输入学号" />
+          <FormSection title="名单信息">
+            <Form.Item
+              name="rosterType"
+              label="名单类型"
+              rules={[{ required: true, message: '请选择名单类型' }]}
+            >
+              <Select
+                options={
+                  ROSTER_TYPES as unknown as { value: string; label: string }[]
+                }
+                placeholder="请选择"
+              />
             </Form.Item>
             <Form.Item name="issueNo" label="期数">
-              <Input maxLength={20} style={{ width: 120 }} placeholder="如 40" />
+              <Input
+                maxLength={20}
+                style={{ width: 120 }}
+                placeholder="如 40"
+              />
             </Form.Item>
-          </Space>
-          <Form.Item name="className" label="班级">
-            <Input maxLength={100} placeholder="如 计科2301" />
-          </Form.Item>
-          <Form.Item name="branchName" label="所在支部">
-            <Input maxLength={100} placeholder="如 信息与智能工程学院学生第一党支部" />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={3} maxLength={200} />
-          </Form.Item>
+          </FormSection>
+          <FormSection title="人员资料">
+            <Form.Item
+              name="name"
+              label="姓名"
+              rules={[{ required: true, message: '请输入姓名' }]}
+            >
+              <Input maxLength={50} placeholder="请输入姓名" />
+            </Form.Item>
+            <Form.Item name="gender" label="性别">
+              <Select
+                options={GENDER_OPTIONS}
+                style={{ width: 100 }}
+                placeholder="请选择"
+              />
+            </Form.Item>
+            <Form.Item name="studentNo" label="学号">
+              <Input
+                maxLength={20}
+                style={{ width: 180 }}
+                placeholder="请输入学号"
+              />
+            </Form.Item>
+            <Form.Item name="className" label="班级">
+              <Input maxLength={100} placeholder="如 计科2301" />
+            </Form.Item>
+            <Form.Item
+              className="form-field-wide"
+              name="branchName"
+              label="所在支部"
+            >
+              <Input
+                maxLength={100}
+                placeholder="如 信息与智能工程学院学生第一党支部"
+              />
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={3} maxLength={200} />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
 
       {/* F3：xlsx 批量导入名单 */}
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="选择名单类型与文件，导入后核对结果。"
         title="导入名单"
         open={importOpen}
         onCancel={() => setImportOpen(false)}
@@ -299,9 +403,23 @@ export default function PartyRosterList() {
           </Space>
         }
       >
-        <Form form={importForm} layout="vertical" preserve={false} initialValues={{ rosterType: 'ACTIVE' }}>
-          <Form.Item name="rosterType" label="名单类型" rules={[{ required: true, message: '请选择名单类型' }]}>
-            <Select options={ROSTER_TYPES as unknown as { value: string; label: string }[]} placeholder="请选择" />
+        <Form
+          form={importForm}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ rosterType: 'ACTIVE' }}
+        >
+          <Form.Item
+            name="rosterType"
+            label="名单类型"
+            rules={[{ required: true, message: '请选择名单类型' }]}
+          >
+            <Select
+              options={
+                ROSTER_TYPES as unknown as { value: string; label: string }[]
+              }
+              placeholder="请选择"
+            />
           </Form.Item>
           <Form.Item label="xlsx 文件" required>
             <Upload
@@ -312,17 +430,22 @@ export default function PartyRosterList() {
                 return false
               }}
               onRemove={() => setImportFile(null)}
-              fileList={importFile ? [{ uid: '-1', name: importFile.name, status: 'done' }] : []}
+              fileList={
+                importFile
+                  ? [{ uid: '-1', name: importFile.name, status: 'done' }]
+                  : []
+              }
             >
               <Button icon={<UploadOutlined />}>选择文件</Button>
             </Upload>
           </Form.Item>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            支持 .xlsx / .xls；表头需含「姓名」「学号」列（性别/班级/支部可选，列顺序不限，可跳过标题行）；
+            支持 .xlsx /
+            .xls；表头需含「姓名」「学号」列（性别/班级/支部可选，列顺序不限，可跳过标题行）；
             与已有名单按「类型 + 姓名 + 学号」自动去重，重复行跳过不重复入库。
           </div>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

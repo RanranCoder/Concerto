@@ -1,18 +1,45 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Alert, Button, Descriptions, Drawer, Empty, Form, Input, Modal, Select, Space,
-  Spin, Table, Tabs, Tag, Tooltip, message,
+  Alert,
+  App,
+  Button,
+  Descriptions,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  Tooltip,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  kbChunks, kbChunksOf, kbCreateDocument, kbRefreshSnapshots, kbReindex, kbRetrievals,
-  kbSnapshotSpecs, kbSnapshots, kbSources, kbStats,
+  kbChunks,
+  kbChunksOf,
+  kbCreateDocument,
+  kbRefreshSnapshots,
+  kbReindex,
+  kbRetrievals,
+  kbSnapshotSpecs,
+  kbSnapshots,
+  kbSources,
+  kbStats,
 } from '@/api/knowledge'
 import type {
-  KbRetrievalLogVO, KbSnapshotSpecVO, KbSnapshotVO, KnowledgeChunkVO,
-  KnowledgeSourceVO, KnowledgeStatsVO,
+  KbRetrievalLogVO,
+  KbSnapshotSpecVO,
+  KbSnapshotVO,
+  KnowledgeChunkVO,
+  KnowledgeSourceVO,
+  KnowledgeStatsVO,
 } from '@/api/knowledge'
 import { useAuthStore } from '@/stores/auth'
+import PageHeader from '@/components/glass/PageHeader'
 
 /** 后端 LocalDateTime 序列化成 `2026-09-14T20:13:45`；只展示到分钟 */
 function fmt(iso: string | null | undefined, withTime = true): string {
@@ -58,6 +85,7 @@ const SKIP_LABEL: Record<string, { text: string; color: string }> = {
  * 也没法判断该补语料还是该修索引。
  */
 export default function KnowledgeBase() {
+  const { message } = App.useApp()
   const perms = useAuthStore((s) => s.user?.permissions) ?? []
   const canManage = perms.includes('kb:manage')
 
@@ -85,47 +113,53 @@ export default function KnowledgeBase() {
   }, [loadOverview])
 
   const sourceOptions = useMemo(
-    () => sources.map((s) => ({ value: s.sourceType, label: `${s.label}（${s.chunkCount} 条）` })),
+    () =>
+      sources.map((s) => ({
+        value: s.sourceType,
+        label: `${s.label}（${s.chunkCount} 条）`,
+      })),
     [sources],
   )
 
   return (
-    <div className="page-container">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>知识库</h2>
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-            灵思「对话」档位能检索到的全部资料。内容来自平台各业务数据与人工录入，
-            均按来源各自的可见范围过滤。
-          </div>
-        </div>
-        <Space>
-          <Button onClick={() => void loadOverview()} loading={loadingStats}>
-            刷新
-          </Button>
-          {canManage && (
-            <Tooltip title="遍历全部知识源重建索引。日常由变更事件自动增量更新，这里是兜底与修复入口">
-              <Button
-                type="primary"
-                onClick={async () => {
-                  const hide = message.loading('正在重建索引…', 0)
-                  try {
-                    const r = await kbReindex()
-                    message.success(`重建完成，当前共 ${r.totalChunks} 个分块`)
-                    await loadOverview()
-                  } catch {
-                    /* 拦截器已提示 */
-                  } finally {
-                    hide()
-                  }
-                }}
-              >
-                重建索引
-              </Button>
-            </Tooltip>
-          )}
-        </Space>
-      </div>
+    <div>
+      {/* 页头统一走 PageHeader：原来手写的 <h2 style={{margin:0}}> 走浏览器默认 1.5em/1.571，
+          与全站 .page-header-title 的 20px/1.3 不是同一档，也没有下边框与 20px 下间距；
+          顺带去掉只在 JSX 里出现、样式表里并不存在的 page-container 类。 */}
+      <PageHeader
+        title="知识库"
+        description="灵思「对话」档位能检索到的全部资料。内容来自平台各业务数据与人工录入，均按来源各自的可见范围过滤。"
+        extra={
+          <>
+            <Button onClick={() => void loadOverview()} loading={loadingStats}>
+              刷新
+            </Button>
+            {canManage && (
+              <Tooltip title="遍历全部知识源重建索引。日常由变更事件自动增量更新，这里是兜底与修复入口">
+                <Button
+                  type="primary"
+                  onClick={async () => {
+                    const hide = message.loading('正在重建索引…', 0)
+                    try {
+                      const r = await kbReindex()
+                      message.success(
+                        `重建完成，当前共 ${r.totalChunks} 个分块`,
+                      )
+                      await loadOverview()
+                    } catch {
+                      /* 拦截器已提示 */
+                    } finally {
+                      hide()
+                    }
+                  }}
+                >
+                  重建索引
+                </Button>
+              </Tooltip>
+            )}
+          </>
+        }
+      />
 
       {/* ---------- 覆盖统计 ---------- */}
       <div style={{ marginTop: 16 }}>
@@ -136,16 +170,20 @@ export default function KnowledgeBase() {
             message={
               <span>
                 检索模式：<b>{stats.retriever}</b>
-                <span style={{ marginLeft: 12, color: 'var(--text-secondary)' }}>
+                <span
+                  style={{ marginLeft: 12, color: 'var(--text-secondary)' }}
+                >
                   知识库更新于 {ago(stats.lastIndexedAt)}
-                  {stats.staleMinutes != null && `（${stats.staleMinutes} 分钟前）`}
+                  {stats.staleMinutes != null &&
+                    `（${stats.staleMinutes} 分钟前）`}
                 </span>
               </span>
             }
             description={
               <span>
                 {stats.searchModeNote}
-                {!stats.fulltextAvailable && ' —— 已降级为模糊匹配，检索会比全文索引慢。'}
+                {!stats.fulltextAvailable &&
+                  ' —— 已降级为模糊匹配，检索会比全文索引慢。'}
               </span>
             }
             style={{ marginBottom: 12 }}
@@ -154,21 +192,40 @@ export default function KnowledgeBase() {
 
         {stats && (
           <Descriptions bordered size="small" column={4}>
-            <Descriptions.Item label="知识源">{sources.length} 类</Descriptions.Item>
-            <Descriptions.Item label="人工文档">{stats.documentCount}</Descriptions.Item>
-            <Descriptions.Item label="检索分块">{stats.chunkCount}</Descriptions.Item>
+            <Descriptions.Item label="知识源">
+              {sources.length} 类
+            </Descriptions.Item>
+            <Descriptions.Item label="人工文档">
+              {stats.documentCount}
+            </Descriptions.Item>
+            <Descriptions.Item label="检索分块">
+              {stats.chunkCount}
+            </Descriptions.Item>
             <Descriptions.Item label="事实快照">
               {stats.snapshotCount ?? 0}
-              {stats.snapshotSpecCount != null && stats.snapshotSpecCount > 0 && (
-                <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontSize: 13 }}>
-                  来自 {stats.snapshotSpecCount} 个模板
-                </span>
-              )}
+              {stats.snapshotSpecCount != null &&
+                stats.snapshotSpecCount > 0 && (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      color: 'var(--text-tertiary)',
+                      fontSize: 13,
+                    }}
+                  >
+                    来自 {stats.snapshotSpecCount} 个模板
+                  </span>
+                )}
             </Descriptions.Item>
             <Descriptions.Item label="累计检索" span={2}>
               {stats.retrievalTotal}
               {stats.retrievalNoHit > 0 && (
-                <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontSize: 13 }}>
+                <span
+                  style={{
+                    marginLeft: 6,
+                    color: 'var(--text-tertiary)',
+                    fontSize: 13,
+                  }}
+                >
                   其中无依据 {stats.retrievalNoHit}
                 </span>
               )}
@@ -217,7 +274,9 @@ export default function KnowledgeBase() {
           {
             key: 'snapshot',
             label: '事实快照',
-            children: <SnapshotTab canManage={canManage} onChanged={loadOverview} />,
+            children: (
+              <SnapshotTab canManage={canManage} onChanged={loadOverview} />
+            ),
           },
         ]}
       />
@@ -228,7 +287,10 @@ export default function KnowledgeBase() {
 /* ========================================================================== 内容台账 */
 
 function LedgerTab({
-  sourceOptions, canManage, onChanged, sources,
+  sourceOptions,
+  canManage,
+  onChanged,
+  sources,
 }: {
   sourceOptions: { value: string; label: string }[]
   canManage: boolean
@@ -245,15 +307,23 @@ function LedgerTab({
 
   const [detail, setDetail] = useState<KnowledgeChunkVO[] | null>(null)
   const [detailTitle, setDetailTitle] = useState('')
-  const [expanded, setExpanded] = useState<Record<string, KnowledgeChunkVO[]>>({})
+  const [expanded, setExpanded] = useState<Record<string, KnowledgeChunkVO[]>>(
+    {},
+  )
 
+  const { message } = App.useApp()
   const [createOpen, setCreateOpen] = useState(false)
   const [form] = Form.useForm()
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await kbChunks({ sourceType, keyword: keyword || undefined, page, size })
+      const res = await kbChunks({
+        sourceType,
+        keyword: keyword || undefined,
+        page,
+        size,
+      })
       setRows(res.records ?? [])
       setTotal(res.total ?? 0)
     } catch {
@@ -267,7 +337,8 @@ function LedgerTab({
     void load()
   }, [load])
 
-  const sourceLabel = (t: string) => sources.find((s) => s.sourceType === t)?.label ?? t
+  const sourceLabel = (t: string) =>
+    sources.find((s) => s.sourceType === t)?.label ?? t
 
   const columns: ColumnsType<KnowledgeChunkVO> = [
     {
@@ -283,7 +354,9 @@ function LedgerTab({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14 }}>{r.title || '（无标题）'}</div>
           {r.path && (
-            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{r.path}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+              {r.path}
+            </div>
           )}
         </div>
       ),
@@ -306,12 +379,19 @@ function LedgerTab({
       dataIndex: 'asOf',
       width: 110,
       render: (v: string | null) =>
-        v ? <Tag color="orange">截至 {fmt(v, false)}</Tag> : <span style={{ opacity: 0.4 }}>—</span>,
+        v ? (
+          <Tag color="orange">截至 {fmt(v, false)}</Tag>
+        ) : (
+          <span style={{ opacity: 0.4 }}>—</span>
+        ),
     },
     {
       title: '字数',
       dataIndex: 'tokenLen',
       width: 70,
+      // 数值列右对齐 + 等宽数字：与全站表格的数值列同一口径（逐行数字右边缘才齐）
+      align: 'right' as const,
+      onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
       render: (v: number | null) => v ?? '—',
     },
     {
@@ -319,17 +399,133 @@ function LedgerTab({
       dataIndex: 'indexedAt',
       width: 150,
       render: (v: string | null) => (
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fmt(v)}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          {fmt(v)}
+        </span>
       ),
     },
     {
       title: '片段',
       dataIndex: 'snippet',
       render: (v: string) => (
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{v}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          {v}
+        </span>
       ),
     },
   ]
+
+  if (createOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="填写文档信息与完整正文，保留条款编号以便检索引用。"
+        title="录入制度文档"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        okText="保存并建立索引"
+        width={720}
+        onOk={async () => {
+          const v = await form.validateFields()
+          try {
+            await kbCreateDocument({
+              title: v.title,
+              docType: v.docType ?? 'REGULATION',
+              category: v.category,
+              body: v.body,
+              summary: v.summary,
+              version: v.version,
+              visibility: v.visibility ?? 'ALL',
+              status: v.status ?? 'PUBLISHED',
+            })
+            message.success('已保存，并已建立索引')
+            setCreateOpen(false)
+            form.resetFields()
+            setPage(1)
+            await load()
+            await onChanged()
+          } catch {
+            /* 拦截器已提示 */
+          }
+        }}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="请保留原文的章节与条款编号"
+          description="保留章节标题和条款编号，便于查找原文并核对引用出处。"
+        />
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={{
+            docType: 'REGULATION',
+            visibility: 'ALL',
+            status: 'PUBLISHED',
+          }}
+        >
+          <FormSection title="文档信息">
+            <Form.Item
+              className="form-field-wide"
+              name="title"
+              label="标题"
+              rules={[{ required: true, message: '请输入标题' }]}
+            >
+              <Input
+                maxLength={200}
+                placeholder="如：中国共产党发展党员工作细则"
+              />
+            </Form.Item>
+            <Form.Item name="docType" label="类型" style={{ flex: 1 }}>
+              <Select
+                options={[
+                  { value: 'REGULATION', label: '制度' },
+                  { value: 'POLICY', label: '上级文件' },
+                  { value: 'MANUAL', label: '操作指引' },
+                  { value: 'FAQ', label: '常见问答' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="category" label="业务分类" style={{ flex: 1 }}>
+              <Input placeholder="如：党员发展" />
+            </Form.Item>
+            <Form.Item name="summary" label="摘要（可选）">
+              <Input.TextArea
+                rows={2}
+                maxLength={500}
+                placeholder="一句话说明这份文件管什么"
+              />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="文档正文">
+            <Form.Item
+              name="body"
+              label="正文"
+              rules={[{ required: true, message: '请输入正文' }]}
+            >
+              <Input.TextArea
+                rows={12}
+                placeholder={
+                  '第三章 发展对象的确定\n第二十五条 党支部应当…\n第二十六条 入党介绍人应当…'
+                }
+              />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="可见范围与状态">
+            <Form.Item name="visibility" label="可见范围" style={{ flex: 1 }}>
+              <Select
+                options={[
+                  { value: 'ALL', label: '全员' },
+                  { value: 'LEADER', label: '部长及以上' },
+                ]}
+              />
+            </Form.Item>
+          </FormSection>
+        </Form>
+      </FormSurface>
+    )
 
   return (
     <>
@@ -386,9 +582,19 @@ function LedgerTab({
             const list = expanded[key]
             if (!list) return <Spin size="small" />
             return (
-              <div style={{ maxHeight: 320, overflow: 'auto', fontSize: 13, lineHeight: 1.7 }}>
-                <div style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>
-                  该来源共产出 {list.length} 个分块。点「查看」在右侧通读单个分块原文。
+              <div
+                style={{
+                  maxHeight: 320,
+                  overflow: 'auto',
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                }}
+              >
+                <div
+                  style={{ marginBottom: 8, color: 'var(--text-secondary)' }}
+                >
+                  该来源共产出 {list.length}{' '}
+                  个分块。点「查看」在右侧通读单个分块原文。
                 </div>
                 {list.map((c) => (
                   <div
@@ -400,16 +606,28 @@ function LedgerTab({
                       gap: 10,
                     }}
                   >
-                    <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                    <span
+                      style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}
+                    >
                       #{c.seq}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {c.path && (
-                        <div style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>
+                        <div
+                          style={{
+                            color: 'var(--text-tertiary)',
+                            fontSize: 13,
+                          }}
+                        >
                           {c.path}
                         </div>
                       )}
-                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      <div
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                        }}
+                      >
                         {c.content ?? c.snippet}
                       </div>
                     </div>
@@ -417,7 +635,9 @@ function LedgerTab({
                       size="small"
                       type="link"
                       onClick={() => {
-                        setDetailTitle(`${r.title ?? ''}${c.path ? ` · ${c.path}` : ''}`)
+                        setDetailTitle(
+                          `${r.title ?? ''}${c.path ? ` · ${c.path}` : ''}`,
+                        )
                         setDetail([c])
                       }}
                     >
@@ -448,84 +668,14 @@ function LedgerTab({
         width={620}
       >
         {detail?.map((c) => (
-          <div key={c.id} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: 14 }}>
+          <div
+            key={c.id}
+            style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: 14 }}
+          >
             {c.content ?? c.snippet}
           </div>
         ))}
       </Drawer>
-
-      <Modal
-        title="录入制度文档"
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        okText="保存并建立索引"
-        width={720}
-        onOk={async () => {
-          const v = await form.validateFields()
-          try {
-            await kbCreateDocument({
-              title: v.title,
-              docType: v.docType ?? 'REGULATION',
-              category: v.category,
-              body: v.body,
-              summary: v.summary,
-              version: v.version,
-              visibility: v.visibility ?? 'ALL',
-              status: v.status ?? 'PUBLISHED',
-            })
-            message.success('已保存，并已建立索引')
-            setCreateOpen(false)
-            form.resetFields()
-            setPage(1)
-            await load()
-            await onChanged()
-          } catch {
-            /* 拦截器已提示 */
-          }
-        }}
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="正文里请保留条款编号（如「第二十六条 …」）"
-          description="分块按编号切分，引用里的出处路径（如「第三章 第二十六条」）就来自这里。编号缺失时出处只能给到文档级。"
-        />
-        <Form form={form} layout="vertical" initialValues={{ docType: 'REGULATION', visibility: 'ALL', status: 'PUBLISHED' }}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
-            <Input maxLength={200} placeholder="如：中国共产党发展党员工作细则" />
-          </Form.Item>
-          <Space size={12} style={{ display: 'flex' }}>
-            <Form.Item name="docType" label="类型" style={{ flex: 1 }}>
-              <Select
-                options={[
-                  { value: 'REGULATION', label: '制度' },
-                  { value: 'POLICY', label: '上级文件' },
-                  { value: 'MANUAL', label: '操作指引' },
-                  { value: 'FAQ', label: '常见问答' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item name="category" label="业务分类" style={{ flex: 1 }}>
-              <Input placeholder="如：党员发展" />
-            </Form.Item>
-            <Form.Item name="visibility" label="可见范围" style={{ flex: 1 }}>
-              <Select
-                options={[
-                  { value: 'ALL', label: '全员' },
-                  { value: 'LEADER', label: '部长及以上' },
-                ]}
-              />
-            </Form.Item>
-          </Space>
-          <Form.Item name="summary" label="摘要（可选）">
-            <Input.TextArea rows={2} maxLength={500} placeholder="一句话说明这份文件管什么" />
-          </Form.Item>
-          <Form.Item name="body" label="正文" rules={[{ required: true, message: '请输入正文' }]}>
-            <Input.TextArea rows={12} placeholder={'第三章 发展对象的确定\n第二十五条 党支部应当…\n第二十六条 入党介绍人应当…'} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </>
   )
 }
@@ -589,7 +739,11 @@ function RetrievalTab() {
           <span style={{ color: 'var(--text-tertiary)' }}> / </span>
           <span>{r.allowedCount}</span>
           <span style={{ color: 'var(--text-tertiary)' }}> / </span>
-          <span style={{ color: r.filteredCount > 0 ? 'var(--ls-warn)' : 'inherit' }}>
+          <span
+            style={{
+              color: r.filteredCount > 0 ? 'var(--ls-warn)' : 'inherit',
+            }}
+          >
             {r.filteredCount}
           </span>
         </span>
@@ -607,7 +761,10 @@ function RetrievalTab() {
       width: 120,
       render: (_, r) => {
         if (!r.skipReason) return <Tag color="green">正常作答</Tag>
-        const s = SKIP_LABEL[r.skipReason] ?? { text: r.skipReason, color: 'default' }
+        const s = SKIP_LABEL[r.skipReason] ?? {
+          text: r.skipReason,
+          color: 'default',
+        }
         return <Tag color={s.color}>{s.text}</Tag>
       },
     },
@@ -616,7 +773,11 @@ function RetrievalTab() {
       dataIndex: 'provider',
       width: 110,
       render: (v: string | null, r) =>
-        r.degraded ? <Tag color="orange">规则模式</Tag> : <span style={{ fontSize: 13 }}>{v ?? '—'}</span>,
+        r.degraded ? (
+          <Tag color="orange">规则模式</Tag>
+        ) : (
+          <span style={{ fontSize: 13 }}>{v ?? '—'}</span>
+        ),
     },
   ]
 
@@ -659,7 +820,9 @@ function RetrievalTab() {
             const hits = parseHits(r.hitsJson)
             return (
               <div style={{ fontSize: 13 }}>
-                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>
+                <div
+                  style={{ marginBottom: 6, color: 'var(--text-secondary)' }}
+                >
                   放行的 {hits.length} 条依据（进入模型上下文的部分）
                 </div>
                 {hits.length === 0 ? (
@@ -667,7 +830,9 @@ function RetrievalTab() {
                 ) : (
                   hits.map((h, i) => (
                     <div key={i} style={{ padding: '3px 0' }}>
-                      <Tag style={{ marginRight: 6 }}>{String(h['sourceType'])}</Tag>
+                      <Tag style={{ marginRight: 6 }}>
+                        {String(h['sourceType'])}
+                      </Tag>
                       #{String(h['seq'])}
                       {h['path'] ? ` · ${String(h['path'])}` : ''}
                       <span style={{ color: 'var(--text-tertiary)' }}>
@@ -725,7 +890,14 @@ function RetrievalTab() {
  * 快照声明的是"某时刻的数字"。展示时把「数据截至」放在标题旁而不是折叠进详情，
  * 因为用户最容易犯的错就是把它当实时值读（方案 R16）。
  */
-function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: () => Promise<void> }) {
+function SnapshotTab({
+  canManage,
+  onChanged,
+}: {
+  canManage: boolean
+  onChanged: () => Promise<void>
+}) {
+  const { message } = App.useApp()
   const [specs, setSpecs] = useState<KbSnapshotSpecVO[]>([])
   const [rows, setRows] = useState<KbSnapshotVO[]>([])
   const [total, setTotal] = useState(0)
@@ -739,7 +911,10 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [sp, list] = await Promise.all([kbSnapshotSpecs(), kbSnapshots({ specCode, page, size })])
+      const [sp, list] = await Promise.all([
+        kbSnapshotSpecs(),
+        kbSnapshots({ specCode, page, size }),
+      ])
       setSpecs(sp ?? [])
       setRows(list.records ?? [])
       setTotal(list.total ?? 0)
@@ -769,7 +944,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14 }}>{v}</div>
           {r.description && (
-            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{r.description}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+              {r.description}
+            </div>
           )}
         </div>
       ),
@@ -785,9 +962,11 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       dataIndex: 'visibility',
       width: 110,
       render: (v: string) =>
-        v === 'LEADER'
-          ? <Tag color="orange">部长及以上</Tag>
-          : <Tag color="blue">全员</Tag>,
+        v === 'LEADER' ? (
+          <Tag color="orange">部长及以上</Tag>
+        ) : (
+          <Tag color="blue">全员</Tag>
+        ),
     },
     {
       // 放在生成时间之前：这是用户最先要看的信息
@@ -795,7 +974,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       dataIndex: 'asOf',
       width: 130,
       render: (v: string) => (
-        <Tag color="orange" style={{ margin: 0 }}>截至 {fmt(v, false)}</Tag>
+        <Tag color="orange" style={{ margin: 0 }}>
+          截至 {fmt(v, false)}
+        </Tag>
       ),
     },
     {
@@ -803,7 +984,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       dataIndex: 'generatedAt',
       width: 150,
       render: (v: string | null) => (
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fmt(v)}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          {fmt(v)}
+        </span>
       ),
     },
     {
@@ -820,7 +1003,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
   return (
     <>
       {/* 模板说明卡：这是评审入口，必须让人不点开任何东西就看清"系统在自动收录什么" */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div
+        style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}
+      >
         {specs.map((s) => (
           <div
             key={s.code}
@@ -833,19 +1018,42 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
               background: 'var(--soft)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{s.titleTemplate.replace('%s', '').trim()}</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 500 }}>
+                {s.titleTemplate.replace('%s', '').trim()}
+              </span>
               <Tag style={{ margin: 0, fontSize: 13 }}>
                 {s.visibility === 'LEADER' ? '部长及以上' : '全员'}
               </Tag>
               {s.requiredPermission && (
-                <Tag style={{ margin: 0, fontSize: 13 }}>{s.requiredPermission}</Tag>
+                <Tag style={{ margin: 0, fontSize: 13 }}>
+                  {s.requiredPermission}
+                </Tag>
               )}
             </div>
-            <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: 'var(--text-secondary)',
+              }}
+            >
               {s.description}
             </div>
-            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-tertiary)' }}>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 13,
+                color: 'var(--text-tertiary)',
+              }}
+            >
               {s.refreshHint} · 覆盖 {s.scopeCount} 个作用域
             </div>
           </div>
@@ -862,9 +1070,14 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
             setPage(1)
             setSpecCode(v)
           }}
-          options={specs.map((s) => ({ value: s.code, label: specShort(s.code) }))}
+          options={specs.map((s) => ({
+            value: s.code,
+            label: specShort(s.code),
+          }))}
         />
-        <Button onClick={() => void load()} loading={loading}>刷新</Button>
+        <Button onClick={() => void load()} loading={loading}>
+          刷新
+        </Button>
         {canManage && (
           <Tooltip title="重算全部快照。日常由定时任务按日生成；刚录完一批人想立刻能问到时用">
             <Button
@@ -874,7 +1087,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
                 setRefreshing(true)
                 try {
                   const r = await kbRefreshSnapshots()
-                  message.success(`已重算 ${r.totalWritten} 份快照，清理 ${r.pruned} 份历史版本`)
+                  message.success(
+                    `已重算 ${r.totalWritten} 份快照，清理 ${r.pruned} 份历史版本`,
+                  )
                   await load()
                   await onChanged()
                 } catch {
@@ -889,7 +1104,8 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
           </Tooltip>
         )}
         <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-          共 {total} 份。快照是聚合数字，<b>不含个人明细</b>；逐人数据请到成员管理页查看。
+          共 {total} 份。快照是聚合数字，<b>不含个人明细</b>
+          ；逐人数据请到成员管理页查看。
         </span>
       </Space>
 
@@ -903,7 +1119,9 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
         expandable={{
           // 内容只有一段，直接展开看全文 —— 它存在的意义就是让人核对数字
           expandedRowRender: (r) => (
-            <div style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+            <div
+              style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}
+            >
               {r.content}
             </div>
           ),
@@ -928,15 +1146,28 @@ function SnapshotTab({ canManage, onChanged }: { canManage: boolean; onChanged: 
       >
         {detail && (
           <>
-            <Descriptions bordered size="small" column={1} style={{ marginBottom: 14 }}>
-              <Descriptions.Item label="数据截至">{fmt(detail.asOf)}</Descriptions.Item>
-              <Descriptions.Item label="生成时间">{fmt(detail.generatedAt)}</Descriptions.Item>
+            <Descriptions
+              bordered
+              size="small"
+              column={1}
+              style={{ marginBottom: 14 }}
+            >
+              <Descriptions.Item label="数据截至">
+                {fmt(detail.asOf)}
+              </Descriptions.Item>
+              <Descriptions.Item label="生成时间">
+                {fmt(detail.generatedAt)}
+              </Descriptions.Item>
               <Descriptions.Item label="可见范围">
                 {detail.visibility === 'LEADER' ? '部长及以上' : '全员'}
-                {detail.requiredPermission ? ` + ${detail.requiredPermission}` : ''}
+                {detail.requiredPermission
+                  ? ` + ${detail.requiredPermission}`
+                  : ''}
               </Descriptions.Item>
             </Descriptions>
-            <div style={{ fontSize: 14, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
+            <div
+              style={{ fontSize: 14, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}
+            >
               {detail.content}
             </div>
           </>

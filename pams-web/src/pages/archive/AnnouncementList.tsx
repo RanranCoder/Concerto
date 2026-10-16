@@ -1,5 +1,16 @@
+import FormSurface from '@/components/form/FormSurface'
+import { RecordsNav } from '@/components/records/RecordsLayout'
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Space, Tag, Typography } from 'antd'
+import {
+  App,
+  Button,
+  Form,
+  Input,
+  Popconfirm,
+  Space,
+  Tag,
+  Typography,
+} from 'antd'
 import type { TableColumnsType } from 'antd'
 import { BellOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -132,7 +143,11 @@ export default function AnnouncementList() {
       key: 'title',
       ellipsis: true,
       render: (t: string, r: AnnouncementVO) => (
-        <Button type="link" style={{ padding: 0, height: 'auto', textAlign: 'left' }} onClick={() => handleRead(r)}>
+        <Button
+          type="link"
+          style={{ padding: 0, height: 'auto', textAlign: 'left' }}
+          onClick={() => handleRead(r)}
+        >
           {readIds.includes(r.id) ? t : <b>{t}</b>}
         </Button>
       ),
@@ -148,24 +163,42 @@ export default function AnnouncementList() {
       dataIndex: 'publishTime',
       key: 'publishTime',
       width: 170,
-      render: (t: string | null) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
+      align: 'right',
+      onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
+      render: (t: string | null) =>
+        t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: '状态',
       key: 'status',
       width: 100,
       render: (_: unknown, r: AnnouncementVO) =>
-        readIds.includes(r.id) ? <Tag>已读</Tag> : <Tag color="processing">未读</Tag>,
+        readIds.includes(r.id) ? (
+          <Tag>已读</Tag>
+        ) : (
+          <Tag color="processing">未读</Tag>
+        ),
     },
     ...(hasPerm('notice:manage')
       ? [
           {
             title: '操作',
             key: 'action',
+            align: 'right' as const,
             width: 100,
             render: (_: unknown, r: AnnouncementVO) => (
-              <Popconfirm title="确认删除该公告？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              <Popconfirm
+                title="确认删除该公告？"
+                onConfirm={() => handleDelete(r.id)}
+                okText="删除"
+                cancelText="取消"
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                >
                   删除
                 </Button>
               </Popconfirm>
@@ -176,21 +209,29 @@ export default function AnnouncementList() {
   ]
 
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
         title="通知公告"
         description="党建办公室通知发布（部长以上可发布，删除限老师/主任），已读状态跟随账号"
         extra={
           hasPerm('notice:publish') ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openPublish}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openPublish}
+            >
               发布公告
             </Button>
           ) : null
         }
       />
+      <RecordsNav section="archive" />
 
       {!hasPerm('notice:publish') && (
-        <GlassCard style={{ padding: 12, marginBottom: 16 }}>
+        <GlassCard
+          className="records-toolbar"
+          style={{ padding: 16, marginBottom: 16 }}
+        >
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
             您当前仅可查看公告，发布需部长及以上权限。
           </Typography.Text>
@@ -198,6 +239,7 @@ export default function AnnouncementList() {
       )}
 
       <GlassTable<AnnouncementVO>
+        scroll={{ x: 900 }}
         columns={columns}
         dataSource={data.map((r) => ({ ...r, key: r.id }))}
         rowKey="id"
@@ -206,28 +248,47 @@ export default function AnnouncementList() {
         locale={{ emptyText: '暂无公告' }}
       />
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="填写公告标题与内容，发布后成员可在公告列表查看。"
         title="发布公告"
         open={publishOpen}
         onCancel={() => setPublishOpen(false)}
         footer={
           <Space>
             <Button onClick={() => setPublishOpen(false)}>取消</Button>
-            <Button type="primary" icon={<BellOutlined />} loading={saving} onClick={handlePublish}>
+            <Button
+              type="primary"
+              icon={<BellOutlined />}
+              loading={saving}
+              onClick={handlePublish}
+            >
               发布
             </Button>
           </Space>
         }
       >
         <Form form={form} layout="vertical" preserve={false}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入公告标题' }]}>
+          <Form.Item
+            name="title"
+            label="标题"
+            rules={[{ required: true, message: '请输入公告标题' }]}
+          >
             <Input maxLength={150} placeholder="公告标题" />
           </Form.Item>
-          <Form.Item name="content" label="内容" rules={[{ required: true, message: '请输入公告内容' }]}>
-            <Input.TextArea rows={8} maxLength={5000} placeholder="公告正文（支持换行）" />
+          <Form.Item
+            name="content"
+            label="内容"
+            rules={[{ required: true, message: '请输入公告内容' }]}
+          >
+            <Input.TextArea
+              rows={8}
+              maxLength={5000}
+              placeholder="公告正文（支持换行）"
+            />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
 
       {/* 查看详情 */}
       <GlassModal
@@ -238,12 +299,22 @@ export default function AnnouncementList() {
       >
         {detail && (
           <>
-            <div style={{ marginBottom: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
+            <div
+              style={{
+                marginBottom: 12,
+                color: 'var(--text-secondary)',
+                fontSize: 13,
+              }}
+            >
               {publisherNameOf(detail.publisherId)}
-              {detail.publishTime ? ` · ${dayjs(detail.publishTime).format('YYYY-MM-DD HH:mm')}` : ''}
+              {detail.publishTime
+                ? ` · ${dayjs(detail.publishTime).format('YYYY-MM-DD HH:mm')}`
+                : ''}
               {readIds.includes(detail.id) ? ' · 已读' : ' · 未读'}
             </div>
-            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+            <Typography.Paragraph
+              style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}
+            >
               {detail.content}
             </Typography.Paragraph>
           </>

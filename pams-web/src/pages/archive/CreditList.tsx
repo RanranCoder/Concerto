@@ -1,9 +1,24 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
+import { RecordsNav } from '@/components/records/RecordsLayout'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, Form, Input, InputNumber, Popconfirm, Select, Space, Statistic } from 'antd'
-import { DeleteOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import {
+  App,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Select,
+  Space,
+  Statistic,
+} from 'antd'
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import { useHasPerm } from '@/components/glass/RequireRole'
@@ -143,14 +158,21 @@ export default function CreditList() {
 
   const columns = [
     { title: '姓名', dataIndex: 'personName', key: 'personName', width: 110 },
-    { title: '学号', dataIndex: 'studentNo', key: 'studentNo', width: 130, render: (v: string) => v || '-' },
+    {
+      title: '学号',
+      dataIndex: 'studentNo',
+      key: 'studentNo',
+      width: 130,
+      render: (v: string) => v || '-',
+    },
     { title: '项目', dataIndex: 'project', key: 'project', ellipsis: true },
     {
       title: '分值',
       dataIndex: 'credit',
       key: 'credit',
       width: 90,
-      align: 'center' as const,
+      align: 'right' as const,
+      onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
       render: (v: number) => v.toFixed(2),
     },
     {
@@ -158,7 +180,8 @@ export default function CreditList() {
       dataIndex: 'basis',
       key: 'basis',
       width: 90,
-      render: (v: string) => (v === 'PARTICIPATE' ? '参与' : v === 'ANSWER' ? '答题' : v || '-'),
+      render: (v: string) =>
+        v === 'PARTICIPATE' ? '参与' : v === 'ANSWER' ? '答题' : v || '-',
     },
     {
       title: '关联活动',
@@ -177,11 +200,17 @@ export default function CreditList() {
     {
       title: '操作',
       key: 'action',
+      align: 'right' as const,
       width: 90,
       // 无 quality:delete 权限时隐藏删除入口（与后端 @PreAuthorize 同口径）
       render: (_: unknown, r: CreditVO) =>
         canDelete ? (
-          <Popconfirm title="确认删除该加分记录？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+          <Popconfirm
+            title="确认删除该加分记录？"
+            onConfirm={() => handleDelete(r.id)}
+            okText="删除"
+            cancelText="取消"
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除
             </Button>
@@ -191,14 +220,17 @@ export default function CreditList() {
   ]
 
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
         title="素拓加分"
         description="活动素拓加分台账：记录参与 / 答题等加分，汇总人次与总分值"
         extra={
           canAdd ? (
             <Space>
-              <Button icon={<ThunderboltOutlined />} onClick={() => setActivityCreditOpen(true)}>
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={() => setActivityCreditOpen(true)}
+              >
                 活动加分
               </Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
@@ -208,6 +240,7 @@ export default function CreditList() {
           ) : null
         }
       />
+      <RecordsNav section="archive" />
 
       <ActivityCreditModal
         open={activityCreditOpen}
@@ -218,7 +251,10 @@ export default function CreditList() {
         }}
       />
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <GlassCard
+        className="records-toolbar"
+        style={{ padding: 16, marginBottom: 16 }}
+      >
         <Space size="large" wrap>
           <Statistic title="总加分人次" value={summaryCount} suffix="人次" />
           <Statistic title="总分值" value={summaryCreditTotal} precision={2} />
@@ -228,7 +264,10 @@ export default function CreditList() {
         </Space>
       </GlassCard>
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <GlassCard
+        className="records-toolbar"
+        style={{ padding: 16, marginBottom: 16 }}
+      >
         <Input.Search
           placeholder="搜索姓名 / 学号 / 项目"
           allowClear
@@ -241,6 +280,7 @@ export default function CreditList() {
       </GlassCard>
 
       <GlassTable<CreditVO>
+        scroll={{ x: 900 }}
         columns={columns}
         dataSource={data}
         rowKey="id"
@@ -258,7 +298,9 @@ export default function CreditList() {
         }}
       />
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="选择加分对象，填写项目、分值与依据。"
         title="新增加分"
         open={addOpen}
         onCancel={() => setAddOpen(false)}
@@ -272,42 +314,65 @@ export default function CreditList() {
         }
       >
         <Form form={form} layout="vertical" preserve={false}>
-          <Form.Item name="personName" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input maxLength={50} placeholder="素拓加分对象姓名" />
-          </Form.Item>
-          <Form.Item name="studentNo" label="学号">
-            <Input maxLength={20} placeholder="选填" />
-          </Form.Item>
-          <Form.Item name="activityId" label="关联活动">
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={activities.map((a) => ({ value: a.id, label: a.name }))}
-              placeholder="选填"
-            />
-          </Form.Item>
-          <Form.Item name="project" label="加分项目" rules={[{ required: true, message: '请输入加分项目' }]}>
-            <Input maxLength={100} placeholder="如 党日活动参与加分" />
-          </Form.Item>
-          <Form.Item name="credit" label="分值" rules={[{ required: true, message: '请输入分值' }]}>
-            <InputNumber
-              min={0}
-              max={99.99}
-              precision={2}
-              step={0.5}
-              style={{ width: '100%' }}
-              placeholder="0 ~ 99.99"
-            />
-          </Form.Item>
-          <Form.Item name="basis" label="依据">
-            <Select allowClear options={CREDIT_BASIS_OPTIONS} placeholder="参与 / 答题（选填）" />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} maxLength={200} placeholder="选填" />
-          </Form.Item>
+          <FormSection title="加分对象">
+            <Form.Item
+              name="personName"
+              label="姓名"
+              rules={[{ required: true, message: '请输入姓名' }]}
+            >
+              <Input maxLength={50} placeholder="素拓加分对象姓名" />
+            </Form.Item>
+            <Form.Item name="studentNo" label="学号">
+              <Input maxLength={20} placeholder="选填" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="项目与分值">
+            <Form.Item name="activityId" label="关联活动">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={activities.map((a) => ({
+                  value: a.id,
+                  label: a.name,
+                }))}
+                placeholder="选填"
+              />
+            </Form.Item>
+            <Form.Item
+              name="project"
+              label="加分项目"
+              rules={[{ required: true, message: '请输入加分项目' }]}
+            >
+              <Input maxLength={100} placeholder="如 党日活动参与加分" />
+            </Form.Item>
+            <Form.Item
+              name="credit"
+              label="分值"
+              rules={[{ required: true, message: '请输入分值' }]}
+            >
+              <InputNumber
+                min={0}
+                max={99.99}
+                precision={2}
+                step={0.5}
+                style={{ width: '100%' }}
+                placeholder="0 ~ 99.99"
+              />
+            </Form.Item>
+            <Form.Item name="basis" label="依据">
+              <Select
+                allowClear
+                options={CREDIT_BASIS_OPTIONS}
+                placeholder="参与 / 答题（选填）"
+              />
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={2} maxLength={200} placeholder="选填" />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

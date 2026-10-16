@@ -1,3 +1,5 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
+import { RecordsNav } from '@/components/records/RecordsLayout'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App,
@@ -6,7 +8,6 @@ import {
   Empty,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Radio,
   Select,
@@ -26,7 +27,6 @@ import {
 } from '@ant-design/icons'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import { useHasPerm } from '@/components/glass/RequireRole'
 import {
   archiveGroupChat,
@@ -86,11 +86,21 @@ export default function GroupChatList() {
   // 分类管理
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [newCategory, setNewCategory] = useState('')
+  const [categoryEdit, setCategoryEdit] = useState<{
+    id: number
+    name: string
+  } | null>(null)
+  const [categorySaving, setCategorySaving] = useState(false)
 
   const fetchAll = useCallback(async () => {
     try {
       const [cs, cats] = await Promise.all([
-        listGroupChats({ keyword: keyword || undefined, categoryId: filterCategory, status: filterStatus, department: filterDept }),
+        listGroupChats({
+          keyword: keyword || undefined,
+          categoryId: filterCategory,
+          status: filterStatus,
+          department: filterDept,
+        }),
         listChatCategories(),
       ])
       setChats(cs ?? [])
@@ -123,9 +133,11 @@ export default function GroupChatList() {
   }, [])
 
   const categoryNameOf = (id: number | null) =>
-    id == null ? '未分类' : categories.find((c) => c.id === id)?.name ?? `#${id}`
+    id == null
+      ? '未分类'
+      : (categories.find((c) => c.id === id)?.name ?? `#${id}`)
   const ownerNameOf = (id: number | null) =>
-    id == null ? '-' : users.find((u) => u.id === id)?.realName ?? `#${id}`
+    id == null ? '-' : (users.find((u) => u.id === id)?.realName ?? `#${id}`)
 
   const openCreate = () => {
     setEditing(null)
@@ -232,15 +244,21 @@ export default function GroupChatList() {
     }
   }
 
-  const handleRenameCategory = async (id: number, name: string) => {
-    const next = window.prompt('重命名分类', name)
-    if (!next?.trim()) return
+  const handleRenameCategory = async () => {
+    if (!categoryEdit?.name.trim()) {
+      message.warning('请输入分类名称')
+      return
+    }
+    setCategorySaving(true)
     try {
-      await renameChatCategory(id, next.trim())
+      await renameChatCategory(categoryEdit.id, categoryEdit.name.trim())
       message.success('已重命名')
+      setCategoryEdit(null)
       fetchAll()
     } catch {
       /* http 拦截已提示 */
+    } finally {
+      setCategorySaving(false)
     }
   }
 
@@ -261,8 +279,8 @@ export default function GroupChatList() {
     return (
       <Card
         key={c.id}
-        size="small"
-        style={{ width: 300, marginBottom: 12 }}
+        /* 高度撑满网格单元：同一行的卡片宽高一致，底边不会参差 */
+        style={{ height: '100%' }}
         title={
           <Space>
             <span style={{ fontWeight: 600 }}>{c.name}</span>
@@ -270,18 +288,51 @@ export default function GroupChatList() {
           </Space>
         }
         extra={
-          <Space size={0}>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(c)} />
-            {c.status !== 'ARCHIVED' && (
-              <Button type="link" size="small" icon={<InboxOutlined />} onClick={() => handleArchive(c.id)} title="归档" />
-            )}
-            <Popconfirm title="确认删除该群聊？" onConfirm={() => handleDelete(c.id)} okText="删除" cancelText="取消">
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
-          </Space>
+          hasPerm('chat:manage') && (
+            <Space size={0}>
+              <Button
+                aria-label="编辑群聊"
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openEdit(c)}
+              />
+              {c.status !== 'ARCHIVED' && (
+                <Button
+                  aria-label="归档群聊"
+                  type="link"
+                  size="small"
+                  icon={<InboxOutlined />}
+                  onClick={() => handleArchive(c.id)}
+                  title="归档"
+                />
+              )}
+              <Popconfirm
+                title="确认删除该群聊？"
+                onConfirm={() => handleDelete(c.id)}
+                okText="删除"
+                cancelText="取消"
+              >
+                <Button
+                  aria-label="删除群聊"
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            </Space>
+          )
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            fontSize: 14,
+          }}
+        >
           <div>
             <Tag color="blue">{categoryNameOf(c.categoryId)}</Tag>
             {c.departments?.map((d) => (
@@ -291,8 +342,23 @@ export default function GroupChatList() {
           <div style={{ color: 'var(--text-secondary)' }}>
             负责人：{ownerNameOf(c.ownerId)}
           </div>
-          {c.activityName && <div style={{ color: 'var(--text-secondary)' }}>关联活动：{c.activityName}</div>}
-          {c.remark && <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>备注：{c.remark}</div>}
+          {c.activityName && (
+            <div style={{ color: 'var(--text-secondary)' }}>
+              关联活动：{c.activityName}
+            </div>
+          )}
+          {c.remark && (
+            <div
+              style={{
+                color: 'var(--text-secondary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              备注：{c.remark}
+            </div>
+          )}
           {c.qrCodeUrl && (
             <Tooltip title="点击查看群二维码">
               <a href={c.qrCodeUrl} target="_blank" rel="noreferrer">
@@ -310,14 +376,22 @@ export default function GroupChatList() {
     {
       title: '分类',
       key: 'category',
-      render: (_: unknown, r: GroupChatVO) => <Tag color="blue">{categoryNameOf(r.categoryId)}</Tag>,
+      render: (_: unknown, r: GroupChatVO) => (
+        <Tag color="blue">{categoryNameOf(r.categoryId)}</Tag>
+      ),
     },
     {
       title: '关联部门',
       key: 'departments',
-      render: (_: unknown, r: GroupChatVO) => r.departments?.map((d) => <Tag key={d}>{d}</Tag>) ?? '-',
+      render: (_: unknown, r: GroupChatVO) =>
+        r.departments?.map((d) => <Tag key={d}>{d}</Tag>) ?? '-',
     },
-    { title: '负责人', key: 'owner', width: 100, render: (_: unknown, r: GroupChatVO) => ownerNameOf(r.ownerId) },
+    {
+      title: '负责人',
+      key: 'owner',
+      width: 100,
+      render: (_: unknown, r: GroupChatVO) => ownerNameOf(r.ownerId),
+    },
     {
       title: '状态',
       key: 'status',
@@ -330,21 +404,37 @@ export default function GroupChatList() {
     {
       title: '操作',
       key: 'action',
+      align: 'right' as const,
       width: 160,
       render: (_: unknown, r: GroupChatVO) => (
         <Space size="small" wrap>
           {hasPerm('chat:manage') && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEdit(r)}
+            >
               编辑
             </Button>
           )}
           {hasPerm('chat:manage') && r.status !== 'ARCHIVED' && (
-            <Button type="link" size="small" icon={<InboxOutlined />} onClick={() => handleArchive(r.id)}>
+            <Button
+              type="link"
+              size="small"
+              icon={<InboxOutlined />}
+              onClick={() => handleArchive(r.id)}
+            >
               归档
             </Button>
           )}
           {hasPerm('chat:manage') && (
-            <Popconfirm title="确认删除该群聊？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+            <Popconfirm
+              title="确认删除该群聊？"
+              onConfirm={() => handleDelete(r.id)}
+              okText="删除"
+              cancelText="取消"
+            >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                 删除
               </Button>
@@ -356,27 +446,38 @@ export default function GroupChatList() {
   ]
 
   return (
-    <div>
+    <div className="records-page">
       <PageHeader
         title="群聊管理"
         description="统一管理党务工作微信群：分类、关联活动/部门、负责人与二维码"
         extra={
           <Space>
             {hasPerm('chat:category') && (
-              <Button icon={<AppstoreOutlined />} onClick={() => setCategoryOpen(true)}>
+              <Button
+                icon={<AppstoreOutlined />}
+                onClick={() => setCategoryOpen(true)}
+              >
                 分类管理
               </Button>
             )}
             {hasPerm('chat:manage') && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+              >
                 新增群聊
               </Button>
             )}
           </Space>
         }
       />
+      <RecordsNav section="archive" />
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <GlassCard
+        className="records-toolbar"
+        style={{ padding: 16, marginBottom: 16 }}
+      >
         <Space wrap>
           <Input.Search
             placeholder="搜索群聊名称"
@@ -399,7 +500,10 @@ export default function GroupChatList() {
             style={{ width: 120 }}
             value={filterStatus}
             onChange={setFilterStatus}
-            options={Object.entries(STATUS_MAP).map(([v, m]) => ({ value: v, label: m.label }))}
+            options={Object.entries(STATUS_MAP).map(([v, m]) => ({
+              value: v,
+              label: m.label,
+            }))}
           />
           <Select
             placeholder="按部门筛选"
@@ -420,8 +524,18 @@ export default function GroupChatList() {
         </Space>
       </GlassCard>
 
+      {/* 卡片视图用 grid：定宽 300 + flex-wrap 在末行右侧会留下不等宽的空白，右边缘参差；
+          列表视图让卡片只留 4px，与全站 GlassTable 同一几何（4 + 单元格 12 = 16px），
+          表格首列文字才与同页筛选卡的 16px 内缩落在同一条竖线上。 */}
       {view === 'card' ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+            gap: 16,
+          }}
+        >
           {filtered.length === 0 ? (
             <Empty style={{ margin: '40px auto' }} description="暂无群聊" />
           ) : (
@@ -429,15 +543,30 @@ export default function GroupChatList() {
           )}
         </div>
       ) : (
-        <GlassCard style={{ padding: 16 }}>
+        <GlassCard style={{ padding: 4, overflowX: 'auto' }}>
           {filtered.length === 0 ? (
-            <Empty description="暂无群聊" />
+            <Empty style={{ padding: '40px 0' }} description="暂无群聊" />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <table
+              style={{
+                width: '100%',
+                minWidth: 760,
+                borderCollapse: 'collapse',
+                fontSize: 14,
+              }}
+            >
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-secondary)' }}>
+                <tr
+                  style={{ textAlign: 'left', color: 'var(--text-secondary)' }}
+                >
                   {columns.map((c) => (
-                    <th key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+                    <th
+                      key={c.key}
+                      style={{
+                        padding: '8px 12px',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                    >
                       {c.title}
                     </th>
                   ))}
@@ -452,12 +581,20 @@ export default function GroupChatList() {
                       if (c.render) {
                         cell = c.render(undefined, r)
                       } else if (c.dataIndex) {
-                        cell = (r as unknown as Record<string, unknown>)[c.dataIndex] as React.ReactNode
+                        cell = (r as unknown as Record<string, unknown>)[
+                          c.dataIndex
+                        ] as React.ReactNode
                       } else {
                         cell = null
                       }
                       return (
-                        <td key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+                        <td
+                          key={c.key}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: '1px solid var(--border)',
+                          }}
+                        >
                           {cell}
                         </td>
                       )
@@ -471,7 +608,9 @@ export default function GroupChatList() {
       )}
 
       {/* 新增/编辑弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="维护群聊用途、负责人和加入方式。"
         title={editing ? '编辑群聊' : '新增群聊'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -492,95 +631,147 @@ export default function GroupChatList() {
           key={editing ? `chat-edit-${editing.id}` : 'chat-create'}
           initialValues={{ status: 'ACTIVE', departments: [] }}
         >
-          <Form.Item name="name" label="群聊名称" rules={[{ required: true, message: '请输入群聊名称' }]}>
-            <Input maxLength={50} placeholder="如 第四十期培训班活动群" />
-          </Form.Item>
-          <Space size={12} style={{ display: 'flex' }}>
-            <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]} style={{ flex: 1 }}>
-              <Select
-                placeholder="选择分类"
-                options={categories.map((c) => ({ value: c.id, label: c.name }))}
-              />
+          <FormSection title="群聊信息">
+            <Form.Item
+              name="name"
+              label="群聊名称"
+              rules={[{ required: true, message: '请输入群聊名称' }]}
+            >
+              <Input maxLength={50} placeholder="如 第四十期培训班活动群" />
             </Form.Item>
-            <Form.Item name="status" label="状态" style={{ flex: 1 }}>
-              <Select
-                options={Object.entries(STATUS_MAP).map(([v, m]) => ({ value: v, label: m.label }))}
-              />
-            </Form.Item>
-          </Space>
-          <Form.Item name="activityId" label="关联活动">
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择活动（可选）"
-              options={activities.map((a) => ({ value: a.id, label: a.name }))}
-            />
-          </Form.Item>
-          <Form.Item name="departments" label="关联部门">
-            <Select
-              mode="multiple"
-              placeholder="选择部门（可多选）"
-              options={depts.map((d) => ({ value: d.name, label: d.name }))}
-            />
-          </Form.Item>
-          <Form.Item name="ownerId" label="群主/负责人" rules={[{ required: true, message: '请选择负责人' }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder="选择系统内用户"
-              options={users.map((u) => ({ value: u.id, label: `${u.realName}（${u.deptName ?? u.roleName}）` }))}
-            />
-          </Form.Item>
-          <Form.Item name="qrCodeUrl" label="群二维码">
-            <div>
-              <label
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
-                  border: '1px dashed var(--brand)',
-                  borderRadius: 8,
-                  color: 'var(--brand)',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                }}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 12,
+              }}
+            >
+              <Form.Item
+                name="categoryId"
+                label="分类"
+                rules={[{ required: true, message: '请选择分类' }]}
               >
-                <QrcodeOutlined /> {qrUrl ? '重新上传' : '上传二维码图片（可选）'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) handleQrUpload(f)
-                    e.target.value = ''
-                  }}
+                <Select
+                  placeholder="选择分类"
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                  }))}
                 />
-              </label>
-              {qrUrl && (
-                <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  已上传
-                </span>
-              )}
+              </Form.Item>
+              <Form.Item name="status" label="状态">
+                <Select
+                  options={Object.entries(STATUS_MAP).map(([v, m]) => ({
+                    value: v,
+                    label: m.label,
+                  }))}
+                />
+              </Form.Item>
             </div>
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} maxLength={200} placeholder="备注信息（可选）" />
-          </Form.Item>
+          </FormSection>
+          <FormSection title="加入方式与管理">
+            {/* 两列等分用 grid：Space 会给每个 Form.Item 包一层 .ant-space-item，
+              写在 Form.Item 上的 flex:1 不生效，分类/状态下拉各按内容宽度、宽窄不一 */}
+            <Form.Item name="activityId" label="关联活动">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="选择活动（可选）"
+                options={activities.map((a) => ({
+                  value: a.id,
+                  label: a.name,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="departments" label="关联部门">
+              <Select
+                mode="multiple"
+                placeholder="选择部门（可多选）"
+                options={depts.map((d) => ({ value: d.name, label: d.name }))}
+              />
+            </Form.Item>
+            <Form.Item
+              name="ownerId"
+              label="群主/负责人"
+              rules={[{ required: true, message: '请选择负责人' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="选择系统内用户"
+                options={users.map((u) => ({
+                  value: u.id,
+                  label: `${u.realName}（${u.deptName ?? u.roleName}）`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="qrCodeUrl" label="群二维码">
+              <div>
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    border: '1px dashed var(--brand)',
+                    borderRadius: 8,
+                    color: 'var(--brand-text)',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                  }}
+                >
+                  <QrcodeOutlined />{' '}
+                  {qrUrl ? '重新上传' : '上传二维码图片（可选）'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleQrUpload(f)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                {qrUrl && (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    已上传
+                  </span>
+                )}
+              </div>
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea
+                rows={2}
+                maxLength={200}
+                placeholder="备注信息（可选）"
+              />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
 
       {/* 分类管理弹窗 */}
-      <Modal
+      <FormSurface
+        mode="drawer"
+        description="维护群聊分类，保存后可在列表中使用。"
         title="分类管理"
         open={categoryOpen}
         onCancel={() => setCategoryOpen(false)}
         footer={<Button onClick={() => setCategoryOpen(false)}>关闭</Button>}
       >
-        <Space style={{ marginBottom: 12, width: '100%' }}>
+        {/* 输入框撑满、按钮靠右：Space 的 .ant-space-item 不会拉伸子项 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <Input
+            aria-label="新分类名称"
+            style={{ flex: 1 }}
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
             placeholder="新分类名称，如 活动群"
@@ -589,20 +780,88 @@ export default function GroupChatList() {
           <Button type="primary" onClick={addCategory}>
             新增
           </Button>
-        </Space>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {categories.map((c) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <span style={{ flex: 1 }}>{c.name}</span>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleRenameCategory(c.id, c.name)} />
-              <Popconfirm title="删除该分类？" onConfirm={() => handleDeleteCategory(c.id)} okText="删除" cancelText="取消">
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
+            <div
+              key={c.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 10px',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+              }}
+            >
+              {categoryEdit?.id === c.id ? (
+                <>
+                  <Input
+                    aria-label="分类名称"
+                    autoFocus
+                    maxLength={50}
+                    value={categoryEdit.name}
+                    disabled={categorySaving}
+                    style={{ flex: 1, minWidth: 0 }}
+                    onChange={(e) =>
+                      setCategoryEdit({ id: c.id, name: e.target.value })
+                    }
+                    onPressEnter={() => {
+                      if (!categorySaving) void handleRenameCategory()
+                    }}
+                  />
+                  <Button
+                    type="primary"
+                    size="small"
+                    loading={categorySaving}
+                    onClick={handleRenameCategory}
+                  >
+                    保存
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={categorySaving}
+                    onClick={() => setCategoryEdit(null)}
+                  >
+                    取消
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1 }}>{c.name}</span>
+                  <Button
+                    aria-label={`重命名${c.name}`}
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => setCategoryEdit({ id: c.id, name: c.name })}
+                  />
+                  <Popconfirm
+                    title="删除该分类？"
+                    onConfirm={() => handleDeleteCategory(c.id)}
+                    okText="删除"
+                    cancelText="取消"
+                  >
+                    <Button
+                      aria-label={`删除${c.name}`}
+                      type="link"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                    />
+                  </Popconfirm>
+                </>
+              )}
             </div>
           ))}
-          {categories.length === 0 && <Empty description="暂无分类" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+          {categories.length === 0 && (
+            <Empty
+              description="暂无分类"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          )}
         </div>
-      </Modal>
+      </FormSurface>
     </div>
   )
 }

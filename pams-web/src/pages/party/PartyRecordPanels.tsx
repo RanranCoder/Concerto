@@ -1,8 +1,17 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Space } from 'antd'
+import {
+  App,
+  Button,
+  DatePicker,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+} from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import {
   listInvestigations,
@@ -24,7 +33,8 @@ import {
 } from '@/api/party'
 
 /** 通用小工具：空值转 - */
-const dash = (v: unknown) => (v == null || (typeof v === 'string' && !v.trim()) ? '-' : String(v))
+const dash = (v: unknown) =>
+  v == null || (typeof v === 'string' && !v.trim()) ? '-' : String(v)
 
 // ==================== 函调 Tab ====================
 
@@ -130,43 +140,11 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
     }
   }
 
-  return (
-    <div>
-      <Space style={{ marginBottom: 12 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增函调
-        </Button>
-      </Space>
-      <GlassTable<PartyInvestigationVO>
-        columns={[
-          { title: '关系人', dataIndex: 'person', key: 'person', render: (_: unknown, r) => `${dash(r.fatherName)} 父` },
-          { title: '所在党支部', dataIndex: 'branch', key: 'branch', render: (_: unknown, r) => dash(r.fatherBranch) },
-          { title: '党支部地址', dataIndex: 'addr', key: 'addr', render: (_: unknown, r) => dash(r.fatherBranchAddr) },
-          {
-            title: '操作',
-            key: 'action',
-            width: 140,
-            render: (_: unknown, r: PartyInvestigationVO) => (
-              <Space size="small">
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-                  编辑
-                </Button>
-                <Popconfirm title="确认删除该函调？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
-        dataSource={list.map((r) => ({ ...r, key: r.id }))}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-      />
-
-      <GlassModal
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="按家庭成员分别登记姓名、所在党支部与联系地址。"
         title={editing ? '编辑函调' : '新增函调'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -186,44 +164,122 @@ export function InvestigationPanel({ memberId }: { memberId: number }) {
           key={editing ? `inv-edit-${editing.id}` : 'inv-create'}
           initialValues={formInit}
         >
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>父亲</div>
-          <Space size="middle" wrap style={{ marginBottom: 8 }}>
+          <FormSection title="父亲">
             <Form.Item name="fatherName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
             </Form.Item>
             <Form.Item name="fatherBranch" label="所在党支部">
               <Input maxLength={100} style={{ width: 220 }} />
             </Form.Item>
-          </Space>
-          <Form.Item name="fatherBranchAddr" label="党支部地址">
-            <Input maxLength={255} placeholder="函调寄送地址" />
-          </Form.Item>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>母亲</div>
-          <Space size="middle" wrap style={{ marginBottom: 8 }}>
+            <Form.Item
+              className="form-field-wide"
+              name="fatherBranchAddr"
+              label="党支部地址"
+            >
+              <Input maxLength={255} placeholder="函调寄送地址" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="母亲">
             <Form.Item name="motherName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
             </Form.Item>
             <Form.Item name="motherBranch" label="所在党支部">
               <Input maxLength={100} style={{ width: 220 }} />
             </Form.Item>
-          </Space>
-          <Form.Item name="motherBranchAddr" label="党支部地址">
-            <Input maxLength={255} placeholder="函调寄送地址" />
-          </Form.Item>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 8 }}>其他社会关系人</div>
-          <Space size="middle" wrap style={{ marginBottom: 8 }}>
+            <Form.Item
+              className="form-field-wide"
+              name="motherBranchAddr"
+              label="党支部地址"
+            >
+              <Input maxLength={255} placeholder="函调寄送地址" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="其他社会关系人">
             <Form.Item name="relativeName" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
             </Form.Item>
             <Form.Item name="relativeBranch" label="所在党支部">
               <Input maxLength={100} style={{ width: 220 }} />
             </Form.Item>
-          </Space>
-          <Form.Item name="relativeBranchAddr" label="党支部地址">
-            <Input maxLength={255} placeholder="函调寄送地址" />
-          </Form.Item>
+            <Form.Item
+              className="form-field-wide"
+              name="relativeBranchAddr"
+              label="党支部地址"
+            >
+              <Input maxLength={255} placeholder="函调寄送地址" />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
+    )
+
+  return (
+    <div>
+      <Space style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          新增函调
+        </Button>
+      </Space>
+      <GlassTable<PartyInvestigationVO>
+        scroll={{ x: 850 }}
+        columns={[
+          {
+            title: '关系人',
+            dataIndex: 'person',
+            key: 'person',
+            render: (_: unknown, r) => `${dash(r.fatherName)} 父`,
+          },
+          {
+            title: '所在党支部',
+            dataIndex: 'branch',
+            key: 'branch',
+            render: (_: unknown, r) => dash(r.fatherBranch),
+          },
+          {
+            title: '党支部地址',
+            dataIndex: 'addr',
+            key: 'addr',
+            render: (_: unknown, r) => dash(r.fatherBranchAddr),
+          },
+          {
+            title: '操作',
+            key: 'action',
+            align: 'right' as const,
+            width: 140,
+            render: (_: unknown, r: PartyInvestigationVO) => (
+              <Space size="small">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(r)}
+                >
+                  编辑
+                </Button>
+                <Popconfirm
+                  title="确认删除该函调？"
+                  onConfirm={() => handleDelete(r.id)}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+        dataSource={list.map((r) => ({ ...r, key: r.id }))}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+      />
     </div>
   )
 }
@@ -313,7 +369,9 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
         name: values.name || null,
         gender: values.gender || null,
         nation: values.nation || null,
-        birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
+        birthDate: values.birthDate
+          ? values.birthDate.format('YYYY-MM-DD')
+          : null,
         nativePlace: values.nativePlace || null,
         college: values.college || null,
         branch: values.branch || null,
@@ -322,7 +380,9 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
         idCard: values.idCard || null,
         phone: values.phone || null,
         homeAddress: values.homeAddress || null,
-        applyDate: values.applyDate ? values.applyDate.format('YYYY-MM-DD') : null,
+        applyDate: values.applyDate
+          ? values.applyDate.format('YYYY-MM-DD')
+          : null,
         talkPerson: values.talkPerson || null,
         conditionNote: values.conditionNote || null,
         remark: values.remark || null,
@@ -353,44 +413,11 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
     }
   }
 
-  return (
-    <div>
-      <Space style={{ marginBottom: 12 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增登记
-        </Button>
-      </Space>
-      <GlassTable<PartyRegisterVO>
-        columns={[
-          { title: '姓名', dataIndex: 'name', key: 'name', render: (v: string) => dash(v) },
-          { title: '班级', dataIndex: 'className', key: 'className', render: (v: string) => dash(v) },
-          { title: '申请书时间', dataIndex: 'applyDate', key: 'applyDate', render: (v: string) => dash(v) },
-          { title: '谈话人', dataIndex: 'talkPerson', key: 'talkPerson', render: (v: string) => dash(v) },
-          {
-            title: '操作',
-            key: 'action',
-            width: 140,
-            render: (_: unknown, r: PartyRegisterVO) => (
-              <Space size="small">
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-                  编辑
-                </Button>
-                <Popconfirm title="确认删除该登记？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
-        dataSource={list.map((r) => ({ ...r, key: r.id }))}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-      />
-
-      <GlassModal
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="依次核对基本资料、申请信息和谈话情况。"
         title={editing ? '编辑登记' : '新增登记'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -411,7 +438,7 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
           key={editing ? `reg-edit-${editing.id}` : 'reg-create'}
           initialValues={formInit}
         >
-          <Space size="middle" wrap>
+          <FormSection title="基本资料">
             <Form.Item name="name" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
             </Form.Item>
@@ -424,51 +451,139 @@ export function RegisterPanel({ memberId }: { memberId: number }) {
             <Form.Item name="birthDate" label="出生日期">
               <DatePicker placeholder="选择日期" />
             </Form.Item>
-          </Space>
-          <Space size="middle" wrap>
             <Form.Item name="nativePlace" label="籍贯">
               <Input maxLength={100} style={{ width: 160 }} />
             </Form.Item>
             <Form.Item name="college" label="学院">
-              <Input maxLength={100} style={{ width: 200 }} placeholder="信息与智能工程学院" />
+              <Input
+                maxLength={100}
+                style={{ width: 200 }}
+                placeholder="信息与智能工程学院"
+              />
             </Form.Item>
             <Form.Item name="education" label="学历">
-              <Input maxLength={50} style={{ width: 120 }} placeholder="本科在读" />
+              <Input
+                maxLength={50}
+                style={{ width: 120 }}
+                placeholder="本科在读"
+              />
             </Form.Item>
-          </Space>
-          <Space size="middle" wrap>
             <Form.Item name="branch" label="所在党支部">
               <Input maxLength={100} style={{ width: 240 }} />
             </Form.Item>
             <Form.Item name="className" label="班级">
               <Input maxLength={100} style={{ width: 160 }} />
             </Form.Item>
-          </Space>
-          <Space size="middle" wrap>
+          </FormSection>
+          <FormSection title="联系资料">
             <Form.Item name="idCard" label="身份证号">
               <Input maxLength={18} style={{ width: 200 }} />
             </Form.Item>
             <Form.Item name="phone" label="电话">
               <Input maxLength={20} style={{ width: 160 }} />
             </Form.Item>
+            <Form.Item
+              className="form-field-wide"
+              name="homeAddress"
+              label="家庭地址"
+            >
+              <Input maxLength={255} />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="申请与谈话">
             <Form.Item name="applyDate" label="申请书时间">
               <DatePicker placeholder="选择日期" />
             </Form.Item>
-          </Space>
-          <Form.Item name="homeAddress" label="家庭地址">
-            <Input maxLength={255} />
-          </Form.Item>
-          <Form.Item name="talkPerson" label="谈话人">
-            <Input maxLength={50} placeholder="负责谈话的党组织联系人" />
-          </Form.Item>
-          <Form.Item name="conditionNote" label="条件情况">
-            <Input.TextArea rows={3} placeholder="对申请人主要条件情况的说明" />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} />
-          </Form.Item>
+            <Form.Item name="talkPerson" label="谈话人">
+              <Input maxLength={50} placeholder="负责谈话的党组织联系人" />
+            </Form.Item>
+            <Form.Item name="conditionNote" label="条件情况">
+              <Input.TextArea
+                rows={3}
+                placeholder="对申请人主要条件情况的说明"
+              />
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
+    )
+
+  return (
+    <div>
+      <Space style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          新增登记
+        </Button>
+      </Space>
+      <GlassTable<PartyRegisterVO>
+        scroll={{ x: 1000 }}
+        columns={[
+          {
+            title: '姓名',
+            dataIndex: 'name',
+            key: 'name',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '班级',
+            dataIndex: 'className',
+            key: 'className',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '申请书时间',
+            dataIndex: 'applyDate',
+            key: 'applyDate',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '谈话人',
+            dataIndex: 'talkPerson',
+            key: 'talkPerson',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '操作',
+            key: 'action',
+            align: 'right' as const,
+            width: 140,
+            render: (_: unknown, r: PartyRegisterVO) => (
+              <Space size="small">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(r)}
+                >
+                  编辑
+                </Button>
+                <Popconfirm
+                  title="确认删除该登记？"
+                  onConfirm={() => handleDelete(r.id)}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+        dataSource={list.map((r) => ({ ...r, key: r.id }))}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+      />
     </div>
   )
 }
@@ -586,45 +701,11 @@ export function TransferPanel({ memberId }: { memberId: number }) {
     }
   }
 
-  return (
-    <div>
-      <Space style={{ marginBottom: 12 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增转移
-        </Button>
-      </Space>
-      <GlassTable<PartyTransferVO>
-        columns={[
-          { title: '姓名', dataIndex: 'name', key: 'name', render: (v: string) => dash(v) },
-          { title: '接收组织', dataIndex: 'receiveOrg', key: 'receiveOrg', render: (v: string) => dash(v) },
-          { title: '身份', dataIndex: 'isProbationary', key: 'isProbationary', render: (v: number | null) => (v == null ? '-' : v === 1 ? '预备党员' : '正式党员') },
-          { title: '方式', dataIndex: 'isOnline', key: 'isOnline', render: (v: number | null) => (v == null ? '-' : v === 1 ? '线上' : '线下') },
-          { title: '签署日期', dataIndex: 'signDate', key: 'signDate', render: (v: string) => dash(v) },
-          {
-            title: '操作',
-            key: 'action',
-            width: 140,
-            render: (_: unknown, r: PartyTransferVO) => (
-              <Space size="small">
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
-                  编辑
-                </Button>
-                <Popconfirm title="确认删除该转移？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
-        dataSource={list.map((r) => ({ ...r, key: r.id }))}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-      />
-
-      <GlassModal
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="核对转移身份、接收组织与联系方式。"
         title={editing ? '编辑转移' : '新增转移'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -644,7 +725,7 @@ export function TransferPanel({ memberId }: { memberId: number }) {
           key={editing ? `tra-edit-${editing.id}` : 'tra-create'}
           initialValues={formInit}
         >
-          <Space size="middle" wrap>
+          <FormSection title="人员资料">
             <Form.Item name="name" label="姓名">
               <Input maxLength={50} style={{ width: 140 }} />
             </Form.Item>
@@ -657,8 +738,8 @@ export function TransferPanel({ memberId }: { memberId: number }) {
             <Form.Item name="className" label="班级">
               <Input maxLength={100} style={{ width: 160 }} />
             </Form.Item>
-          </Space>
-          <Space size="middle" wrap>
+          </FormSection>
+          <FormSection title="组织关系转移">
             <Form.Item name="isProbationary" label="转移身份">
               <Select
                 style={{ width: 140 }}
@@ -680,11 +761,15 @@ export function TransferPanel({ memberId }: { memberId: number }) {
             <Form.Item name="signDate" label="签署日期">
               <DatePicker placeholder="选择日期" />
             </Form.Item>
-          </Space>
-          <Form.Item name="receiveOrg" label="接收组织">
-            <Input maxLength={200} placeholder="接收组织关系的党组织名称" />
-          </Form.Item>
-          <Space size="middle" wrap>
+            <Form.Item
+              className="form-field-wide"
+              name="receiveOrg"
+              label="接收组织"
+            >
+              <Input maxLength={200} placeholder="接收组织关系的党组织名称" />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="联系方式与备注">
             <Form.Item name="idCard" label="身份证号">
               <Input maxLength={18} style={{ width: 200 }} />
             </Form.Item>
@@ -694,12 +779,95 @@ export function TransferPanel({ memberId }: { memberId: number }) {
             <Form.Item name="wechat" label="微信">
               <Input maxLength={50} style={{ width: 160 }} />
             </Form.Item>
-          </Space>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} />
-          </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+          </FormSection>
         </Form>
-      </GlassModal>
+      </FormSurface>
+    )
+
+  return (
+    <div>
+      <Space style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          新增转移
+        </Button>
+      </Space>
+      <GlassTable<PartyTransferVO>
+        scroll={{ x: 900 }}
+        columns={[
+          {
+            title: '姓名',
+            dataIndex: 'name',
+            key: 'name',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '接收组织',
+            dataIndex: 'receiveOrg',
+            key: 'receiveOrg',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '身份',
+            dataIndex: 'isProbationary',
+            key: 'isProbationary',
+            render: (v: number | null) =>
+              v == null ? '-' : v === 1 ? '预备党员' : '正式党员',
+          },
+          {
+            title: '方式',
+            dataIndex: 'isOnline',
+            key: 'isOnline',
+            render: (v: number | null) =>
+              v == null ? '-' : v === 1 ? '线上' : '线下',
+          },
+          {
+            title: '签署日期',
+            dataIndex: 'signDate',
+            key: 'signDate',
+            render: (v: string) => dash(v),
+          },
+          {
+            title: '操作',
+            key: 'action',
+            align: 'right' as const,
+            width: 140,
+            render: (_: unknown, r: PartyTransferVO) => (
+              <Space size="small">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(r)}
+                >
+                  编辑
+                </Button>
+                <Popconfirm
+                  title="确认删除该转移？"
+                  onConfirm={() => handleDelete(r.id)}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+        dataSource={list.map((r) => ({ ...r, key: r.id }))}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+      />
     </div>
   )
 }
