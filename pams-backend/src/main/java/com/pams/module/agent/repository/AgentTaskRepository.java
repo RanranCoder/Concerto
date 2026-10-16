@@ -43,6 +43,8 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
 
     long countByUserIdAndStatus(Long userId, String status);
 
+    List<AgentTask> findByUserIdAndConversationIdInOrderByIdDesc(Long userId, List<Long> conversationIds);
+
     /**
      * 乐观锁抢占（D2）。影响行数 0 = 重复提交，直接返回幂等结果。
      * 这是确认门禁"后端强制"的关键：不依赖前端自觉。

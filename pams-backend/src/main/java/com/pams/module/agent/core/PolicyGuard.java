@@ -182,8 +182,28 @@ public class PolicyGuard {
         return out;
     }
 
-    /** restricted 工具的固定话术（D4：不经 LLM，由模板渲染） */
-    public String restrictedNotice(String subject, String deepLink) {
+    /**
+     * 工具入参的**出网闸口**（V36）：决定这次调用的入参能不能下发给前端。
+     *
+     * <p><b>为什么闸门在读侧，而不是改写入侧</b>：{@code agent_tool_call.args_json}
+     * 是审计口径（D9，永久保留、只存遮罩后的明文），动它等于动审计。
+     * 而"给用户看多少"是披露口径 —— 两者必须分开，否则一次展示层的收紧
+     * 会顺手把审计数据也改掉（不可逆）。
+     *
+     * <p>取值规则（与 docs/PAMS-Agent业务设计方案.md 表结构里
+     * {@code args_json(脱敏)} + sensitive/restricted 不落明文的要求一致）：
+     * <ul>
+     *   <li>{@link Sensitivity#NORMAL} → 原字符串（其值已由 {@link #sanitizeArgs} 遮罩）</li>
+     *   <li>{@link Sensitivity#SENSITIVE} / {@link Sensitivity#RESTRICTED} → {@code null}</li>
+     * </ul>
+     * 前端只认这个结果：{@code null} 就是"不可下钻"，不允许前端自己按 sensitivity 猜。
+     */
+    public String egressArgs(Sensitivity sensitivity, String sanitizedArgsJson) {
+        if (sanitizedArgsJson == null || sanitizedArgsJson.isBlank()) return null;
+        return sensitivity == Sensitivity.NORMAL ? sanitizedArgsJson : null;
+    }
+
+    /** restricted 工具的固定话术（D4：不经 LLM，由模板渲染） */    public String restrictedNotice(String subject, String deepLink) {
         return "该信息受权限保护，无法在此展示。\n\n"
                 + subject + "属于受限数据，仅可在业务页面查看。"
                 + (deepLink == null ? "" : "\n\n前往查看：" + deepLink);

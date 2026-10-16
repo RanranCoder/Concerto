@@ -60,15 +60,18 @@ public class DeepSeekProvider implements LlmProvider {
 
         ObjectNode body = buildBody(request);
 
-        String raw = client.post()
+        // ⚠️ 刻意取 byte[] 而不是 String：真实 API 的响应头是 application/json（**不带 charset**），
+        // 而 Spring 的 StringHttpMessageConverter 在缺 charset 时按 ISO-8859-1 解码 ——
+        // 中文答复会变成一堆 ? 与乱码，且不报错。JSON 按 RFC 8259 就是 UTF-8，自己解码最稳。
+        byte[] raw = client.post()
                 .uri("/chat/completions")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body.toString())
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
 
-        return parse(raw);
+        return parse(raw == null ? "" : new String(raw, java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**
@@ -85,6 +88,28 @@ public class DeepSeekProvider implements LlmProvider {
      */
     @Override
     public ChatResponse chatStream(ChatRequest request, java.util.function.Consumer<String> onDelta) {
+        return chatStream(request, onDelta, null);
+    }
+
+    /**
+     * 流式对话 + 思维链（{@code reasoning_content}）。
+     *
+     * <p>思考模式下 {@code delta} 里除了 {@code content} 还会给 {@code reasoning_content}：
+     * 那是**模型真实推理原文**，与正文是两条独立流（同一时刻只有一条在产出）。
+     * 这里把它同步回调给调用方（{@code AgentLlmCaller} 负责合并成 THINKING_DELTA 事件
+     * 与落库），本方法只做"边到边转交"，不做合并 —— 合并阈值只有一处（DeltaBatch），
+     * 否则两条链路（正文/推理）的节奏会各自漂移。
+     *
+     * <p>⚠️ 注意：思考模式现在由请求参数 {@code thinking} 控制（见 {@link #buildBody}），
+     * 不再依赖 {@code deepseek-reasoner} 这个模型名。
+     *
+     * @param onReasoning 可为 null（调用方不关心推理时，行为与两参重载完全一致）。
+     *                    无论它是否为 null，攒下的完整推理都会放进返回的
+     *                    {@link ChatResponse#reasoningContent()} —— 工具循环要靠它回灌。
+     */
+    @Override
+    public ChatResponse chatStream(ChatRequest request, java.util.function.Consumer<String> onDelta,
+                                   java.util.function.Consumer<String> onReasoning) {
         String apiKey = props.resolveApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("未配置 PAMS_AGENT_API_KEY");
@@ -103,6 +128,7 @@ public class DeepSeekProvider implements LlmProvider {
                 .build();
 
         StringBuilder content = new StringBuilder();
+        StringBuilder reasoning = new StringBuilder();
         Map<Integer, StringBuilder> callIds = new LinkedHashMap<>();
         Map<Integer, StringBuilder> callNames = new LinkedHashMap<>();
         Map<Integer, StringBuilder> callArgs = new LinkedHashMap<>();
@@ -126,6 +152,15 @@ public class DeepSeekProvider implements LlmProvider {
                     if (!piece.isEmpty()) {
                         content.append(piece);
                         onDelta.accept(piece);
+                    }
+
+                    // 思维链：思考模式（请求参数 thinking，官方默认开启）才有的字段；
+                    // 关掉思考模式的请求这一行永远为空，零成本。
+                    String think = delta.path("reasoning_content").isNull()
+                            ? "" : delta.path("reasoning_content").asText("");
+                    if (!think.isEmpty()) {
+                        reasoning.append(think);
+                        if (onReasoning != null) onReasoning.accept(think);
                     }
 
                     for (JsonNode tc : delta.path("tool_calls")) {
@@ -163,15 +198,34 @@ public class DeepSeekProvider implements LlmProvider {
             }
             calls.add(new ToolCallRequest(e.getValue().toString(), callNames.get(idx).toString(), args));
         }
-        return new ChatResponse(content.toString(), calls, name(), false);
+        if (reasoning.length() > 0) {
+            log.debug("思维链 {} 字 / 正文 {} 字", reasoning.length(), content.length());
+        }
+        // 攒下的推理**必须带在返回值里**，不能只走 onReasoning 回调：
+        // 工具循环的下一轮要把本轮 assistant 的推理原文回灌（思考模式 + tools 的硬约束），
+        // 而回调是"边到边展示"、调用方并不保证留存完整文本。
+        return new ChatResponse(content.toString(), calls, name(), false,
+                reasoning.length() == 0 ? null : reasoning.toString());
     }
 
     /** 组装请求体（流式与非流式共用，避免两条路径的字段漂移） */
     private ObjectNode buildBody(ChatRequest request) {
         ObjectNode body = mapper.createObjectNode();
         body.put("model", props.getModel());
+        // 思考模式下 temperature 不生效（传了不报错也不起作用）。
+        // 仍然传：关闭思考模式时它是唯一的采样控制器，按开关删字段会让两条路径的请求体形状不一致
         body.put("temperature", request.temperature());
         body.put("max_tokens", request.maxTokens());
+
+        // ---- 思考模式（官方 2026-10-12 起是**参数**，不再是 deepseek-reasoner 这个模型名）----
+        // 默认 enabled。它与工具调用的耦合见下面 messages 循环的说明
+        // （官方契约要求回灌 assistant 的 reasoning_content；同日实测该约束当前未强制）。
+        body.putObject("thinking").put("type", props.isThinking() ? "enabled" : "disabled");
+        if (props.isThinking()) {
+            // 关闭思考时**不发**这个字段：它此时不可能生效，发出去只会让"请求体里有什么"
+            // 与"实际生效什么"对不上（排查线上问题时这点最容易误导）
+            body.put("reasoning_effort", props.getReasoningEffort());
+        }
 
         ArrayNode msgs = body.putArray("messages");
         for (ChatMessage m : request.messages()) {
@@ -179,6 +233,17 @@ public class DeepSeekProvider implements LlmProvider {
             n.put("role", m.role());
             // assistant 发起工具调用时 content 允许为空，但字段必须在（部分网关对 null 敏感）
             n.put("content", m.content() == null ? "" : m.content());
+
+            // ---- 思考模式 + tools 的耦合 ----
+            // 官方契约：只要请求带过 tools，后续请求就必须**完整回传**历史 assistant 的
+            // reasoning_content，否则 400。这里按消息上的字段原样带上；
+            // 没有推理的回合（思考模式关闭 / 模型没给）不带该字段即可。
+            // ⚠️ 已复现（2026-10-12 JVM 直连真 API）：带 tools + 历史 assistant(tool_calls) 且该轮
+            // 产生过推理时，不带它会 **HTTP 400**（"The reasoning_content in the thinking mode must be
+            // passed back to the API."）；thinking 关闭时不触发。所以这是必需品，不是保险。
+            if (m.reasoningContent() != null && !m.reasoningContent().isBlank()) {
+                n.put("reasoning_content", m.reasoningContent());
+            }
 
             // ---- OpenAI 兼容协议：tool 结果必须带 tool_call_id ----
             // 缺这个字段 DeepSeek 直接 400：missing field `tool_call_id`
@@ -238,6 +303,10 @@ public class DeepSeekProvider implements LlmProvider {
             JsonNode msg = choice.path("message");
 
             String content = msg.path("content").isNull() ? "" : msg.path("content").asText("");
+            // 非流式也要把推理带出来：它与流式路径是同一条业务链路的两种传输方式，
+            // 少一边就会出现"流式有思维链、非流式没有"这种只在特定调用点复现的怪现象
+            String reasoningContent = msg.path("reasoning_content").isNull()
+                    ? "" : msg.path("reasoning_content").asText("");
             List<ToolCallRequest> calls = new ArrayList<>();
             for (JsonNode tc : msg.path("tool_calls")) {
                 String id = tc.path("id").asText("");
@@ -256,7 +325,8 @@ public class DeepSeekProvider implements LlmProvider {
                 }
                 calls.add(new ToolCallRequest(id, fname, args));
             }
-            return new ChatResponse(content, calls, name(), false);
+            return new ChatResponse(content, calls, name(), false,
+                    reasoningContent.isBlank() ? null : reasoningContent);
         } catch (Exception e) {
             log.warn("DeepSeek 响应解析失败", e);
             throw new IllegalStateException("LLM 响应解析失败：" + e.getMessage(), e);

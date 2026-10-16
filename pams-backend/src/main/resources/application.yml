@@ -4,6 +4,20 @@ server:
 spring:
   application:
     name: pams-backend
+  config:
+    # 让应用**自己**读仓库根的 .env（KEY=VALUE 与 properties 同形，故用 [.properties] 指定解析器）。
+    #
+    # 为什么需要：IDEA 的 Run Configuration 不读 .env，`mvn spring-boot:run` 也不读（pom 里没有 dotenv 依赖），
+    # 只有 start.bat 会载入 —— 三条启动路径的行为不一致，IDE 里就永远降级成 stub，
+    # 前端表现为「永远是规则模式」，与密钥/网络无关（start.bat 第 4-8 行注释记的同一个坑）。
+    #
+    # 为什么两个相对路径都写：CWD 可能是模块根（IDE 默认；mvn 在 pams-backend 下跑 → ../.env），
+    # 也可能是仓库根（mvn -f pams-backend/pom.xml 从根跑 → ./.env）。
+    #
+    # optional: 缺文件时跳过而不是启动失败 —— docker/CI 是直接注入环境变量，根本没有这个文件。
+    # 优先级不变：环境变量仍优先（AgentProperties.resolveApiKey 先读 System.getenv，
+    # 再回落到这里导入的 pams.agent.api-key 占位值）。
+    import: optional:file:../.env[.properties],optional:file:./.env[.properties]
   datasource:
     url: jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: root
@@ -48,10 +62,24 @@ pams:
   agent:
     provider: deepseek
     base-url: https://api.deepseek.com
-    model: deepseek-chat
+    # ⚠️ model id 随官方调整，不要凭记忆写：2026-10-12 起 /chat/completions 的有效取值是
+    # deepseek-flash / deepseek-v4-pro（前者更快更省，后者更强）；
+    # 旧的 deepseek-chat / deepseek-reasoner 已不在官方取值列表里。
+    # 实测（2026-10-12 真 Key 打真 API）：旧 id 目前仍返回 200 —— 服务端把它静默别名到
+    # deepseek-flash，所以"用旧 id 会 400"并不成立；换掉的价值是不再依赖未公开的别名行为，
+    # 且日志/计费里的模型名与实际一致。（"规则模式"的真因是 Key 没进 JVM 环境变量，与模型名无关。）
+    model: deepseek-flash
     timeout-ms: 30000
-    max-tokens: 2048
+    # 思考模式下推理与正文**共享** max_tokens：给太小会被推理吃光，响应以 finish_reason=length
+    # 收尾、正文被截断（表现为"答到一半没了"，不报错）。官方思考模式默认 64K，这里按成本取中间值。
+    max-tokens: 8192
     temperature: 0.3
+    # 思考模式：官方 2026-10-12 起是**请求参数**（thinking:{type:enabled|disabled}，默认 enabled），
+    # 不再是独立模型。关掉则模型不再产出 reasoning_content，过程区的思维链会整段为空（V35 落库与下发仍在）。
+    thinking: true
+    # 推理投入档位 none|low|high|max（官方默认 high）。只写归一化后的值：
+    # 官方的 minimal/medium/xhigh 别名会被归一化成 low/high，写别名会造成"不同档位其实同效"的错觉。
+    reasoning-effort: high
     context-rounds: 6
     max-tool-iterations: 5
     stream-buffer-size: 500
@@ -79,3 +107,10 @@ spring:
 pams:
   jwt:
     secret: test-only-jwt-secret-0123456789abcdef0123456789abcdef
+  agent:
+    # ⚠️ 测试**永不打真实 API**：上面那条 .env 导入会在"开发者本机存在 .env"时把真 Key 带进来，
+    # 若不在这里显式压住，`mvn test` 就会真的实例化 DeepSeekProvider ——
+    # 任何碰到 LLM 的测试都会变成对外发请求（慢、花钱、结果不稳定），而且只在有 .env 的机器上复现。
+    # 需要验证"导入生效 / 有 Key 就选 deepseek"时，用环境变量显式打开：
+    #   PAMS_TEST_AGENT_PROVIDER=deepseek mvn -o -Dtest=... test
+    provider: ${PAMS_TEST_AGENT_PROVIDER:stub}

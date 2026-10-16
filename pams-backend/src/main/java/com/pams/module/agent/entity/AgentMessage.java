@@ -72,6 +72,40 @@ public class AgentMessage implements OrgScoped {
     @Column(length = 20)
     private String mode;
 
+    /**
+     * 本轮思维链（V35）：模型推理（{@code reasoning_content}）按 LLM 调用轮次分段的原文。
+     *
+     * <p>结构见 {@code ThinkingTrace.Step}：
+     * {@code [{round, text, startedAt, endedAt, durationMs}]}，前端同名类型 {@code AgentThinkingStep}。
+     *
+     * <p>与 {@link #toolCalls} 是**互补**的两层，不能互相推导：
+     * <ul>
+     *   <li>{@code tool_calls} = <b>做了什么</b>（工具、耗时、状态；有事实、无理由）</li>
+     *   <li>{@code thinking_json} = <b>为什么这么做</b>（模型原文推理；有理由、无动作）</li>
+     * </ul>
+     * 过程区历史回看需要两者合起来才是一条完整的时间轴；只派生 toolCalls
+     * 会让刷新后的时间轴缺掉"思考"这一半（V26 就是那个状态）。
+     *
+     * <p><b>脱敏</b>：仅 {@code sensitivity=normal} 时写入 —— 思考原文可能包含
+     * 业务数据（真实姓名、金额），与正文同级对待，写时脱敏而不是事后清理。
+     */
+    @Column(name = "thinking_json", columnDefinition = "JSON")
+    private String thinkingJson;
+
+    /**
+     * 本轮编排旁白（V36）：{@code THINKING} 事件的自述行，结构
+     * {@code [{note, ts, durationMs?}]}，前端同名类型 {@code AgentThinkingNote}。
+     *
+     * <p>为什么不与 {@link #thinkingJson} 合成一列：两者是**不同主体的两种行** ——
+     * 推理是模型说的（按 LLM 轮次分段、可展开读原文），旁白是后端编排说的
+     * （一句话 + 持续到下一句的时长，没有正文可展开）。合成一列就得在同一个数组里
+     * 塞两种结构，历史解析与前端类型都要做多态判断；分列则各自是干净的同类数组。
+     *
+     * <p>脱敏：与 {@link #thinkingJson} 同规则 —— 仅 {@code sensitivity=normal} 时写入。
+     */
+    @Column(name = "thinking_notes_json", columnDefinition = "JSON")
+    private String thinkingNotesJson;
+
     @Column(nullable = false, length = 20)
     private String sensitivity = "normal";
 

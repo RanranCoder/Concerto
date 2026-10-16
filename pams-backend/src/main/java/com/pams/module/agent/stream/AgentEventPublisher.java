@@ -33,6 +33,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Component
 public class AgentEventPublisher {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
+    private final Map<String,Long> authorizationVersions = new ConcurrentHashMap<>();
+
+    private boolean authorizedStream(String sid) {
+        Long uid = owners.get(sid);
+        if (authorization == null || uid == null) return true;
+        Long baseline = authorizationVersions.get(sid);
+        boolean allowed = authorization.valid(uid) && baseline != null && baseline.equals(((Number)authorization.identity(uid).get("authz_version")).longValue());
+        if (!allowed) { aborted.put(sid,true); buffers.remove(sid); }
+        return allowed;
+    }
 
     public static final String DEST_STREAM = "/queue/agent/stream";
     public static final String DEST_TASK = "/queue/agent";
@@ -78,7 +90,10 @@ public class AgentEventPublisher {
         String id = (prefix == null ? "s" : prefix) + "_" + Long.toHexString(System.nanoTime());
         counters.put(id, new AtomicInteger(0));
         buffers.put(id, new ArrayList<>());
-        if (ownerUserId != null) owners.put(id, ownerUserId);
+        if (ownerUserId != null) {
+            owners.put(id, ownerUserId);
+            if (authorization != null) authorizationVersions.put(id,((Number)authorization.identity(ownerUserId).get("authz_version")).longValue());
+        }
         return id;
     }
 
@@ -95,6 +110,7 @@ public class AgentEventPublisher {
         if (event == null) return;
         // 1) 缓冲（streamId 为空时不缓冲——例如协作基准等非会话场景，避免 ConcurrentHashMap 空键 NPE）
         String sid = event.streamId();
+        if (sid != null && !authorizedStream(sid)) return;
         if (sid != null) {
             List<AgentStreamEvent> buf = buffers.computeIfAbsent(sid, k -> new ArrayList<>());
             synchronized (buf) {
@@ -120,6 +136,7 @@ public class AgentEventPublisher {
      * 一旦通过日志/截图/工单泄露，任何人都能读到别人的过程事件。
      */
     public List<AgentStreamEvent> since(String streamId, int since, Long requesterUserId) {
+        if (!authorizedStream(streamId)) return List.of();
         if (!ownedBy(streamId, requesterUserId)) {
             log.warn("灵思过程事件补拉被拒：stream={} requester={}", streamId, requesterUserId);
             // 返回空而不是抛异常：调用方拿到空列表即"没有可补的事件"，

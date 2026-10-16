@@ -21,6 +21,7 @@ import com.pams.module.agent.orchestration.CoordinatorAgent;
 import com.pams.module.agent.registry.AgentCatalog;
 import com.pams.module.agent.stream.AgentEventPublisher;
 import com.pams.module.agent.stream.AgentStreamEvent;
+import com.pams.module.agent.stream.ThinkingTrace;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.access.AccessDeniedException;
@@ -89,6 +90,8 @@ public class AgentOrchestrator {
     private final CollaborationRouter collaborationRouter;
     /** 协调者（升级为协作时执行协作 Run；与 AgentTeamController 共用同一实现） */
     private final CoordinatorAgent coordinatorAgent;
+    /** 思维链暂存：推理是流式片段，落库发生在收官段，中间靠它按 streamId 攒起来（V35） */
+    private final ThinkingTrace thinkingTrace;
 
     public AgentOrchestrator(ToolRegistry registry,
                              LlmProvider primaryProvider,
@@ -103,7 +106,8 @@ public class AgentOrchestrator {
                              AgentLlmCaller llmCaller,
                              KbPipeline kbPipeline,
                              CollaborationRouter collaborationRouter,
-                             CoordinatorAgent coordinatorAgent) {
+                             CoordinatorAgent coordinatorAgent,
+                             ThinkingTrace thinkingTrace) {
         this.registry = registry;
         this.primaryProvider = primaryProvider;
         this.conversations = conversations;
@@ -118,6 +122,7 @@ public class AgentOrchestrator {
         this.kbPipeline = kbPipeline;
         this.collaborationRouter = collaborationRouter;
         this.coordinatorAgent = coordinatorAgent;
+        this.thinkingTrace = thinkingTrace;
     }
 
     /* ===================================================================== 对外入口 */
@@ -179,7 +184,7 @@ public class AgentOrchestrator {
         long startedAt = System.currentTimeMillis();
 
         // ===== ① TTFE：进入编排的第一时间就推 THINKING，不得等首个工具出结果 =====
-        emit(ctx, AgentStreamEvent.thinking(streamId, publisher.nextSeq(streamId), "正在理解你的问题…"));
+        emitNote(ctx, streamId, "正在理解你的问题…");
 
         // 会话：无则创建（标题取首条消息前 18 字）
         AgentConversation conversation;
@@ -213,6 +218,9 @@ public class AgentOrchestrator {
         String providerName = primaryProvider.name();
         boolean degraded = false;
         int firstToolSeq = -1;
+        // 本轮留存档位：取所有**已执行**工具里最严的一档（见 Sensitivity.max 的说明）。
+        // 只算已执行的，不算"未可见/被拒"的：那些没有任何数据进入上下文，不该抬高留存档位。
+        Sensitivity turnSensitivity = Sensitivity.NORMAL;
 
         // ===== 模式分流（方案 §7.3）=====
         // 「对话」档位走独立流水线，**不进工具循环**。
@@ -289,8 +297,12 @@ public class AgentOrchestrator {
                 // 把 LLM 的"我要调工具"回合放进上下文，保证多轮一致性。
                 // ⚠️ 必须带 toolCalls：OpenAI 兼容协议要求 assistant(tool_calls) 与其后的
                 // tool(tool_call_id) 成对出现，只放一句裸文本会被 DeepSeek 判为非法请求。
+                // ⚠️ 也必须带 reasoningContent：思考模式下**只要请求带了 tools**，
+                // 官方思考模式契约要求回传该回合推理原文，否则 **HTTP 400**：
+                // "The reasoning_content in the thinking mode must be passed back to the API."
+                // （2026-10-12 JVM 直连真 API 复现；thinking 关闭时不触发）。漏掉它 = 第一次工具调用之后整轮失败。
                 messages.add(LlmProvider.ChatMessage.assistantCalling(
-                        response.content(), response.toolCalls()));
+                        response.content(), response.toolCalls(), response.reasoningContent()));
 
                 // ===== ④⑤ 逐个派发 + 结果过闸口 =====
                 boolean writePlanProduced = false;
@@ -316,7 +328,7 @@ public class AgentOrchestrator {
                                 ? "当前处于只读模式，不能执行写操作 " + tool.name()
                                   + "。请如实告知用户：如果需要写入数据，请把输入框的模式切到「标准模式」。"
                                 : "工具 " + tool.name() + " 需要更高权限，无法为你执行。"));
-                        toolCallVo.add(toolCallEntry(tool, "DENIED", 0L, reason));
+                        toolCallVo.add(toolCallEntry(tool, "DENIED", 0L, reason, call.arguments()));
                         continue;
                     }
 
@@ -336,6 +348,9 @@ public class AgentOrchestrator {
                     }
                     long cost = System.currentTimeMillis() - t0;
 
+                    // 留存档位取本轮最严：碰过敏感数据的轮次，答复与思维链都不再按 NORMAL 全量留存
+                    turnSensitivity = Sensitivity.max(turnSensitivity, tool.sensitivity());
+
                     emit(ctx, AgentStreamEvent.toolEnd(streamId, publisher.nextSeq(streamId),
                             tool.name(), tool.label(), result.status(), cost, result.error()));
                     recordToolRow(convId, ctx, streamId, tool, call, result.status(), cost, result.error());
@@ -343,7 +358,7 @@ public class AgentOrchestrator {
                     // "审计写不进去"而看不到结果）
                     safeAudit(ctx, tool, call, result);
 
-                    toolCallVo.add(toolCallEntry(tool, result.status(), cost, result.error()));
+                    toolCallVo.add(toolCallEntry(tool, result.status(), cost, result.error(), call.arguments()));
                     if (result.references() != null && !result.references().isEmpty()) {
                         allReferences.addAll(result.references());
                     }
@@ -416,13 +431,26 @@ public class AgentOrchestrator {
 
         // ===== ⑧ 落库 + 收官事件 =====
         int duration = (int) (System.currentTimeMillis() - startedAt);
-        Sensitivity replySensitivity = pendingPlan != null ? Sensitivity.NORMAL : Sensitivity.NORMAL;
+        // 该轮的留存档位 = 本轮最严的工具档位（D4 / 决策 6）。
+        // ⚠️ 此前这里写的是 `pendingPlan != null ? NORMAL : NORMAL`——两个分支同值，
+        // 等于敏感轮次的答复一直在按全量落库（策略写了但从未生效）。
+        Sensitivity replySensitivity = turnSensitivity;
         List<Map<String, Object>> finalRefs = dedupeRefs(allReferences);
+        // V35：思维链随 assistant 消息落库，历史回看才看得到"为什么这么做"。
+        // 取快照后即释放内存副本（toJson 为空时返回 null，老链路行为不变）
+        List<Map<String, Object>> thinkingVo = thinkingTrace.toList(streamId);
+        String thinkingJson = thinkingVo.isEmpty() ? null : thinkingTrace.toJson(streamId);
+        // V36：编排旁白（「正在理解你的问题…」这类）与推理分段一起落库 ——
+        // 只落推理的话，刷新后过程区会缺掉旁白行，与实时看到的时间轴不是同一条
+        List<Map<String, Object>> thinkingNotesVo = thinkingTrace.notesList(streamId);
+        String thinkingNotesJson = thinkingNotesVo.isEmpty() ? null : thinkingTrace.notesJson(streamId);
         AgentMessage saved = conversations.save(convId, AgentMessage.ROLE_ASSISTANT, reply,
                 replySensitivity, conversations.summarize(reply, 100),
                 toolCallVo.isEmpty() ? null : toolCallVo, finalRefs,
                 streamId, providerName, duration,
-                ctx.getMode(), citationsOut.isEmpty() ? null : citationsOut);
+                ctx.getMode(), citationsOut.isEmpty() ? null : citationsOut,
+                thinkingJson, thinkingNotesJson);
+        thinkingTrace.clear(streamId);
         conversations.touch(convId);
 
         Map<String, Object> extra = new LinkedHashMap<>();
@@ -445,6 +473,12 @@ public class AgentOrchestrator {
         out.put("references", finalRefs);
         // V27：答案依据（服务端回填）。前端据此渲染依据卡；为空时前端需显式提示"未标注出处"
         out.put("citations", citationsOut);
+        // V35：思维链（与本轮落库的是同一份快照）。前端把本轮消息存下来后，
+        // 下一轮开始时它变成"历史轮次"，靠这份数据回放出思考段 —— 不必再拉一次接口。
+        out.put("thinking", thinkingVo);
+        // V36：编排旁白（与落库同一份快照）。前端把它按 ts 排进时间轴，
+        // 于是"刷新前后看到的是同一条过程"这句话对旁白也成立
+        out.put("thinkingNotes", thinkingNotesVo);
         out.put("mode", ctx.getMode());
         out.put("provider", providerName);
         out.put("degraded", degraded);
@@ -561,7 +595,15 @@ public class AgentOrchestrator {
         return sb.toString();
     }
 
-    private Map<String, Object> toolCallEntry(AgentTool tool, String status, long cost, String error) {
+    /**
+     * 工具调用摘要（进 {@code toolCalls[]}：/chat 响应 + 消息落库，历史回放都读它）。
+     *
+     * @param args 本次调用的原始入参。<b>写入侧不做判断</b> —— 是否下发给前端由
+     *             {@link PolicyGuard#egressArgs} 这道读侧闸门决定（normal 才给遮罩明文），
+     *             因为 audit 的 {@code args_json} 是审计口径，不能为了展示去改它。
+     */
+    private Map<String, Object> toolCallEntry(AgentTool tool, String status, long cost, String error,
+                                              Map<String, Object> args) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("tool", tool.name());
         m.put("label", tool.label());
@@ -570,6 +612,13 @@ public class AgentOrchestrator {
         m.put("write", tool.writeOperation());
         m.put("sensitivity", tool.sensitivity().name().toLowerCase());
         if (error != null) m.put("error", error);
+        // V36：入参下钻。sensitive/restricted → null（前端见到 null 就不给下钻入口）
+        m.put("argsJson", policyGuard.egressArgs(tool.sensitivity(), auditService.toJson(args)));
+        // 工具行的**起始**时间戳（epoch ms）：前端据此把工具行与推理段/旁白行按时间交错。
+        // 用 now-cost 而不是落库时刻：cost 是执行耗时，落库发生在结束之后，
+        // 用结束时刻排序会让"耗时长的工具"整行漂到它后面的推理段之后（顺序读起来是错的）。
+        // 现在还没有 start 时间落库，这是不引入新列的前提下最接近真实位置的值。
+        m.put("ts", System.currentTimeMillis() - Math.max(0L, cost));
         return m;
     }
 
@@ -619,6 +668,18 @@ public class AgentOrchestrator {
     void emit(ToolContext ctx, AgentStreamEvent event) {
         if (ctx.getLoginUser() == null) return;
         publisher.publish(ctx.getLoginUser().getUsername(), event);
+    }
+
+    /**
+     * 推一条编排旁白（{@code THINKING}）并**同时收进 {@link ThinkingTrace}**。
+     *
+     * <p>顺序是刻意的：先收集再发送 —— 反过来的话，事件已经推到前端而落库快照里没有，
+     * 刷新后用户看到的时间轴就会少一行「刚刚明明看到过」的旁白。
+     * 收集本身不会抛异常，所以"先收后发"不会让实时性受损。
+     */
+    void emitNote(ToolContext ctx, String streamId, String note) {
+        thinkingTrace.note(streamId, note);
+        emit(ctx, AgentStreamEvent.thinking(streamId, publisher.nextSeq(streamId), note));
     }
 
     /**

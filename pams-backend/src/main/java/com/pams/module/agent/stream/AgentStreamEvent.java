@@ -26,8 +26,29 @@ public record AgentStreamEvent(String streamId, int seq, String type,
                                Map<String, Object> payload, long ts) {
 
     // —— 一期实发的事件类型 ——
-    /** 进入编排的第一时间推送。**必须在意图分类之前**，否则 TTFE 不达标（灵思 §3.5.3 规则 5） */
+    /**
+     * 编排自述（「正在理解你的问题…」这类后端写死的短句）。
+     *
+     * <p><b>它不是模型的思维链</b>，只是 TTFE 兜底：进入编排的第一时间就得有东西可看。
+     * 模型真正的推理文本走 {@link #THINKING_DELTA}。
+     * **必须在意图分类之前**推送，否则 TTFE 不达标（灵思 §3.5.3 规则 5）。
+     */
     public static final String THINKING = "THINKING";
+    /**
+     * 模型推理增量（思维链正文）。
+     *
+     * <p>来源：provider 的 {@code delta.reasoning_content}（**思考模式**的思维链字段。
+     * 注意它是请求参数 {@code thinking:{type:enabled|disabled}} 的产物、官方默认开启，
+     * <b>不是</b>某个"reasoner 模型"独有 —— 2026-10-12 起官方模型取值只有
+     * {@code deepseek-flash} / {@code deepseek-v4-pro}）。
+     * 与 {@link #MESSAGE_DELTA} 同构：{@code round} 标识"本轮第几次 LLM 调用"，
+     * 前端把**同 round 的片段拼成一段推理**，round 变化即新起一段。
+     *
+     * <p>为什么不复用 THINKING：两者的语义与时效完全不同 ——
+     * THINKING 是后端的编排旁白（有意的占位），THINKING_DELTA 是模型的真实推理原文
+     * （可长可短、需可展开回看、需随消息落库）。混在一起会让"这段到底是谁说的"无法分辨。
+     */
+    public static final String THINKING_DELTA = "THINKING_DELTA";
     public static final String TOOL_START = "TOOL_START";
     public static final String TOOL_END = "TOOL_END";
     public static final String PLAN_READY = "PLAN_READY";
@@ -164,6 +185,19 @@ public record AgentStreamEvent(String streamId, int seq, String type,
 
     public static AgentStreamEvent thinking(String streamId, int seq, String note) {
         return of(streamId, seq, THINKING, Map.of("note", note == null ? "" : note));
+    }
+
+    /**
+     * 模型推理增量（思维链正文片段）。
+     *
+     * @param round 本轮问答内的第几次 LLM 调用（与 {@link #messageDelta} 同一套 round 语义）
+     * @param text  增量片段（调用方已做长度/时间双阈值合并，不是单 token）
+     */
+    public static AgentStreamEvent thinkingDelta(String streamId, int seq, int round, String text) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("round", round);
+        p.put("text", text == null ? "" : text);
+        return of(streamId, seq, THINKING_DELTA, p);
     }
 
     public static AgentStreamEvent toolStart(String streamId, int seq, String tool, String label) {

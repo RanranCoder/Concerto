@@ -33,6 +33,21 @@ public class AgentExecutorConfig {
         pool.setMaxPoolSize(props.getExecutorMaxSize());
         pool.setQueueCapacity(props.getExecutorQueueCapacity());
         pool.setThreadNamePrefix("agent-");
+        pool.setTaskDecorator(task -> {
+            Long captured = com.pams.common.OrgContext.get();
+            var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            Long tenant = captured != null ? captured : authentication != null && authentication.getPrincipal() instanceof com.pams.security.LoginUser u ? u.getOrgId() : null;
+            if (tenant == null) throw new IllegalStateException("异步业务任务缺少可信组织上下文");
+            return () -> {
+                Long previous = com.pams.common.OrgContext.get();
+                try {
+                    com.pams.common.OrgContext.set(tenant);
+                    task.run();
+                } finally {
+                    if (previous == null) com.pams.common.OrgContext.clear(); else com.pams.common.OrgContext.set(previous);
+                }
+            };
+        });
         pool.setWaitForTasksToCompleteOnShutdown(true);
         pool.setAwaitTerminationSeconds(20);
         pool.initialize();

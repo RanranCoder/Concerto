@@ -195,4 +195,49 @@ class PolicyGuardEgressTest {
         }
         throw new IOException("找不到 AgentOrchestrator 源码，无法执行接线契约断言：" + rel);
     }
+
+    /* ------------------------------------------- ④ 工具入参下钻的读侧闸门（V36） */
+
+    /**
+     * 入参下钻的闸门语义：只有 {@code normal} 才把「遮罩后的明文」下发给前端。
+     *
+     * <p>为什么闸门必须在读侧：{@code agent_tool_call.args_json} 是审计口径（永久保留），
+     * 改它等于动审计；而"给用户看多少"是披露口径。两者分开之后，
+     * 一次展示层的收紧不会顺手改掉审计数据。
+     */
+    @Test
+    void argsAreOnlyExposedForNormalSensitivity() {
+        String sanitized = "{\"name\":\"张三\",\"idCard\":\"***\"}";
+
+        assertThat(guard.egressArgs(Sensitivity.NORMAL, sanitized))
+                .as("normal 级工具：入参可下钻（值已遮罩）")
+                .isEqualTo(sanitized);
+        assertThat(guard.egressArgs(Sensitivity.SENSITIVE, sanitized))
+                .as("sensitive 级：不下发入参（前端据此不给下钻入口）")
+                .isNull();
+        assertThat(guard.egressArgs(Sensitivity.RESTRICTED, sanitized))
+                .as("restricted 级：不下发入参")
+                .isNull();
+        assertThat(guard.egressArgs(Sensitivity.NORMAL, null)).isNull();
+        assertThat(guard.egressArgs(Sensitivity.NORMAL, "  ")).isNull();
+    }
+
+    /**
+     * 接线契约：编排器的 {@code toolCalls[]} 元素必须带上**经闸口**的 argsJson。
+     *
+     * <p>锁两件事：①调用点存在；②argsJson 的取值来自闸口，而不是把
+     * {@code auditService.toJson(args)} 直接塞进去（那会绕过敏感度判断，
+     * 与"调用了但没用"是同一类缺陷）。
+     */
+    @Test
+    void toolCallEntriesCarryGatedArgs() throws IOException {
+        String src = readOrchestratorSource();
+
+        assertThat(src)
+                .as("toolCalls[] 必须调用 policyGuard.egressArgs(...)（V36 下钻闸门的接线点）")
+                .contains("policyGuard.egressArgs(");
+        assertThat(src)
+                .as("argsJson 必须来自闸口返回值，不得直接下发未过闸的入参 JSON")
+                .doesNotContain("m.put(\"argsJson\", auditService.toJson(args))");
+    }
 }

@@ -341,7 +341,7 @@ public class TaskGate {
     private Map<String, Object> readFormPayload(AgentTask task) {
         if (task.getPlanJson() == null) return null;
         try {
-            return mapper.readValue(task.getPlanJson(), Map.class);
+            return AgentJson.readObject(mapper, task.getPlanJson());
         } catch (Exception e) {
             return null;
         }
@@ -426,6 +426,7 @@ public class TaskGate {
             rj.put("message", result.message());
             rj.put("detail", result.detail());
             rj.put("references", result.references());
+            rj.put("skipped", plan.skipped());
             resultMap = rj;
             resultJson = mapper.writeValueAsString(rj);
         } catch (Exception e) {
@@ -449,6 +450,7 @@ public class TaskGate {
         // 前端两条取数路径（REST 确认返回 / WS 异步完成）拿到的结构完全一致，避免分叉。
         done.put("artifacts", toArtifacts(resultMap));
         done.put("detail", result.detail());
+        done.put("skipped", plan.skipped());
         done.put("toolName", task.getToolName());
         // 供前端判断"这次完成是不是当前正开着的那条会话"
         done.put("conversationId", task.getConversationId());
@@ -481,7 +483,7 @@ public class TaskGate {
     private AgentActionPlan readPlan(AgentTask task) {
         if (task.getPlanJson() == null) return AgentActionPlan.empty();
         try {
-            Map<String, Object> m = mapper.readValue(task.getPlanJson(), Map.class);
+            Map<String, Object> m = AgentJson.readObject(mapper, task.getPlanJson());
             Object itemsRaw = m.get("items");
             Object skippedRaw = m.get("skipped");
             List<AgentActionPlan.PlanItem> items = new ArrayList<>();
@@ -572,7 +574,7 @@ public class TaskGate {
         vo.put("expired", isExpired(t));
         if (withPlan && t.getPlanJson() != null) {
             try {
-                Map<String, Object> parsed = mapper.readValue(t.getPlanJson(), Map.class);
+                Map<String, Object> parsed = AgentJson.readObject(mapper, t.getPlanJson());
                 if (AgentTask.WAITING_INPUT.equals(t.getStatus()) && "form".equals(parsed.get("type"))) {
                     // 待填写任务：plan_json 里是表单 payload，放 form 键，避免前端把表单误当清单
                     parsed.put("taskId", t.getId());
@@ -589,7 +591,7 @@ public class TaskGate {
         Map<String, Object> resultMap = null;
         if (t.getResultJson() != null) {
             try {
-                resultMap = mapper.readValue(t.getResultJson(), Map.class);
+                resultMap = AgentJson.readObject(mapper, t.getResultJson());
                 vo.put("result", resultMap);
             } catch (Exception ignored) {
                 vo.put("result", null);
@@ -635,7 +637,7 @@ public class TaskGate {
     private boolean readReversible(AgentTask t) {
         if (t.getPlanJson() == null) return false;
         try {
-            Map<String, Object> m = mapper.readValue(t.getPlanJson(), Map.class);
+            Map<String, Object> m = AgentJson.readObject(mapper, t.getPlanJson());
             return Boolean.TRUE.equals(m.get("reversible"));
         } catch (Exception e) {
             return false;

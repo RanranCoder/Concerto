@@ -5,6 +5,7 @@ import com.pams.module.agent.core.ToolContext;
 import com.pams.module.agent.llm.LlmProvider;
 import com.pams.module.agent.stream.AgentEventPublisher;
 import com.pams.module.agent.stream.AgentStreamEvent;
+import com.pams.module.agent.stream.ThinkingTrace;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -36,15 +37,18 @@ public class AgentLlmCaller {
     private final LlmProvider stubProvider;
     private final AgentProperties props;
     private final AgentEventPublisher publisher;
+    private final ThinkingTrace thinkingTrace;
 
     public AgentLlmCaller(LlmProvider primaryProvider,
                           @Qualifier("stubProvider") LlmProvider stubProvider,
                           AgentProperties props,
-                          AgentEventPublisher publisher) {
+                          AgentEventPublisher publisher,
+                          ThinkingTrace thinkingTrace) {
         this.primaryProvider = primaryProvider;
         this.stubProvider = stubProvider;
         this.props = props;
         this.publisher = publisher;
+        this.thinkingTrace = thinkingTrace;
     }
 
     /**
@@ -66,17 +70,22 @@ public class AgentLlmCaller {
         }
 
         DeltaBatch batch = new DeltaBatch(ctx, streamId, round);
+        // 思维链单独一条流：与正文各自的合并节奏互不影响（推理往往先出、正文后出）
+        ReasoningBatch reasoning = new ReasoningBatch(ctx, streamId, round);
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 if (attempt == 2) {
                     // 上一次可能已经吐了半截文本：换个 round，前端自然从头拼
                     batch = new DeltaBatch(ctx, streamId, round + 1000);
+                    reasoning = new ReasoningBatch(ctx, streamId, round + 1000);
                 }
-                LlmProvider.ChatResponse resp = primaryProvider.chatStream(req, batch::accept);
+                LlmProvider.ChatResponse resp = primaryProvider.chatStream(req, batch::accept, reasoning::accept);
                 batch.flush();
+                reasoning.finish();
                 return resp;
             } catch (Exception e) {
                 batch.discard();
+                reasoning.discard();
                 if (attempt == 1) {
                     log.warn("灵思主 provider 调用失败，重试 1 次：{}", e.getMessage());
                 } else {
@@ -142,8 +151,61 @@ public class AgentLlmCaller {
         }
     }
 
-    private LlmProvider.ChatResponse safeStub(LlmProvider.ChatRequest req) {
-        try {
+    /**
+     * 思维链增量合并器 —— 与 {@link DeltaBatch} 同一套"长度 + 时间"双阈值。
+     *
+     * <p>为什么不复用 DeltaBatch：两条流的<b>落点不同</b>。
+     * 正文进 MESSAGE_DELTA（前端拼装答复）；推理既要实时推 THINKING_DELTA，
+     * 又要**全量**写进 {@link ThinkingTrace} 供收官落库（合并后的片段无法还原原文，
+     * 所以进 trace 的是未合并的增量）。混在一个类里会让"谁负责丢弃半截内容"变得含糊。
+     */
+    private class ReasoningBatch {
+        private static final int MAX_CHARS = 48;
+        private static final long MAX_MS = 80;
+
+        private final ToolContext ctx;
+        private final String streamId;
+        private final int round;
+        private final StringBuilder buf = new StringBuilder();
+        private long lastFlush = System.currentTimeMillis();
+        private boolean discarded;
+
+        ReasoningBatch(ToolContext ctx, String streamId, int round) {
+            this.ctx = ctx;
+            this.streamId = streamId;
+            this.round = round;
+            thinkingTrace.begin(streamId, round);
+        }
+
+        void accept(String piece) {
+            if (discarded || piece == null || piece.isEmpty()) return;
+            thinkingTrace.append(streamId, round, piece);
+            buf.append(piece);
+            if (buf.length() >= MAX_CHARS || System.currentTimeMillis() - lastFlush >= MAX_MS) flush();
+        }
+
+        void flush() {
+            if (discarded || buf.length() == 0) return;
+            emit(ctx, AgentStreamEvent.thinkingDelta(streamId, publisher.nextSeq(streamId), round, buf.toString()));
+            buf.setLength(0);
+            lastFlush = System.currentTimeMillis();
+        }
+
+        /** 正常收尾：把尾巴推出去并记结束时间（折叠态的"第 N 段 · 耗时"依赖它） */
+        void finish() {
+            flush();
+            thinkingTrace.end(streamId, round);
+        }
+
+        /** 调用失败：这一轮的推理作废（重试换 round 会重发，留着就会出现两段半截推理） */
+        void discard() {
+            discarded = true;
+            buf.setLength(0);
+            thinkingTrace.drop(streamId, round);
+        }
+    }
+
+    private LlmProvider.ChatResponse safeStub(LlmProvider.ChatRequest req) {        try {
             LlmProvider.ChatResponse r = stubProvider.chat(req);
             if (r.degraded()) return r;
             return new LlmProvider.ChatResponse(r.content(), r.toolCalls(), "stub", true);

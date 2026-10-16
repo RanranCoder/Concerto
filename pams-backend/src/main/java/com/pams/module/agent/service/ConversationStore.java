@@ -11,8 +11,11 @@ import com.pams.module.agent.entity.AgentTask;
 import com.pams.module.agent.repository.AgentConversationRepository;
 import com.pams.module.agent.repository.AgentMessageRepository;
 import com.pams.module.agent.repository.AgentTaskRepository;
+import com.pams.module.agent.stream.ThinkingTrace;
 import com.pams.module.knowledge.service.PermissionResolver;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -102,6 +105,18 @@ public class ConversationStore {
         Page<AgentConversation> p = conversationRepository
                 .findByUserIdAndDeletedOrderByUpdatedAtDesc(userId, 0, PageRequest.of(page - 1, size));
 
+        List<Long> ids = p.getContent().stream().map(AgentConversation::getId).toList();
+        Map<Long, List<AgentTask>> tasks = new HashMap<>();
+        Map<Long, AgentMessage> latestMessages = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (AgentTask t : taskRepository.findByUserIdAndConversationIdInOrderByIdDesc(userId, ids)) {
+                tasks.computeIfAbsent(t.getConversationId(), ignored -> new ArrayList<>()).add(t);
+            }
+            for (AgentMessage m : messageRepository.findLatestByConversationIds(ids)) {
+                latestMessages.put(m.getConversationId(), m);
+            }
+        }
+
         List<Map<String, Object>> records = new ArrayList<>();
         for (AgentConversation c : p.getContent()) {
             Map<String, Object> vo = new LinkedHashMap<>();
@@ -109,7 +124,10 @@ public class ConversationStore {
             vo.put("title", c.getTitle());
             vo.put("updatedAt", c.getUpdatedAt());
             vo.put("createdAt", c.getCreatedAt());
-            vo.put("pendingTaskCount", 0); // 由 Service 层填充，避免 N+1
+            List<AgentTask> conversationTasks = tasks.getOrDefault(c.getId(), List.of());
+            vo.put("pendingTaskCount", conversationTasks.stream()
+                    .filter(t -> AgentTask.PENDING_CONFIRM.equals(t.getStatus())).count());
+            vo.put("status", conversationStatus(conversationTasks, latestMessages.get(c.getId())));
             records.add(vo);
         }
         PageResult<Map<String, Object>> r = new PageResult<>();
@@ -118,6 +136,22 @@ public class ConversationStore {
         r.setCurrent(page);
         r.setSize(size);
         return r;
+    }
+
+    /** 工作状态来自持久化任务与最近一条消息，不把“没有待确认”误读成已完成。 */
+    static String conversationStatus(List<AgentTask> tasks, AgentMessage latest) {
+        for (String status : List.of(AgentTask.RUNNING, AgentTask.WAITING_INPUT, AgentTask.PENDING_CONFIRM)) {
+            if (tasks.stream().anyMatch(t -> status.equals(t.getStatus()))) return status;
+        }
+        if (latest == null || !AgentMessage.ROLE_ASSISTANT.equals(latest.getRole())) return "READY";
+        if (!tasks.isEmpty()) {
+            AgentTask task = tasks.getFirst();
+            if (task.getCreatedAt() != null && latest.getCreatedAt() != null
+                    && !latest.getCreatedAt().isAfter(task.getFinishedAt() == null ? task.getCreatedAt() : task.getFinishedAt())) {
+                return AgentTask.SUCCESS.equals(task.getStatus()) ? "COMPLETED" : task.getStatus();
+            }
+        }
+        return "COMPLETED";
     }
 
     @Transactional
@@ -176,11 +210,103 @@ public class ConversationStore {
                              List<Map<String, Object>> references,
                              String streamId, String provider, Integer durationMs,
                              String mode, List<Map<String, Object>> citations) {
+        // V35/V36 起多两个 thinking*：老调用点零改动（前端历史回看时两者都是空数组）
+        return save(conversationId, role, fullText, sensitivity, summary, toolCalls,
+                references, streamId, provider, durationMs, mode, citations, null, null);
+    }
+
+    /** 敏感档下思维链每段保留的字符上限（与正文摘要 {@code summarize(reply, 100)} 同量级） */
+    private static final int THINKING_SENSITIVE_MAX = 500;
+
+    /**
+     * 思维链两列（推理 / 旁白）的留存闸门 —— <b>与正文同一套策略</b>（D4 / 决策 6）：
+     * NORMAL 全量、SENSITIVE 仅存摘要、RESTRICTED 一个字都不落。
+     *
+     * <p><b>为什么从"只放行 NORMAL"改成这样</b>：原先非 NORMAL 一律整列不落，
+     * 与 D4 / 决策 6 以及 {@link Sensitivity} 自己的 javadoc（"sensitive 会话中仅存摘要"）
+     * 都不一致。后果是同一轮里**正文留了摘要、过程区整块空白** —— 用户回看时"有结论、没过程"，
+     * 正好打掉 §7.1 的验收点"过程区是真实历史"。
+     *
+     * <p><b>为什么这里是"截断"而不是像正文那样传入现成摘要</b>：思维链是模型的原始输出流，
+     * 没有现成的摘要可存；为它单独跑一次 LLM 摘要既贵又慢，而敏感轮次占比很低，不值得。
+     * 因此按字符截断，并在末尾显式标注"被截断"，避免被读成"推理就到这"。
+     *
+     * <p><b>必须在 JSON 内部截断，而不是截 JSON 文本</b>：这两列是 MySQL 的 JSON 列，
+     * 直接截字符串会得到非法 JSON 被数据库拒绝（写不进去，且只在日志里报错）。
+     */
+    private String forThinkingStorage(Sensitivity level, String json) {
+        if (json == null || json.isBlank()) return null;
+        Sensitivity lv = level == null ? Sensitivity.NORMAL : level;
+        if (!lv.canEgress()) return null;                 // restricted：不落内容
+        if (lv != Sensitivity.SENSITIVE) return json;     // normal：全量
+        try {
+            JsonNode arr = mapper.readTree(json);
+            if (arr == null || !arr.isArray()) return null;
+            for (JsonNode node : arr) {
+                if (!(node instanceof ObjectNode obj)) continue;
+                // 推理分段用 text、旁白行用 note —— 两类都截
+                for (String field : new String[]{"text", "note"}) {
+                    String v = obj.path(field).asText("");
+                    if (v.length() > THINKING_SENSITIVE_MAX) {
+                        obj.put(field, v.substring(0, THINKING_SENSITIVE_MAX) + "…（敏感档仅存摘要）");
+                    }
+                }
+            }
+            return mapper.writeValueAsString(arr);
+        } catch (Exception e) {
+            // 解析不了就不落：宁可少留，也不要把非预期形态的内容写进去
+            log.warn("思维链敏感档截断失败，按不落处理", e);
+            return null;
+        }
+    }
+
+    /**
+     * 读侧：JSON 列 → 列表（**容忍 H2 的"字符串里再套一层 JSON"形态**，且失败不再静默）。
+     *
+     * <p><b>为什么需要它</b>：MySQL 的 JSON 列会把写入文本解析成 JSON 文档（读回即原文），
+     * 而 H2（test profile）把 JSON 列当普通字符串，读回是 {@code "[{\"round\":0}]"} ——
+     * 一个**字符串**。直接 {@code readValue(json, List.class)} 会抛异常，而此前这里
+     * （五处 JSON 列全一样）都是 {@code catch (Exception ignored)} 吞掉并回落空数组：
+     * 后果是**读侧在 H2 下静默失效**——"刷新后还能看到思维链 / 工具行 / 引用"这几条
+     * 恰好都是验收点，却永远测不出来；线上万一出现同形态数据（或列被写成字符串）也是无声丢内容。
+     *
+     * <p>做法：先按原样解析；结果是字符串就再解一层；两次都失败**留 warn** 后回落空列表
+     * （保留"一行坏数据不该炸掉整个历史列表"的既有容错，但不再无声无息）。
+     */
+    private List<Object> readJsonList(String json, String what) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            Object v = mapper.readValue(json, Object.class);
+            if (v instanceof String s) v = mapper.readValue(s, Object.class);
+            return v instanceof List<?> list ? new ArrayList<>(list) : List.of();
+        } catch (Exception e) {
+            log.warn("{} 解析失败，历史回放将缺这部分内容：{}", what, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 落库（V35 扩展：{@code thinkingJson}；V36 扩展：{@code thinkingNotesJson}）。
+     *
+     * @param thinkingJson      本轮**模型推理**分段（{@link ThinkingTrace#toJson(String)} 的产物）。
+     * @param thinkingNotesJson 本轮**编排旁白**（{@link ThinkingTrace#notesJson(String)} 的产物）。
+     *                          两者都按与正文**同一套策略**留存（见 {@link #forThinkingStorage}）。
+     */
+    @Transactional
+    public AgentMessage save(Long conversationId, String role, String fullText,
+                             Sensitivity sensitivity, String summary,
+                             List<Map<String, Object>> toolCalls,
+                             List<Map<String, Object>> references,
+                             String streamId, String provider, Integer durationMs,
+                             String mode, List<Map<String, Object>> citations,
+                             String thinkingJson, String thinkingNotesJson) {
         AgentMessage m = new AgentMessage();
         m.setConversationId(conversationId);
         m.setRole(role);
         m.setSensitivity(sensitivity.name().toLowerCase());
         m.setContent(policyGuard.forStorage(sensitivity, fullText, summary));
+        m.setThinkingJson(forThinkingStorage(sensitivity, thinkingJson));
+        m.setThinkingNotesJson(forThinkingStorage(sensitivity, thinkingNotesJson));
         if (toolCalls != null && !toolCalls.isEmpty()) {
             try {
                 m.setToolCalls(mapper.writeValueAsString(toolCalls));
@@ -243,14 +369,33 @@ public class ConversationStore {
 
         // V26 历史恢复：按 stream_id 一次查出本页消息关联的任务（避免 N+1），
         // 把仍可交互的确认卡/表单卡挂回产生它的那条 assistant 消息
-        Map<String, AgentTask> taskByStream = loadInteractiveTasks(conversationId, content);
+        Map<String, AgentTask> taskByStream = loadInteractiveTasks(conversationId, content, userId);
 
         List<Map<String, Object>> records = new ArrayList<>();
         for (AgentMessage m : content) {
             Map<String, Object> vo = toVo(m);
             if (AgentMessage.ROLE_ASSISTANT.equals(m.getRole()) && m.getStreamId() != null) {
                 AgentTask t = taskByStream.get(m.getStreamId());
-                if (t != null) attachTaskCard(vo, t);
+                if (t != null) {
+                    attachTaskCard(vo, t);
+                    if (List.of(AgentTask.SUCCESS, AgentTask.FAILED, AgentTask.PARTIAL, AgentTask.CANCELLED).contains(t.getStatus())) {
+                        Map<String, Object> result = new LinkedHashMap<>();
+                        if ("normal".equalsIgnoreCase(m.getSensitivity())) {
+                            try {
+                                if (t.getResultJson() != null) result.putAll(AgentJson.readObject(mapper,t.getResultJson()));
+                                if (t.getPlanJson() != null) {
+                                    Map<?, ?> plan = AgentJson.readObject(mapper,t.getPlanJson());
+                                    result.put("skipped", plan.getOrDefault("skipped", null));
+                                }
+                                result.put("artifacts", TaskGate.toArtifacts(result));
+                                vo.put("artifacts", result.get("artifacts"));
+                            } catch (Exception e) { log.warn("任务结果回放失败：task={}", t.getId()); }
+                        }
+                        result.put("status", t.getStatus());
+                        result.put("taskId", t.getId());
+                        vo.put("taskResult", result);
+                    }
+                }
             }
             records.add(vo);
         }
@@ -340,7 +485,7 @@ public class ConversationStore {
     }
 
     /** 本页消息涉及 stream_id → 最新一条任务（一次查询，防 N+1；无任务返回空 Map） */
-    private Map<String, AgentTask> loadInteractiveTasks(Long conversationId, List<AgentMessage> content) {
+    private Map<String, AgentTask> loadInteractiveTasks(Long conversationId, List<AgentMessage> content, Long userId) {
         List<String> streamIds = content.stream()
                 .filter(m -> AgentMessage.ROLE_ASSISTANT.equals(m.getRole()))
                 .map(AgentMessage::getStreamId)
@@ -351,7 +496,7 @@ public class ConversationStore {
         Map<String, AgentTask> out = new HashMap<>();
         // 按 id 升序遍历、后写覆盖 → 同一 stream 多条任务时保留最新
         for (AgentTask t : taskRepository.findByConversationIdAndStreamIdInOrderByIdAsc(conversationId, streamIds)) {
-            if (t.getStreamId() != null) out.put(t.getStreamId(), t);
+            if (userId.equals(t.getUserId()) && t.getStreamId() != null) out.put(t.getStreamId(), t);
         }
         return out;
     }
@@ -364,7 +509,7 @@ public class ConversationStore {
     private void attachTaskCard(Map<String, Object> vo, AgentTask t) {
         if (t.getPlanJson() == null) return;
         try {
-            Map<String, Object> parsed = mapper.readValue(t.getPlanJson(), Map.class);
+            Map<String, Object> parsed = AgentJson.readObject(mapper,t.getPlanJson());
             if (AgentTask.PENDING_CONFIRM.equals(t.getStatus())) {
                 parsed.put("planId", t.getId());
                 parsed.put("confirmToken", t.getConfirmToken() == null ? "" : t.getConfirmToken());
@@ -390,38 +535,19 @@ public class ConversationStore {
         vo.put("provider", m.getProvider());
         vo.put("durationMs", m.getDurationMs());
         vo.put("createdAt", m.getCreatedAt());
-        if (m.getToolCalls() != null && !m.getToolCalls().isBlank()) {
-            try {
-                vo.put("toolCalls", mapper.readValue(m.getToolCalls(), List.class));
-            } catch (Exception ignored) {
-                vo.put("toolCalls", List.of());
-            }
-        } else {
-            vo.put("toolCalls", List.of());
-        }
+        // 读侧统一走 readJsonList：容忍 H2 的字符串包装，且解析失败留 warn（不再静默变空数组）
+        vo.put("toolCalls", readJsonList(m.getToolCalls(), "tool_calls"));
         // V26：引用随消息恢复（此前只随 /chat 同步返回，刷新即丢）
-        if (m.getRefsJson() != null && !m.getRefsJson().isBlank()) {
-            try {
-                vo.put("references", mapper.readValue(m.getRefsJson(), List.class));
-            } catch (Exception ignored) {
-                vo.put("references", List.of());
-            }
-        } else {
-            vo.put("references", List.of());
-        }
+        vo.put("references", readJsonList(m.getRefsJson(), "refs_json"));
         // V27：运行模式（历史回看渲染差异 + 效果统计）。老数据为 null，按 standard 兜底
         vo.put("mode", m.getMode() == null ? "standard" : m.getMode());
+        // V35：思维链（历史回放）。老数据为 null → 空数组，前端据此只渲染工具行
+        vo.put("thinking", readJsonList(m.getThinkingJson(), "thinking_json"));
+        // V36：编排旁白。前端按 ts 与推理段合并排序，刷新后与实时看到的是同一条时间轴
+        vo.put("thinkingNotes", readJsonList(m.getThinkingNotesJson(), "thinking_notes_json"));
         // V27：答案依据。⚠️ 这里放的是**落库时的原样**，
         // 调用方（messages）会再跑一次回源复核 —— 权限收紧必须能撤回历史（方案 G8 / R21）
-        if (m.getCitationsJson() != null && !m.getCitationsJson().isBlank()) {
-            try {
-                vo.put("citations", mapper.readValue(m.getCitationsJson(), List.class));
-            } catch (Exception ignored) {
-                vo.put("citations", List.of());
-            }
-        } else {
-            vo.put("citations", List.of());
-        }
+        vo.put("citations", readJsonList(m.getCitationsJson(), "citations_json"));
         vo.put("plan", null);
         vo.put("form", null);
         return vo;

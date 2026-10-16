@@ -35,7 +35,7 @@ import java.util.Set;
  */
 @Slf4j
 @Service
-public class SpecialistAgent {
+public class  SpecialistAgent {
 
     /** 单个工具调用的执行记录。 */
     public record ToolInvocation(String name, String label, String status, String summary, long durationMs) {

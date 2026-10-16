@@ -9,6 +9,7 @@ import com.pams.module.agent.core.ToolContext;
 import com.pams.module.agent.llm.LlmProvider;
 import com.pams.module.agent.stream.AgentEventPublisher;
 import com.pams.module.agent.stream.AgentStreamEvent;
+import com.pams.module.agent.stream.ThinkingTrace;
 import com.pams.module.knowledge.entity.KbRetrievalLog;
 import com.pams.module.knowledge.repository.KbRetrievalLogRepository;
 import com.pams.module.knowledge.retriever.ScoredChunk;
@@ -47,6 +48,8 @@ import java.util.Map;
 @Slf4j
 @Service
 public class KbPipeline {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
     /** 引用卡片段摘要的截断长度（不等于给 LLM 的片段长度） */
     private static final int SNIPPET_CHARS = 240;
@@ -64,6 +67,8 @@ public class KbPipeline {
      * 它把这层关系表达成"两条流水线共用一个能力"，而不是"两个类互相需要"。
      */
     private final AgentLlmCaller llmCaller;
+    /** 思维链暂存：对话档位的旁白（「已找到 N 条相关依据」）也要落库，否则刷新即丢（V36） */
+    private final ThinkingTrace thinkingTrace;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public KbPipeline(KnowledgeQuery knowledgeQuery,
@@ -71,13 +76,15 @@ public class KbPipeline {
                       PolicyGuard policyGuard,
                       AgentEventPublisher publisher,
                       KbRetrievalLogRepository logRepository,
-                      AgentLlmCaller llmCaller) {
+                      AgentLlmCaller llmCaller,
+                      ThinkingTrace thinkingTrace) {
         this.knowledgeQuery = knowledgeQuery;
         this.citationMapper = citationMapper;
         this.policyGuard = policyGuard;
         this.publisher = publisher;
         this.logRepository = logRepository;
         this.llmCaller = llmCaller;
+        this.thinkingTrace = thinkingTrace;
     }
 
     /**
@@ -90,6 +97,7 @@ public class KbPipeline {
      *         （避免两条链路各写一份"收官逻辑"而漂移）
      */
     public KbOutcome run(String question, Long convId, ToolContext ctx, String streamId) {
+        if (authorization != null) ctx = authorization.refresh(ctx);
         long t0 = System.currentTimeMillis();
 
         // ===== ② 检索 + 权限复核 =====
@@ -174,6 +182,8 @@ public class KbPipeline {
 
     private void emitNote(ToolContext ctx, String streamId, String note) {
         if (ctx == null || ctx.getLoginUser() == null) return;
+        // 先收集再发送：否则事件已到前端而落库快照里没有，刷新后少一行（与编排器同一约定）
+        thinkingTrace.note(streamId, note);
         publisher.publish(ctx.getLoginUser().getUsername(),
                 AgentStreamEvent.thinking(streamId, publisher.nextSeq(streamId), note));
     }
