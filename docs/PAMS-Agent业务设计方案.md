@@ -1,6 +1,8 @@
 # PAMS Agent 业务设计方案
 
-> **文档版本**：v1.7　|　**撰写日期**：2026-09-13（v1.7 增补 2026-09-14）　|　**文档状态**：设计稿，待评审
+> **文档版本**：v1.9　|　**撰写日期**：2026-09-13（v1.9 增补 2026-10-12）　|　**文档状态**：实施中——基座与一期能力已落地；多 Agent / 知识库由后续文档接管（**编码前先读 §0.5**）
+> **v1.9 变更（2026-10-12，思维链落地 + 现状对齐）**：① **模型推理（思维链）端到端接通**——新增 `THINKING_DELTA` 事件（`{round,text}`，`ReasoningBatch` 48 字符 / 80ms 合并）、`ThinkingTrace` 按 streamId→round 暂存（LRU 200 流 / 每流 40 段 / 每段 8000 字），`agent_message` 新增 **`thinking_json`（V35）/ `thinking_notes_json`（V36）** 支持刷新后回放；② **`agent_tool_call.args_json` 增加读侧闸门** `PolicyGuard.egressArgs`（`normal` 给遮罩明文、`sensitive`/`restricted` 给 `null`）并随 VO 下发给前端做「工具行下钻」——**闸门刻意在读侧，不动审计口径**；③ 迁移链现状推进至 **V36**；④ 补记两条**待产品拍板**的口径（见 D7「v1.9 现状核对」）。**同日补记：核对官方文档后发现模型已换代——思考模式成了请求参数（`thinking`，默认开）且支持工具调用，而 `deepseek-chat` / `deepseek-reasoner` 已不在官方 `model` 取值列表（现为 `deepseek-flash` / `deepseek-v4-pro`）；已改为 `model: deepseek-flash` 并按官方约束回灌 `reasoning_content`，细节与"仍待真机验证"清单见 D7 的 v1.9 补记。**
+> **v1.8 变更（2026-10-05，现状对齐 + 自洽修复，不改变任何设计决策）**：① 新增 **§0.5 实施现状与使用须知**——工具数（21 = 读 11 / 写 10）、迁移链（V1–V34）、流式（事件级 + 字符级均已落地）、净化、多 Agent、限流缺口等逐项核对至源码；② **修复决策 6 的自相矛盾**（"写时脱敏"与"90 天留存"二选一，按实现修正并勘误）；③ 以「v1.8 现状核对」补记更新 D5 / D7 / §3.5 / §3.6 / §4.3.1 / §4.4 / §6 的过期状态。**要点速览：`draftPlanSections` 已落地；字符级流式已落地；`providerFor(Sensitivity)` 分级路由未实现；Agent 端点限流未接；人工编辑保存路径未接服务端净化。**
 > **v1.7 变更**：新增 **§3.10 对话体验修正与内容类工具**——① 落地工具清单 #15 **`draftPlanSections`**（策划书章节草稿，此前"没有办法生成策划书"）；② **内容类输出先预览后落库**（`AgentActionPlan.preview` + 确认卡「查看全文」抽屉）；③ **多轮「接续」**（出新清单自动作废旧清单 + 待确认清单注入上下文，修"纠正后无法执行"的错位）；④ 用户气泡单一数据源（修"发出的消息不显示"）；⑤ 执行结果落进对话框、去掉 corner 弹窗。工具数 **20 → 21**（读 11 / 写 10）；回归 `f4-plan.mjs` 16 项全绿。
 > **v1.7 补记（同日）**：定位并修复 **§4.3.1 缺陷 6**——`agent_audit_log.side_effect` 为 `VARCHAR(10)` 而编排器写入 `"WRITE_PREVIEW"`（13 字符），导致**所有写类工具的 dry-run 审计行静默丢失**（也是缺陷 2"少一条审计"的真正根因）；取值改为 `"PREVIEW"`，回归 `f5-audit.mjs` + SQL 断言通过。
 > **v1.6 变更**：新增 **§3.9 活动名称自动解析**——工具不再强制 `activityId`（用户天生只说得出名称），新增共享组件 `ActivityResolver`（ID 直取 / 名称尾缀「（ID n）」/ 精确同名唯一才拍板 / 其余出候选清单，**绝不静默选择**）；6 个工具接入。确定性单测 12 项 + 端到端 `f3-resolve.mjs` 14 项全绿。
@@ -8,8 +10,9 @@
 > **v1.4 变更**：新增 **§3.7 表单补全（D2.5 Form Elicitation）**——写类工具缺参时弹出结构化表单引导补全（对齐 Claude/MCP elicitation 与 Codex 结构化确认最佳实践），含状态机 `WAITING_INPUT`、`POST /tasks/{id}/input` 端点、`INPUT_NEEDED` 事件契约与两变体回归实测（全绿）。创建活动为首个消费者。
 > **v1.3 变更**：在源码核实基础上**把第 6 节的 6 项决策补成"有理由的建议"**——LLM 供应商（D5 补选型详述 + "按数据分级路由 provider"建议）、HTML 净化（D10 重写，含白名单口径与"顺带覆盖人工写路径"）、content 权限码收敛（D3 补论证，建议不收敛）、ngram FULLTEXT（D6 补 DDL 与 `BOOLEAN MODE` 细节）、`agent_message` 留存（拆为分角色差异化）。**另修正 D3 一处实现级错误**（原文用 `LoginUser.permissions`，实际该字段不存在）。
 > **文档定位**：在《[PAMS-Agent 集成调研文档](PAMS-Agent集成调研文档.md)》（v1.0，2026-08-08，机会点调研）的基础上，把 40+ 个机会点**收敛为可施工的业务设计**，并**给出技术方案与落地可行性判断**。
-> **基线核对**：本稿所有"现状"结论均来自 2026-09-13 对 `pams-backend` / `pams-web` 源码与 Flyway 迁移链的直接核对，与调研文档的差异集中在第 0 节。
+> **基线核对**：本稿所有"现状"结论均来自 2026-09-13 对 `pams-backend` / `pams-web` 源码与 Flyway 迁移链的直接核对，与调研文档的差异集中在第 0 节；**v1.8 已补充核对至 2026-10-05（Flyway V1–V34），与 v1.7 的差异集中在 §0.5**。
 > **前置文档**：[PAMS-Agent集成调研文档.md](PAMS-Agent集成调研文档.md) ｜ [PRD-v5-开发规划.md](PRD-v5-开发规划.md) ｜ [API.md](API.md) ｜ [PAMS设计方案.md](PAMS设计方案.md)
+> **后续文档（v1.8 补登，见 §0.5.3 优先级）**：[PAMS-灵思页面设计方案.md](PAMS-灵思页面设计方案.md) ｜ [PAMS-灵思知识库问答方案-v1.md](PAMS-灵思知识库问答方案-v1.md) ｜ [PAMS-通用化与多Agent协作改造策划.md](PAMS-通用化与多Agent协作改造策划.md) ｜ [PAMS-协作内聚进灵思-修改计划.md](PAMS-协作内聚进灵思-修改计划.md)
 
 ---
 
@@ -36,13 +39,44 @@
 | # | 缺口 | 说明 | 处理建议 |
 |---|---|---|---|
 | G1 | content 模块（`News`/`Article`）仍用 `LEADER` 角色宏，未收敛到 `content:*` 权限码 | 与 S2「双轨权限收敛」的剩余部分一致 | Agent 侧先用 **LEADER 等价口径**放行，等 S2 扫到 content 时同步切换；不阻塞 |
-| G2 | 服务端无 HTML 净化 | 前端有 DOMPurify，但策划书/推文正文是富文本 HTML，**生成类 Agent 会把 LLM 输出写入库** | 引入 Jsoup 白名单（与 wangEditor5 产出的标签集对齐），约 1 人日，**建议本期做** |
-| G3 | 无 SSE 通道（但有 WebSocket） | 现有推送只有 WebSocket 用户队列（通知用），无 HTTP SSE | **一期用 WebSocket 推送离散过程事件**（D7 事件级流式，成本低）；字符级流式二期用 `fetch + ReadableStream`（保留 `Authorization` 头） |
-| G4 | `agent_*` 表不存在 | 会话/消息/任务/审计 | 本期批次 0 建表 |
-| G5 | 材料库仅元数据检索，无正文索引 | 1660 份材料正文未索引 | 一期用结构化检索；二期用 **MySQL 8 内置 ngram 全文索引**（零新增组件，详见 3.7） |
+| G2 | 服务端无 HTML 净化 | 前端有 DOMPurify，但策划书/推文正文是富文本 HTML，**生成类 Agent 会把 LLM 输出写入库** | 引入 Jsoup 白名单（与 wangEditor5 产出的标签集对齐），约 1 人日，**建议本期做**（**v1.8：已落地**——jsoup `HtmlSanitizer` 接入 4 个生成类写工具；人工编辑路径收口仍缺，见 §0.5.2） |
+| G3 | 无 SSE 通道（但有 WebSocket） | 现有推送只有 WebSocket 用户队列（通知用），无 HTTP SSE | **一期用 WebSocket 推送离散过程事件**（D7 事件级流式，成本低）——**v1.8 核对：字符级流式最终也走 WebSocket `MESSAGE_DELTA` 落地，未引入 SSE / fetch 流** |
+| G4 | `agent_*` 表不存在 | 会话/消息/任务/审计 | 本期批次 0 建表（**v1.8：已建**——V24 起，现共 9 张 agent 表，见 §0.5.2） |
+| G5 | 材料库仅元数据检索，无正文索引 | 1660 份材料正文未索引 | 一期用结构化检索；二期用 **MySQL 8 内置 ngram 全文索引**（零新增组件，详见 3.7）（**v1.8：已落地**——知识库检索 V27/V28，见 §0.5.2） |
 | G6 | 考勤/素拓历史数据仍靠姓名关联 | V20 只覆盖排班 | Agent 回答时对同名做二次确认；不做批量回填 |
 
 > **结论**：调研文档的"阶段一先修 5 处权限缺口 → 再做基座"的串行前提**已不成立**。Agent 可以**并行启动**，唯一真正的硬前置是 G2（服务端净化，因为生成类能力离不开它）与批次 0 基座本身。
+
+---
+
+## 0.5 实施现状与使用须知（v1.8 新增｜2026-10-05 核对｜**编码前先读本节**）
+
+### 0.5.1 一句话状态
+
+本文的 D1–D11 设计**已进入实施并大面积落地**：基座（B0 / B0.5）与一期能力（B1–B3）已上线运行；检索增强（B4）由《[PAMS-灵思知识库问答方案-v1](PAMS-灵思知识库问答方案-v1.md)》接管并已落地；多 Agent 协作与通用化由《[PAMS-通用化与多Agent协作改造策划](PAMS-通用化与多Agent协作改造策划.md)》接管，批次 B/C 及协作内聚 C1–C3 已落地。**本文继续作为「基座契约」的唯一事实来源**：工具派发与权限（D3）、确认门禁（D2）、出网与脱敏（D4）、审计（D9）、解耦契约（D11）以本文为准；能力扩展以各自文档为准（见 0.5.3）。
+
+### 0.5.2 当前实现一览（逐项核对至 2026-10-05 源码）
+
+| 维度 | 现状 | 证据 / 备注 |
+|---|---|---|
+| 迁移链 | **V1–V36**（通用 `db/migration` + `migration-mysql` / `migration-h2` 方言目录） | Agent 相关：V24 基座、V25 seat 修复、V26 历史绑定、V32 多 Agent、V33 评估、**V34 租户唯一键、V35 `thinking_json`、V36 `thinking_notes_json`（V35 原为裸 `ALTER TABLE`，由 V36 补成判存 + `PREPARE` 幂等写法）** |
+| Agent 工具 | **21 个（读 11 / 写 10）**；与 §3.5 规划（23）的偏差见 §4.3.1「v1.8 更新」表 | `module/agent/tool/`：23 个文件 = 21 工具 + `ActivityResolver` / `ToolArgs` 辅助 |
+| Agent 表 | 基座 5 张（V24）+ `agent_definition` / `agent_run` / `agent_step`（V32）+ `agent_benchmark`（V33）；`agent_message` / `agent_task` 另有 V26 / V32 扩展列，**`agent_message` 再有 V35 / V36 两列（思维链推理与旁白）** | Flyway 迁移 |
+| LLM 网关 | DeepSeek + Stub 已落地（无 Key / 失败自动降级）；**Ollama 未接入**；`providerFor(Sensitivity)` 分级路由**未实现**（`LlmConfig` 仅以注释保留设计意图） | 见 D5「v1.8 现状核对」 |
+| 流式 | **事件级 + 字符级 + 推理流均已落地**：`MESSAGE_DELTA` 由 `AgentLlmCaller.DeltaBatch`（24 字符 / 60ms 双阈值）合并推送、`THINKING_DELTA`（模型推理增量）由 `ReasoningBatch`（48 字符 / 80ms）合并推送；`round` 语义覆盖重试（+1000）/ 降级（+2000） | 见 D7「v1.9 现状核对」 |
+| 内容净化 | 已落地（jsoup `HtmlSanitizer`），接入 4 个生成类写工具（`draftPlanSections` / `draftArticleFromActivity` / `publishAnnouncement` / `sendNotification`）；**⚠️ 未收口到 Service 公共入口——人工编辑器保存路径仍只有前端 DOMPurify，D10「顺带覆盖人工写路径」未完成** | 建议见 D10：若要闭合，收口进 `PlanSectionService` / `ArticleService` / `AnnouncementService` 的保存入口 |
+| 多 Agent | 已落地（V32/V33，`orchestration/`：Coordinator + Blackboard + P1–P4 专家执行）；协作内聚 C1–C3 已落地——协作成为灵思内联执行策略，原 `/agent/team` 页面与路由已删除（`LingsiTeamPanel` 内联呈现） | 见《协作内聚进灵思-修改计划》 |
+| 通用化 / 多租户 | 阶段 1（先建列，V30/V31）+ A3 隔离收尾（V34）已落地；领域包 / 组织注册 / 主题令牌见《通用化与多Agent协作改造策划》 | 迁移链 |
+| 前端 | `AgentHome` + **20 个 `Lingsi*` 组件**（含 `LingsiTeamPanel`；`LingsiFormCard.test.tsx` 为单测）+ 知识库页 + 评估页 | `pams-web/src/components/agent/` |
+| Agent API | **18 个端点**：AgentController 11（`/api/agent/**`）+ AgentTeamController 4（`/api/agent/team/**`，协作 Run 接口）+ AgentBenchController 3（`/api/agent/bench/**`） | controller 包实测 |
+| 限流 / 成本 | **Agent chat 端点未接限流**（平台已有 `LoginRateLimiter` / `OrgRegisterRateLimiter` 范式可复用）——已知缺口，扩容或对外开放前补齐 | 代码 |
+
+### 0.5.3 使用须知（对编码 Agent / 开发者，强制）
+
+1. **区分「规划」与「现状」**：§3.5 是原始**规划基线**；开工前以本节与 §4.3.1 现状表为准——**已落地能力不要重复实现**（清单见 0.5.2），**规划未实现项也不要当作遗漏**（多数在后续文档有明确安排，如 `checkPlanCompleteness` 在《通用化与多Agent协作改造策划》中仍标注「待实现」）。
+2. **契约类改动必读**：动权限（D3）、出网（D4）、门禁（D2）、Service 复用方式（D1）之前，先读 §3.2 与 §4.3.1——那里是**已经踩过的坑**（六条真实缺陷 + v1.8 补记两条），不是理论风险。
+3. **文档优先级（冲突裁决）**：① 基座契约（D1–D4、D11、§4.3.1）→ 本文；② 知识库 / RAG → 《知识库问答方案》（本文 D6 的检索议题已由其实际接管）；③ 多 Agent 协作 / 通用化 / 多租户 → 《通用化与多Agent协作改造策划》+《协作内聚修改计划》；④ 页面与组件形态 → 《灵思页面设计方案》及 UI v2 / v3 / v4。**较新文档优先；冲突消除后回填本文。**
+4. **维护义务**：任何改变「工具数 / 表结构 / 门禁状态机 / 出网口径」的变更，合入时同步更新 §0.5 与 §4.3.1。
 
 ---
 
@@ -82,6 +116,8 @@
 | **A. 党建小助** | chat | 全局悬浮球 / 右侧抽屉，任意页面可唤起 | "有事问它" | 全部查询问答类（活动/任务/材料/通知/排班/党务脱敏/素拓） |
 | **B. 流程内 Copilot** | copilot | 具体表单/编辑器内的就地按钮（不做全局入口） | "这一步帮我填/帮我查" | 策划书章节起草、审核意见辅助、完整性检查、状态推进建议、材料类型建议、签到名单预检 |
 | **C. 批量自动化** | automation | 列表页/详情页的动作按钮，或从 A 触发后落成"任务卡" | "帮我批量做，我确认" | 素拓批量加分、名单导入、材料归档补全、议程生成、排班生成、批量状态推进、催办 |
+
+> **v1.8 命名现状**：入口 A 最终以「**灵思**」为产品名落地（页面 `/agent`、侧栏菜单、前端组件前缀 `Lingsi*`）；本节的"党建小助"为历史命名，其余入口名称与形态不变。
 
 ### 2.1 入口 A：党建小助（对话问答）
 
@@ -268,6 +304,8 @@ restricted     → 根本不出网（PolicyGuard 拦截，已是 D4 的既定行
 - **二期**：若演示环境或实际部署有可用算力，再补 `OllamaProvider` 承接 `sensitive` 走廊。
 - **若无 API Key**：`StubProvider` 单跑，体验打折但**流程完整可演示**。这也说明 **B0 的技术选型不依赖 Key**——Key 是配置项，不是阻塞项。
 
+> **v1.8 现状核对**：一期已落地（`LlmConfig`：DeepSeek + 无 Key / 失败降级 Stub）；**`providerFor(Sensitivity)` 分级路由未实现**——代码中仅注释保留设计意图，`sensitive` 实际走 `PolicyGuard` 遮罩后出网（D4），`restricted` 拦截不变；Ollama 未接入，仍为二期可选项。
+
 > **决策建议：DeepSeek API 为主 + Stub 兜底（一期）；`sensitive` 走"仅摘要出网"；`Ollama` 列为二期可选项，不作为一期阻塞。**
 
 #### D6　一期不做向量检索（本方案最重要的取舍）
@@ -305,7 +343,7 @@ restricted     → 根本不出网（PolicyGuard 拦截，已是 D4 的既定行
 > | 类型 | 内容 | 粒度 | 本期 | 理由 |
 > |---|---|---|---|---|
 > | **事件级流式** | 思考摘要、工具开始/结束/耗时、计划就绪、答复完成 | 离散事件 | **✅ 做** | 天然事件模型，与现有 WebSocket 完全契合；后端本就要产生这些事件，多推一次成本极低；是"过程透明"的核心载体 |
-> | **字符级流式** | 答复逐 token 吐出 | 连续 token | **二期** | 需 `fetch + ReadableStream` 承载，与"工具调用多轮编排 + 确认中断"叠加会显著提高复杂度——**这正是原 D7 判断成立的部分**，继续延后 |
+> | **字符级流式** | 答复逐 token 吐出 | 连续 token | **✅ 已落地**（v1.8 核对；原计划二期） | 实际经 WebSocket `MESSAGE_DELTA` 承载（`DeltaBatch` 24 字符 / 60ms 合并推送，`round` 语义覆盖重试 / 降级）——未引入 `fetch + ReadableStream`，"继续延后"的原判断已不适用 |
 >
 > **代价评估**：事件级流式需新增一个 `/user/queue/agent/stream` 用户定向队列与 `AgentStreamEvent` 契约（`{streamId, seq, type, payload, ts}`，`seq` 单调递增供前端去重排序）。`AgentOrchestrator` 每进入一个阶段即 `simpMessagingTemplate.convertAndSendToUser(...)`。**预估增量 0.5–1 人日**（含断连补拉端点）。若一期连这个也不做，则需要退化为轮询——但轮询会让"实时看到它在动"的效果打折，不建议。
 >
@@ -324,6 +362,31 @@ restricted     → 根本不出网（PolicyGuard 拦截，已是 D4 的既定行
   - **触发条件**：横向扩容、或上负载均衡。
   - **届时的解法**（择一，按需评估）：① 启用 STOMP broker relay（RabbitMQ/ActiveMQ）；② 改用 Redis pub/sub 做跨实例广播；③ Nginx 配置会话粘性（**最省事，但只是缓解，实例重启期间仍会丢**）。
   - **当前动作**：不加任何代码，**只在文档里记下这条边界**——避免将来扩容时"Agent 推送莫名不工作"成为无人能解释的悬案。这一条同时也是 D7"不引 Redis"结论的**适用前提**，两者必须一起读。
+
+> **v1.8 现状核对**：**字符级流式已落地**（超出原"二期"安排）——`AgentLlmCaller` 以 `DeltaBatch`（24 字符 / 60ms 双阈值）合并推送 `MESSAGE_DELTA`，`round` 语义覆盖重试（+1000）与降级（+2000）；前端 `stores/agent.ts` / `api/agent.ts` 已消费。本节"字符级流式二期"的表述作废（设计推导保留为历史）。
+>
+> **v1.9 现状核对（2026-10-12，思维链）**：**模型推理原文也接进来了**，与 v1.8 时相比多了三件事：
+> 1. **`THINKING_DELTA` 从"写了常量但没人发"变成真的在发**——`DeepSeekProvider` 早就把 `delta.reasoning_content` 交给 `onReasoning` 回调（三参 `chatStream` 重载），但调用方 `AgentLlmCaller` 之前只传了正文回调，**推理片段被整段丢掉**；现由 `ReasoningBatch`（48 字符 / 80ms，与 `DeltaBatch` 同款双阈值）合并推送，并用同一个 `round` 语义（重试 +1000、降级 +2000，失败即 `discard` + `ThinkingTrace.drop`）。
+> 2. **推理与旁白分列落库**：`thinking_json`（`[{round,text,startedAt,endedAt,durationMs}]`，V35）、`thinking_notes_json`（`[{note,ts,durationMs?}]`，V36），**仅在 `normal` 档写入**；`ThinkingTrace` 有界（LRU 200 流 / 每流 40 段 / 每段 8000 字），收官后取快照。
+> 3. **工具入参可下发**：`PolicyGuard.egressArgs(sensitivity, sanitizedArgsJson)`——`normal` 给**遮罩后的明文**（`args_json` 写入时已过 `sanitizeArgs`）、`sensitive`/`restricted` 给 `null`。**闸门放读侧是刻意的**：`args_json` 是审计口径（D9），展示层收紧不该反向改审计数据。
+>
+> **原记的"两条待产品拍板"（v1.9 补记：均已处理，原判断有误）**：
+> - ~~① `sensitive` 档目前是"整列不落"，而决策 6 / D4 的口径是"仅存摘要（截断）"——需拍板后统一注释与实现~~ → **不是待拍板项**：`Sensitivity` 的 javadoc 与决策 6 / D4 都已写明"sensitive 会话中仅存摘要"，属**实现没按已定策略走**。已由 `ConversationStore.forThinkingStorage()` 统一为与正文同一套闸门（normal 全量 / sensitive **在 JSON 内部**截断成摘要 / restricted 不落）。**注意"在 JSON 内部截断"不是实现细节**：这两列是 MySQL 的 JSON 列，直接截 JSON 文本会得到非法 JSON 被数据库拒绝且只在日志报错。
+> - ~~② `replySensitivity` 恒为 `NORMAL` 导致留存闸门不触发~~ → **已修**。原代码 `pendingPlan != null ? NORMAL : NORMAL` 两个分支同值，等于策略从未生效；现为本轮**已执行**工具里最严的一档（`Sensitivity.max`）。
+> - **仍有真实代价（可一行回退）**：仅 3 个工具是敏感档（`CreateMemberTool` / `QueryAttendanceTool` / `QueryPartyMemberProgressTool`），涉及它们的轮次答复在历史里从全量变摘要（`summarize(reply, 100)`）。若更看重"历史看全答案"，把 `AgentOrchestrator.replySensitivity` 改回 `Sensitivity.NORMAL`。
+>
+> **⚠️ 已修正的前置条件（v1.9 补记，同日）**：原写「`reasoning_content` 是 reasoner 系列独有字段，而 `application.yml` 是 `deepseek-chat`」——**这两句都已过时，且当时的结论低估了严重性**。核对官方文档（`/guides/thinking_mode/`、`/api/create-chat-completion`）后的事实是：
+> 1. **思考模式已从"独立模型"变成请求参数**：`thinking:{type:enabled|disabled}`（**默认 enabled**）+ `reasoning_effort:none|low|high|max`（默认 high）。所以"是不是 reasoner 模型"这个问法本身作废；**思考模式支持工具调用**，原先"reasoner 不支持 function calling、得按档位分模型"的顾虑不成立。
+> 2. **`deepseek-chat` / `deepseek-reasoner` 已不在官方 `model` 取值列表里**（现只有 `deepseek-flash` / `deepseek-v4-pro`）。**⚠️ 同日真 Key 实测更正**：旧 id 目前**仍返回 200** —— 服务端把它**静默别名**到 `deepseek-flash`（响应里的 `model` 字段被改写）。因此"无效 model → 每次 400 → 重试 → 降级 stub"这条**不成立**：模型名既不是"一直在规则模式"的病因、也不是解药，它只影响日志/计费里显示的模型名是否与实际一致。**"一直在规则模式"的真因已定位**：`PAMS_AGENT_API_KEY` 不在 JVM 环境变量里（Spring Boot 不读 `.env`，`application.yml` 是 `${PAMS_AGENT_API_KEY:}`）→ `LlmConfig` 直接返回 stub。
+> 3. **官方契约要求回传 `reasoning_content`**：请求携带 `tools` 时，后续须完整回传历史 assistant 的推理原文，否则 400（思考模式下 `tool_choice` 也不支持 `required` / 指定具体 tool）。工具循环已按此回灌。**✅ 已自行复现（2026-10-12，JVM 直连真实 API）**：第一轮带 `tools` + thinking → 200 且返回推理；第二轮带 `tools`、回灌该轮 assistant 的 `tool_calls` 但**不带** `reasoning_content` → **HTTP 400**：`The reasoning_content in the thinking mode must be passed back to the API.`（把 `thinking` 关掉则不触发）。工具循环第二轮正好命中该组合，**回灌是必需**。**⚠️ 勘误**：此前一次探测得出"该约束未强制"的相反结论、并据此把本条与相关注释改软 —— 原因是那次没有构造出"带 tools + 历史 assistant 带 tool_calls 且产生过推理"这个组合（单轮或不带 tools 不会触发）。**不要据此删掉回灌。**
+>
+> **已落地的修法**：`AgentProperties`/`application.yml` 改 `model: deepseek-flash` + `thinking: true` + `reasoning-effort: high` + `max-tokens` 2048→**8192**（思考模式下推理与正文**共享** `max_tokens`，给太小会 `finish_reason=length` 把正文截断）；`LlmProvider.ChatMessage/ChatResponse` 增 `reasoningContent`（各带 4 参兼容构造器，既有构造点零改动）；`DeepSeekProvider` 请求体下发 `thinking`/`reasoning_effort` 并在序列化 assistant 时带上 `reasoning_content`；`AgentOrchestrator` 工具循环回灌时带上推理原文。**顺带修掉一个既存缺陷**：非流式路径 `chat()` 之前用 `String` 接收响应，而真实 API 的 `application/json` 不带 charset，Spring 按 ISO-8859-1 解码 → **中文答复全乱码且不报错**；现改为取 `byte[]` 后按 UTF-8 解码（JSON 按 RFC 8259 即 UTF-8）。
+>
+> **真机验证已完成（同日，JVM 直连真实 API）**：`GET /models` → 200，Key 可见模型只有 `deepseek-flash` 与 `deepseek-v4-pro`；`thinking:{enabled}` + `reasoning_effort:high` → 200 且**返回 `reasoning_content`**（`reasoning_tokens=29`）；后端自身链路（`DeepSeekProvider` 非流式+工具+thinking、工具循环第二轮、流式 52 片 / 204 字推理）**全部通过**。**方法记录**：本机 pwsh 的 .NET/curl 的 TLS 被沙箱拦（`schannel: SEC_E_NO_CREDENTIALS`），但 **JVM 的 TLS 通** —— 后端用的就是它，所以"用 Java 直连真实 API"是本沙箱唯一可行的真机验证路径（此前这里记的"打不了真实 API"是错的）。
+>
+> **同日再补记：读侧五处静默吞异常 + 测试/生产行为分叉（本次回归测试挖出来的）**。写回归测试时发现 `ConversationStore.toVo()` 读 JSON 列用的是 `mapper.readValue(...)` 且外面套 `catch (Exception ignored) { vo.put(x, List.of()) }`，**五列全一样**（`tool_calls` / `refs_json` / `thinking_json` / `thinking_notes_json` / `citations_json`）。而 H2（test profile）把 JSON 列当**普通字符串**存，读回是 `"[{\"round\":0}]"` 这种带引号转义的字符串 → `readValue` 解析失败 → 被吞掉 → **历史回放静默返回空数组**。生产是 MySQL（解析成 JSON 文档，读回即原文）所以线上看着正常，但后果是**验收点"刷新后仍能看到思维链 / 工具行 / 引用"在测试环境永远测不出来**——测试与生产行为不一致，是典型的"假绿"，而且线上一旦出现同形态数据也会无声丢内容。
+> **修法**：新增 `ConversationStore.readJsonList(json, what)` 统一读侧——先按原样解析，**结果是字符串就再解一层**，两次都失败则 `log.warn` 后回落空列表（保留"一行坏数据不炸整个历史列表"的容错，但不再无声）。五处调用点全部收口。
+> **顺带记两条环境事实（供后续解读测试红绿）**：① 本机沙箱里 **Mockito 无法初始化**（inline mock maker 不能 self-attach），**仓库既有 Mockito 测试在该环境下同样全红**，与代码无关；② **H2 不校验 JSON 合法性**（当字符串照收），因此"写非法 JSON 会被数据库拒绝"这条 MySQL 性质在 H2 上无法验证，回归测试改用"产物必须能被 Jackson 解析"守"在 JSON 内部截断"那道闸。
 
 #### D8　会话与上下文
 
@@ -388,14 +451,14 @@ restricted     → 根本不出网（PolicyGuard 拦截，已是 D4 的既定行
 
 Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + utf8mb4 约定）：
 
-> ⚠️ **迁移号已更正**：本文档早期版本写"建议 `V22__agent.sql`"，但 **V22 与 V23 已被占用**（`V22__drop_activity_session.sql`、`V23__signin_fields_json.sql`）。当前迁移链为 **V1–V23**，Agent 迁移必须用 **`V24`**。若沿用旧号，Flyway 会因校验和不匹配或重复版本直接启动失败。
+> ⚠️ **迁移号已更正**：本文档早期版本写"建议 `V22__agent.sql`"，但 **V22 与 V23 已被占用**（`V22__drop_activity_session.sql`、`V23__signin_fields_json.sql`）。当前迁移链为 **V1–V23**，Agent 迁移必须用 **`V24`**。若沿用旧号，Flyway 会因校验和不匹配或重复版本直接启动失败。（v1.8 注：此为 2026-09-13 的链上状态，现链已至 **V34**，见 §0.5.2。）
 
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | `agent_conversation` | `id, user_id, title, created_at, updated_at, deleted` | 会话；按 `user_id` 强隔离 |
-| `agent_message` | `id, conversation_id, role(SYSTEM/USER/ASSISTANT/TOOL), content, tool_calls(JSON), created_at` | 消息；敏感结果仅存摘要 |
+| `agent_message` | `id, conversation_id, role(SYSTEM/USER/ASSISTANT/TOOL), content, tool_calls(JSON), created_at`，**v1.9：`thinking_json`(JSON) / `thinking_notes_json`(JSON)** | 消息；敏感结果仅存摘要。**思维链两列仅在 `sensitivity = normal` 时写入**（推理原文与编排旁白都可能含业务数据，与正文同级脱敏，见 D4 / 决策 6） |
 | `agent_task` | `id, user_id, conversation_id, tool_name, task_type(SYNC/ASYNC), status(PENDING_CONFIRM/RUNNING/SUCCESS/FAILED/PARTIAL/CANCELLED), plan_json, result_json, confirm_token, confirmed_at, created_at, finished_at` | 确认门禁 + 异步任务状态机（**核心表**） |
-| `agent_tool_call` | `id, conversation_id, message_id, tool_name, args_json(脱敏), sensitivity, side_effect, duration_ms, result_status, created_at` | 调用流水，便于排障与统计。**同时是前端过程区（P5）历史回看的数据源**——刷新页面后 `✓ 查询我的待办 184ms` 这些行从本表读回，不是前端临时状态（灵思 §7.1） |
+| `agent_tool_call` | `id, conversation_id, message_id, tool_name, args_json(脱敏), sensitivity, side_effect, duration_ms, result_status, created_at` | 调用流水，便于排障与统计。**同时是前端过程区（P5）历史回看的数据源**——刷新页面后 `✓ 查询我的待办 184ms` 这些行从本表读回，不是前端临时状态（灵思 §7.1）。**v1.9：`args_json` 经读侧闸门 `PolicyGuard.egressArgs` 下发给前端供「工具行下钻」——`normal` 给遮罩明文、`sensitive`/`restricted` 给 `null`；写入侧不变（那是审计口径，展示层收紧不该改它）。另：随消息下发的工具条目新增 `ts`（= 调用开始时刻 epoch ms，由 `now - durationMs` 推出，不新增列），前端据此把工具行与推理段/旁白行按真实时间交错** |
 | `agent_audit_log` | `id, user_id, conversation_id, task_id, tool_name, args_digest, side_effect, confirmed_by, result_status, created_at` | 审计（写操作 100% 覆盖） |
 
 > 约束：`agent_task(id, status)` 建索引（乐观锁更新需要）；`agent_conversation(user_id, updated_at)` 建索引（列表查询）。
@@ -415,12 +478,14 @@ Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + 
 | POST | `/api/agent/tasks/{id}/cancel` | 取消待确认任务 | 本人 |
 | GET | `/api/agent/tools` | 返回**当前用户可见**的工具清单（供前端做能力提示/引导） | 登录即可，按权限过滤 |
 
+> **v1.8 现状**：实际端点已扩至 **18 个**（含 v1.4 的 `POST /api/agent/tasks/{id}/input` 与多 Agent 的 `AgentTeamController` / `AgentBenchController` 两组），完整清单以 controller 代码为准；本表为规划基线。
+
 **WebSocket 订阅（用户定向队列）**：
 
 | 队列 | 事件 | 说明 |
 |---|---|---|
 | `/user/queue/agent` | `AGENT_TASK_DONE` | 异步任务完成推送（D7 长任务） |
-| `/user/queue/agent/stream` | `AgentStreamEvent` | **对话过程事件流**（D7 事件级流式）：`THINKING` / `TOOL_START` / `TOOL_END` / `PLAN_READY` / `MESSAGE_DONE` / `ERROR`；`MESSAGE_DELTA` 为二期字符流预留 |
+| `/user/queue/agent/stream` | `AgentStreamEvent` | **对话过程事件流**（D7）：`THINKING`（编排旁白）/ **`THINKING_DELTA`（模型推理增量 `{round,text}`，v1.9 落地）** / `TOOL_START` / `TOOL_END` / `PLAN_READY` / `INPUT_NEEDED` / `MESSAGE_DELTA`（字符级流式）/ `MESSAGE_DONE` / `ERROR` / `ABORTED`；多 Agent 协作另扩展 `AGENT_*` / `REVIEW_RESULT` 事件（见《通用化与多Agent协作改造策划》§3.7） |
 
 **`AgentStreamEvent` 契约**：
 
@@ -461,6 +526,8 @@ Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + 
 ### 3.5 工具清单（首批 23 个，按批次交付）
 
 > 原则：**聚合优先**。项目有约 191 个接口，但**绝不能做 191 个工具**——工具越多，LLM 选错率越高、上下文越贵。按"用户会说的那句话"聚合，首批控制在 25 个以内。
+
+> ⚠️ **现状提示（v1.8）**：本表是 2026-09-13 的**规划基线**（23 个）；截至 2026-10-05 实际注册 **21 个（读 11 / 写 10）**——落地偏差、未实现项与实现期新增工具见 §4.3.1「v1.8 更新」表与 §0.5.2。**勿把本表"批次"栏当作当前待办。**
 
 **读类（chat / copilot）— 14 个**
 
@@ -513,6 +580,8 @@ Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + 
 ### 3.6 前端集成方案
 
 > **2026-09-13 更新**：本节已由 `PAMS-灵思页面设计方案.md`（v1.1）展开与部分修正。页面形态从"仅抽屉"扩展为**六面**（P1 主页 / P2 悬浮球+抽屉 / P3 就地 Copilot / P4 确认卡 / P5 过程区 / P6 受限块），组件名有调整。**以灵思页面设计方案为准**，本表保留用于追溯。
+
+> **v1.8 现状**：组件已按灵思方案 + UI v3/v4 落地为 `pams-web/src/components/agent/` 下 **20 个 `Lingsi*` 组件**（含多 Agent 内联面板 `LingsiTeamPanel`；`LingsiFormCard.test.tsx` 为单测）。**新建组件与命名以代码现状为准**，本表旧名（AgentDrawer / AgentMessageBubble / AgentProcessZone / AgentResultCard / AgentActionCard 等）仅作追溯。
 
 | 组件 | 位置 | 说明 |
 |---|---|---|
@@ -602,7 +671,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 决策 | 理由 |
 |---|---|
 | 任务↔消息用 `stream_id` 关联（agent_message 已有该列，V24） | 消息与任务在编排器内同流产生，天然键；无需改 `agent_message` |
-| 历史时间轴**由 toolCalls 摘要本地派生**，不调 `/streams/{id}` | 同源数据（编排器同时写入）、零请求、对旧消息也生效；THINKING 行是一次性过渡态，不参与恢复 |
+| 历史时间轴 | **v1.5：由 toolCalls 摘要本地派生**；**v1.9 修正**：**工具行**仍由 toolCalls 摘要派生（同源、零请求、对旧消息也生效），但**编排旁白与模型推理段改由消息上的 `thinking_notes_json` / `thinking_json` 回放**——原句"THINKING 行是一次性过渡态，不参与恢复"已不成立（那会让刷新后的时间轴缺行，与"过程区是真实历史"自相矛盾） | 两者都必须能回放，且**顺序与实时看到的一致**（旁白按 `ts`、推理按轮次分段） |
 | 只恢复**仍可交互**的任务卡（PENDING_CONFIRM → plan / WAITING_INPUT → form），终态不出卡 | 已执行/已取消的操作再挂确认按钮是误导；`pendingTaskCount` 与可见卡面一致 |
 | `confirmToken` 随卡传入 `confirmPlan(planId, token)`，不再读全局 `pendingPlan` | 历史恢复的确认卡同样可确认（原实现全局 plan 为 null 时静默失效） |
 | 恢复出的 plan 携带后端签发的令牌 | 24h 过期校验仍由后端把守（前端只做视觉提示） |
@@ -782,7 +851,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 项 | 结果 |
 |---|---|
 | Flyway | `23 → 24 - agent` 成功应用；第二轮补 `25 - fix seat layout color labels`（见缺陷 5）；重启后 `up to date`，5 张 agent 表全部建出 |
-| 工具注册 | 实注册 **20** 个（读 11 / 写 9），与 §3.5 规划的 23 个有差异，见下方"工具清单偏差" |
+| 工具注册 | 实注册 **20** 个（读 11 / 写 9），与 §3.5 规划的 23 个有差异，见下方"工具清单偏差"（**v1.8：当前为 21 个**——新增 `draftPlanSections` 落地，见更新后的偏差表） |
 | 模型 | `provider=deepseek`、`degraded=false`，主链路真实调通 |
 | 耗时 | 单轮问答 1.2–2.8s，含 1–2 次工具调用，**满足总 P95 < 3s** |
 
@@ -809,6 +878,8 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 6 | **所有写类工具的 dry-run 都没有审计行**（`agent_audit_log` 里 `generateActivityTasks` / `draftPlanSections` 0 行，而读类工具正常） | `side_effect` 列是 `VARCHAR(10)`（V24 契约 `READ/WRITE`），而编排器 `safeAudit` 传的是 **`"WRITE_PREVIEW"`（13 字符）** → 插入报 `Data truncation` → 因保存走 `saveAndFlush`（缺陷 2 的修复使得异常在方法体内抛出并被 `AuditService.log` catch），**参与同一物理事务的仓储方法已把事务标为 rollback-only** → 代理 commit 抛 `UnexpectedRollbackException` → 被 `safeAudit()` 兜成一条 WARN。**后果是"审计静默丢失"，日志只说"旁路异常已忽略"，极易漏诊** | 取值改为 **`"PREVIEW"`**（7 字符，仍在 10 字符契约内）：`AgentOrchestrator.safeAudit`。另在方法上加注释固化"取值必须 ≤10 字符"这一约束——这是**缺陷 2 的真正根因**，也是它"残留少一条审计"的闭合 |
 
 > **2026-09-14 补记**：缺陷 **2** 的"三重兜底"只是把硬失败降级为"审计少一条 + 一条 WARN"，**真正根因在缺陷 6**（`side_effect` 超长导致插入失败、事务被标 rollback-only）。缺陷 6 修复后，"写类工具 dry-run 无审计行"这一残留已闭合——回归 `f5-audit.mjs` + SQL 断言 `side_effect='PREVIEW'` 落库、后端 0 条审计告警。
+>
+> **v1.8 补记（2026-10-05）：出网链路另有两处"接线未通电"式缺陷（已修复，改动 D4 前必读）**——① `PolicyGuard.egress` 曾"算了但没用"：编排器拿到返回值只用于判断 `restricted`，真正进入上下文的文本却取自工具原文 ⇒ **`SENSITIVE` 的遮罩从未生效**（审计 A2，已修复）；② 学号遮罩正则曾"定义却从未被调用"（同批修复），遮罩顺序固化 `ID_CARD → PHONE → STUDENT_NO`（长模式优先，否则身份证会被手机号规则先咬掉）。**教训：安全函数单测通过 ≠ 闸口生效——任何改动 `PolicyGuard` 或上下文组装点的变更，必须端到端断言"进入 LLM 请求的文本确实已遮罩 / 被拦截"。**
 >
 > **运维提醒**：`spring-boot:run` 会 **fork 子 JVM**；`TaskStop`/杀 Maven 包装进程**不会连带杀掉它**，旧子进程会继续占着 8080 跑**旧代码**，而新启动只会报 "Port 8080 was already in use"。表现为"改了代码但行为没变"。排查：`netstat -ano | findstr :8080` 取 PID → `taskkill /F /T /PID <pid>`。
 
@@ -839,14 +910,25 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 - **schema 漂移风险（V25 只修了 seat_layout）**：凡先于 Flyway 存在的表，其迁移文件里"事后补进 CREATE TABLE 的列"都可能同样缺失。
   V25 的 information_schema 判存范式可直接复用；建议后续做一次"实体字段 ↔ 表结构"全量比对脚本化体检。
 
-**工具清单偏差（20 实现 vs 23 规划）**：
+**工具清单偏差（v1.8 更新至 2026-10-05：当前 21 实现 = 读 11 / 写 10，vs 规划 23）**：
 
-| 规划中的工具 | 处理 |
-|---|---|
-| `queryActivityDetailForWriting`、`querySchedule` | 未单独实现，能力分别由 `queryActivityTasks` / `queryCommonFreeTime` 覆盖 |
-| `checkPlanCompleteness`、`draftPlanSections`、`draftNewsFromActivity`、`draftAnnouncement`、`generateAgendaFromPlan`、`archiveActivityMaterials`、`importPartyRoster` | 未实现（二期） |
-| `previewCreditBatch` + `commitCreditBatch` | **合并为单工具**的双模（dry-run / commit），更契合 D2 门禁——一个工具对应一个待确认任务 |
-| — | **新增 4 个**：`createActivity`、`sendNotification`、`createSeatLayout`、`createMember`（实现期发现的高频写操作） |
+| 规划 # | 规划中的工具 | 落地情况（核对源码） |
+|---|---|---|
+| 4 | `queryActivityDetailForWriting` | 未单独实现——生成类工具自带素材白名单，能力已覆盖 |
+| 8 | `querySchedule` | 未单独实现——排班 / 空闲由 `queryCommonFreeTime` 覆盖 |
+| 14 | `checkPlanCompleteness` | 未实现（《通用化与多Agent协作改造策划》仍标注「待实现」） |
+| 15 | `draftPlanSections` | ✅ **已落地**（v1.7 §3.10.1；本表旧版"未实现"已作废） |
+| 16 | `draftArticleFromActivity` | ✅ 已落地 |
+| 17 | `draftNewsFromActivity` | 未实现（二期） |
+| 18 | `draftAnnouncement` | **演进落地为 `publishAnnouncement`**：草稿预览 + 确认后发布一体化，`notice:publish` / normal / 不可撤回（发布走 D2 门禁） |
+| 19 | `previewCreditBatch` + `commitCreditBatch` | **合并为单工具双模**（dry-run / commit）——一个工具对应一个待确认任务，更契合 D2 门禁 |
+| 20 | `generateAgendaFromPlan` | 未实现（二期） |
+| 21 | `generateActivitySchedule` | ✅ 已落地 |
+| 22 | `archiveActivityMaterials` | 未实现（二期） |
+| 23 | `importPartyRoster` | 未实现（二期） |
+| — | 实现期新增 | `createActivity`、`generateActivityTasks`、`sendNotification`、`createSeatLayout`、`createMember`（高频写操作，均走确认门禁；名称类参数与 §3.9 解析联动） |
+
+> 合计：规划已落地 15（读 11 / 写 4）+ 规划演进 1（#18）+ 实现期新增 5 = **21 个（读 11 / 写 10）**。
 
 > `sendNotification` 依赖的 `notification:send` 权限码原库不存在，已在 `V24__agent.sql` 中补种并授予部长及以上角色。
 > **注意**：写错权限码的后果不是报错，而是工具**永久不可见**（静默失效），排查成本很高。
@@ -863,6 +945,8 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 在 Agent 回复中给出 `/uploads/**` 直链 | **禁止** | 统一走 `/api/files/{id}/download`（带权限门控） |
 | 课表截图 OCR 识别导入 | **缓做** | 无 OCR/解析管线，投入产出比低（调研文档已标"就绪度低"） |
 | 移动端适配 | **不做** | 与 PRD-v5 保持一致（当前 1280px+ PC 口径） |
+
+> **v1.8 现状核对**：向量库 / RAG 框架"不做"**维持**——知识库已按"关键词检索型 RAG"落地（V27/V28），一期无任何向量组件；独立 Agent 服务"不做"**维持**——多 Agent 为进程内自研实现（V32/V33），LangChain4j / Spring AI / AutoGen 路径的否决结论见《通用化与多Agent协作改造策划》§6 D2；Redis / MQ"不做"**维持**（单实例前提未变，D7 边界记录继续有效）。
 
 ### 4.5 验收标准
 
@@ -924,18 +1008,22 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 7 | 过程事件的传输通道（原灵思 §11 第 8 项） | STOMP 用户定向队列 / 轮询 | **✅ 已确认可行，无需拍板**（2026-09-13 源码核实）：`NotificationEventListener` 以普通 `@Component` 注入 `SimpMessagingTemplate` 并调 `convertAndSendToUser(username, dest, payload)`，**无任何线程特判**，证明 `AgentOrchestrator` 在自己的线程池里推事件完全可行。**采用 STOMP `/user/queue/agent/stream` 为主通道，轮询仅作断连补拉兜底** |
 | 8 | 首事件延迟（TTFE）阈值 | 800ms / 1.5s / 不设指标 | **P95 < 800ms**。理由见验收标准 9 的说明：TTFE 是"流式是否真的生效"的判定标准，不设指标等于放任"做了流式但体感没变" |
 
+> **v1.8 现状核对（2026-10-05，逐项闭环）**：#1 已执行——DeepSeek + Stub 落地，Ollama 未接、分级路由未实现（见 D5）；#2 ✅ 已落地（`HtmlSanitizer` + jsoup；人工路径收口仍缺，见 §0.5.2）；#3 按原建议执行——content 仍维持 `LEADER` 等价口径，未收敛（现势复核）；#4 事件级 ✅ 且**字符级也已落地**（见 D7）；#5 ✅ 已落地并被《知识库问答方案》扩展（V27/V28）；#6 已落地（写时脱敏），原表"90 天"勘误见决策 6 详述；#7 ✅ 已落地；#8 维持阈值不变。**8 项决策全部闭环，无未决项；后续变更走 §0.5.3 第 4 条维护义务。**
+
 #### 决策 6 详述：`agent_message` 留存策略（建议：只存摘要 + 分角色差异化）
 
-原建议"只存摘要 + 90 天清理"方向正确，但**"一刀切 90 天"有问题**——它会让"我上个月问过的那份材料在哪"这类正常回溯失效。建议改为**按数据分级差异化**：
+原建议"只存摘要 + 90 天清理"方向正确，但**"一刀切 90 天"有问题**——它会让"我上个月问过的那份材料在哪"这类正常回溯失效。建议改为**按数据分级差异化**（v1.8 进一步修正：因敏感内容在写入时既已脱敏为摘要，"留存期"维度整体取消——见下方勘误注）：
 
 | 消息类型 | 存储内容 | 留存期 | 理由 |
 |---|---|---|---|
 | `normal` 问答（活动、材料、通知） | **完整文本** | **永久**（随会话） | 这是用户的"工作记忆"，清掉会让功能变难用。且这些内容本身就是用户有权看的业务数据，存着不增加暴露面 |
-| `sensitive` 工具结果 | **仅摘要**（如"查到 42 人签到"而非名单） | 90 天 | 与 D4 一致：敏感明细不入会话明文；摘要足够支撑"我当时问过什么"的记忆 |
-| `restricted` 工具结果 | **不落内容**，仅存"已拒绝 + 深链"的占位 | 90 天 | 内容根本没进 LLM 上下文（D4），无内容可存 |
+| `sensitive` 工具结果 | **仅摘要**（如"查到 42 人签到"而非名单） | 随会话保留（不设独立清理任务） | 与 D4 一致：敏感明细不入会话明文；摘要足够支撑"我当时问过什么"的记忆 |
+| `restricted` 工具结果 | **不落内容**，仅存"已拒绝 + 深链"的占位 | 随会话保留 | 内容根本没进 LLM 上下文（D4），无内容可存 |
 | `agent_tool_call`（调用流水） | **不含结果内容**，只有 `tool_name / args_digest / duration / status` | **永久** | 审计用途（D9），与 `agent_audit_log` 同性质，属于"必须留" |
 
 **实现方式**：不引入定时任务（项目已有 `AttendanceAutoJob`，但这条不需要那么重）——**在写入时判定 `sensitivity`，直接把不该存的内容替换成摘要**（写时就脱敏，而非事后清理）。这样连"90 天后清理任务"都可以省掉，因为**敏感内容从未被写入**。
+
+> **v1.8 勘误与现状**：原表 sensitive / restricted 两行写"90 天"留存，与"写时脱敏、不引入清理任务"自相矛盾——明细既从未落库，"90 天清理"无对象可清；已按实现修正为"随会话保留"。现状核对：`PolicyGuard.forStorage` 已按写时脱敏落地（normal 全文 / sensitive 摘要 / restricted 占位），**代码中不存在任何会话清理任务**；若未来要求摘要行也不长期保留，再单独设计（当前非需求）。
 
 > **⚠️ 一个必须说清的取舍**：如果 `sensitive` 消息只存摘要，那么**用户回看历史会话时会发现"当时的细节不见了"**。这不是 bug，是设计——需要在 UI 上说明（灵思 §7.2 的受限数据块已承担此职责）。**如果不说明，用户会以为系统丢了数据。**
 
@@ -957,4 +1045,4 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 
 ---
 
-> **文档结束**。本稿的"现状"部分已逐项核对至 2026-09-13 的源码与迁移链（Flyway **V1–V23**，Agent 迁移将用 **V24**），技术方案部分均给出取舍理由与落地路径，工作量按批次给出区间估算。评审重点建议放在第 6 节的 8 项决策上。
+> **文档结束**。本稿的"现状"部分已逐项核对至 2026-09-13 的源码与迁移链（当时 **V1–V23**）；**v1.8 已补充核对至 2026-10-05（Flyway V1–V34），当前状态与使用须知见 §0.5**。技术方案部分均给出取舍理由与落地路径。第 6 节 8 项决策已全部闭环（见 §6 的 v1.8 现状核对）。

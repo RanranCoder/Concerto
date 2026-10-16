@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAMS 登录页设计稿 v2（对齐参考布局）</title>
+<style>
+/* =========================================================================
+   PAMS 登录页设计稿 v2 —— 布局对齐用户提供的参考稿
+   参考稿特征：居中大圆角容器；左=深色表单面板；右=品牌渐变面板 +
+              巨型描边字 + 居中引言；页底为浅色。
+   本稿把配色/文案/组织能力换成 PAMS 新需求（院校蓝 + 组织选择 + 通用化）。
+   ========================================================================= */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: 'PingFang SC','Microsoft YaHei','HarmonyOS Sans SC','Noto Sans SC',sans-serif;
+  background: #0f1012; color: #e6e8ec;
+}
+
+/* ---------- 顶栏（评审工具，不属于设计本身） ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  padding: 12px 20px; background: #17181a; border-bottom: 1px solid #2a2c30;
+}
+.bar h1 { margin: 0; font-size: 14px; font-weight: 600; }
+.bar .seg { display: flex; border: 1px solid #33363b; border-radius: 6px; overflow: hidden; }
+.bar .seg button { border: 0; background: transparent; color: #a2aab6; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.bar .seg button[aria-pressed='true'] { background: #2563eb; color: #fff; }
+.bar .spacer { flex: 1; }
+.bar .hint { font-size: 12px; color: #8a93a3; }
+
+/* ---------- 设计 token（来自 src/styles/tokens.ts） ---------- */
+.stage {
+  --page:#F5F6F8;
+  --dark:#1A1B1E;          /* 深色表单面板 */
+  --dark-2:#26272B;        /* 深色面板内的输入框面 */
+  --dark-line:#34363B;     /* 深色面板内的描边 */
+  --on-dark:#F2F3F5;
+  --on-dark-dim:rgba(255,255,255,.58);
+  --on-dark-faint:rgba(255,255,255,.38);
+  --brand:#0034A2;
+  --brand-hover:#0045D6;
+  --brand-link:#7FA6F0;    /* 深底上的蓝色文字（深色主题 token 同款） */
+  --g-a:#F0F4FF; --g-b:#C6D4FA; --g-c:#7D9BEE;
+  --r-md:8px; --r-sm:6px;
+  font-size: 14px;
+}
+/* 组织品牌态：主色 + 右侧渐变同步（对应 stores/org.ts 的 themeJson.primaryColor） */
+.stage[data-org='union'] { --brand:#2F6FED; --brand-hover:#1F5FE0; --brand-link:#8FB4FB; --g-a:#EAF1FF; --g-b:#C2D6FC; --g-c:#6E9BF2; }
+.stage[data-org='club']  { --brand:#0E7C66; --brand-hover:#0B6A57; --brand-link:#6FD6C1; --g-a:#E8F5F1; --g-b:#BEE3D9; --g-c:#4FB39B; }
+
+/* ---------- 页面 ---------- */
+.page { background: var(--page); padding: 40px 20px 56px; }
+#viewport { max-width: 1000px; margin: 0 auto; container-type: inline-size; }
+
+.shell {
+  display: grid; grid-template-columns: 45% 55%;
+  min-height: 620px; overflow: hidden;
+  border-radius: 24px; border: 1px solid rgba(16,24,40,.14);
+  /* 品牌落地容器：允许一层很轻的浮起阴影（内页卡片仍无阴影） */
+  box-shadow: 0 24px 60px rgba(16,24,40,.14);
+  background: var(--dark);
+}
+
+/* ===== 左：深色表单面板 ===== */
+.panel { position: relative; display: flex; flex-direction: column; padding: 36px 44px 28px; background: var(--dark); color: var(--on-dark); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark {
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff;
+  background: var(--brand);
+}
+.brand-word { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
+.brand-env { font-size: 13px; font-weight: 500; color: var(--on-dark-dim); }
+
+.form { flex: 1; display: flex; flex-direction: column; justify-content: center; width: 100%; max-width: 330px; margin: 0 auto; }
+.form h1 { margin: 0 0 6px; font-size: 21px; font-weight: 600; }
+.form .sub { margin: 0 0 24px; font-size: 14px; color: var(--on-dark-dim); }
+
+.lbl { display: block; margin: 0 0 7px; font-size: 12px; color: var(--on-dark-dim); }
+.inp {
+  width: 100%; height: 40px; padding: 0 12px; margin-bottom: 16px;
+  background: var(--dark-2); border: 1px solid var(--dark-line); border-radius: var(--r-md);
+  color: var(--on-dark); font: inherit; font-size: 14px; outline: 0;
+  transition: border-color 140ms, box-shadow 140ms;
+}
+.inp::placeholder { color: var(--on-dark-faint); }
+.inp:focus { border-color: var(--brand-link); box-shadow: 0 0 0 3px rgba(127,166,240,.18); }
+.hint { margin: -10px 0 16px; font-size: 12px; color: var(--on-dark-faint); }
+
+/* 组织选择（通用化核心） */
+.org-select {
+  display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; margin-bottom: 16px;
+  background: var(--dark-2); border: 1px solid var(--dark-line); border-radius: var(--r-md); cursor: pointer;
+}
+.org-select .o-mark { width: 20px; height: 20px; flex: none; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); }
+.org-select .o-name { flex: 1; font-size: 14px; }
+.org-select .o-caret { font-size: 9px; color: var(--on-dark-faint); }
+
+.btn {
+  width: 100%; height: 40px; margin-top: 4px; border: 0; cursor: pointer;
+  border-radius: var(--r-md); background: var(--brand); color: #fff;
+  font: inherit; font-size: 14px; font-weight: 500;
+  transition: background 140ms cubic-bezier(.22,1,.36,1);
+}
+.btn:hover { background: var(--brand-hover); }
+
+.legal { margin: 14px 0 0; font-size: 11px; line-height: 1.6; color: var(--on-dark-faint); }
+.legal a { color: var(--brand-link); text-decoration: none; }
+.divider { position: relative; margin: 22px 0 16px; border-top: 1px solid var(--dark-line); }
+.alt { text-align: center; font-size: 13px; color: var(--on-dark-dim); }
+.alt a { color: var(--brand-link); text-decoration: none; margin-left: 4px; }
+.alt a:hover { text-decoration: underline; }
+
+.copyright { margin-top: 28px; font-size: 11px; color: rgba(255,255,255,.28); }
+
+/* ===== 右：品牌渐变面板 ===== */
+.hero {
+  position: relative; overflow: hidden; display: grid; place-items: center;
+  background: linear-gradient(155deg, var(--g-a) 0%, var(--g-b) 48%, var(--g-c) 100%);
+}
+.giant {
+  position: absolute; z-index: 1; white-space: nowrap; user-select: none;
+  font-size: 158px; font-weight: 700; letter-spacing: -3px; line-height: 1;
+  color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,.6);
+}
+.giant.top { top: -30px; left: -14px; }
+.giant.bottom { bottom: -38px; left: 6px; }
+.reg { position: absolute; top: 18px; right: 22px; z-index: 2; font-size: 20px; color: rgba(255,255,255,.55); }
+.quote {
+  position: relative; z-index: 2; margin: 0; max-width: 27ch; padding: 0 40px;
+  text-align: center; color: #fff; font-size: 22px; line-height: 1.55;
+  text-shadow: 0 2px 16px rgba(20,40,90,.18);
+}
+.quote b { font-weight: 700; }
+
+/* ---------- 窄屏：只留深色表单面板 ---------- */
+@container (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; min-height: 0; border-radius: 20px; }
+  .hero { display: none; }
+  .panel { min-height: 620px; border-radius: 20px; }
+}
+@media (max-width: 900px) {
+  .page { padding: 0; }
+  #viewport { max-width: none; }
+  .shell { border-radius: 0; min-height: 100vh; border: 0; box-shadow: none; }
+  .panel { min-height: 100vh; border-radius: 0; }
+}
+
+/* ---------- 说明区（评审用） ---------- */
+.spec { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; color: #cfd3da; }
+.spec h2 { font-size: 16px; margin: 28px 0 10px; color: #fff; }
+.spec p, .spec li { font-size: 13px; line-height: 1.8; color: #a2aab6; }
+.spec table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0 4px; }
+.spec th, .spec td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2a2c30; vertical-align: top; }
+.spec th { color: #8a93a3; font-weight: 500; }
+.spec code { background: #24262a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.spec .yes { color: #5FBF7A; } .spec .no { color: #F0735C; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 1px solid #3a3d42; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>PAMS 登录页设计稿 v2 · 对齐参考布局</h1>
+  <div class="seg" id="segOrg">
+    <button data-v="none" aria-pressed="true">中立 / 默认</button>
+    <button data-v="union" aria-pressed="false">学生会品牌</button>
+    <button data-v="club" aria-pressed="false">社团品牌</button>
+  </div>
+  <div class="seg" id="segW">
+    <button data-v="wide" aria-pressed="true">桌面</button>
+    <button data-v="narrow" aria-pressed="false">窄屏 ≤860</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="hint">评审用原型 · 非落地代码</span>
+</div>
+
+<div class="stage" id="stage" data-org="none">
+  <div class="page">
+    <div id="viewport" style="transition: max-width 200ms; max-width: 1000px;">
+      <div class="shell">
+        <!-- 左：深色表单面板 -->
+        <section class="panel">
+          <div class="brand">
+            
+            
+            
+          </div>
+
+          <div class="form" style="width: 329.996px; height: 512.95px; transform: matrix(1, 0, 0, 1, -0.00737762, 0); position: relative;">
+            <h1 style="width: 329.996px; height: 31.1688px; transform: matrix(1, 0, 0, 1, 0, -3.30578);">登录</h1>
+            <p class="sub" id="formSub">继续你的工作</p>
+
+            <label class="lbl">所属组织</label>
+            <div class="org-select">
+              <span class="o-mark" id="oMark">党</span>
+              <span class="o-name" id="oName">党建办公室</span>
+              <span class="o-caret">▼</span>
+            </div>
+
+            <label class="lbl">用户名</label>
+            <input class="inp" placeholder="用户名 / 学号">
+
+            <label class="lbl">密码</label>
+            <input class="inp" type="password" placeholder="请输入密码">
+            <p class="hint">至少 6 位字符。</p>
+
+            <button class="btn">登 录</button>
+
+            <p class="legal">登录即表示同意 <a>《服务条款》</a> 与 <a>《隐私政策》</a>，包括 Cookie 的使用。</p>
+
+            <div class="divider"></div>
+            <p class="alt">还没有组织？<a>注册新组织</a></p>
+          </div>
+
+          <div class="copyright">© 2026 PAMS · 通用学生组织管理平台</div>
+        </section>
+
+        <!-- 右：品牌渐变面板 -->
+        <section class="hero" aria-hidden="true" style="width: 573.989px; height: 636.091px; transform: matrix(1, 0, 0, 1, 0, -15.577);">
+          <div class="giant top" id="giantTop">PAMS</div>
+          <div class="quote" id="quote"> 让每一次活动，从策划、签到到归档，都在一处闭环完成。</div>
+          <div class="giant bottom" id="giantBottom">PAMS</div>
+          
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="spec">
+  <h2>0. 相对参考稿，改了什么</h2>
+  <table>
+    <tbody><tr><th>维度</th><th>参考稿</th><th>本稿（PAMS）</th></tr>
+    <tr><td>外层</td><td>居中大圆角容器，页底浅色</td><td>保留（半径 24px、轻浮起阴影、页底 <code>#F5F6F8</code>）</td></tr>
+    <tr><td>左面板</td><td>近黑表单面板</td><td>保留（<code>#1A1B1E</code>），放「组织选择 + 登录」表单</td></tr>
+    <tr><td>右面板</td><td>淡紫→蓝渐变 + 巨型描边字 + 引言</td><td>保留结构；渐变改院校蓝系，描边字 <code>PAMS</code>，引言改产品主张</td></tr>
+    <tr><td>主色</td><td>蓝 <code>#2F6FE4</code></td><td>院校蓝 <code>#0034A2</code>（组织可覆盖）</td></tr>
+    <tr><td>通用化</td><td>无</td><td>新增<b>组织选择 + 组织品牌</b>（名称/简称/logo/主题色）</td></tr>
+  </tbody></table>
+
+  <h2>1. 结构</h2>
+  <p>桌面：容器 <code>max-width 1000px</code>，左 45% 深色表单 / 右 55% 渐变品牌板，最小高 620px。深色表单面板内：品牌标识（顶）→ 表单（垂直居中，宽 ≤330px）→ 版权（底）。窄屏 ≤860：只保留深色表单面板，隐藏渐变板（表单是唯一的任务路径）。</p>
+
+  <h2>2. 与 v4 设计系统的一处取舍（需你确认）</h2>
+  <p class="no">v4 明确要求「去渐变、去装饰」。参考稿的<b>右侧渐变 + 巨型描边字</b>属于对外的品牌落地页表达，与内页系统不同。本稿把它限定在<b>右侧一个面板内</b>（不进入内页、不进入表单区），作为 v4 §10 允许的「仪式场景」处理。若你希望完全贴 v4，可把右板换成纯色 <code>--brand</code> 或 <code>--brand-soft</code>。</p>
+
+  <h2>3. 组织选择（核心新增，需后端配合）</h2>
+  <p>现状后端<b>没有免登录的组织列表接口</b>（<code>GET /api/orgs/current</code> 需登录）。落地「登录前选组织」二选一：</p>
+  <table>
+    <tbody><tr><th>方案</th><th>做法</th><th>代价</th></tr>
+    <tr><td>A 公开列表（本稿采用）</td><td>新增 <code>GET /api/orgs/public</code>（免登录，仅回 id/name/shortName/logoUrl/themeJson），前端下拉选择 + localStorage 记忆</td><td>需 1 个免登录只读接口（注意脱敏）</td></tr>
+    <tr><td>B 组织链接进入</td><td>不改接口，注册后给入口链接 <code>/login?org=&lt;code&gt;</code>，按 code 拉公开品牌</td><td>仍需按 code 取品牌的公开接口</td></tr>
+  </tbody></table>
+
+  <h2>4. 关键数值</h2>
+  <table>
+    <tbody><tr><th>元素</th><th>值</th></tr>
+    <tr><td>页底 / 容器 / 左面板 / 输入面</td><td><span class="swatch" style="background:#F5F6F8"></span>#F5F6F8 · 容器圆角 24 · <span class="swatch" style="background:#1A1B1E"></span>#1A1B1E · <span class="swatch" style="background:#26272B"></span>#26272B（边 #34363B）</td></tr>
+    <tr><td>主色 / hover / 深底链接</td><td><span class="swatch" style="background:#0034A2"></span>#0034A2 · #0045D6 · <span class="swatch" style="background:#7FA6F0"></span>#7FA6F0</td></tr>
+    <tr><td>右侧渐变</td><td>#F0F4FF → #C6D4FA → #7D9BEE（155°）；描边字 1.5px rgba(255,255,255,.6)</td></tr>
+    <tr><td>控件 / 字号</td><td>输入与按钮高 40 · 圆角 8；标题 21 · 正文 14 · 标签 12 · 辅助 11</td></tr>
+  </tbody></table>
+
+  <h2>5. 待你拍板</h2>
+  <p>① 布局是否就按此稿？<br>
+     ② 右侧渐变面板：<b>保留渐变+描边字</b>（本稿）／改为纯色主蓝／整体去掉右板只留居中表单？<br>
+     ③ 组织选择：做（需新增免登录公开接口）／先不做（隐藏选择器）？<br>
+     ④ 附加功能：是否保留「忘记密码 / 记住我 / 验证码」——参考稿无这些，本稿也暂未放。</p>
+</section>
+
+<script>
+  const stage = document.getElementById('stage')
+  const viewport = document.getElementById('viewport')
+  const ORG = {
+    none:  { mark: 'P', word: 'PAMS', env: '党建办公室', sub: '继续你的工作', oMark: '党', oName: '党建办公室',
+             top: 'PAMS', bottom: 'PAMS', quote: '<b>PAMS</b> 让每一次活动，从策划、签到到归档，都在一处闭环完成。' },
+    union: { mark: '学', word: 'STUDENT UNION', env: '信工学生会', sub: '继续你的工作', oMark: '学', oName: '信工学生会',
+             top: 'UNION', bottom: 'UNION', quote: '<b>信工学生会</b> 用一套系统，把活动、签到与材料管起来。' },
+    club:  { mark: '无', word: 'CLUB', env: '无线电协会', sub: '继续你的工作', oMark: '无', oName: '无线电协会',
+             top: 'CLUB', bottom: 'CLUB', quote: '<b>无线电协会</b> 让社团活动从想法到归档，一路顺畅。' },
+  }
+  const apply = (v) => {
+    const o = ORG[v]
+    document.getElementById('brandMark').textContent = o.mark
+    document.getElementById('brandWord').textContent = o.word
+    document.getElementById('brandEnv').textContent = o.env
+    document.getElementById('formSub').textContent = o.sub
+    document.getElementById('oMark').textContent = o.oMark
+    document.getElementById('oName').textContent = o.oName
+    document.getElementById('giantTop').textContent = o.top
+    document.getElementById('giantBottom').textContent = o.bottom
+    document.getElementById('quote').innerHTML = o.quote
+  }
+  const bind = (id, cb) => {
+    const seg = document.getElementById(id)
+    seg.addEventListener('click', (e) => {
+      const btn = e.target.closest('button'); if (!btn) return
+      ;[...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)))
+      cb(btn.dataset.v)
+    })
+  }
+  bind('segOrg', (v) => { stage.setAttribute('data-org', v); apply(v) })
+  bind('segW', (v) => { viewport.style.maxWidth = v === 'narrow' ? '430px' : '1000px' })
+  viewport.style.transition = 'max-width 200ms ease'
+</script>
+
+</body></html>

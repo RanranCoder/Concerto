@@ -1,0 +1,184 @@
+{
+  "before": {
+    "agent": {
+      ".content-inner": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-page": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-sider": {
+        "x": 0,
+        "y": 0,
+        "width": 252,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-main": {
+        "x": 268,
+        "y": 0,
+        "width": 924,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-composer": {
+        "x": 269,
+        "y": 771.15625,
+        "width": 922,
+        "height": 131.84375,
+        "fontSize": "14px"
+      },
+      ".glass-card": {
+        "x": 0,
+        "y": 0,
+        "width": 252,
+        "height": 904,
+        "fontSize": "14px"
+      }
+    },
+    "party": {
+      ".content-inner": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 313.265625,
+        "fontSize": "14px"
+      },
+      ".page-header": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 61.421875,
+        "fontSize": "14px"
+      },
+      ".glass-card": {
+        "x": 0,
+        "y": 81.421875,
+        "width": 1192,
+        "height": 66,
+        "fontSize": "14px"
+      },
+      ".ant-table": {
+        "x": 5,
+        "y": 168.421875,
+        "width": 1182,
+        "height": 83.84375,
+        "fontSize": "14px"
+      },
+      ".ant-table-thead": {
+        "x": 5,
+        "y": 168.421875,
+        "width": 1182,
+        "height": 39.84375,
+        "fontSize": "14px"
+      },
+      ".ant-table-tbody": {
+        "x": 5,
+        "y": 208.265625,
+        "width": 1182,
+        "height": 44,
+        "fontSize": "14px"
+      }
+    }
+  },
+  "after": {
+    "agent": {
+      ".content-inner": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-page": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-sider": {
+        "x": 0,
+        "y": 0,
+        "width": 252,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-main": {
+        "x": 268,
+        "y": 0,
+        "width": 924,
+        "height": 904,
+        "fontSize": "14px"
+      },
+      ".lingsi-composer": {
+        "x": 269,
+        "y": 771.140625,
+        "width": 922,
+        "height": 131.859375,
+        "fontSize": "14px"
+      },
+      ".glass-card": {
+        "x": 0,
+        "y": 0,
+        "width": 252,
+        "height": 904,
+        "fontSize": "14px"
+      }
+    },
+    "party": {
+      ".content-inner": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 313.265625,
+        "fontSize": "14px"
+      },
+      ".page-header": {
+        "x": 0,
+        "y": 0,
+        "width": 1192,
+        "height": 61.421875,
+        "fontSize": "14px"
+      },
+      ".glass-card": {
+        "x": 0,
+        "y": 81.421875,
+        "width": 1192,
+        "height": 66,
+        "fontSize": "14px"
+      },
+      ".ant-table": {
+        "x": 5,
+        "y": 168.421875,
+        "width": 1182,
+        "height": 83.84375,
+        "fontSize": "14px"
+      },
+      ".ant-table-thead": {
+        "x": 5,
+        "y": 168.421875,
+        "width": 1182,
+        "height": 39.84375,
+        "fontSize": "14px"
+      },
+      ".ant-table-tbody": {
+        "x": 5,
+        "y": 208.265625,
+        "width": 1182,
+        "height": 44,
+        "fontSize": "14px"
+      }
+    }
+  },
+  "differences": [],
+  "unexpectedSourceChanges": []
+}
