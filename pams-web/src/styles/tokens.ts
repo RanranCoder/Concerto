@@ -7,10 +7,10 @@
  * tokens.css 里再抄一遍，两边必然漂移（见方案 §1.2）。这里以 TS 为唯一出处，
  * CSS 变量由 buildTokenCss() 生成后注入 <style>，从机制上消除两套值。
  *
- * 主色取自 https://www.gzccc.edu.cn/ 的 css25/index.css：#0034A2（出现 82 次）。
+ * v6 主色由用户指定为 rgb(22,104,220)，明暗配色见 docs/PAMS-UI-设计方案-v6-行业规范修订.md。
  */
 
-import { deriveBrandScale, lighten, parseColor, readableOn, withAlpha } from './color'
+import { deriveBrandScale, lighten, parseColor, readableOn, toHex, withAlpha } from './color'
 
 export type ThemeMode = 'light' | 'dark'
 
@@ -85,63 +85,97 @@ export interface BaseTokens extends SurfaceTokens {
   radiusMd: string
   radiusLg: string
   radiusXl: string
+  /** 品牌落地容器（登录页等大圆角容器）专用，内页 UI 不用 */
+  radius2xl: string
   radiusPill: string
+
+  /** v6 色彩层级与业务分类；独立于组件布局。 */
+  canvasElevated: string
+  focus: string
+  onBrand: string
+  categoryActivity: string
+  categoryActivityBg: string
+  categorySchedule: string
+  categoryScheduleText: string
+  categoryScheduleBg: string
+  categoryDocument: string
+  categoryDocumentText: string
+  categoryDocumentBg: string
+  categoryAssistant: string
+  categoryAssistantBg: string
+  todayBg: string
 
   easing: string
   dur: string
 }
 
 export const lightTokens: BaseTokens = {
-  page: '#F5F6F8',
+  page: '#F4F6F9',
   canvas: '#FFFFFF',
-  soft: '#F2F4F8',
-  softStrong: '#E7EAF2',
-  sunken: '#EDEFF4',
-  siderBg: '#F2F4F8',
-  siderText: '#1B2438',
-  siderTextDim: '#6D747F',
-  siderBorder: '#E2E7F0',
-  siderSelected: 'rgba(0,52,162,.10)',
-  siderHover: '#E7EAF2',
-  border: '#E2E7F0',
-  borderStrong: '#D3DAE6',
-  shadow1: '0 2px 8px rgba(16,24,40,.06)',
-  shadow2: '0 8px 24px rgba(16,24,40,.10)',
+  soft: '#F6F7F9',
+  softStrong: '#EEF0F3',
+  sunken: '#FFFFFF',
+  siderBg: '#FCFDFE',
+  siderText: '#263243',
+  siderTextDim: '#5B6777',
+  siderBorder: '#DFE5ED',
+  siderSelected: '#E6F4FF',
+  siderHover: '#F0F3F8',
+  border: '#DFE5ED',
+  borderStrong: '#7C899B',
+  shadow1: '0 2px 8px rgba(38,50,67,.06)',
+  shadow2: '0 12px 36px rgba(38,50,67,.12)',
 
-  brand: '#0034A2',
-  brandHover: '#0045D6',
-  brandActive: '#002B85',
-  brandSoft: '#E7EDFB',
-  brandText: '#0034A2',
-  accent: '#FFA811',
-  accentText: '#9A5B00',
+  brand: '#1668DC',
+  brandHover: '#094BB5',
+  brandActive: '#00328F',
+  brandSoft: '#E6F4FF',
+  brandText: '#1668DC',
+  accent: '#C17B20',
+  accentText: '#8C520F',
 
-  success: '#1F7A3D',
-  successBg: '#EDF7EF',
-  successSoft: 'rgba(31,122,61,.10)',
-  warning: '#9A5B00',
-  warningBg: '#FDF5E6',
-  warningSoft: 'rgba(154,91,0,.10)',
-  danger: '#C0271A',
-  dangerBg: '#FDECEA',
-  dangerSoft: 'rgba(192,39,26,.10)',
-  info: '#0E7490',
-  infoBg: '#E6F4F7',
-  infoSoft: 'rgba(14,116,144,.10)',
+  success: '#267549',
+  successBg: '#ECF6EF',
+  successSoft: '#ECF6EF',
+  warning: '#8C520F',
+  warningBg: '#FFF3E0',
+  warningSoft: '#FFF3E0',
+  danger: '#BB3344',
+  dangerBg: '#FDEEF0',
+  dangerSoft: '#FDEEF0',
+  info: '#1668DC',
+  infoBg: '#E6F4FF',
+  infoSoft: '#E6F4FF',
 
-  textPrimary: '#1B2438',
-  textSecondary: '#5A6478',
-  textTertiary: '#7A8496',
-  textDisabled: '#A8B0BB',
+  textPrimary: '#263243',
+  textSecondary: '#5B6777',
+  textTertiary: '#687587',
+  textDisabled: '#A6AFBC',
 
   radiusSm: '4px',
   radiusMd: '6px',
   radiusLg: '8px',
   radiusXl: '10px',
+  radius2xl: '24px',
   radiusPill: '999px',
 
   easing: 'cubic-bezier(.22,1,.36,1)',
   dur: '140ms',
+
+  canvasElevated: '#FFFFFF',
+  focus: '#1668DC',
+  onBrand: '#FFFFFF',
+  categoryActivity: '#1668DC',
+  categoryActivityBg: '#E6F4FF',
+  categorySchedule: '#138375',
+  categoryScheduleText: '#0E6D62',
+  categoryScheduleBg: '#EDF7F3',
+  categoryDocument: '#C17B20',
+  categoryDocumentText: '#8C520F',
+  categoryDocumentBg: '#FFF6E8',
+  categoryAssistant: '#625A8F',
+  categoryAssistantBg: '#F1EFF7',
+  todayBg: '#F0F7FF',
 }
 
 /**
@@ -157,56 +191,81 @@ export const lightTokens: BaseTokens = {
  *  ④ 正文不用纯白 #FFF：用 #E6E8EA，降低眩光（参考站正文 #E7E9EB）。
  */
 export const darkTokens: BaseTokens = {
-  page: '#17181A',
-  canvas: '#1E2024',
-  soft: '#24262A',
-  softStrong: '#2C2F34',
-  sunken: '#121315',
-  siderBg: '#1F2226',
-  siderText: '#FFFFFF',
-  siderTextDim: 'rgba(255,255,255,.58)',
-  siderBorder: 'rgba(255,255,255,.08)',
-  siderSelected: 'rgba(255,255,255,.10)',
-  siderHover: 'rgba(255,255,255,.06)',
-  border: '#33363B',
-  borderStrong: '#41454B',
-  shadow1: '0 2px 8px rgba(0,0,0,.40)',
-  shadow2: '0 8px 24px rgba(0,0,0,.50)',
+  page: '#15171B',
+  canvas: '#1E2127',
+  soft: '#252932',
+  softStrong: '#2A2F37',
+  sunken: '#171A1F',
+  siderBg: '#191C21',
+  siderText: '#E6EAF0',
+  siderTextDim: '#AAB3C2',
+  siderBorder: '#363C46',
+  siderSelected: '#172C49',
+  siderHover: '#272D36',
+  border: '#363C46',
+  borderStrong: '#707C8E',
+  shadow1: '0 2px 8px rgba(0,0,0,.30)',
+  shadow2: '0 12px 36px rgba(0,0,0,.40)',
 
-  brand: '#2563EB',
-  brandHover: '#3B7BF0',
-  brandActive: '#1D4FD8',
-  brandSoft: 'rgba(59,123,240,.16)',
-  brandText: '#7FA6F0',
-  accent: '#FFA811',
-  accentText: '#E0A854',
+  brand: '#1668DC',
+  brandHover: '#1B70E5',
+  brandActive: '#094BB5',
+  brandSoft: '#172C49',
+  brandText: '#82B5FF',
+  accent: '#D5A052',
+  accentText: '#EDBC6B',
 
-  success: '#5FBF7A',
-  successBg: '#16241A',
-  successSoft: 'rgba(95,191,122,.14)',
-  warning: '#E0A854',
-  warningBg: '#2A2314',
-  warningSoft: 'rgba(224,168,84,.14)',
-  danger: '#F0735C',
-  dangerBg: '#2A1A17',
-  dangerSoft: 'rgba(240,115,92,.14)',
-  info: '#38BDF8',
-  infoBg: '#12242B',
-  infoSoft: 'rgba(56,189,248,.14)',
+  success: '#7BC89F',
+  successBg: '#1C3228',
+  successSoft: '#1C3228',
+  warning: '#EDBC6B',
+  warningBg: '#3A2D1B',
+  warningSoft: '#3A2D1B',
+  danger: '#F29AAC',
+  dangerBg: '#392229',
+  dangerSoft: '#392229',
+  info: '#82B5FF',
+  infoBg: '#172C49',
+  infoSoft: '#172C49',
 
-  textPrimary: '#E6E8EC',
-  textSecondary: '#A2AAB6',
-  textTertiary: '#8A93A3',
-  textDisabled: '#5A626E',
+  textPrimary: '#E6EAF0',
+  textSecondary: '#AAB3C2',
+  textTertiary: '#919EAF',
+  textDisabled: '#647080',
 
   radiusSm: '4px',
   radiusMd: '6px',
   radiusLg: '8px',
   radiusXl: '10px',
+  radius2xl: '24px',
   radiusPill: '999px',
 
   easing: 'cubic-bezier(.22,1,.36,1)',
   dur: '140ms',
+
+  canvasElevated: '#262B33',
+  focus: '#86B9FF',
+  onBrand: '#FFFFFF',
+  categoryActivity: '#82B5FF',
+  categoryActivityBg: '#22354F',
+  categorySchedule: '#45B49D',
+  categoryScheduleText: '#71CDBC',
+  categoryScheduleBg: '#20372F',
+  categoryDocument: '#D5A052',
+  categoryDocumentText: '#EDBC6B',
+  categoryDocumentBg: '#352A1C',
+  categoryAssistant: '#C0AFDF',
+  categoryAssistantBg: '#2E273C',
+  todayBg: '#202D41',
+}
+
+
+/** 将旧默认院校蓝迁移到新版；其他组织自定义颜色保留。 */
+export function normalizePrimaryColor(primary?: string | null): string {
+  const parsed = primary ? parseColor(primary) : null
+  if (!parsed) return lightTokens.brand
+  const hex = toHex(parsed)
+  return hex === '#0034A2' ? lightTokens.brand : hex
 }
 
 export const tokensFor = (mode: ThemeMode): BaseTokens => (mode === 'dark' ? darkTokens : lightTokens)
@@ -222,11 +281,12 @@ export function brandOverrides(primary: string, mode: ThemeMode): Partial<BaseTo
   const { brand, hover, active } = deriveBrandScale(primary, isDark)
   return {
     brand,
-    brandHover: hover,
-    brandActive: active,
+    brandHover: readableOn(hover, base.onBrand, 4.5),
+    brandActive: readableOn(active, base.onBrand, 4.5),
     brandSoft: isDark ? withAlpha(brand, 0.18) : lighten(brand, 0.88),
     // 深色主题下主色往往过暗，当文字用要提亮到可读
-    brandText: isDark ? readableOn(brand, base.canvas, 4.5) : brand,
+    brandText: readableOn(brand, isDark ? base.canvas : lighten(brand, 0.88), 4.5),
+    focus: readableOn(brand, base.canvas, 3),
   }
 }
 
@@ -234,6 +294,7 @@ export function brandOverrides(primary: string, mode: ThemeMode): Partial<BaseTo
 export function resolveTokens(mode: ThemeMode, primary?: string): BaseTokens {
   const base = tokensFor(mode)
   if (!primary || !parseColor(primary)) return base
+  if (toHex(parseColor(primary)!) === lightTokens.brand) return base
   return { ...base, ...brandOverrides(primary, mode) }
 }
 
@@ -255,6 +316,7 @@ export const FONT_SCALE = {
  */
 export const DISPLAY_SCALE = {
   /** 强调符号（如签到成功的 ✓） */
+  pageTitle: '26px',
   symbol: '22px',
   /** 卡片级大数字 */
   statXl: '28px',
@@ -318,7 +380,22 @@ export const CSS_VAR_MAP: Record<keyof BaseTokens, string> = {
   radiusMd: '--r-md',
   radiusLg: '--r-lg',
   radiusXl: '--r-xl',
+  radius2xl: '--r-2xl',
   radiusPill: '--r-pill',
+  canvasElevated: '--canvas-elevated',
+  focus: '--focus',
+  onBrand: '--on-brand',
+  categoryActivity: '--category-activity',
+  categoryActivityBg: '--category-activity-bg',
+  categorySchedule: '--category-schedule',
+  categoryScheduleText: '--category-schedule-text',
+  categoryScheduleBg: '--category-schedule-bg',
+  categoryDocument: '--category-document',
+  categoryDocumentText: '--category-document-text',
+  categoryDocumentBg: '--category-document-bg',
+  categoryAssistant: '--category-assistant',
+  categoryAssistantBg: '--category-assistant-bg',
+  todayBg: '--today-bg',
   easing: '--ease',
   dur: '--dur',
 }

@@ -21,6 +21,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     locale: 'zh-CN',
+    channel: process.env.PAMS_E2E_CHROME_CHANNEL as 'chrome' | undefined,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

@@ -32,7 +32,7 @@ function ThemeConfigProvider() {
     <ConfigProvider locale={zhCN} theme={buildAntdTheme(mode, primary)}>
       <AntApp>
         <FeedbackBridge />
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </AntApp>
     </ConfigProvider>
   )

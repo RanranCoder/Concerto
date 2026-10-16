@@ -10,6 +10,7 @@ export interface UserVO {
   deptId: number | null
   deptName: string | null
   roleCode: string | null
+  roleId?: number
   roleName: string | null
   status: number | null
 }

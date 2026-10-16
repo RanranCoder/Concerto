@@ -8,6 +8,7 @@ import {
   lightTokens,
   darkTokens,
   resolveTokens,
+  normalizePrimaryColor,
   type BaseTokens,
 } from '@/styles/tokens'
 import { contrastRatio } from '@/styles/color'
@@ -120,6 +121,30 @@ describe('组织自定义主色派生', () => {
   })
 })
 
+describe('v6 明暗配色与品牌迁移', () => {
+  it('旧院校默认色迁移，新主色和组织自定义色保持准确', () => {
+    expect(normalizePrimaryColor('#0034a2')).toBe('#1668DC')
+    expect(normalizePrimaryColor('rgb(22, 104, 220)')).toBe('#1668DC')
+    expect(normalizePrimaryColor('#1E7A46')).toBe('#1E7A46')
+    expect(normalizePrimaryColor('invalid')).toBe(lightTokens.brand)
+    expect(resolveTokens('dark', '#1668DC')).toEqual(darkTokens)
+  })
+
+  it('两套主题中的实际文字组合达到 AA，交互边界可辨认', () => {
+    for (const t of [lightTokens, darkTokens]) {
+      for (const [foreground, background] of [
+        [t.onBrand, t.brand], [t.onBrand, t.brandHover], [t.onBrand, t.brandActive],
+        [t.brandText, t.brandSoft], [t.textPrimary, t.canvas], [t.textSecondary, t.page],
+        [t.success, t.successBg], [t.warning, t.warningBg], [t.danger, t.dangerBg],
+        [t.categoryScheduleText, t.categoryScheduleBg], [t.categoryDocumentText, t.categoryDocumentBg],
+        [t.categoryAssistant, t.categoryAssistantBg],
+      ]) expect(contrastRatio(foreground, background), `${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(t.borderStrong, t.sunken)).toBeGreaterThanOrEqual(3)
+      expect(contrastRatio(t.focus, t.canvas)).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
+
 /**
  * 防止「引用了不存在的 CSS 变量」——这类 bug 不报错、不崩，只是样式静默失效。
  * 本轮统一时就踩到过：--easing / --radius-md / --radius-lg 在改名后成了死引用。
@@ -207,7 +232,7 @@ describe('字号与内联颜色约束', () => {
   const ALLOWED_FONT_SIZES = new Set([
     'var(--fs-micro)', 'var(--fs-caption)', 'var(--fs-body)', 'var(--fs-body-lg)',
     'var(--fs-title)', 'var(--fs-h2)', 'var(--fs-stat)',
-    'var(--fs-symbol)', 'var(--fs-statXl)', 'var(--fs-display)',
+    'var(--fs-pageTitle)', 'var(--fs-symbol)', 'var(--fs-statXl)', 'var(--fs-display)',
     'var(--fs-hero)', 'var(--fs-watermark)',
     // global.css 里 Word 纸张的局部变量（白纸黑字，刻意不随主题）
     'var(--wp-ink)', 'var(--wp-ink-soft)', 'var(--wp-line)', 'var(--wp-th-bg)',
@@ -280,7 +305,7 @@ describe('字号与内联颜色约束', () => {
 
   it('CSS 圆角只用刻度（4/6/8/10 + 胶囊/圆形）', () => {
     const allowed = new Set([
-      'var(--r-sm)', 'var(--r-md)', 'var(--r-lg)', 'var(--r-xl)',
+      'var(--r-sm)', 'var(--r-md)', 'var(--r-lg)', 'var(--r-xl)', 'var(--r-2xl)',
       'var(--r-pill)', '50%', '0', '0 !important',
       // 角落不对称的情形（如聊天气泡尾巴、选中竖条只圆右侧）
       '0 2px 2px 0',

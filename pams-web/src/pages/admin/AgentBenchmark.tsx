@@ -30,7 +30,7 @@ export default function AgentBenchmark() {
   const multi = result?.summary?.MULTI
 
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card
         title={<Space><ExperimentOutlined />对比评估实验（单 Agent vs 多 Agent）</Space>}
         extra={
@@ -87,7 +87,7 @@ export default function AgentBenchmark() {
 function BarGroup({ label, single, multi }: { label: string; single: number; multi: number }) {
   const max = Math.max(single, multi, 1)
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 8 }}>
       <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
       <Bar color="var(--text-tertiary)" value={single} max={max} tag={`SINGLE ${fmt(single)}`} />
       <Bar color="var(--brand)" value={multi} max={max} tag={`MULTI ${fmt(multi)}`} />
@@ -113,7 +113,7 @@ function fmt(v: number) {
 
 function RowTable({ title, rows }: { title: string; rows: BenchRow[] }) {
   return (
-    <Card title={title} size="small">
+    <Card title={title}>
       <Table<BenchRow>
         rowKey="id"
         size="small"

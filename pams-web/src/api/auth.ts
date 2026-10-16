@@ -14,6 +14,11 @@ export interface LoginResponse {
     orgId: number | null
     orgName: string | null
     permissions: string[]
+    businessPermissions: string[]
+    managementCapabilities: string[]
+    isOwner: boolean
+    authzVersion: number
+    roleId: number
   }
 }
 

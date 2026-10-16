@@ -12,7 +12,8 @@ interface GlassModalProps extends ModalProps {
 export default function GlassModal({ className, children, ...props }: GlassModalProps) {
   return (
     <Modal
-      className={className}
+      className={`form-surface ${className ?? ''}`}
+      maskClosable={false}
       destroyOnHidden
       footer={null}
       {...props}

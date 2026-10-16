@@ -36,6 +36,11 @@ function loginAs(roleCode: string, permissions: string[] = []) {
       orgId: null,
       orgName: null,
       permissions,
+      businessPermissions: permissions,
+      managementCapabilities: [],
+      isOwner: false,
+      authzVersion: 0,
+      roleId: 1,
     },
   })
 }

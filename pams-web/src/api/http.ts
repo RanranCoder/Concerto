@@ -30,7 +30,8 @@ http.interceptors.response.use(
     throw new ApiError(body.code ?? -1, body.message ?? '请求失败')
   },
   (err: AxiosError<{ message?: string }>) => {
-    if (err.response?.status === 401) {
+    // 登录失败应留在表单内重试；只有已有会话失效才跳转登录页。
+    if (err.response?.status === 401 && err.config?.url !== '/auth/login') {
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }

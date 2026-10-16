@@ -14,7 +14,7 @@ export default function Forbidden() {
         justifyContent: 'center',
       }}
     >
-      <GlassCard style={{ padding: '40px 48px', textAlign: 'center', maxWidth: 420 }}>
+      <GlassCard style={{ padding: 40, textAlign: 'center', maxWidth: 420 }}>
         <div
           style={{
             width: 64,

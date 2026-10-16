@@ -1,0 +1,336 @@
+/* Task surfaces: small decisions in dialogs, contextual edits in drawers,
+   sustained writing and long records in the page's own workspace. */
+.form-surface {
+  color: var(--text-primary);
+}
+.form-control-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.form-surface-heading > span {
+  display: block;
+  padding-right: 16px;
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.form-surface-heading p,
+.form-workspace-header p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-weight: 400;
+  line-height: 1.7;
+}
+.form-surface.ant-modal {
+  max-width: calc(100vw - 32px);
+  padding-bottom: 24px;
+}
+.form-surface .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.form-surface .ant-modal-header {
+  margin: 0;
+  padding: 24px 56px 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.form-surface .ant-modal-body {
+  max-height: calc(100dvh - 250px);
+  overflow: auto;
+  padding: 24px;
+  overscroll-behavior: contain;
+}
+.form-surface .ant-modal-footer {
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas);
+}
+.form-surface .ant-modal-close {
+  top: 20px;
+  right: 20px;
+}
+.form-surface-drawer .ant-drawer-header {
+  padding: 24px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+}
+.form-surface-drawer .ant-drawer-header-title {
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 16px;
+}
+.form-surface-drawer .ant-drawer-close {
+  margin: 0;
+  margin-top: 3px;
+}
+.form-surface-drawer .ant-drawer-body {
+  padding: 28px;
+  background: var(--canvas);
+  overscroll-behavior: contain;
+}
+.form-surface-drawer .ant-drawer-footer {
+  padding: 16px 28px;
+  text-align: right;
+  background: var(--canvas);
+  border-top: 1px solid var(--border);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.form-surface-drawer-root .ant-drawer-content-wrapper {
+  max-width: 100vw;
+}
+.form-surface .ant-form-item {
+  margin-bottom: 22px;
+  min-width: 0;
+}
+.form-surface .ant-form-item {
+  scroll-margin-block: 24px;
+}
+.form-surface .ant-form-item-label {
+  padding-bottom: 7px;
+}
+.form-surface .ant-form-item-label > label {
+  height: auto;
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  white-space: normal;
+}
+.form-surface .ant-form-item-extra {
+  margin-top: 5px;
+  font-size: var(--fs-caption);
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.form-surface
+  :is(
+    .ant-input:not(textarea),
+    .ant-input-number,
+    .ant-picker,
+    .ant-input-affix-wrapper
+  ) {
+  min-height: 38px;
+}
+.form-surface .ant-input-affix-wrapper .ant-input {
+  min-height: 0;
+}
+.form-surface .ant-select-single {
+  height: 38px;
+}
+.form-surface .ant-select-multiple .ant-select-selector {
+  min-height: 38px;
+}
+.form-surface textarea.ant-input {
+  padding: 10px 12px;
+  line-height: 1.85;
+  resize: vertical;
+}
+.form-surface .ant-btn:not(.ant-btn-sm, .ant-btn-link, .ant-btn-text) {
+  min-height: 36px;
+}
+.form-surface
+  .ant-form-item-control-input-content
+  > :is(.ant-select, .ant-picker, .ant-input-number, .ant-input) {
+  width: 100%;
+  max-width: 100%;
+}
+.form-surface .ant-form > .ant-space:has(.ant-form-item),
+.form-section-fields > .ant-space:has(.ant-form-item) {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  align-items: start;
+  width: 100%;
+  gap: 0 20px !important;
+}
+.form-surface
+  .ant-space:has(> .ant-space-item > .ant-form-item)
+  > .ant-space-item {
+  min-width: 0;
+}
+.form-surface
+  .ant-space-item
+  > .ant-form-item
+  :is(.ant-input, .ant-select, .ant-input-number, .ant-picker) {
+  width: 100% !important;
+}
+.form-surface .ant-modal-footer > .ant-space,
+.form-surface .ant-drawer-footer > .ant-space {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px !important;
+}
+.form-workspace {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.form-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.form-workspace-header > .ant-btn {
+  margin-top: 2px;
+  background: var(--canvas);
+}
+.form-workspace-header h1 {
+  margin: 0;
+  font-size: var(--fs-stat);
+  font-weight: 600;
+  line-height: 1.5;
+  outline: none;
+  scroll-margin-top: 24px;
+}
+.form-workspace-header h1:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.form-workspace-body {
+  padding: 32px 40px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.form-workspace-body > .ant-form {
+  max-width: 880px;
+  margin: 0 auto;
+}
+.form-workspace-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 3%);
+}
+.form-surface-required-note {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+.form-section + .form-section {
+  margin-top: 10px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.form-section-heading {
+  margin-bottom: 22px;
+}
+.form-section-heading h2 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.form-section-heading p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.7;
+}
+.form-section-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  align-items: start;
+}
+.form-section-fields > :not(.ant-form-item),
+.form-section-fields
+  > .ant-form-item:has(textarea, .ant-upload-wrapper, .long-image-upload),
+.form-section-fields > .form-field-wide {
+  grid-column: 1 / -1;
+}
+.form-section-fields > .ant-form-item-hidden {
+  display: none;
+}
+.form-section-fields
+  > .ant-form-item
+  .ant-form-item-control-input-content
+  > :is(.ant-input, .ant-select, .ant-picker, .ant-input-number) {
+  width: 100% !important;
+}
+.form-workspace .records-two {
+  align-items: start;
+}
+.form-workspace .records-paper {
+  box-shadow: none;
+}
+.form-section-fields > .form-field-wide {
+  grid-column: 1 / -1;
+}
+.form-surface .routine-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 767px) {
+  .form-workspace-header {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .form-workspace-header h1 {
+    font-size: var(--fs-h2);
+  }
+  .form-workspace-body {
+    padding: 22px 18px;
+  }
+  .form-section-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form-section-fields > * {
+    grid-column: 1 !important;
+  }
+  .form-surface .routine-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form-workspace-footer {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+  }
+  .form-workspace-footer > div {
+    margin-left: auto;
+  }
+  .form-surface-required-note {
+    display: none;
+  }
+  .form-surface-drawer .ant-drawer-header {
+    padding: 20px;
+  }
+  .form-surface-drawer .ant-drawer-body {
+    padding: 22px 20px;
+  }
+  .form-surface-drawer .ant-drawer-footer {
+    padding: 14px 20px max(14px, env(safe-area-inset-bottom));
+  }
+  .form-surface .ant-modal-header {
+    padding: 20px 50px 18px 20px;
+  }
+  .form-surface .ant-modal-body {
+    padding: 20px;
+    max-height: calc(100dvh - 230px);
+  }
+  .form-surface .ant-modal-footer {
+    padding: 14px 20px;
+  }
+  .form-surface .ant-form > .ant-space:has(.ant-form-item),
+  .form-section-fields > .ant-space:has(.ant-form-item) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .form-surface,
+  .ant-drawer:has(.form-surface-drawer) * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Tree, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { assignableRoles } from '@/api/permission'
 import { createInvitation, createUnit, deleteUnit, listUnits, updateUnit } from '@/api/org'
 import type { OrgInvitation, OrgUnitNode } from '@/api/org'
 
 const UNIT_TYPES = ['部门', '中心', '小组', '分队']
 
-const ROLE_OPTIONS = [
-  { value: 'DIRECTOR', label: '主任/主席' },
-  { value: 'ORG_LEADER', label: '组织部长' },
-  { value: 'SECRETARY_LEADER', label: '文秘部长' },
-  { value: 'MEDIA_LEADER', label: '新媒体部长' },
-  { value: 'TECH_LEADER', label: '青年科技部长' },
-  { value: 'STAFF', label: '干事' },
-  { value: 'TEACHER', label: '指导老师' },
-]
 
 interface TreeItem {
   key: number
@@ -47,7 +39,8 @@ export default function OrgStructure() {
   const [units, setUnits] = useState<OrgUnitNode[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
-  const [inviteRole, setInviteRole] = useState('STAFF')
+  const [inviteRole, setInviteRole] = useState<string>()
+  const [roleOptions, setRoleOptions] = useState<{ value: string; label: string }[]>([])
   const [invitation, setInvitation] = useState<OrgInvitation | null>(null)
 
   const load = useCallback(async () => {
@@ -64,6 +57,7 @@ export default function OrgStructure() {
 
   useEffect(() => {
     load()
+    assignableRoles().then(roles => { setRoleOptions(roles.map(r => ({ value: r.code, label: r.name }))); setInviteRole(current => roles.some(r => r.code === current) ? current : roles[0]?.code) }).catch(() => {})
   }, [load])
 
   const treeData = useMemo(() => toTreeData(units), [units])
@@ -144,7 +138,7 @@ export default function OrgStructure() {
   }
 
   return (
-    <div style={{ padding: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
       <Card
         title="组织架构"
         style={{ width: 380 }}
@@ -201,13 +195,13 @@ export default function OrgStructure() {
           <Select
             value={inviteRole}
             style={{ width: '100%' }}
-            options={ROLE_OPTIONS}
+            options={roleOptions}
             onChange={setInviteRole}
           />
           <Typography.Text type="secondary">
             预约部门：{selected ? selected.name : '（未选，加入后由管理员分配）'}
           </Typography.Text>
-          <Button type="primary" onClick={onInvite}>生成邀请码（72 小时有效）</Button>
+          <Button type="primary" disabled={!inviteRole} onClick={onInvite}>生成邀请码（72 小时有效）</Button>
           {invitation && (
             <Typography.Paragraph copyable style={{ marginBottom: 0 }}>
               邀请码：{invitation.code}

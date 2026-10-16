@@ -20,6 +20,11 @@ const PARTY_STATUS_MAP: Record<string, { text: string; tone: StatusTone }> = {
 
 /** 活动状态（唯一来源在 api/activityStatus.ts）+ 党务状态 */
 const STATUS_MAP: Record<string, { text: string; tone: StatusTone }> = {
+  DRAFT: { text: '草稿', tone: 'neutral' },
+  PENDING: { text: '待审', tone: 'warning' },
+  APPROVED: { text: '待发布', tone: 'brand' },
+  PUBLISHED: { text: '已发布', tone: 'success' },
+  REJECTED: { text: '被驳回', tone: 'danger' },
   ...Object.fromEntries(
     Object.keys(ACTIVITY_STATUS_LABEL).map((key) => [
       key,

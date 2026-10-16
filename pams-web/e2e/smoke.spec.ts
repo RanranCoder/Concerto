@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 /**
  * PRD-v5 Q2：核心链路冒烟测试。
- * 链路：登录 → 仪表盘 → 活动列表 → 创建活动 → 活动详情（策划书/座位表/签到 Tab 可达）→ 删除收尾。
+ * 链路：登录 → 工作台 → 活动列表 → 创建活动 → 活动详情（策划书/座位表/签到 Tab 可达）→ 删除收尾。
  * 账号为 dev profile 演示账号（teacher/123456）；生产环境不存在该账号，测试自然失败。
  */
 
@@ -11,14 +11,14 @@ async function login(page: Page, username = 'teacher', password = '123456') {
   await page.getByPlaceholder('用户名').fill(username)
   await page.getByPlaceholder('密码').fill(password)
   await page.getByRole('button', { name: /登\s*录/ }).click()
-  // 登录成功跳转仪表盘（标题由 MainLayout 渲染）
-  await expect(page.getByText('仪表盘').first()).toBeVisible({ timeout: 15_000 })
+  // 登录成功跳转工作台（标题由 MainLayout 渲染）
+  await expect(page.getByText('工作台').first()).toBeVisible({ timeout: 15_000 })
 }
 
 test.describe('冒烟链路', () => {
-  test('登录 → 仪表盘渲染核心卡片', async ({ page }) => {
+  test('登录 → 工作台渲染核心卡片', async ({ page }) => {
     await login(page)
-    // 仪表盘页面挂载即视为前端路由/鉴权链路健康
+    // 工作台页面挂载即视为前端路由/鉴权链路健康
     await expect(page).toHaveURL(/\/$/)
   })
 

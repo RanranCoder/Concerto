@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import { isSameOriginDevRequest } from './dev/proxyOrigin'
+
+const apiTarget = 'http://localhost:8080'
 
 export default defineConfig({
   plugins: [react()],
@@ -13,7 +16,19 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, request) => {
+            // Host is rewritten by changeOrigin; keep same-origin browser requests
+            // same-origin upstream, without normalizing requests from other sites.
+            if (isSameOriginDevRequest(request.headers.origin, request.headers.host)) {
+              proxyReq.setHeader('Origin', new URL(apiTarget).origin)
+            }
+          })
+        },
+      },
       '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
       '/ws': { target: 'http://localhost:8080', ws: true },
     },

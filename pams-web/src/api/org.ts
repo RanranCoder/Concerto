@@ -59,6 +59,19 @@ export interface OrgInvitation {
 export const registerOrg = (data: OrgRegisterPayload) =>
   post<{ orgId: number; orgName: string; adminUsername: string }>('/orgs/register', data)
 
+/** 组织公开列表项（免登录，仅非敏感字段） */
+export interface PublicOrg {
+  id: number
+  name: string
+  type: string
+  shortName: string | null
+  logoUrl: string | null
+  themeJson: string | null
+}
+
+/** 组织公开列表（免登录）：登录页组织选择与品牌 */
+export const listPublicOrgs = () => get<PublicOrg[]>('/orgs/public')
+
 export const getCurrentOrg = () => get<OrgInfo>('/orgs/current')
 
 export const updateOrg = (data: {

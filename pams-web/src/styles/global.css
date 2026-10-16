@@ -7,6 +7,12 @@
 
 html, body, #root { height: 100%; }
 
+/* 路由反馈随入口加载，页面模块尚未加载时也能展示。 */
+.route-feedback { min-height: 70vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 18px; padding: 32px; text-align: center; color: var(--text-primary); }
+.route-feedback h1 { font-size: var(--fs-stat); }
+.route-feedback p { color: var(--text-secondary); }
+.route-feedback button { border: 0; border-radius: var(--r-lg); padding: 10px 20px; background: var(--brand); color: var(--on-brand); cursor: pointer; }
+
 body {
   /* 纯色页面底：删除原三段渐变与红色氛围光（设计方案 §3.1） */
   background: var(--page);
@@ -18,16 +24,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 滚动条：细、低对比、不抢视线 */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--r-lg);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+/* 滚动条：全站不显示（滚动能力保留，页面、侧栏、表格、下拉、文本域一律不出轨道） */
+* {
+  scrollbar-width: none;        /* Firefox / Chromium 121+ */
+  -ms-overflow-style: none;     /* 旧 Edge / IE */
 }
-::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); background-clip: padding-box; }
-::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 /* ============ 主壳层 ============ */
 /* 侧边栏：贴边实心面板，明暗两种主题都用深底（白字才可读，见 tokens.ts 的 siderBg 说明）。
@@ -124,10 +126,20 @@ body {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--sp-2);
   border-bottom: 1px solid var(--border);
   background: transparent;
+}
+/* 顶栏操作组与内容列同轴：内容列是 max-width 1440 居中，顶栏若直接贴视口右边缘，
+   超宽屏下头像会比内容右边缘多出一条留白（1440 以上越宽差得越多）。
+   这里用与 .content-inner 完全相同的宽度与居中规则，两侧边缘自然对齐。 */
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 .app-user {
   cursor: pointer;
@@ -137,7 +149,9 @@ body {
 .app-content {
   min-height: 0;
   overflow-y: auto;
-  padding: 0 var(--sp-5) var(--sp-5);
+  /* 顶部 20：标题与 52px 顶栏之间留出呼吸位（设计方案 §5 的内容区值）。
+     左右 24 与顶栏 headerPadding 同值，页面卡片的左右边缘才能与顶栏操作组对齐。 */
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
 }
 .content-inner { max-width: 1440px; margin: 0 auto; }
 
@@ -366,17 +380,22 @@ body {
   align-items: center;
   gap: var(--sp-2);
   width: 100%;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--canvas);
+  /* 与 .dashboard-task-item 同一行节奏：只留纵向内边距 + 底分隔线。
+     原来这里自带 10px 内边距 + 四边描边，左卡（我的待办）与右卡（近期活动）并排时
+     两张卡的列表文字左边缘差 10px，同一屏出现两种行样式。 */
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+  transition: background-color var(--dur) var(--ease);
 }
-.dashboard-activity-item:hover { border-color: var(--border-strong); background: var(--soft); }
+.dashboard-activity-item:last-child { border-bottom: 0; }
+.dashboard-activity-item:hover { background: var(--soft); }
 .dashboard-activity-item:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
 .dashboard-activity-date { display: grid; min-width: 48px; text-align: center; }
 .dashboard-activity-date strong { color: var(--brand-text); font-size: var(--fs-title); }
@@ -392,6 +411,17 @@ body {
   .dashboard-activity-item { align-items: flex-start; }
   .dashboard-activity-item > .tone-tag { margin-left: auto; }
 }
+
+/* 仪表盘右列三张「最新…」卡（最新推文/材料/公告）：行是整块可点区域。
+   这两个类名此前只在 JSX 里出现、样式表里没有定义 —— 行既没有手型也没有 hover，
+   与左侧同款列表的行反馈不一致。 */
+.dash-side-link {
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+.dash-side-link:hover { background: var(--soft); }
+.dash-side-title { font-weight: 500; color: var(--text-primary); }
 
 /* ============ 文字省略 ============ */
 .ellipsis {
@@ -487,7 +517,7 @@ body {
 }
 /* 当前编辑章节高亮：左侧主色条提示 */
 .word-sec-active { position: relative; }
-.word-sec-active > .word-sec-label { color: var(--brand); }
+.word-sec-active > .word-sec-label { color: var(--brand-text); }
 .word-sec-active::before {
   content: '';
   position: absolute;

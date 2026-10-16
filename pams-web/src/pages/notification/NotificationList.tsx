@@ -135,7 +135,7 @@ export default function NotificationList() {
       key: 'title',
       ellipsis: true,
       render: (v: string, r: NotificationRow) => (
-        <Space size={6}>
+        <Space size={4}>
           {!r.read && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--brand)' }} />}
           {r.priority === 'URGENT' && <Tag color="red">紧急</Tag>}
           <span style={{ fontWeight: r.read ? 400 : 600 }}>{v}</span>
@@ -149,11 +149,14 @@ export default function NotificationList() {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
+      align: 'right' as const,
+      onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
       render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: '操作',
       key: 'action',
+      align: 'right' as const,
       width: 100,
       render: (_: unknown, r: NotificationRow) =>
         r.read ? (
@@ -220,7 +223,7 @@ export default function NotificationList() {
             {prefs.map((p) => (
               <div
                 key={p.type}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}
               >
                 <span style={{ fontSize: 14 }}>
                   {TYPE_LABEL[p.type] ?? p.type}

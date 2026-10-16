@@ -20,6 +20,13 @@
   border-color: var(--border-strong);
 }
 
+/* ---------- 表格卡：本体只留 4px，让「4 + 单元格 12」与同页卡片文字的 16px 同一条竖线 ---------- */
+/* 分页器自带 16px 上下外边距、却没有水平内边距，右边缘会贴到卡片边框内侧 4px 处，
+   与上方卡片内容边缘的 16px 不齐；这里补上与单元格同值的 12px 水平外边距。 */
+.glass-card > .ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin-inline: 12px;
+}
+
 /* ---------- 页面标题区：无容器，靠下边框分区 ---------- */
 .page-header {
   display: flex;
@@ -84,16 +91,6 @@
   overflow: hidden;
 }
 
-/* 固定全屏背景层：比视口大一圈（inset 负值）实现轻微放大，
-   把壁纸左右深色边缘推出屏幕，中间主体铺满；被 .login-page 的 overflow 裁剪不产生滚动条 */
-.login-bg {
-  position: absolute;
-  inset: -3%;
-  z-index: 0;
-  background: #17181A url('/login-bg.webp') center / cover no-repeat;
-  pointer-events: none;
-}
-
 /* 统一压暗保证文字/登录框可读性；位于背景之上、内容之下 */
 .login-page::before {
   content: '';
@@ -104,43 +101,6 @@
     linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
     radial-gradient(120% 120% at 50% 42%, transparent 52%, rgba(0, 0, 0, 0.18) 100%);
   pointer-events: none;
-}
-
-/* ============ 左侧品牌区 ============ */
-.login-brand {
-  position: relative;
-  z-index: 2;
-  max-width: 560px;
-  color: #fff;
-  text-align: left;
-}
-.login-brand-title {
-  margin: 0 0 20px;
-  font-size: clamp(42px, 5vw, 64px);
-  font-weight: 700;
-  letter-spacing: 8px;
-  line-height: 1.1;
-  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.4);
-}
-/* 装饰线用主色：组织改主色时这里一起变 */
-.login-brand-title::after {
-  content: '';
-  display: block;
-  width: 56px;
-  height: 3px;
-  border-radius: var(--r-sm);
-  margin-top: 18px;
-  background: var(--brand);
-}
-.login-brand-slogan {
-  font-size: var(--fs-body-lg);
-  letter-spacing: 3px;
-  color: rgba(255, 255, 255, 0.86);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-}
-.login-brand-slogan span {
-  color: rgba(255, 255, 255, 0.3);
-  margin: 0 12px;
 }
 
 /* ============ 右侧登录卡片（线条UI） ============ */
@@ -157,28 +117,6 @@
   -webkit-backdrop-filter: blur(14px) saturate(120%);
   animation: card-fade-in 0.4s var(--ease) both;
 }
-.login-card-title {
-  margin: 0 0 8px;
-  font-size: var(--fs-stat);
-  font-weight: 700;
-  color: #fff;
-}
-.login-card-logo {
-  position: absolute;
-  top: 18px;
-  right: 22px;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-  z-index: 1;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
-}
-.login-card-subtitle {
-  margin: 0 0 32px;
-  font-size: var(--fs-body-lg);
-  color: rgba(255, 255, 255, 0.6);
-}
-
 /* 输入框：无填充、仅下边框的线条样式（登录页底图为深色壁纸，文本/占位恒用白色） */
 .login-card .ant-input {
   background: transparent !important;
@@ -210,27 +148,265 @@
   margin-bottom: 0;
 }
 
-/* 登录按钮：白底主色字，无阴影（底色为深色壁纸，保持白底以保证对比度） */
-.login-card .login-submit {
-  height: 46px;
-  margin-top: 10px;
-  border-radius: var(--r-md);
-  font-size: var(--fs-title);
-  font-weight: 500;
-  background: #fff !important;
-  border: 1px solid #fff !important;
-  color: var(--brand) !important;
-  box-shadow: none !important;
-  transition: background var(--dur) var(--ease);
-}
-.login-card .login-submit:hover {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border-color: #fff !important;
-  color: var(--brand-hover) !important;
-  box-shadow: none !important;
+/* ============================================================
+   登录页 v2（设计稿 docs/PAMS-login-redesign-v1.html）
+   居中大圆角容器：左=深色表单面板；右=品牌渐变面板。
+   页底为「晕染流动」水彩渐变（不随内页深色主题翻转），色阶由组织主色派生。
+   主色由行内 --auth-brand 注入（登录前按所选组织品牌）。
+   ============================================================ */
+.auth-page {
+  --auth-brand: #0034A2;
+  --auth-brand-strong: color-mix(in srgb, var(--auth-brand) 88%, #000);
+  --auth-g1: color-mix(in srgb, var(--auth-brand) 8%, #fff);
+  --auth-g2: color-mix(in srgb, var(--auth-brand) 34%, #fff);
+  --auth-g3: color-mix(in srgb, var(--auth-brand) 62%, #fff);
+  /* 晕染背景色阶：全部由组织主色派生，换组织即整片换色 */
+  --auth-flow-base: color-mix(in srgb, var(--auth-brand) 48%, #fff);
+  --auth-flow-deep: color-mix(in srgb, var(--auth-brand) 88%, #000);
+  --auth-flow-mid: color-mix(in srgb, var(--auth-brand) 70%, #fff);
+  --auth-flow-pale: color-mix(in srgb, var(--auth-brand) 12%, #fff);
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px 56px;
+  background: var(--auth-flow-base);
 }
 
-/* 窄屏：隐藏左侧品牌区，登录卡片居中 */
+/* 晕染层：多层大半径径向渐变整体缓慢旋转缩放，色团错位漂移成水彩流动感 */
+.auth-page::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  background:
+    radial-gradient(38% 44% at 20% 24%, var(--auth-flow-deep) 0%, transparent 60%),
+    radial-gradient(48% 54% at 82% 18%, var(--auth-flow-pale) 0%, transparent 62%),
+    radial-gradient(52% 58% at 76% 82%, var(--auth-flow-mid) 0%, transparent 64%),
+    radial-gradient(44% 50% at 22% 78%, var(--auth-flow-deep) 0%, transparent 66%);
+  filter: blur(48px);
+  animation: auth-flow 18s linear infinite;
+}
+
+/* 颗粒噪点：还原参考图的水彩颗粒质感（不随动，避免额外重绘） */
+.auth-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* 只动 transform：由 GPU 合成，不触发重排重绘。
+   闭环关键帧 0% = 100%，配合 linear 全程匀速漂移，不会在两端停顿。 */
+@keyframes auth-flow {
+  0% {
+    transform: rotate(-3.5deg) scale(1.12) translate3d(-2%, 1.6%, 0);
+  }
+  50% {
+    transform: rotate(3.5deg) scale(1.08) translate3d(2%, -1.6%, 0);
+  }
+  100% {
+    transform: rotate(-3.5deg) scale(1.12) translate3d(-2%, 1.6%, 0);
+  }
+}
+
+/* 关闭动效后仍是完整的静态晕染底 */
+@media (prefers-reduced-motion: reduce) {
+  .auth-page::before {
+    animation: none;
+  }
+}
+
+.auth-shell {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 45% 55%;
+  width: min(100%, 1000px);
+  min-height: 620px;
+  overflow: hidden;
+  border-radius: var(--r-2xl);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 30px 70px rgba(6, 20, 55, 0.32);
+  background: #1A1B1E;
+}
+
+/* ===== 左：深色表单面板 ===== */
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 36px 44px 28px;
+  background: #1A1B1E;
+  color: #F2F3F5;
+}
+.auth-brand { display: flex; align-items: center; gap: 10px; }
+.auth-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: #fff;
+  background: var(--auth-brand);
+}
+.auth-mark img { width: 100%; height: 100%; object-fit: cover; }
+.auth-word { font-size: var(--fs-body-lg); font-weight: 700; letter-spacing: 0.3px; }
+.auth-env { font-size: var(--fs-body); color: rgba(255, 255, 255, 0.58); }
+
+.auth-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  max-width: 330px;
+  margin: 0 auto;
+}
+/* 标题与副标题跟随表单列的左边缘：设计稿里此处没有右对齐，
+   右对齐会让「登录 / 继续你的工作」与下方左对齐的标签、输入框参差不齐。 */
+.auth-form h1 { margin: 0 0 6px; font-size: var(--fs-h2); font-weight: 600; text-align: left; }
+.auth-sub { margin: 0 0 24px; font-size: var(--fs-body-lg); color: rgba(255, 255, 255, 0.58); text-align: left; }
+.auth-lbl { display: block; margin: 0 0 7px; font-size: var(--fs-caption); color: rgba(255, 255, 255, 0.58); }
+
+/* 组织选择（通用化：登录前选择/记忆组织，仅影响品牌展示） */
+.auth-org {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin-bottom: 16px;
+  padding: 0 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid #34363B;
+  background: #26272B;
+}
+.auth-org-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: #fff;
+  background: var(--auth-brand);
+}
+.auth-org-mark img { width: 100%; height: 100%; object-fit: cover; }
+.auth-org-name { flex: 1; font-size: var(--fs-body-lg); }
+
+/* 表单控件：深色面板内的 antd 覆盖 */
+.auth-form .ant-form-item { margin-bottom: 16px; }
+.auth-form .ant-form-item-explain-error { font-size: var(--fs-caption); }
+.auth-form .ant-input-affix-wrapper,
+.auth-form .ant-input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid #34363B !important;
+  background: #26272B !important;
+  color: #F2F3F5 !important;
+}
+.auth-form .ant-input-affix-wrapper .ant-input {
+  height: auto;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+}
+.auth-form .ant-input::placeholder { color: rgba(255, 255, 255, 0.38) !important; }
+.auth-form .ant-input-affix-wrapper:hover,
+.auth-form .ant-input:hover { border-color: #4A4D53 !important; }
+.auth-form .ant-input-affix-wrapper:focus-within,
+.auth-form .ant-input-affix-wrapper-focused,
+.auth-form .ant-input:focus {
+  border-color: var(--auth-brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--auth-brand) 22%, transparent) !important;
+}
+.auth-form .ant-input-prefix,
+.auth-form .ant-input-suffix { color: rgba(255, 255, 255, 0.42); }
+
+/* 登录按钮：全页唯一实底主色（v4 主色配额） */
+.auth-submit {
+  height: 40px;
+  margin-top: 4px;
+  border-radius: var(--r-lg);
+  font-size: var(--fs-body-lg);
+  font-weight: 500;
+  background: var(--auth-brand) !important;
+  border: 1px solid var(--auth-brand) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.auth-submit:hover {
+  background: var(--auth-brand-strong) !important;
+  border-color: var(--auth-brand-strong) !important;
+  color: #fff !important;
+}
+
+.auth-legal { margin: 14px 0 0; font-size: var(--fs-micro); line-height: 1.6; color: rgba(255, 255, 255, 0.38); }
+.auth-divider { margin: 22px 0 16px; border-top: 1px solid #34363B; }
+.auth-alt { text-align: center; font-size: var(--fs-body); color: rgba(255, 255, 255, 0.58); }
+.auth-alt a { margin-left: 4px; }
+.auth-copyright { margin-top: 28px; font-size: var(--fs-micro); color: rgba(255, 255, 255, 0.28); }
+
+/* ===== 右：品牌渐变面板 ===== */
+.auth-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(155deg, var(--auth-g1) 0%, var(--auth-g2) 48%, var(--auth-g3) 100%);
+}
+.auth-giant {
+  position: absolute;
+  z-index: 1;
+  white-space: nowrap;
+  user-select: none;
+  font-size: clamp(56px, 9vw, 92px);
+  font-weight: 700;
+  letter-spacing: -2px;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.6);
+}
+.auth-giant.top { top: -30px; left: 0; }
+.auth-giant.bottom { bottom: -26px; left: 14px; }
+.auth-reg { position: absolute; top: 18px; right: 22px; z-index: 2; font-size: var(--fs-h2); color: rgba(255, 255, 255, 0.55); }
+.auth-quote {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  max-width: 27ch;
+  padding: 0 40px;
+  text-align: center;
+  color: #fff;
+  font-size: var(--fs-symbol);
+  line-height: 1.55;
+  text-shadow: 0 2px 16px rgba(20, 40, 90, 0.18);
+}
+.auth-quote b { font-weight: 700; }
+
+/* 窄屏：只保留深色表单面板（表单是唯一任务路径） */
 @media (max-width: 920px) {
-  .login-brand { display: none; }
+  .auth-shell { grid-template-columns: 1fr; min-height: 0; border-radius: var(--r-2xl); }
+  .auth-hero { display: none; }
+  .auth-panel { min-height: 620px; border-radius: var(--r-2xl); }
+}
+@media (max-width: 560px) {
+  /* 留一圈页边，让晕染底在手机上仍可见（否则深色面板满幅会把它整片盖住） */
+  .auth-page { padding: 12px; }
+  .auth-panel { min-height: calc(100vh - 26px); padding: 28px 22px 22px; }
 }

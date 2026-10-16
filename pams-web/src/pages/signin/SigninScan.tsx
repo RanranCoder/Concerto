@@ -137,7 +137,7 @@ export default function SigninScan() {
         </Typography.Paragraph>
         {done ? (
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 'var(--fs-symbol)', color: 'var(--brand)', marginBottom: 8 }}>✓ 签到成功</div>
+            <div style={{ fontSize: 'var(--fs-symbol)', color: 'var(--brand-text)', marginBottom: 8 }}>✓ 签到成功</div>
             <Button onClick={() => window.location.reload()}>继续</Button>
           </div>
         ) : configured === null ? (

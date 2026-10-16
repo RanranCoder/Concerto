@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getCurrentOrg } from '@/api/org'
-import { lightTokens } from '@/styles/tokens'
+import { lightTokens, normalizePrimaryColor } from '@/styles/tokens'
 
 /**
  * 默认主题色 —— 组织未配置 theme_json 时回退。
@@ -28,7 +28,7 @@ function parsePrimaryColor(themeJson: string | null): string {
   try {
     const obj = JSON.parse(themeJson) as { primaryColor?: unknown }
     return typeof obj.primaryColor === 'string' && obj.primaryColor.trim()
-      ? obj.primaryColor.trim()
+      ? normalizePrimaryColor(obj.primaryColor)
       : DEFAULT_PRIMARY_COLOR
   } catch {
     return DEFAULT_PRIMARY_COLOR

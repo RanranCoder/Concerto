@@ -8,6 +8,11 @@ import '@/styles/global.css'
 import '@/styles/glass.css'
 import '@/styles/tokens.css'
 import '@/styles/lingsi.css'
+import '@/styles/business-v6.css'
+import '@/styles/routine-v6.css'
+import '@/styles/lingsi-v6.css'
+import '@/styles/records-v6.css'
+import '@/styles/forms.css'
 
 // 全局 dayjs 中文 locale：format('ddd') 等输出中文星期（Task 28 minor）
 dayjs.locale('zh-cn')

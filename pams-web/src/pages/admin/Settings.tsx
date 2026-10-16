@@ -44,11 +44,11 @@ export default function Settings() {
 
       <Spin spinning={loading}>
         {info === undefined ? (
-          <GlassCard style={{ padding: 32, textAlign: 'center' }}>
+          <GlassCard style={{ padding: 40, textAlign: 'center' }}>
             <Spin tip="系统信息加载中…" />
           </GlassCard>
         ) : info === null ? (
-          <GlassCard style={{ padding: 32, textAlign: 'center' }}>
+          <GlassCard style={{ padding: 40, textAlign: 'center' }}>
             <AntResult
               status="warning"
               title="系统信息加载失败"
@@ -57,9 +57,9 @@ export default function Settings() {
           </GlassCard>
         ) : (
           <Space direction="vertical" size={16} style={{ display: 'flex' }}>
-            <GlassCard style={{ padding: 24 }}>
+            <GlassCard style={{ padding: 16 }}>
               <Typography.Title level={5} style={{ margin: '0 0 16px' }}>
-                <SettingOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
+                <SettingOutlined style={{ color: 'var(--brand-text)', marginRight: 8 }} />
                 系统信息
               </Typography.Title>
               <Descriptions column={1} size="middle" bordered>
@@ -69,9 +69,9 @@ export default function Settings() {
               </Descriptions>
             </GlassCard>
 
-            <GlassCard style={{ padding: 24 }}>
+            <GlassCard style={{ padding: 16 }}>
               <Typography.Title level={5} style={{ margin: '0 0 16px' }}>
-                <SyncOutlined style={{ color: 'var(--brand)', marginRight: 8 }} />
+                <SyncOutlined style={{ color: 'var(--brand-text)', marginRight: 8 }} />
                 存储与健康
               </Typography.Title>
               <Descriptions column={1} size="middle" bordered>

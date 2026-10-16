@@ -64,7 +64,7 @@ export default function NotificationBell() {
 
   const content = (
     <div style={{ width: 360, maxHeight: 400, overflow: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, padding: '0 4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, padding: '0 12px' }}>
         <Text strong>通知</Text>
         <Space size={0}>
           {unreadCount > 0 && (
