@@ -1,3 +1,4 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
@@ -33,7 +34,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { SEAT_ZONE_COLORS } from '@/styles/categoryColors'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import StatusTag from '@/components/glass/StatusTag'
 import { useHasPerm } from '@/components/glass/RequireRole'
@@ -48,10 +48,22 @@ import {
   type ActivityVO,
   type SeatMapVO,
 } from '@/api/activity'
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_OPTIONS, ACTIVITY_TYPE_MAP } from '@/api/activityStatus'
-import { listMaterials, MATERIAL_BIZ_TYPE_MAP, type MaterialVO } from '@/api/material'
+import {
+  ACTIVITY_STATUS_LABEL,
+  ACTIVITY_STATUS_OPTIONS,
+  ACTIVITY_TYPE_MAP,
+} from '@/api/activityStatus'
+import {
+  listMaterials,
+  MATERIAL_BIZ_TYPE_MAP,
+  type MaterialVO,
+} from '@/api/material'
 import { downloadFile, fetchFileBlob } from '@/api/file'
-import { listTemplates, TEMPLATE_CATEGORY_MAP, type TemplateVO } from '@/api/template'
+import {
+  listTemplates,
+  TEMPLATE_CATEGORY_MAP,
+  type TemplateVO,
+} from '@/api/template'
 import { listDepts } from '@/api/dept'
 import {
   createPlan,
@@ -60,11 +72,25 @@ import {
   updatePlan,
   type PlanSave,
 } from '@/api/plan'
-import { createAgenda, deleteAgenda, listAgendas, updateAgenda } from '@/api/agenda'
+import {
+  createAgenda,
+  deleteAgenda,
+  listAgendas,
+  updateAgenda,
+} from '@/api/agenda'
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
 import { useAuthStore } from '@/stores/auth'
 import WordEditor from '@/components/word/WordEditor'
-import { agendaToDocx, docxToPlan, parseSectionOrder, planToDocx, type PlanFields, type PlanMeta, type PlanOverrides, type PlanSectionOrderItem } from '@/components/word/planTemplate'
+import {
+  agendaToDocx,
+  docxToPlan,
+  parseSectionOrder,
+  planToDocx,
+  type PlanFields,
+  type PlanMeta,
+  type PlanOverrides,
+  type PlanSectionOrderItem,
+} from '@/components/word/planTemplate'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
 import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'
@@ -105,21 +131,62 @@ function buildDefaultLegend(types: string[]): Record<string, string> {
     const type = t?.trim()
     if (!type || seen.includes(type)) continue
     seen.push(type)
-    legend[type] = SEAT_LEGEND_PALETTE[(seen.length - 1) % SEAT_LEGEND_PALETTE.length]
+    legend[type] =
+      SEAT_LEGEND_PALETTE[(seen.length - 1) % SEAT_LEGEND_PALETTE.length]
   }
   return legend
 }
 
 // ==================== 策划书 Tab ====================
 
-const PLAN_FIELDS: Array<{ name: string; label: string; placeholder: string; textarea: boolean }> = [
-  { name: 'background', label: '活动背景', placeholder: '活动的背景与缘由', textarea: true },
-  { name: 'purpose', label: '活动目的', placeholder: '活动要达成的目的', textarea: true },
-  { name: 'content', label: '活动内容', placeholder: '活动主要内容', textarea: true },
-  { name: 'flow', label: '活动流程', placeholder: '流程，可填 JSON：[{"step":"...","detail":"..."}] 或纯文本', textarea: true },
-  { name: 'notice', label: '注意事项', placeholder: '注意事项', textarea: true },
-  { name: 'emergency', label: '应急预案', placeholder: '应急预案', textarea: true },
-  { name: 'budget', label: '经费预算', placeholder: '预算，可填 JSON：[{"item":"...","quantity":1,"unitPrice":0,"totalPrice":0}] 或纯文本', textarea: true },
+const PLAN_FIELDS: Array<{
+  name: string
+  label: string
+  placeholder: string
+  textarea: boolean
+}> = [
+  {
+    name: 'background',
+    label: '活动背景',
+    placeholder: '活动的背景与缘由',
+    textarea: true,
+  },
+  {
+    name: 'purpose',
+    label: '活动目的',
+    placeholder: '活动要达成的目的',
+    textarea: true,
+  },
+  {
+    name: 'content',
+    label: '活动内容',
+    placeholder: '活动主要内容',
+    textarea: true,
+  },
+  {
+    name: 'flow',
+    label: '活动流程',
+    placeholder: '按顺序列出活动环节、时间与负责人',
+    textarea: true,
+  },
+  {
+    name: 'notice',
+    label: '注意事项',
+    placeholder: '注意事项',
+    textarea: true,
+  },
+  {
+    name: 'emergency',
+    label: '应急预案',
+    placeholder: '应急预案',
+    textarea: true,
+  },
+  {
+    name: 'budget',
+    label: '经费预算',
+    placeholder: '列出物品、数量、单价与小计',
+    textarea: true,
+  },
 ]
 
 function PlanTab({
@@ -135,7 +202,7 @@ function PlanTab({
 }) {
   const { message, modal } = App.useApp()
   const user = useAuthStore((s) => s.user)
-  const isMinisterOrAbove = (user?.roleLevel ?? 0) >= 3
+  const isMinisterOrAbove = (user?.permissions ?? []).includes('activity:edit')
   const latest = plan?.latest ?? null
   const [modalOpen, setModalOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -146,7 +213,9 @@ function PlanTab({
   const [templateLoading, setTemplateLoading] = useState(false)
   const [planFields, setPlanFields] = useState<PlanFields | null>(null)
   const [overrides, setOverrides] = useState<PlanOverrides | null>(null)
-  const [sectionOrder, setSectionOrder] = useState<PlanSectionOrderItem[] | null>(null)
+  const [sectionOrder, setSectionOrder] = useState<
+    PlanSectionOrderItem[] | null
+  >(null)
   const [formInit, setFormInit] = useState<Record<string, string>>()
   const [form] = Form.useForm()
   const [reviewForm] = Form.useForm()
@@ -172,18 +241,34 @@ function PlanTab({
   })
 
   /** 当前可用的 7 字段：编辑态 planFields 优先，否则回退到后端 latest */
-  const fields: PlanFields = planFields ?? (latest ? toPlanFields(latest) : { background: '', purpose: '', content: '', flow: '', notice: '', emergency: '', budget: '' })
+  const fields: PlanFields =
+    planFields ??
+    (latest
+      ? toPlanFields(latest)
+      : {
+          background: '',
+          purpose: '',
+          content: '',
+          flow: '',
+          notice: '',
+          emergency: '',
+          budget: '',
+        })
   /** 当前可用的 override：编辑态优先，否则回退后端 latest */
-  const curOverrides: PlanOverrides = overrides ?? (latest ? toOverrides(latest) : {})
+  const curOverrides: PlanOverrides =
+    overrides ?? (latest ? toOverrides(latest) : {})
   /** 当前章节顺序：编辑态优先，否则回退后端 latest 的 section_order（缺省默认模板） */
-  const curSectionOrder: PlanSectionOrderItem[] = sectionOrder ?? (latest ? parseSectionOrder(latest.sectionOrder) : [])
+  const curSectionOrder: PlanSectionOrderItem[] =
+    sectionOrder ?? (latest ? parseSectionOrder(latest.sectionOrder) : [])
 
   const planMeta: PlanMeta = useMemo(
     () => ({
       name: activity?.name,
       theme: activity?.theme,
       orgName: activity?.organizer || '信息工程学院党建办公室',
-      time: activity?.startDate ? `${activity.startDate}${activity.endDate ? ` ~ ${activity.endDate}` : ''}` : '',
+      time: activity?.startDate
+        ? `${activity.startDate}${activity.endDate ? ` ~ ${activity.endDate}` : ''}`
+        : '',
       location: activity?.location ?? '',
       organizer: activity?.organizer ?? '',
       target: activity?.targetAudience ?? '',
@@ -294,7 +379,12 @@ function PlanTab({
   /** 导出 docx：planToDocx 动态 import docx 库，下载标准策划书（保留富文本/覆盖值/章节顺序） */
   const handleExport = async () => {
     try {
-      const blob = await planToDocx(fields, planMeta, curOverrides, curSectionOrder)
+      const blob = await planToDocx(
+        fields,
+        planMeta,
+        curOverrides,
+        curSectionOrder,
+      )
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -388,13 +478,26 @@ function PlanTab({
         notice: fields.notice?.trim() ? fields.notice : null,
         emergency: fields.emergency?.trim() ? fields.emergency : null,
         budget: fields.budget?.trim() ? fields.budget : null,
-        nameOverride: curOverrides.nameOverride?.trim() ? curOverrides.nameOverride : null,
-        themeOverride: curOverrides.themeOverride?.trim() ? curOverrides.themeOverride : null,
-        timeOverride: curOverrides.timeOverride?.trim() ? curOverrides.timeOverride : null,
-        locationOverride: curOverrides.locationOverride?.trim() ? curOverrides.locationOverride : null,
-        organizerOverride: curOverrides.organizerOverride?.trim() ? curOverrides.organizerOverride : null,
-        targetOverride: curOverrides.targetOverride?.trim() ? curOverrides.targetOverride : null,
-        sectionOrder: curSectionOrder.length > 0 ? JSON.stringify(curSectionOrder) : null,
+        nameOverride: curOverrides.nameOverride?.trim()
+          ? curOverrides.nameOverride
+          : null,
+        themeOverride: curOverrides.themeOverride?.trim()
+          ? curOverrides.themeOverride
+          : null,
+        timeOverride: curOverrides.timeOverride?.trim()
+          ? curOverrides.timeOverride
+          : null,
+        locationOverride: curOverrides.locationOverride?.trim()
+          ? curOverrides.locationOverride
+          : null,
+        organizerOverride: curOverrides.organizerOverride?.trim()
+          ? curOverrides.organizerOverride
+          : null,
+        targetOverride: curOverrides.targetOverride?.trim()
+          ? curOverrides.targetOverride
+          : null,
+        sectionOrder:
+          curSectionOrder.length > 0 ? JSON.stringify(curSectionOrder) : null,
         syncActivity,
       }
       // 已审核通过的策划书后端不允许修改，编辑保存时自动升为新版本
@@ -424,7 +527,8 @@ function PlanTab({
     if (overridesChanged()) {
       modal.confirm({
         title: '是否同步更新活动基本信息？',
-        content: '已修改活动名称/主题/时间/地点/组织单位/对象，是否同步更新到活动基本信息？取消则仅保存在策划书中。',
+        content:
+          '已修改活动名称/主题/时间/地点/组织单位/对象，是否同步更新到活动基本信息？取消则仅保存在策划书中。',
         okText: '同步更新',
         cancelText: '仅保存策划书',
         onOk: () => handleSaveFields(true),
@@ -435,17 +539,65 @@ function PlanTab({
     }
   }
 
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="按章节完善活动安排，保存后返回策划书查看。"
+        title="编辑策划书"
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setModalOpen(false)}>取消</Button>
+            <Button type="primary" loading={saving} onClick={handleSave}>
+              保存
+            </Button>
+          </Space>
+        }
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={`plan-edit-${latest?.id ?? 'none'}`}
+          initialValues={formInit}
+        >
+          {[
+            { title: '背景与目的', names: ['background', 'purpose'] },
+            { title: '内容与流程', names: ['content', 'flow'] },
+            { title: '执行保障', names: ['notice', 'emergency', 'budget'] },
+          ].map((section) => (
+            <FormSection key={section.title} title={section.title}>
+              {PLAN_FIELDS.filter((f) => section.names.includes(f.name)).map(
+                (f) => (
+                  <Form.Item key={f.name} name={f.name} label={f.label}>
+                    <Input.TextArea rows={4} placeholder={f.placeholder} />
+                  </Form.Item>
+                ),
+              )}
+            </FormSection>
+          ))}
+        </Form>
+      </FormSurface>
+    )
+
   return (
     <div>
-      <GlassCard style={{ padding: 20 }}>
+      <GlassCard style={{ padding: 16 }}>
         {latest ? (
           <Space style={{ marginBottom: 16 }} wrap>
             <Tag color="red">版本 v{latest.version ?? 1}</Tag>
             <Tag>{PLAN_STATUS_TEXT[latest.status] ?? latest.status}</Tag>
-            {latest.reviewComment && <Tag color="orange">审核意见：{latest.reviewComment}</Tag>}
+            {latest.reviewComment && (
+              <Tag color="orange">审核意见：{latest.reviewComment}</Tag>
+            )}
             {latest.status === 'DRAFT' || latest.status === 'REJECTED' ? (
               <>
-                <Button icon={<EditOutlined />} onClick={() => openEdit(latest)}>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => openEdit(latest)}
+                >
                   字段编辑
                 </Button>
                 <Button icon={<SendOutlined />} onClick={handleSubmit}>
@@ -478,7 +630,11 @@ function PlanTab({
 
         {/* 工具栏：导入/导出/保存（页面即编辑器，无独立预览） */}
         <Space style={{ marginBottom: 16 }} wrap>
-          <Button loading={importing} icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+          <Button
+            loading={importing}
+            icon={<UploadOutlined />}
+            onClick={() => fileInputRef.current?.click()}
+          >
             导入 docx
           </Button>
           <Button icon={<FileTextOutlined />} onClick={openTemplatePick}>
@@ -499,13 +655,22 @@ function PlanTab({
           meta={planMeta}
           overrides={curOverrides}
           onOverridesChange={setOverrides}
-          sectionOrder={curSectionOrder.length > 0 ? curSectionOrder : undefined}
+          sectionOrder={
+            curSectionOrder.length > 0 ? curSectionOrder : undefined
+          }
           onSectionOrderChange={setSectionOrder}
         />
 
         {/* 活动流程字段不在 12 章模板中，导出 docx 不含流程 */}
-        <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-          提示：活动流程已在编辑页提供，但不含在 Word 导出中；如需单独调整各字段可用「字段编辑」。
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          提示：活动流程已在编辑页提供，但不含在 Word
+          导出中；如需单独调整各字段可用「字段编辑」。
         </div>
 
         {/* 隐藏的文件选择：导入 docx */}
@@ -523,7 +688,9 @@ function PlanTab({
       </GlassCard>
 
       {/* F2：从模板库导入策划书模板（PLAN 分类，选中即走 docx 导入管线） */}
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="选择策划书模板，导入后可继续编辑章节内容。"
         title="从模板库导入"
         open={templateOpen}
         onCancel={() => setTemplateOpen(false)}
@@ -540,14 +707,21 @@ function PlanTab({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '10px 12px',
+                  padding: '8px 12px',
                   marginBottom: 8,
                   border: '1px solid var(--border)',
                   borderRadius: 8,
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {t.name}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -568,42 +742,18 @@ function PlanTab({
             ))
           )}
         </Spin>
-        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+        <div
+          style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}
+        >
           提示：模板内容将按章节标题自动填充到当前策划书，导入后可继续编辑。
         </div>
-      </GlassModal>
+      </FormSurface>
 
       {/* 字段编辑弹窗（仅对已存在策划书开放） */}
-      <GlassModal
-        title="编辑策划书"
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          key={`plan-edit-${latest?.id ?? 'none'}`}
-          initialValues={formInit}
-        >
-          {PLAN_FIELDS.map((f) => (
-            <Form.Item key={f.name} name={f.name} label={f.label}>
-              <Input.TextArea rows={4} placeholder={f.placeholder} />
-            </Form.Item>
-          ))}
-        </Form>
-      </GlassModal>
 
       {/* 审核弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
         title="审核策划书"
         open={reviewOpen}
         onCancel={() => setReviewOpen(false)}
@@ -613,7 +763,11 @@ function PlanTab({
             <Button danger loading={saving} onClick={() => handleReview(false)}>
               驳回
             </Button>
-            <Button type="primary" loading={saving} onClick={() => handleReview(true)}>
+            <Button
+              type="primary"
+              loading={saving}
+              onClick={() => handleReview(true)}
+            >
               通过
             </Button>
           </Space>
@@ -624,7 +778,7 @@ function PlanTab({
             <Input.TextArea rows={3} placeholder="填写审核意见（可选）" />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }
@@ -670,7 +824,12 @@ function AgendaTab({ activityId }: { activityId: number }) {
     const values = await form.validateFields()
     setSaving(true)
     try {
-      const payload = { activityId, stepNo: values.stepNo, title: values.title, remark: values.remark || null }
+      const payload = {
+        activityId,
+        stepNo: values.stepNo,
+        title: values.title,
+        remark: values.remark || null,
+      }
       if (editing) {
         await updateAgenda(editing.id, payload)
         message.success('议程已更新')
@@ -723,17 +882,33 @@ function AgendaTab({ activityId }: { activityId: number }) {
   const columns = [
     { title: '步骤', dataIndex: 'stepNo', key: 'stepNo', width: 80 },
     { title: '标题', dataIndex: 'title', key: 'title' },
-    { title: '说明', dataIndex: 'remark', key: 'remark', render: (v: string | null) => v || '-' },
+    {
+      title: '说明',
+      dataIndex: 'remark',
+      key: 'remark',
+      render: (v: string | null) => v || '-',
+    },
     {
       title: '操作',
       key: 'action',
+      align: 'right' as const,
       width: 140,
       render: (_: unknown, r: ActivityAgendaVO) => (
         <Space size="small">
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(r)}
+          >
             编辑
           </Button>
-          <Popconfirm title="确认删除该议程？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+          <Popconfirm
+            title="确认删除该议程？"
+            onConfirm={() => handleDelete(r.id)}
+            okText="删除"
+            cancelText="取消"
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除
             </Button>
@@ -749,7 +924,11 @@ function AgendaTab({ activityId }: { activityId: number }) {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新增议程
         </Button>
-        <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={list.length === 0}>
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleExport}
+          disabled={list.length === 0}
+        >
           导出议程表
         </Button>
       </Space>
@@ -759,7 +938,9 @@ function AgendaTab({ activityId }: { activityId: number }) {
         pagination={false}
         rowKey="id"
       />
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="填写步骤顺序、标题与补充说明。"
         title={editing ? '编辑议程' : '新增议程'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -779,17 +960,25 @@ function AgendaTab({ activityId }: { activityId: number }) {
           key={editing ? `agenda-edit-${editing.id}` : 'agenda-create'}
           initialValues={formInit}
         >
-          <Form.Item name="stepNo" label="步骤序号" rules={[{ required: true, message: '请输入步骤序号' }]}>
+          <Form.Item
+            name="stepNo"
+            label="步骤序号"
+            rules={[{ required: true, message: '请输入步骤序号' }]}
+          >
             <InputNumber min={1} precision={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
+          <Form.Item
+            name="title"
+            label="标题"
+            rules={[{ required: true, message: '请输入标题' }]}
+          >
             <Input maxLength={200} />
           </Form.Item>
           <Form.Item name="remark" label="说明">
             <Input.TextArea rows={3} maxLength={500} />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }
@@ -806,12 +995,16 @@ function SeatTab({ activityId }: { activityId: number }) {
   // 图例：localStorage pams_seat_legend_{activityId} 缓存优先；无缓存则等 seats 加载后按现有 seatType 自动分配默认色
   const [legend, setLegend] = useState<Record<string, string>>(() => {
     try {
-      const cached = localStorage.getItem(`${SEAT_LEGEND_KEY_PREFIX}${activityId}`)
+      const cached = localStorage.getItem(
+        `${SEAT_LEGEND_KEY_PREFIX}${activityId}`,
+      )
       if (cached) {
         const parsed = JSON.parse(cached)
         if (parsed && typeof parsed === 'object') {
           const clean: Record<string, string> = {}
-          for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          for (const [k, v] of Object.entries(
+            parsed as Record<string, unknown>,
+          )) {
             if (typeof v === 'string') clean[k] = v // 过滤非字符串值，防 ColorPicker value={123}
           }
           return clean
@@ -852,7 +1045,10 @@ function SeatTab({ activityId }: { activityId: number }) {
   }, [fetchZones, fetchLayout])
 
   /** 全部座位（跨 zone 展平），供矩阵视图与 Excel 编辑共用 */
-  const allSeats = useMemo<SeatMapVO[]>(() => Object.values(zones).flat(), [zones])
+  const allSeats = useMemo<SeatMapVO[]>(
+    () => Object.values(zones).flat(),
+    [zones],
+  )
 
   /** 现有所有 seatType（去重有序） */
   const seatTypes = useMemo(() => {
@@ -876,7 +1072,10 @@ function SeatTab({ activityId }: { activityId: number }) {
   const handleLegendChange = (next: Record<string, string>) => {
     setLegend(next)
     try {
-      localStorage.setItem(`${SEAT_LEGEND_KEY_PREFIX}${activityId}`, JSON.stringify(next))
+      localStorage.setItem(
+        `${SEAT_LEGEND_KEY_PREFIX}${activityId}`,
+        JSON.stringify(next),
+      )
     } catch {
       /* localStorage 不可用（隐私模式等）忽略 */
     }
@@ -957,13 +1156,32 @@ function SeatTab({ activityId }: { activityId: number }) {
       {/* F6 座位表双轨收敛：已存在可视化布局（seat_layout）时旧版座位表（seat_map）转只读归档；
           仅有旧数据时提示迁移，写入口统一收敛到可视化编辑 */}
       {layout && allSeats.length > 0 && (
-        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--brand)', background: 'var(--soft)', fontSize: 13, color: 'var(--text-secondary)' }}>
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '4px 12px',
+            borderLeft: '3px solid var(--brand)',
+            background: 'var(--soft)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
           该活动已启用可视化座位表（新版），下方旧版座位表转为只读归档；编辑请在「可视化编辑」中进行。
         </div>
       )}
       {!layout && allSeats.length > 0 && (
-        <div style={{ marginBottom: 12, padding: '6px 12px', borderLeft: '3px solid var(--warn)', background: 'var(--soft)', fontSize: 13, color: 'var(--text-secondary)' }}>
-          检测到旧版座位表数据（{allSeats.length} 个座位）。建议切换到「可视化编辑」重建并保存新布局，旧版编辑入口将在新布局创建后转为只读。
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '4px 12px',
+            borderLeft: '3px solid var(--warn)',
+            background: 'var(--soft)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          检测到旧版座位表数据（{allSeats.length}{' '}
+          个座位）。建议切换到「可视化编辑」重建并保存新布局，旧版编辑入口将在新布局创建后转为只读。
         </div>
       )}
       <Space style={{ marginBottom: 12 }} wrap>
@@ -983,28 +1201,56 @@ function SeatTab({ activityId }: { activityId: number }) {
 
       {view === 'visual' ? (
         layoutLoaded ? (
-          <SeatLayoutEditor value={layout} activityId={activityId} onSaved={fetchLayout} />
+          <SeatLayoutEditor
+            value={layout}
+            activityId={activityId}
+            onSaved={fetchLayout}
+          />
         ) : (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <Spin />
           </div>
         )
       ) : view === 'matrix' ? (
-        <SeatMapView seats={allSeats} legend={legend} onSelect={layout ? undefined : openEdit} />
+        <SeatMapView
+          seats={allSeats}
+          legend={legend}
+          onSelect={layout ? undefined : openEdit}
+        />
       ) : layout ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-          旧版 Excel 编辑已锁定：该活动已启用可视化座位表，请使用「可视化编辑」。
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 40,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          旧版 Excel
+          编辑已锁定：该活动已启用可视化座位表，请使用「可视化编辑」。
         </div>
       ) : (
-        <SeatExcelEditor seats={allSeats} legend={legend} onChangeLegend={handleLegendChange} onChangeSeats={handleExcelChange} />
+        <SeatExcelEditor
+          seats={allSeats}
+          legend={legend}
+          onChangeLegend={handleLegendChange}
+          onChangeSeats={handleExcelChange}
+        />
       )}
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="指定座位位置、就座人和座位类型。"
         title={editing ? '编辑座位' : '新增座位'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <div>
               {editing && (
                 <Popconfirm
@@ -1038,8 +1284,18 @@ function SeatTab({ activityId }: { activityId: number }) {
           key={editing ? `seat-edit-${editing.id}` : 'seat-create'}
           initialValues={formInit}
         >
-          <Form.Item name="zone" label="区域" rules={[{ required: true, message: '请输入区域' }]}>
-            <AutoComplete options={zoneOptions} placeholder="选择或输入区域" filterOption={(input, option) => ((option?.value as string) ?? '').includes(input)} />
+          <Form.Item
+            name="zone"
+            label="区域"
+            rules={[{ required: true, message: '请输入区域' }]}
+          >
+            <AutoComplete
+              options={zoneOptions}
+              placeholder="选择或输入区域"
+              filterOption={(input, option) =>
+                ((option?.value as string) ?? '').includes(input)
+              }
+            />
           </Form.Item>
           <Space size={12} style={{ display: 'flex' }}>
             <Form.Item name="rowNo" label="排" style={{ flex: 1 }}>
@@ -1056,7 +1312,7 @@ function SeatTab({ activityId }: { activityId: number }) {
             <Input maxLength={50} placeholder="如 领导席 / 观众席 / 礼仪" />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }
@@ -1065,6 +1321,7 @@ function SeatTab({ activityId }: { activityId: number }) {
 
 export default function ActivityDetail() {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
   const { id } = useParams()
   const activityId = Number(id)
   const navigate = useNavigate()
@@ -1072,6 +1329,7 @@ export default function ActivityDetail() {
   const [loading, setLoading] = useState(false)
   const [changing, setChanging] = useState(false)
   const [materials, setMaterials] = useState<MaterialVO[]>([])
+  const [materialsTotal, setMaterialsTotal] = useState(0)
   const [activeTab, setActiveTab] = useState('basic')
   // 部门列表：后端 Task 只返回 deptId，需映射 deptName 供甘特图预览条着色（与甘特页同款处理）
   const [depts, setDepts] = useState<Array<{ id: number; name: string }>>([])
@@ -1108,6 +1366,7 @@ export default function ActivityDetail() {
     try {
       const page = await listMaterials({ activityId, page: 1, size: 50 })
       setMaterials(page.records)
+      setMaterialsTotal(page.total)
     } catch {
       /* http 拦截已提示 */
     }
@@ -1128,7 +1387,10 @@ export default function ActivityDetail() {
           startDate: String(t.startDate ?? ''),
           endDate: String(t.endDate ?? ''),
           dependsOn: t.dependsOn != null ? Number(t.dependsOn) : null,
-          deptName: deptId != null ? (deptNameById.get(deptId) ?? undefined) : undefined,
+          deptName:
+            deptId != null
+              ? (deptNameById.get(deptId) ?? undefined)
+              : undefined,
           isMilestone: t.isMilestone === 1,
           progress: t.progress != null ? Number(t.progress) : 0,
           assignee: t.assignee != null ? String(t.assignee) : undefined,
@@ -1149,9 +1411,14 @@ export default function ActivityDetail() {
     }
   }
 
-  const activity: (ActivityVO & { targetAudience?: string; description?: string }) | undefined = detail?.activity
+  const activity:
+    | (ActivityVO & { targetAudience?: string; description?: string })
+    | undefined = detail?.activity
   const statusIdx = activity ? STATUS_ORDER.indexOf(activity.status) : -1
-  const nextStatus = statusIdx >= 0 && statusIdx < STATUS_ORDER.length - 1 ? STATUS_ORDER[statusIdx + 1] : null
+  const nextStatus =
+    statusIdx >= 0 && statusIdx < STATUS_ORDER.length - 1
+      ? STATUS_ORDER[statusIdx + 1]
+      : null
   const prevStatus = statusIdx > 0 ? STATUS_ORDER[statusIdx - 1] : null
 
   const tabItems = [
@@ -1159,110 +1426,299 @@ export default function ActivityDetail() {
       key: 'basic',
       label: '基本信息',
       children: activity ? (
-        <GlassCard style={{ padding: 20 }}>
-          <Descriptions
-            column={{ xs: 1, sm: 2, md: 3 }}
-            size="small"
-            items={[
-              { key: 'type', label: '类型', children: TYPE_MAP[activity.type] ?? activity.type },
-              { key: 'status', label: '状态', children: <StatusTag status={activity.status} /> },
-              { key: 'theme', label: '主题', children: activity.theme || '-' },
-              {
-                key: 'time',
-                label: '时间',
-                children: activity.startDate ? `${activity.startDate} ~ ${activity.endDate ?? ''}` : '-',
-              },
-              { key: 'location', label: '地点', children: activity.location || '-' },
-              { key: 'organizer', label: '组织单位', children: activity.organizer || '-' },
-              { key: 'host', label: '主持人', children: activity.host || '-' },
-              { key: 'leader', label: '负责人', children: activity.leader || '-' },
-              { key: 'target', label: '面向对象', children: activity.targetAudience || '-' },
-            ]}
-          />
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>活动描述</div>
-            <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', lineHeight: 1.8 }}>
-              {activity.description || '暂无描述'}
-            </div>
-          </div>
-
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <Space wrap>
-              <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>状态操作：</span>
-              {prevStatus && (
-                <Popconfirm
-                  title={`确认回退到「${ACTIVITY_STATUS_LABEL[prevStatus]}」？`}
-                  description="回退可能影响已有数据（签到、评分等），请谨慎操作"
-                  onConfirm={() => handleStatusChange(prevStatus)}
-                  okText="确认回退"
-                  cancelText="取消"
-                >
-                  <Button loading={changing} icon={<ArrowLeftOutlined />}>
-                    回退到「{ACTIVITY_STATUS_LABEL[prevStatus]}」
-                  </Button>
-                </Popconfirm>
-              )}
-              {nextStatus && (
-                <Popconfirm
-                  title={`确认推进到「${ACTIVITY_STATUS_LABEL[nextStatus]}」？`}
-                  onConfirm={() => handleStatusChange(nextStatus)}
-                  okText="确认推进"
-                  cancelText="取消"
-                >
-                  <Button loading={changing} type="primary" icon={<ArrowRightOutlined />}>
-                    推进到「{ACTIVITY_STATUS_LABEL[nextStatus]}」
-                  </Button>
-                </Popconfirm>
-              )}
-              {!prevStatus && !nextStatus && <Tag>已归档，无后续状态</Tag>}
-            </Space>
-          </div>
-
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>
-              任务甘特图预览
-              <Button type="link" size="small" onClick={() => navigate(`/activities/${activityId}/gantt`)}>
-                查看完整甘特图 →
-              </Button>
-            </div>
-            {/* 内嵌只读甘特图：tasks 来自 detail.tasks（聚合接口已返回），onEdit 空操作保持只读 */}
-            <GanttChart tasks={ganttPreviewTasks} onUpdate={() => {}} onEdit={() => {}} />
-          </div>
-
-          <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)', marginBottom: 6 }}>
-              关联文件（{materials.length}）
-            </div>
-            {materials.length === 0 ? (
-              <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>暂无关联文件，可在材料库上传</div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {materials.map((m) => (
-                  <Tag key={m.id} color="red" style={{ cursor: 'pointer' }} onClick={() => m.fileId && downloadFile(m.fileId)}>
-                    {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {m.name}
-                  </Tag>
-                ))}
+        <div className="activity-overview-v6">
+          <GlassCard style={{ padding: 16 }}>
+            <Descriptions
+              column={{ xs: 1, sm: 2, md: 3 }}
+              size="small"
+              items={[
+                {
+                  key: 'type',
+                  label: '类型',
+                  children: TYPE_MAP[activity.type] ?? activity.type,
+                },
+                {
+                  key: 'status',
+                  label: '状态',
+                  children: <StatusTag status={activity.status} />,
+                },
+                {
+                  key: 'theme',
+                  label: '主题',
+                  children: activity.theme || '-',
+                },
+                {
+                  key: 'time',
+                  label: '时间',
+                  children: activity.startDate
+                    ? `${activity.startDate} ~ ${activity.endDate ?? ''}`
+                    : '-',
+                },
+                {
+                  key: 'location',
+                  label: '地点',
+                  children: activity.location || '-',
+                },
+                {
+                  key: 'organizer',
+                  label: '组织单位',
+                  children: activity.organizer || '-',
+                },
+                {
+                  key: 'host',
+                  label: '主持人',
+                  children: activity.host || '-',
+                },
+                {
+                  key: 'leader',
+                  label: '负责人',
+                  children: activity.leader || '-',
+                },
+                {
+                  key: 'target',
+                  label: '面向对象',
+                  children: activity.targetAudience || '-',
+                },
+              ]}
+            />
+            <div style={{ marginTop: 16 }}>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--brand-text)',
+                  marginBottom: 8,
+                }}
+              >
+                活动描述
               </div>
-            )}
-          </div>
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.8,
+                }}
+              >
+                {activity.description || '暂无描述'}
+              </div>
+            </div>
 
-          <div style={{ marginTop: 16 }}>
-            <Space wrap>
-              <Button icon={<BarChartOutlined />} onClick={() => navigate(`/activities/${activityId}/gantt`)}>
-                查看任务甘特图
-              </Button>
-              <Tooltip title="文件关联将在档案模块（Task 23）提供">
-                <Button icon={<PaperClipOutlined />}>关联文件</Button>
-              </Tooltip>
-            </Space>
-          </div>
-        </GlassCard>
+            <div
+              style={{
+                marginTop: 20,
+                paddingTop: 16,
+                borderTop: '1px solid var(--border)',
+              }}
+            >
+              <Space wrap>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                  状态操作：
+                </span>
+                {prevStatus && (
+                  <Popconfirm
+                    title={`确认回退到「${ACTIVITY_STATUS_LABEL[prevStatus]}」？`}
+                    description="回退可能影响已有数据（签到、评分等），请谨慎操作"
+                    onConfirm={() => handleStatusChange(prevStatus)}
+                    okText="确认回退"
+                    cancelText="取消"
+                  >
+                    <Button loading={changing} icon={<ArrowLeftOutlined />}>
+                      回退到「{ACTIVITY_STATUS_LABEL[prevStatus]}」
+                    </Button>
+                  </Popconfirm>
+                )}
+                {nextStatus && (
+                  <Popconfirm
+                    title={`确认推进到「${ACTIVITY_STATUS_LABEL[nextStatus]}」？`}
+                    onConfirm={() => handleStatusChange(nextStatus)}
+                    okText="确认推进"
+                    cancelText="取消"
+                  >
+                    <Button
+                      loading={changing}
+                      type="primary"
+                      icon={<ArrowRightOutlined />}
+                    >
+                      推进到「{ACTIVITY_STATUS_LABEL[nextStatus]}」
+                    </Button>
+                  </Popconfirm>
+                )}
+                {!prevStatus && !nextStatus && <Tag>已归档，无后续状态</Tag>}
+              </Space>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                paddingTop: 16,
+                borderTop: '1px solid var(--border)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--brand-text)',
+                  marginBottom: 8,
+                }}
+              >
+                任务甘特图预览
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => navigate(`/activities/${activityId}/gantt`)}
+                >
+                  查看完整甘特图 →
+                </Button>
+              </div>
+              {/* 内嵌只读甘特图：tasks 来自 detail.tasks（聚合接口已返回），onEdit 空操作保持只读 */}
+              <GanttChart
+                tasks={ganttPreviewTasks}
+                onUpdate={() => {}}
+                onEdit={() => {}}
+              />
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--brand-text)',
+                  marginBottom: 8,
+                }}
+              >
+                关联文件（{materials.length}）
+              </div>
+              {materials.length === 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                  暂无关联文件，可在材料库上传
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {materials.map((m) => (
+                    <Tag
+                      key={m.id}
+                      color="red"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => m.fileId && downloadFile(m.fileId)}
+                    >
+                      {MATERIAL_BIZ_TYPE_MAP[m.bizType] ?? m.bizType} · {m.name}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Space wrap>
+                <Button
+                  icon={<BarChartOutlined />}
+                  onClick={() => navigate(`/activities/${activityId}/gantt`)}
+                >
+                  查看任务甘特图
+                </Button>
+                <Tooltip title="文件关联将在档案模块（Task 23）提供">
+                  <Button icon={<PaperClipOutlined />}>关联文件</Button>
+                </Tooltip>
+              </Space>
+            </div>
+          </GlassCard>
+          <GlassCard className="activity-sidebar-v6">
+            <h3>活动信息</h3>
+            <dl>
+              <div>
+                <dt>负责单位</dt>
+                <dd>{activity.organizer || '未设置'}</dd>
+              </div>
+              <div>
+                <dt>负责人</dt>
+                <dd>{activity.leader || '未设置'}</dd>
+              </div>
+              <div>
+                <dt>开始日期</dt>
+                <dd>{activity.startDate || '待确认'}</dd>
+              </div>
+              <div>
+                <dt>任务准备</dt>
+                <dd>
+                  {
+                    ganttPreviewTasks.filter(
+                      (task) => (task.progress ?? 0) >= 100,
+                    ).length
+                  }{' '}
+                  / {ganttPreviewTasks.length} 项完成
+                </dd>
+              </div>
+              <div>
+                <dt>关联文件</dt>
+                <dd>{materialsTotal} 份</dd>
+              </div>
+            </dl>
+            {activity.status === 'PLAN_REVIEW' && (
+              <p className="business-inline-notice">
+                策划仍待审核，请在活动执行前完成复核。
+              </p>
+            )}
+          </GlassCard>
+        </div>
       ) : null,
+    },
+    {
+      key: 'materials',
+      label: '材料',
+      children: (
+        <GlassTable<MaterialVO>
+          rowKey="id"
+          dataSource={materials}
+          scroll={{ x: 650 }}
+          columns={[
+            {
+              title: '材料名称',
+              dataIndex: 'name',
+              render: (name: string) => (
+                <span className="business-table-name">{name}</span>
+              ),
+            },
+            {
+              title: '类型',
+              dataIndex: 'bizType',
+              render: (value: string) => MATERIAL_BIZ_TYPE_MAP[value] ?? value,
+            },
+            {
+              title: '上传时间',
+              dataIndex: 'createdAt',
+              render: (value: string) => value?.slice(0, 10) || '—',
+            },
+            {
+              title: '操作',
+              key: 'action',
+              render: (_: unknown, record: MaterialVO) => (
+                <Button
+                  type="link"
+                  disabled={!record.fileId}
+                  onClick={() => record.fileId && downloadFile(record.fileId)}
+                >
+                  下载
+                </Button>
+              ),
+            },
+          ]}
+          pagination={false}
+        />
+      ),
     },
     {
       key: 'plan',
       label: '策划书',
-      children: detail ? <PlanTab activityId={activityId} activity={detail.activity} plan={detail.plan} onChanged={fetchDetail} /> : null,
+      children: detail ? (
+        <PlanTab
+          activityId={activityId}
+          activity={detail.activity}
+          plan={detail.plan}
+          onChanged={fetchDetail}
+        />
+      ) : null,
     },
     {
       key: 'agenda',
@@ -1282,17 +1738,21 @@ export default function ActivityDetail() {
     {
       key: 'signin',
       label: '签到',
-      children: <SigninPanel activityId={activityId} active={activeTab === 'signin'} />,
+      children: (
+        <SigninPanel activityId={activityId} active={activeTab === 'signin'} />
+      ),
     },
     {
       key: 'articles',
       label: '推文',
-      children: <ActivityArticlesTab activityId={activityId} activity={activity} />,
+      children: (
+        <ActivityArticlesTab activityId={activityId} activity={activity} />
+      ),
     },
   ]
 
   return (
-    <div>
+    <div className="activity-detail-v6">
       <PageHeader
         title={activity ? activity.name : '活动详情'}
         description={
@@ -1301,19 +1761,66 @@ export default function ActivityDetail() {
             : '加载中…'
         }
         extra={
-          <Space>
+          <Space wrap>
             {activity && <StatusTag status={activity.status} />}
+            {activity && hasPerm('schedule:view') && (
+              <>
+                <Button
+                  onClick={() =>
+                    navigate(
+                      `/routine/activity-schedules?activityId=${activityId}`,
+                    )
+                  }
+                >
+                  岗位排班
+                </Button>
+                <Button
+                  onClick={() =>
+                    navigate(`/routine/attendance?activityId=${activityId}`)
+                  }
+                >
+                  活动考勤
+                </Button>
+              </>
+            )}
             {activity && (
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/activities/${activityId}/edit`)}>
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/activities/${activityId}/edit`)}
+              >
                 编辑
               </Button>
             )}
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/activities')}>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/activities')}
+            >
               返回列表
             </Button>
           </Space>
         }
       />
+      {activity && (
+        <ol className="activity-stage-strip" aria-label="活动推进阶段">
+          {ACTIVITY_STATUS_OPTIONS.map((option, index) => (
+            <li
+              key={option.value}
+              className={
+                index < statusIdx
+                  ? 'complete'
+                  : index === statusIdx
+                    ? 'current'
+                    : ''
+              }
+              aria-current={index === statusIdx ? 'step' : undefined}
+            >
+              <span>{index < statusIdx ? '✓' : index + 1}</span>
+              {option.label}
+            </li>
+          ))}
+        </ol>
+      )}
       <Spin spinning={loading}>
         <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
       </Spin>

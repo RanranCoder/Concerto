@@ -1,9 +1,20 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnsType } from 'antd/es/table'
-import { App, Button, Empty, Form, Input, InputNumber, Popconfirm, Space, Tag, Tooltip } from 'antd'
+import {
+  App,
+  Button,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Tag,
+  Tooltip,
+} from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import {
   createScoreRecord,
@@ -140,7 +151,9 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         if (v === undefined || v === null || v === '') continue
         const n = Number(v)
         if (!Number.isFinite(n) || n < 0 || n > rule.fullMarks) {
-          errs.push(`「${rule.dimensionName}」分值需在 0~${rule.fullMarks} 之间`)
+          errs.push(
+            `「${rule.dimensionName}」分值需在 0~${rule.fullMarks} 之间`,
+          )
         } else {
           dims[String(rule.id)] = n
         }
@@ -187,14 +200,34 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   const ruleColumns = useMemo<ColumnsType<ScoreRuleVO>>(
     () => [
       { title: '评分维度', dataIndex: 'dimensionName', key: 'dimensionName' },
-      { title: '分值', dataIndex: 'fullMarks', key: 'fullMarks', width: 100, render: (v: number) => `${v} 分` },
-      { title: '排序', dataIndex: 'sortOrder', key: 'sortOrder', width: 80, render: (v: number | null) => v ?? 0 },
+      {
+        title: '分值',
+        dataIndex: 'fullMarks',
+        key: 'fullMarks',
+        width: 100,
+        align: 'right',
+        onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
+        render: (v: number) => `${v} 分`,
+      },
+      {
+        title: '排序',
+        dataIndex: 'sortOrder',
+        key: 'sortOrder',
+        width: 80,
+        render: (v: number | null) => v ?? 0,
+      },
       {
         title: '操作',
         key: 'action',
+        align: 'right',
         width: 80,
         render: (_: unknown, r: ScoreRuleVO) => (
-          <Popconfirm title="确认删除该规则？" onConfirm={() => handleDeleteRule(r.id)} okText="删除" cancelText="取消">
+          <Popconfirm
+            title="确认删除该规则？"
+            onConfirm={() => handleDeleteRule(r.id)}
+            okText="删除"
+            cancelText="取消"
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         ),
@@ -223,14 +256,20 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
     () => {
       const base: Array<Record<string, unknown>> = [
         { title: '队名', dataIndex: 'teamName', key: 'teamName' },
-        { title: '组别', dataIndex: 'groupName', key: 'groupName', render: (v: string) => v || '-' },
+        {
+          title: '组别',
+          dataIndex: 'groupName',
+          key: 'groupName',
+          render: (v: string) => v || '-',
+        },
       ]
       rules.forEach((rule) => {
         base.push({
           title: `${rule.dimensionName} (${rule.fullMarks})`,
           key: `dim_${rule.id}`,
           width: 90,
-          render: (_: unknown, row: RecordRow) => row.dims[String(rule.id)] ?? '-',
+          render: (_: unknown, row: RecordRow) =>
+            row.dims[String(rule.id)] ?? '-',
         })
       })
       base.push({
@@ -238,17 +277,22 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         dataIndex: 'total',
         key: 'total',
         width: 80,
+        align: 'right',
+        onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
         render: (v: number | null) => v ?? 0,
       })
       base.push({
         title: '名次',
         key: 'rank',
         width: 80,
+        align: 'right',
+        onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
         render: (_: unknown, row: RecordRow) => ranks.get(row.id) ?? '-',
       })
       base.push({
         title: '操作',
         key: 'action',
+        align: 'right',
         width: 80,
         render: (_: unknown, row: RecordRow) => (
           <Popconfirm
@@ -269,8 +313,11 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
 
   return (
     <div>
-      <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+        <Space
+          wrap
+          style={{ display: 'flex', justifyContent: 'space-between' }}
+        >
           <Space wrap>
             <Tag color="red">评分规则</Tag>
             <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
@@ -290,11 +337,16 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         locale={{ emptyText: <Empty description="暂无评分规则" /> }}
       />
 
-      <GlassCard style={{ padding: 16, marginTop: 12, marginBottom: 12 }}>
-        <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <GlassCard style={{ padding: 16, marginTop: 16, marginBottom: 16 }}>
+        <Space
+          wrap
+          style={{ display: 'flex', justifyContent: 'space-between' }}
+        >
           <Space wrap>
             <Tag color="blue">评分记录</Tag>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{records.length} 支队伍</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              {records.length} 支队伍
+            </span>
           </Space>
           {rules.length ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={openRecord}>
@@ -314,73 +366,115 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={records.length > 10 ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` } : false}
+        pagination={
+          records.length > 10
+            ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` }
+            : false
+        }
         locale={{ emptyText: <Empty description="暂无评分记录" /> }}
       />
 
       {/* 新增规则弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
         title="新增评分规则"
         open={ruleModal}
         onCancel={() => setRuleModal(false)}
         footer={
           <Space>
             <Button onClick={() => setRuleModal(false)}>取消</Button>
-            <Button type="primary" loading={ruleSaving} onClick={handleSaveRule}>
+            <Button
+              type="primary"
+              loading={ruleSaving}
+              onClick={handleSaveRule}
+            >
               保存
             </Button>
           </Space>
         }
       >
-        <Form form={ruleForm} layout="vertical" preserve={false} initialValues={ruleInit}>
-          <Form.Item name="dimensionName" label="评分维度" rules={[{ required: true, message: '请输入评分维度' }]}>
-            <Input maxLength={50} placeholder="如 仪容仪表 / 演讲内容 / 综合表现" />
+        <Form
+          form={ruleForm}
+          layout="vertical"
+          preserve={false}
+          initialValues={ruleInit}
+        >
+          <Form.Item
+            name="dimensionName"
+            label="评分维度"
+            rules={[{ required: true, message: '请输入评分维度' }]}
+          >
+            <Input
+              maxLength={50}
+              placeholder="如 仪容仪表 / 演讲内容 / 综合表现"
+            />
           </Form.Item>
-          <Space size={12} style={{ display: 'flex' }}>
+          {/* 两列等分用 grid：写在 Form.Item 上的 flex:1 会被 antd Space 的 .ant-space-item 吃掉 */}
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}
+          >
             <Form.Item
               name="fullMarks"
               label="满分分值"
-              style={{ flex: 1 }}
               rules={[{ required: true, message: '请输入满分分值' }]}
             >
-              <InputNumber min={1} max={1000} style={{ width: '100%' }} placeholder="如 30" />
+              <InputNumber
+                min={1}
+                max={1000}
+                style={{ width: '100%' }}
+                placeholder="如 30"
+              />
             </Form.Item>
-            <Form.Item name="sortOrder" label="排序" style={{ flex: 1 }}>
+            <Form.Item name="sortOrder" label="排序">
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
-          </Space>
+          </div>
         </Form>
-      </GlassModal>
+      </FormSurface>
 
       {/* 录入记录弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="选择评分对象与规则，填写分数和说明。"
         title="录入评分记录"
         open={recordModal}
         onCancel={() => setRecordModal(false)}
         footer={
           <Space>
             <Button onClick={() => setRecordModal(false)}>取消</Button>
-            <Button type="primary" loading={recordSaving} onClick={handleSaveRecord}>
+            <Button
+              type="primary"
+              loading={recordSaving}
+              onClick={handleSaveRecord}
+            >
               提交（自动计算总分）
             </Button>
           </Space>
         }
       >
         <Form form={recordForm} layout="vertical" preserve={false}>
-          <Space size={12} style={{ display: 'flex' }}>
+          {/* 两列等分用 grid：写在 Form.Item 上的 flex:1 会被 antd Space 的 .ant-space-item 吃掉 */}
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}
+          >
             <Form.Item
               name="teamName"
               label="队名"
-              style={{ flex: 1 }}
               rules={[{ required: true, message: '请输入队名' }]}
             >
               <Input maxLength={100} placeholder="如 计科2301班" />
             </Form.Item>
-            <Form.Item name="groupName" label="组别" style={{ flex: 1 }}>
+            <Form.Item name="groupName" label="组别">
               <Input maxLength={100} placeholder="如 第一组" />
             </Form.Item>
-          </Space>
-          <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: 'var(--text-secondary)',
+              marginBottom: 8,
+            }}
+          >
             各维度得分（0 ~ 满分）
           </div>
           {rules.map((rule) => (
@@ -389,14 +483,20 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
               name={`dim_${rule.id}`}
               label={`${rule.dimensionName}（满分 ${rule.fullMarks}）`}
             >
-              <InputNumber min={0} max={rule.fullMarks} precision={0} style={{ width: '100%' }} placeholder="0 ~ 满分" />
+              <InputNumber
+                min={0}
+                max={rule.fullMarks}
+                precision={0}
+                style={{ width: '100%' }}
+                placeholder="0 ~ 满分"
+              />
             </Form.Item>
           ))}
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} maxLength={200} />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

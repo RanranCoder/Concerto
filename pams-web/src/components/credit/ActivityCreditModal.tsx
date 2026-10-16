@@ -1,6 +1,19 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, Checkbox, Collapse, Empty, Form, Input, InputNumber, Select, Space, Spin, Steps } from 'antd'
-import GlassModal from '@/components/glass/GlassModal'
+import {
+  App,
+  Button,
+  Checkbox,
+  Collapse,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Spin,
+  Steps,
+} from 'antd'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listSignInGroups, type SignInGroupVO } from '@/api/signinGroup'
 import { activityBatchCredit } from '@/api/credit'
@@ -21,7 +34,11 @@ interface ActivityCreditModalProps {
  * 素拓活动加分弹窗（PRD F05）
  * 步骤：①选择活动 → ②选择名单分组 → ③选择人员 → ④设置加分 → ⑤预览确认
  */
-export default function ActivityCreditModal({ open, onClose, onSuccess }: ActivityCreditModalProps) {
+export default function ActivityCreditModal({
+  open,
+  onClose,
+  onSuccess,
+}: ActivityCreditModalProps) {
   const { message } = App.useApp()
   const [step, setStep] = useState(0)
   const [activities, setActivities] = useState<ActivityVO[]>([])
@@ -91,7 +108,10 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
     loadGroups(activityId)
     const act = activities.find((a) => a.id === activityId)
     setReason(act?.name ?? '')
-    form.setFieldsValue({ project: act?.name ? `${act.name}参与加分` : '', reason: act?.name ?? '' })
+    form.setFieldsValue({
+      project: act?.name ? `${act.name}参与加分` : '',
+      reason: act?.name ?? '',
+    })
   }
 
   // 汇总选中分组的人员（去重，按姓名+学号）
@@ -129,7 +149,9 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
       setPeoplePool(poolFromGroups)
       setStep(2)
     } else if (step === 2) {
-      const checked = peoplePool.filter((p) => checkedPeople.has(`${p.personName}|${p.studentNo ?? ''}`))
+      const checked = peoplePool.filter((p) =>
+        checkedPeople.has(`${p.personName}|${p.studentNo ?? ''}`),
+      )
       if (checked.length === 0) {
         message.warning('请至少选择一名人员')
         return
@@ -183,7 +205,9 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
           checked={checkedGroupIds.includes(g.id)}
           onChange={(e) => {
             setCheckedGroupIds((prev) =>
-              e.target.checked ? [...prev, g.id] : prev.filter((id) => id !== g.id),
+              e.target.checked
+                ? [...prev, g.id]
+                : prev.filter((id) => id !== g.id),
             )
           }}
           onClick={(e) => e.stopPropagation()}
@@ -208,7 +232,9 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
                 padding: '6px 4px',
                 cursor: 'pointer',
                 borderRadius: 6,
-                background: checkedPeople.has(key) ? 'var(--brand-soft)' : 'transparent',
+                background: checkedPeople.has(key)
+                  ? 'var(--brand-soft)'
+                  : 'transparent',
               }}
               onClick={() =>
                 togglePerson({
@@ -231,11 +257,13 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
   }))
 
   return (
-    <GlassModal
+    <FormSurface
+      mode="drawer"
+      description="选择活动、核对参与人员，再填写加分信息。"
       title="活动加分"
       open={open}
       onCancel={onClose}
-      width={720}
+      width={900}
       footer={
         <Space>
           <Button onClick={onClose}>取消</Button>
@@ -247,7 +275,7 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
           )}
           {step === 4 && (
             <Button type="primary" loading={submitting} onClick={submit}>
-              确认提交
+              确认加分
             </Button>
           )}
         </Space>
@@ -272,13 +300,21 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
             showSearch
             optionFilterProp="label"
             style={{ width: '100%' }}
-            placeholder={loadingActivities ? '加载中…' : '选择已完成/已归档的活动'}
+            placeholder={
+              loadingActivities ? '加载中…' : '选择已完成/已归档的活动'
+            }
             value={selectedActivity}
             loading={loadingActivities}
             onChange={handleActivityChange}
             options={activities.map((a) => ({ value: a.id, label: a.name }))}
           />
-          <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
+          <div
+            style={{
+              marginTop: 12,
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+            }}
+          >
             仅显示已完成 / 已归档的活动，将按活动的签到名单批量加分
           </div>
         </div>
@@ -286,7 +322,13 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
 
       {step === 1 && (
         <div>
-          <div style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
+          <div
+            style={{
+              marginBottom: 8,
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+            }}
+          >
             勾选要参与加分的名单分组（共 {groups.length} 组）
           </div>
           <Spin spinning={loadingGroups}>
@@ -305,12 +347,29 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
 
       {step === 2 && (
         <div>
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+          <div
+            style={{
+              marginBottom: 8,
+              display: 'flex',
+              justifyContent: 'space-between',
+            }}
+          >
             <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
               人员池 {peoplePool.length} 人 · 已选 {selectedPeople.length} 人
             </span>
             <Space>
-              <Button size="small" onClick={() => setCheckedPeople(new Set(peoplePool.map((p) => `${p.personName}|${p.studentNo ?? ''}`)))}>
+              <Button
+                size="small"
+                onClick={() =>
+                  setCheckedPeople(
+                    new Set(
+                      peoplePool.map(
+                        (p) => `${p.personName}|${p.studentNo ?? ''}`,
+                      ),
+                    ),
+                  )
+                }
+              >
                 全选
               </Button>
               <Button size="small" onClick={() => setCheckedPeople(new Set())}>
@@ -318,7 +377,15 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
               </Button>
             </Space>
           </div>
-          <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+          <div
+            style={{
+              maxHeight: 380,
+              overflow: 'auto',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 8,
+            }}
+          >
             {peoplePool.map((p, i) => {
               const key = `${p.personName}|${p.studentNo ?? ''}`
               return (
@@ -331,23 +398,36 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
                     padding: '6px 4px',
                     cursor: 'pointer',
                     borderRadius: 6,
-                    background: checkedPeople.has(key) ? 'var(--brand-soft)' : 'transparent',
+                    background: checkedPeople.has(key)
+                      ? 'var(--brand-soft)'
+                      : 'transparent',
                   }}
                   onClick={() => togglePerson(p)}
                 >
                   <Checkbox checked={checkedPeople.has(key)} />
                   <span>{p.personName}</span>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{p.studentNo ?? ''}</span>
+                  <span
+                    style={{ color: 'var(--text-secondary)', fontSize: 13 }}
+                  >
+                    {p.studentNo ?? ''}
+                  </span>
                 </div>
               )
             })}
-            {peoplePool.length === 0 && <Empty description="所选分组暂无人员" />}
+            {peoplePool.length === 0 && (
+              <Empty description="所选分组暂无人员" />
+            )}
           </div>
         </div>
       )}
 
       {step === 3 && (
-        <Form form={form} layout="vertical" preserve={false} initialValues={{ credit: 0.5 }}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ credit: 0.5 }}
+        >
           <Form.Item
             name="credit"
             label="加分值"
@@ -363,7 +443,11 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
               onChange={(v) => setCredit(v ?? 0.5)}
             />
           </Form.Item>
-          <Form.Item name="project" label="加分原因（自动填充活动名称）" rules={[{ required: true, message: '请输入加分原因' }]}>
+          <Form.Item
+            name="project"
+            label="加分原因（自动填充活动名称）"
+            rules={[{ required: true, message: '请输入加分原因' }]}
+          >
             <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="remark" label="备注">
@@ -374,17 +458,29 @@ export default function ActivityCreditModal({ open, onClose, onSuccess }: Activi
 
       {step === 4 && (
         <div style={{ textAlign: 'center', padding: '24px 0' }}>
-          <div style={{ fontSize: 'var(--fs-statXl)', fontWeight: 600, color: 'var(--brand)' }}>
+          <div
+            style={{
+              fontSize: 'var(--fs-statXl)',
+              fontWeight: 600,
+              color: 'var(--brand-text)',
+            }}
+          >
             将为 {totalSelected} 人各加 {credit ?? 0} 分
           </div>
           <div style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
             共计 {totalCredit} 分 · 每人一条加分记录，可整体撤回
           </div>
-          <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 14 }}>
+          <div
+            style={{
+              marginTop: 12,
+              color: 'var(--text-secondary)',
+              fontSize: 14,
+            }}
+          >
             来源活动：{activities.find((a) => a.id === selectedActivity)?.name}
           </div>
         </div>
       )}
-    </GlassModal>
+    </FormSurface>
   )
 }

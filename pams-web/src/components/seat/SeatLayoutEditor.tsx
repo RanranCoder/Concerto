@@ -1,5 +1,16 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, ColorPicker, Input, InputNumber, Modal, Popover, Slider, Space, Tag } from 'antd'
+import {
+  App,
+  Button,
+  ColorPicker,
+  Input,
+  InputNumber,
+  Popover,
+  Slider,
+  Space,
+  Tag,
+} from 'antd'
 import {
   BorderOutlined,
   CheckOutlined,
@@ -44,7 +55,12 @@ interface SeatLayoutEditorProps {
   onSaved?: () => void
 }
 
-export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved }: SeatLayoutEditorProps) {
+export default function SeatLayoutEditor({
+  value,
+  activityId,
+  readOnly,
+  onSaved,
+}: SeatLayoutEditorProps) {
   const { message } = App.useApp()
   const [rows, setRows] = useState(10)
   const [cols, setCols] = useState(10)
@@ -54,14 +70,20 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   const [zoom, setZoom] = useState(100)
   const [layoutName, setLayoutName] = useState('我的座位表')
   const [colorLabels, setColorLabels] = useState<ColorLabel[]>(PRESET_COLORS)
-  const [selectedColor, setSelectedColor] = useState<string>(PRESET_COLORS[0].color)
-  const [selectedLabel, setSelectedLabel] = useState<string>(PRESET_COLORS[0].label)
+  const [selectedColor, setSelectedColor] = useState<string>(
+    PRESET_COLORS[0].color,
+  )
+  const [selectedLabel, setSelectedLabel] = useState<string>(
+    PRESET_COLORS[0].label,
+  )
   const [colorManageOpen, setColorManageOpen] = useState(false)
   const [newColor, setNewColor] = useState(SEAT_DEFAULT_COLOR)
   const [newLabel, setNewLabel] = useState('')
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [dragStart, setDragStart] = useState<string | null>(null)
-  const [history, setHistory] = useState<Array<{ rows: number; cols: number; cells: Map<string, SeatCell> }>>([])
+  const [history, setHistory] = useState<
+    Array<{ rows: number; cols: number; cells: Map<string, SeatCell> }>
+  >([])
   const [historyIdx, setHistoryIdx] = useState(-1)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [templates, setTemplates] = useState<SeatLayoutVO[]>([])
@@ -80,7 +102,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
       setRows(value.rows)
       setCols(value.cols)
       setLayoutName(value.name)
-      setAisleCols(new Set((value.aisleCols || '').split(',').filter(Boolean).map(Number)))
+      setAisleCols(
+        new Set((value.aisleCols || '').split(',').filter(Boolean).map(Number)),
+      )
       setAisleRatio(Number(value.aisleWidthRatio) || 1.5)
       try {
         const parsed = JSON.parse(value.colorLabels || '[]') as ColorLabel[]
@@ -104,18 +128,24 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   }, [value])
 
   // 快照历史
-  const snapshot = useCallback((next: Map<string, SeatCell>, r: number, c: number) => {
-    setHistory((h) => {
-      const nh = h.slice(0, historyIdx + 1)
-      nh.push({ rows: r, cols: c, cells: new Map(next) })
-      return nh.slice(-50)
-    })
-    setHistoryIdx((i) => Math.min(i + 1, 49))
-  }, [historyIdx])
+  const snapshot = useCallback(
+    (next: Map<string, SeatCell>, r: number, c: number) => {
+      setHistory((h) => {
+        const nh = h.slice(0, historyIdx + 1)
+        nh.push({ rows: r, cols: c, cells: new Map(next) })
+        return nh.slice(-50)
+      })
+      setHistoryIdx((i) => Math.min(i + 1, 49))
+    },
+    [historyIdx],
+  )
 
-  const pushHistory = useCallback((next: Map<string, SeatCell>) => {
-    snapshot(next, rows, cols)
-  }, [snapshot, rows, cols])
+  const pushHistory = useCallback(
+    (next: Map<string, SeatCell>) => {
+      snapshot(next, rows, cols)
+    },
+    [snapshot, rows, cols],
+  )
 
   const undo = () => {
     if (historyIdx < 0) return
@@ -143,7 +173,14 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
     const next = new Map(cells)
     if (aisleCols.has(c)) return // 过道列不可设置座位
     if (!cell || cell.type === 'empty') {
-      next.set(k, { row: r, col: c, type: 'seat', color: selectedColor, label: selectedLabel, state: 'EMPTY' })
+      next.set(k, {
+        row: r,
+        col: c,
+        type: 'seat',
+        color: selectedColor,
+        label: selectedLabel,
+        state: 'EMPTY',
+      })
     } else {
       // 已设座位：应用当前颜色
       next.set(k, { ...cell, color: selectedColor, label: selectedLabel })
@@ -162,8 +199,10 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   const handleMouseEnter = (r: number, c: number) => {
     if (!dragStart) return
     const { r: sr, c: sc } = cellKey(dragStart)
-    const minR = Math.min(sr, r), maxR = Math.max(sr, r)
-    const minC = Math.min(sc, c), maxC = Math.max(sc, c)
+    const minR = Math.min(sr, r),
+      maxR = Math.max(sr, r)
+    const minC = Math.min(sc, c),
+      maxC = Math.max(sc, c)
     const sel = new Set<string>()
     for (let i = minR; i <= maxR; i++) {
       for (let j = minC; j <= maxC; j++) {
@@ -183,7 +222,14 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
           next.set(k, { ...cell, color: selectedColor, label: selectedLabel })
         } else if (!cell) {
           const { r, c } = cellKey(k)
-          next.set(k, { row: r, col: c, type: 'seat', color: selectedColor, label: selectedLabel, state: 'EMPTY' })
+          next.set(k, {
+            row: r,
+            col: c,
+            type: 'seat',
+            color: selectedColor,
+            label: selectedLabel,
+            state: 'EMPTY',
+          })
         }
       })
       pushHistory(next)
@@ -219,7 +265,14 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
       for (let r = 1; r <= rows; r++) {
         for (let c = 1; c <= cols; c++) {
           if (aisleCols.has(c)) continue
-          next.set(key(r, c), { row: r, col: c, type: 'seat', color: selectedColor, label: selectedLabel, state: 'EMPTY' })
+          next.set(key(r, c), {
+            row: r,
+            col: c,
+            type: 'seat',
+            color: selectedColor,
+            label: selectedLabel,
+            state: 'EMPTY',
+          })
         }
       }
     } else if (selection.size > 0) {
@@ -228,12 +281,26 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
         if (mode === 'row') {
           for (let j = 1; j <= cols; j++) {
             if (aisleCols.has(j)) continue
-            next.set(key(r, j), { row: r, col: j, type: 'seat', color: selectedColor, label: selectedLabel, state: 'EMPTY' })
+            next.set(key(r, j), {
+              row: r,
+              col: j,
+              type: 'seat',
+              color: selectedColor,
+              label: selectedLabel,
+              state: 'EMPTY',
+            })
           }
         } else if (mode === 'col') {
           for (let i = 1; i <= rows; i++) {
             if (aisleCols.has(c)) continue
-            next.set(key(i, c), { row: i, col: c, type: 'seat', color: selectedColor, label: selectedLabel, state: 'EMPTY' })
+            next.set(key(i, c), {
+              row: i,
+              col: c,
+              type: 'seat',
+              color: selectedColor,
+              label: selectedLabel,
+              state: 'EMPTY',
+            })
           }
         }
       })
@@ -272,7 +339,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   }
   const addColor = (color: string, label: string) => {
     if (!color || !label.trim()) return
-    if (colorLabels.some((c) => c.color.toLowerCase() === color.toLowerCase())) {
+    if (
+      colorLabels.some((c) => c.color.toLowerCase() === color.toLowerCase())
+    ) {
       message.warning('该颜色已存在')
       return
     }
@@ -292,7 +361,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   }
   const renameColor = (color: string, label: string) => {
     if (!label.trim()) return
-    setColorLabels((prev) => prev.map((c) => (c.color === color ? { ...c, label: label.trim() } : c)))
+    setColorLabels((prev) =>
+      prev.map((c) => (c.color === color ? { ...c, label: label.trim() } : c)),
+    )
     if (selectedColor === color) setSelectedLabel(label.trim())
   }
 
@@ -300,7 +371,8 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
   const saveLayout = async () => {
     if (readOnly) return
     try {
-      const { createSeatLayout, updateSeatLayout } = await import('@/api/seatLayout')
+      const { createSeatLayout, updateSeatLayout } =
+        await import('@/api/seatLayout')
       const payload = {
         activityId,
         name: layoutName.trim() || '我的座位表',
@@ -382,7 +454,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
     setRows(t.rows)
     setCols(t.cols)
     setLayoutName(t.name)
-    setAisleCols(new Set((t.aisleCols || '').split(',').filter(Boolean).map(Number)))
+    setAisleCols(
+      new Set((t.aisleCols || '').split(',').filter(Boolean).map(Number)),
+    )
     setAisleRatio(Number(t.aisleWidthRatio) || 1.5)
     try {
       const parsed = JSON.parse(t.colorLabels || '[]') as ColorLabel[]
@@ -430,7 +504,18 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
     <div ref={editorRef}>
       {/* 工具栏 */}
       {!readOnly && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12, padding: 12, background: 'var(--soft)', borderRadius: 10 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 12,
+            padding: 12,
+            background: 'var(--soft)',
+            borderRadius: 10,
+          }}
+        >
           <Input
             value={layoutName}
             onChange={(e) => setLayoutName(e.target.value)}
@@ -439,10 +524,28 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             size="small"
           />
           <Space size={4}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>行</span>
-            <InputNumber min={1} max={100} value={rows} onChange={changeRows} size="small" style={{ width: 70 }} />
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>列</span>
-            <InputNumber min={1} max={100} value={cols} onChange={changeCols} size="small" style={{ width: 70 }} />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              行
+            </span>
+            <InputNumber
+              min={1}
+              max={100}
+              value={rows}
+              onChange={changeRows}
+              size="small"
+              style={{ width: 70 }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              列
+            </span>
+            <InputNumber
+              min={1}
+              max={100}
+              value={cols}
+              onChange={changeCols}
+              size="small"
+              style={{ width: 70 }}
+            />
           </Space>
 
           {/* 过道 */}
@@ -450,10 +553,23 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             trigger="click"
             content={
               <div style={{ maxWidth: 260 }}>
-                <div style={{ fontSize: 13, marginBottom: 8, color: 'var(--text-secondary)' }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    marginBottom: 8,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   点击列号切换过道（过道列不可设座位，宽度自动加宽）
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 260 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    maxWidth: 260,
+                  }}
+                >
                   {columnLetters.map((l, i) => (
                     <Tag
                       key={i}
@@ -461,12 +577,17 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                       style={{ cursor: 'pointer', margin: 0 }}
                       onClick={() => toggleAisle(i + 1)}
                     >
-                      {l}{aisleCols.has(i + 1) ? ' ║' : ''}
+                      {l}
+                      {aisleCols.has(i + 1) ? ' ║' : ''}
                     </Tag>
                   ))}
                 </div>
                 <Space size={6} style={{ marginTop: 10 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>过道宽度</span>
+                  <span
+                    style={{ fontSize: 13, color: 'var(--text-secondary)' }}
+                  >
+                    过道宽度
+                  </span>
                   <InputNumber
                     min={1.5}
                     max={2}
@@ -476,12 +597,18 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                     size="small"
                     style={{ width: 80 }}
                   />
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>倍</span>
+                  <span
+                    style={{ fontSize: 13, color: 'var(--text-secondary)' }}
+                  >
+                    倍
+                  </span>
                 </Space>
               </div>
             }
           >
-            <Button size="small" icon={<BorderOutlined />}>过道</Button>
+            <Button size="small" icon={<BorderOutlined />}>
+              过道
+            </Button>
           </Popover>
 
           {/* 颜色区域 */}
@@ -489,34 +616,90 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             trigger="click"
             content={
               <div style={{ width: 260 }}>
-                <div style={{ fontSize: 13, marginBottom: 8, color: 'var(--text-secondary)' }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    marginBottom: 8,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   点击色板 → 点击格子或拖拽批量上色
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: 6,
+                  }}
+                >
                   {colorLabels.map((p) => (
                     <div
                       key={p.color}
                       onClick={() => selectColor(p)}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer',
-                        borderRadius: 6, border: selectedColor === p.color ? '2px solid var(--brand)' : '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 6px',
+                        cursor: 'pointer',
+                        borderRadius: 6,
+                        border:
+                          selectedColor === p.color
+                            ? '2px solid var(--brand)'
+                            : '1px solid var(--border)',
                         fontSize: 13,
                       }}
                     >
-                      <span style={{ width: 16, height: 16, borderRadius: 4, background: p.color, flexShrink: 0 }} />
+                      <span
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: 4,
+                          background: p.color,
+                          flexShrink: 0,
+                        }}
+                      />
                       {p.label}
-                      {selectedColor === p.color && <CheckOutlined style={{ color: 'var(--brand)', marginLeft: 'auto' }} />}
+                      {selectedColor === p.color && (
+                        <CheckOutlined
+                          style={{
+                            color: 'var(--brand-text)',
+                            marginLeft: 'auto',
+                          }}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
-                <Button size="small" type="link" icon={<EditOutlined />} onClick={() => setColorManageOpen(true)} style={{ padding: 0, marginTop: 8 }}>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<EditOutlined />}
+                  onClick={() => setColorManageOpen(true)}
+                  style={{ padding: 0, marginTop: 8 }}
+                >
                   配色管理
                 </Button>
-                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>当前区域：{selectedLabel}</div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  当前区域：{selectedLabel}
+                </div>
               </div>
             }
           >
-            <Button size="small" style={{ background: selectedColor, color: '#fff', border: 'none' }}>
+            <Button
+              size="small"
+              style={{
+                background: selectedColor,
+                color: '#fff',
+                border: 'none',
+              }}
+            >
               {selectedLabel}
             </Button>
           </Popover>
@@ -526,9 +709,15 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
             trigger="click"
             content={
               <Space direction="vertical" style={{ width: 150 }}>
-                <Button size="small" block onClick={() => fill('row')}>按行填充（选中行）</Button>
-                <Button size="small" block onClick={() => fill('col')}>按列填充（选中列）</Button>
-                <Button size="small" block onClick={() => fill('all')}>矩形全部填充</Button>
+                <Button size="small" block onClick={() => fill('row')}>
+                  按行填充（选中行）
+                </Button>
+                <Button size="small" block onClick={() => fill('col')}>
+                  按列填充（选中列）
+                </Button>
+                <Button size="small" block onClick={() => fill('all')}>
+                  矩形全部填充
+                </Button>
               </Space>
             }
           >
@@ -537,25 +726,55 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
 
           {/* 模板 */}
           <Space size={4}>
-            <Button size="small" icon={<SaveOutlined />} onClick={saveLayout}>保存</Button>
-            <Button size="small" onClick={loadTemplates}>模板</Button>
+            <Button size="small" icon={<SaveOutlined />} onClick={saveLayout}>
+              保存
+            </Button>
+            <Button size="small" onClick={loadTemplates}>
+              模板
+            </Button>
           </Space>
 
           {/* 撤销重做 */}
           <Space size={4}>
-            <Button size="small" icon={<UndoOutlined />} onClick={undo} disabled={historyIdx < 0} />
-            <Button size="small" icon={<RedoOutlined />} onClick={redo} disabled={historyIdx + 1 >= history.length} />
+            <Button
+              size="small"
+              icon={<UndoOutlined />}
+              onClick={undo}
+              disabled={historyIdx < 0}
+            />
+            <Button
+              size="small"
+              icon={<RedoOutlined />}
+              onClick={redo}
+              disabled={historyIdx + 1 >= history.length}
+            />
           </Space>
 
-          <Button size="small" icon={<DownloadOutlined />} onClick={exportPng}>导出</Button>
+          <Button size="small" icon={<DownloadOutlined />} onClick={exportPng}>
+            导出
+          </Button>
           {selection.size > 0 && (
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={clearSelection}>
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={clearSelection}
+            >
               清除选中({selection.size})
             </Button>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>缩放</span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginLeft: 'auto',
+            }}
+          >
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              缩放
+            </span>
             <Slider
               min={50}
               max={200}
@@ -563,7 +782,9 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
               onChange={setZoom}
               style={{ width: 100, margin: '0 8px' }}
             />
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{zoom}%</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {zoom}%
+            </span>
           </div>
         </div>
       )}
@@ -583,13 +804,22 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
           style={{
             transform: `scale(${zoom / 100})`,
             transformOrigin: 'top left',
-            width: rowLabelWidth + cols * (cellSize + 2) + aisleCols.size * cellSize * (aisleRatio - 1),
+            width:
+              rowLabelWidth +
+              cols * (cellSize + 2) +
+              aisleCols.size * cellSize * (aisleRatio - 1),
           }}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
           {/* 列头 */}
-          <div style={{ display: 'flex', marginBottom: 2, paddingLeft: rowLabelWidth }}>
+          <div
+            style={{
+              display: 'flex',
+              marginBottom: 2,
+              paddingLeft: rowLabelWidth,
+            }}
+          >
             {columnLetters.map((l, i) => {
               const isAisle = aisleCols.has(i + 1)
               return (
@@ -598,8 +828,13 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                   style={{
                     width: isAisle ? cellSize * aisleRatio + 2 : cellSize + 2,
                     height: colHeaderH,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, color: isAisle ? 'var(--brand)' : 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 13,
+                    color: isAisle
+                      ? 'var(--brand-text)'
+                      : 'var(--text-secondary)',
                     fontWeight: isAisle ? 600 : 400,
                     cursor: readOnly ? 'default' : 'pointer',
                   }}
@@ -613,8 +848,18 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
           </div>
           {/* 行 */}
           {Array.from({ length: rows }, (_, ri) => ri + 1).map((r) => (
-            <div key={r} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-              <div style={{ width: rowLabelWidth, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+            <div
+              key={r}
+              style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}
+            >
+              <div
+                style={{
+                  width: rowLabelWidth,
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: 'var(--text-secondary)',
+                }}
+              >
                 {r}
               </div>
               {Array.from({ length: cols }, (_, ci) => ci + 1).map((c) => {
@@ -628,7 +873,11 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                     onMouseDown={() => handleMouseDown(r, c)}
                     onMouseEnter={() => handleMouseEnter(r, c)}
                     onClick={() => handleCellClick(r, c)}
-                    title={isAisle ? `第${c}列 过道` : `${r}排${columnLetters[c - 1]}列 · ${cell?.label || '空座'}${cell?.personName ? ` · ${cell.personName}` : ''}`}
+                    title={
+                      isAisle
+                        ? `第${c}列 过道`
+                        : `${r}排${columnLetters[c - 1]}列 · ${cell?.label || '空座'}${cell?.personName ? ` · ${cell.personName}` : ''}`
+                    }
                     style={{
                       width: w,
                       height: cellSize + 2,
@@ -637,18 +886,35 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
                       background: isAisle
                         ? SEAT_AISLE_HATCH
                         : cell?.type === 'seat'
-                          ? (cell.color || SEAT_DEFAULT_COLOR)
+                          ? cell.color || SEAT_DEFAULT_COLOR
                           : 'transparent',
-                      border: isAisle ? 'none' : isSelected ? '2px solid var(--brand)' : '1px solid var(--border)',
+                      border: isAisle
+                        ? 'none'
+                        : isSelected
+                          ? '2px solid var(--brand)'
+                          : '1px solid var(--border)',
                       boxSizing: 'border-box',
-                      cursor: readOnly ? 'default' : isAisle ? 'not-allowed' : 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: readOnly
+                        ? 'default'
+                        : isAisle
+                          ? 'not-allowed'
+                          : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                       fontSize: Math.max(8, cellSize * 0.35),
-                      color: isAisle || cell?.type === 'empty' ? 'var(--text-secondary)' : '#fff',
+                      color:
+                        isAisle || cell?.type === 'empty'
+                          ? 'var(--text-secondary)'
+                          : '#fff',
                       overflow: 'hidden',
                     }}
                   >
-                    {isAisle ? '║' : cell?.type === 'seat' ? (cell.label?.[0] ?? '') : ''}
+                    {isAisle
+                      ? '║'
+                      : cell?.type === 'seat'
+                        ? (cell.label?.[0] ?? '')
+                        : ''}
                   </div>
                 )
               })}
@@ -658,81 +924,195 @@ export default function SeatLayoutEditor({ value, activityId, readOnly, onSaved 
       </div>
 
       {/* 图例 */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+      <div
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}
+      >
         {colorLabels.map((p) => (
-          <span key={p.color} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-            <span style={{ width: 12, height: 12, borderRadius: 3, background: p.color }} />
+          <span
+            key={p.color}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 3,
+                background: p.color,
+              }}
+            />
             {p.label}
           </span>
         ))}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-          <span style={{ width: 12, height: 12, borderRadius: 3, border: '1px solid var(--border)' }} />
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <span
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 3,
+              border: '1px solid var(--border)',
+            }}
+          />
           空座
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-          <span style={{ width: 12, height: 12, borderRadius: 3, background: SEAT_AISLE_HATCH }} />
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <span
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 3,
+              background: SEAT_AISLE_HATCH,
+            }}
+          />
           过道
         </span>
       </div>
 
       {/* 模板弹窗 */}
-      <Modal
+      <FormSurface
+        mode="dialog"
         title="从模板新建"
         open={templateOpen}
         onCancel={() => setTemplateOpen(false)}
         footer={<Button onClick={() => setTemplateOpen(false)}>关闭</Button>}
       >
         {templates.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>暂无可用模板</div>
+          <div
+            style={{
+              textAlign: 'center',
+              padding: 24,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            暂无可用模板
+          </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 10,
+            }}
+          >
             {templates.map((t) => (
               <div
                 key={t.id}
                 onClick={() => applyTemplate(t)}
                 style={{
-                  border: '1px solid var(--border)', borderRadius: 8, padding: 12, cursor: 'pointer',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  cursor: 'pointer',
                   transition: 'all .15s',
                 }}
               >
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    marginTop: 4,
+                  }}
+                >
                   {t.rows} × {t.cols} · {t.templateCategory || '自定义'}
                 </div>
               </div>
             ))}
           </div>
         )}
-      </Modal>
+      </FormSurface>
 
       {/* 配色管理弹窗 */}
-      <Modal
+      <FormSurface
+        mode="dialog"
         title="配色管理"
         open={colorManageOpen}
         onCancel={() => setColorManageOpen(false)}
         footer={<Button onClick={() => setColorManageOpen(false)}>关闭</Button>}
       >
         <Space.Compact style={{ marginBottom: 12, display: 'flex' }}>
-          <ColorPicker size="small" value={newColor} onChangeComplete={(c) => setNewColor(c.toHexString())} />
-          <Input size="small" placeholder="标签，如 嘉宾区" maxLength={20} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
-          <Button size="small" type="primary" onClick={() => { addColor(newColor, newLabel); setNewLabel('') }}>新增</Button>
+          <ColorPicker
+            size="small"
+            value={newColor}
+            onChangeComplete={(c) => setNewColor(c.toHexString())}
+          />
+          <Input
+            size="small"
+            placeholder="标签，如 嘉宾区"
+            maxLength={20}
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+          />
+          <Button
+            size="small"
+            type="primary"
+            onClick={() => {
+              addColor(newColor, newLabel)
+              setNewLabel('')
+            }}
+          >
+            新增
+          </Button>
         </Space.Compact>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {colorLabels.map((c) => (
-            <div key={c.color} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ColorPicker size="small" value={c.color} onChangeComplete={(nc) => {
-                const next = colorLabels.map((x) => (x.color === c.color ? { ...x, color: nc.toHexString() } : x))
-                setColorLabels(next)
-                if (selectedColor === c.color) setSelectedColor(nc.toHexString())
-              }} />
-              <Input size="small" defaultValue={c.label} maxLength={20} style={{ flex: 1 }}
-                onPressEnter={(e) => renameColor(c.color, (e.target as HTMLInputElement).value)}
-                onBlur={(e) => renameColor(c.color, e.target.value)} />
-              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeColor(c.color)} />
+            <div
+              key={c.color}
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <ColorPicker
+                size="small"
+                value={c.color}
+                onChangeComplete={(nc) => {
+                  const next = colorLabels.map((x) =>
+                    x.color === c.color ? { ...x, color: nc.toHexString() } : x,
+                  )
+                  setColorLabels(next)
+                  if (selectedColor === c.color)
+                    setSelectedColor(nc.toHexString())
+                }}
+              />
+              <Input
+                size="small"
+                defaultValue={c.label}
+                maxLength={20}
+                style={{ flex: 1 }}
+                onPressEnter={(e) =>
+                  renameColor(c.color, (e.target as HTMLInputElement).value)
+                }
+                onBlur={(e) => renameColor(c.color, e.target.value)}
+              />
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => removeColor(c.color)}
+              />
             </div>
           ))}
         </div>
-      </Modal>
+      </FormSurface>
     </div>
   )
 }

@@ -1,8 +1,12 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useState } from 'react'
 import { App, Button, Checkbox, Form, Space } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
-import GlassModal from '@/components/glass/GlassModal'
-import { getRosterHeaders, saveSigninFields, getSigninFields } from '@/api/signin'
+import {
+  getRosterHeaders,
+  saveSigninFields,
+  getSigninFields,
+} from '@/api/signin'
 
 /**
  * 核验字段配置面板（GlassModal）。
@@ -77,7 +81,9 @@ export default function SigninFieldConfig({
       <Button icon={<SettingOutlined />} onClick={() => setOpen(true)}>
         核验字段配置
       </Button>
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="选择现场核验时需要核对的信息。"
         title="核验字段配置"
         open={open}
         onCancel={() => setOpen(false)}
@@ -90,17 +96,29 @@ export default function SigninFieldConfig({
           </Space>
         }
       >
-        <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+          }}
+        >
           选择需要核验的字段，勾选的字段在扫码签到时为必填项。
         </div>
         {loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>加载中…</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+            加载中…
+          </div>
         ) : headers.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>请先上传应签名单</div>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+            请先上传应签名单
+          </div>
         ) : (
           <Form form={form} layout="vertical">
             <Form.Item name="fields" style={{ marginBottom: 0 }}>
-              <Checkbox.Group style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Checkbox.Group
+                style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+              >
                 {headers.map((header) => (
                   <Checkbox key={header} value={header}>
                     {header}
@@ -110,7 +128,7 @@ export default function SigninFieldConfig({
             </Form.Item>
           </Form>
         )}
-      </GlassModal>
+      </FormSurface>
     </>
   )
 }

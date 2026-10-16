@@ -93,7 +93,7 @@ export default function ActivityEdit() {
         extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/activities/${activityId}`)}>返回详情</Button>}
       />
       <Spin spinning={loading}>
-        <GlassCard style={{ padding: 24, maxWidth: 720 }}>
+        <GlassCard style={{ padding: 16, maxWidth: 720 }}>
           <Form form={form} layout="vertical">
             <Form.Item name="name" label="活动名称" rules={[{ required: true, message: '请输入活动名称' }]}>
               <Input maxLength={100} />

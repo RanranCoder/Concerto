@@ -117,6 +117,7 @@ export default function SigninRosterList({ activityId, status, onStatusChange, r
       {
         title: '操作',
         key: 'action',
+        align: 'right',
         width: 70,
         render: (_: unknown, r: SigninRosterVO) => (
           <Popconfirm title="确认删除该名单行？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">

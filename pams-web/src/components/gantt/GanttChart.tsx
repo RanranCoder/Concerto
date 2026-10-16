@@ -1,8 +1,14 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input, DatePicker, Slider, Empty, Button } from 'antd'
 import dayjs from 'dayjs'
-import GlassModal from '@/components/glass/GlassModal'
-import { dayRange, buildDeps, todayStr, taskToPixels, type GanttTask } from './gantt.utils'
+import {
+  dayRange,
+  buildDeps,
+  todayStr,
+  taskToPixels,
+  type GanttTask,
+} from './gantt.utils'
 
 interface GanttChartProps {
   tasks: GanttTask[]
@@ -21,12 +27,18 @@ const BAR_H = 26
 function barFill(deptName?: string): string {
   if (!deptName) return 'var(--text-secondary)'
   let h = 0
-  for (let i = 0; i < deptName.length; i++) h = (h * 31 + deptName.charCodeAt(i)) % 360
+  for (let i = 0; i < deptName.length; i++)
+    h = (h * 31 + deptName.charCodeAt(i)) % 360
   const v = 120 + (h % 5) * 18 // 120-192 灰阶
   return `rgb(${v}, ${v + 8}, ${v + 20})`
 }
 
-export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 24, onEdit }: GanttChartProps) {
+export default function GanttChart({
+  tasks,
+  onUpdate,
+  pxPerDay: pxPerDayProp = 24,
+  onEdit,
+}: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [editing, setEditing] = useState<GanttTask | null>(null)
@@ -48,8 +60,14 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
   // 动态计算pxPerDay：确保甘特图至少填满容器宽度
   const pxPerDay = useMemo(() => {
     if (!tasks.length || !containerWidth) return pxPerDayProp
-    const start = tasks.reduce((a, t) => (t.startDate < a ? t.startDate : a), tasks[0].startDate)
-    const end = tasks.reduce((a, t) => (t.endDate > a ? t.endDate : a), tasks[0].endDate)
+    const start = tasks.reduce(
+      (a, t) => (t.startDate < a ? t.startDate : a),
+      tasks[0].startDate,
+    )
+    const end = tasks.reduce(
+      (a, t) => (t.endDate > a ? t.endDate : a),
+      tasks[0].endDate,
+    )
     const days = Math.max(dayRange(start, end), 1)
     const gridWidth = containerWidth - LABEL_W
     // 计算需要的pxPerDay来填满容器，但不超过原值的3倍
@@ -59,8 +77,14 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
 
   const range = useMemo(() => {
     if (!tasks.length) return { start: todayStr(), days: 30 }
-    const start = tasks.reduce((a, t) => (t.startDate < a ? t.startDate : a), tasks[0].startDate)
-    const end = tasks.reduce((a, t) => (t.endDate > a ? t.endDate : a), tasks[0].endDate)
+    const start = tasks.reduce(
+      (a, t) => (t.startDate < a ? t.startDate : a),
+      tasks[0].startDate,
+    )
+    const end = tasks.reduce(
+      (a, t) => (t.endDate > a ? t.endDate : a),
+      tasks[0].endDate,
+    )
     return { start, days: Math.max(dayRange(start, end), 1) }
   }, [tasks])
 
@@ -68,11 +92,16 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
   const width = LABEL_W + gridW
   const height = HEADER_H + tasks.length * ROW_HEIGHT
   const deps = useMemo(() => buildDeps(tasks), [tasks])
-  const todayX = LABEL_W + Math.max(dayjs(todayStr()).diff(dayjs(range.start), 'day'), 0) * pxPerDay
+  const todayX =
+    LABEL_W +
+    Math.max(dayjs(todayStr()).diff(dayjs(range.start), 'day'), 0) * pxPerDay
 
   const rows = useMemo(() => {
     return tasks.map((t, i) => {
-      const offset = Math.max(dayjs(t.startDate).diff(dayjs(range.start), 'day'), 0)
+      const offset = Math.max(
+        dayjs(t.startDate).diff(dayjs(range.start), 'day'),
+        0,
+      )
       const px = taskToPixels(t, pxPerDay, offset)
       const y = HEADER_H + i * ROW_HEIGHT + (ROW_HEIGHT - BAR_H) / 2
       return { t, y, px: { left: px.left + LABEL_W, width: px.width } }
@@ -130,7 +159,14 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
         <rect x={0} y={0} width={width} height={HEADER_H} fill="var(--soft)" />
         {months.map((m) => (
           <g key={m.label}>
-            <line x1={m.x} y1={0} x2={m.x} y2={HEADER_H} stroke="var(--border)" strokeDasharray="3 3" />
+            <line
+              x1={m.x}
+              y1={0}
+              x2={m.x}
+              y2={HEADER_H}
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+            />
             <text x={m.x + 4} y={20} fill="var(--text-secondary)" fontSize={11}>
               {m.label}
             </text>
@@ -159,7 +195,13 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
           strokeWidth={1.5}
           strokeDasharray="4 3"
         />
-        <text x={todayX - 6} y={HEADER_H - 14} fill="var(--brand)" fontSize={10} textAnchor="end">
+        <text
+          x={todayX - 6}
+          y={HEADER_H - 14}
+          fill="var(--brand)"
+          fontSize={10}
+          textAnchor="end"
+        >
           今日
         </text>
 
@@ -202,7 +244,13 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             onClick={() => (onEdit ? onEdit(t) : setEditing(t))}
           >
             <g clipPath="url(#label-clip)">
-              <text x={8} y={y + 16} fill="var(--text-primary)" fontSize={12} style={{ userSelect: 'none' }}>
+              <text
+                x={8}
+                y={y + 16}
+                fill="var(--text-primary)"
+                fontSize={12}
+                style={{ userSelect: 'none' }}
+              >
                 {t.name}
               </text>
             </g>
@@ -255,42 +303,67 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
       </svg>
 
       {/* 编辑弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="维护任务安排、进度与依赖关系。"
         open={!!editing}
         title={editing ? `编辑任务：${editing.name}` : ''}
         onCancel={() => setEditing(null)}
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <Button onClick={() => setEditing(null)}>取消</Button>
-            <Button type="primary" onClick={saveEdit}>保存</Button>
+            <Button type="primary" onClick={saveEdit}>
+              保存
+            </Button>
           </div>
         }
       >
         {editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>任务名称</div>
+              <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>
+                任务名称
+              </div>
               <Input
                 value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                onChange={(e) =>
+                  setEditing({ ...editing, name: e.target.value })
+                }
                 placeholder="任务名称"
               />
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>开始日期</div>
+                <div
+                  style={{ marginBottom: 6, color: 'var(--text-secondary)' }}
+                >
+                  开始日期
+                </div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={dayjs(editing.startDate)}
-                  onChange={(d) => d && setEditing({ ...editing, startDate: d.format('YYYY-MM-DD') })}
+                  onChange={(d) =>
+                    d &&
+                    setEditing({
+                      ...editing,
+                      startDate: d.format('YYYY-MM-DD'),
+                    })
+                  }
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ marginBottom: 6, color: 'var(--text-secondary)' }}>结束日期</div>
+                <div
+                  style={{ marginBottom: 6, color: 'var(--text-secondary)' }}
+                >
+                  结束日期
+                </div>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={dayjs(editing.endDate)}
-                  onChange={(d) => d && setEditing({ ...editing, endDate: d.format('YYYY-MM-DD') })}
+                  onChange={(d) =>
+                    d &&
+                    setEditing({ ...editing, endDate: d.format('YYYY-MM-DD') })
+                  }
                 />
               </div>
             </div>
@@ -307,7 +380,7 @@ export default function GanttChart({ tasks, onUpdate, pxPerDay: pxPerDayProp = 2
             </div>
           </div>
         )}
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

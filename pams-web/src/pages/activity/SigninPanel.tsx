@@ -1,10 +1,26 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnsType } from 'antd/es/table'
-import { App, Button, DatePicker, Empty, Form, Input, Popconfirm, Select, Space, Tag } from 'antd'
-import { DeleteOutlined, DownloadOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import {
+  App,
+  Button,
+  DatePicker,
+  Empty,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Space,
+  Tag,
+} from 'antd'
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import SigninQR from '@/components/signin/SigninQR'
 import SignInGroupList from '@/components/signin/SignInGroupList'
@@ -56,7 +72,13 @@ function exportCsv(rows: SigninVO[]) {
   URL.revokeObjectURL(url)
 }
 
-export default function SigninPanel({ activityId, active = true }: { activityId: number; active?: boolean }) {
+export default function SigninPanel({
+  activityId,
+  active = true,
+}: {
+  activityId: number
+  active?: boolean
+}) {
   const { message } = App.useApp()
   const [list, setList] = useState<SigninVO[]>([])
   const [count, setCount] = useState(0)
@@ -67,15 +89,21 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
   const [form] = Form.useForm()
 
   // 应签名单：汇总 / 刷新信号（上传、字段配置、补签、扫码、手动签到均 bump）
-  const isMinisterOrAbove = (useAuthStore((s) => s.user?.roleLevel) ?? 0) >= 3
-  const [rosterSummaryData, setRosterSummaryData] = useState<SigninSummaryVO | null>(null)
+  const isMinisterOrAbove = useAuthStore(
+    (s) => s.user?.permissions?.includes('checkin:manage') ?? false,
+  )
+  const [rosterSummaryData, setRosterSummaryData] =
+    useState<SigninSummaryVO | null>(null)
   const [rosterVersion, setRosterVersion] = useState(0)
   const bumpRoster = () => setRosterVersion((v) => v + 1)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [rows, c] = await Promise.all([listSignins(activityId), countSignins(activityId)])
+      const [rows, c] = await Promise.all([
+        listSignins(activityId),
+        countSignins(activityId),
+      ])
       setList(rows ?? [])
       setCount(c ?? 0)
     } catch {
@@ -127,7 +155,9 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
         className: values.className || null,
         identityType: values.identityType || null,
         signType: values.signType ?? 'MANUAL',
-        signTime: values.signTime ? values.signTime.format('YYYY-MM-DD HH:mm:ss') : null,
+        signTime: values.signTime
+          ? values.signTime.format('YYYY-MM-DD HH:mm:ss')
+          : null,
         location: values.location || null,
       }
       await createSignin(payload)
@@ -154,30 +184,57 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
   const columns = useMemo<ColumnsType<SigninVO>>(
     () => [
       { title: '姓名', dataIndex: 'name', key: 'name' },
-      { title: '学号', dataIndex: 'studentNo', key: 'studentNo', render: (v: string | null) => v || '-' },
-      { title: '班级', dataIndex: 'className', key: 'className', render: (v: string | null) => v || '-' },
-      { title: '身份', dataIndex: 'identityType', key: 'identityType', render: (v: string | null) => v || '-' },
+      {
+        title: '学号',
+        dataIndex: 'studentNo',
+        key: 'studentNo',
+        render: (v: string | null) => v || '-',
+      },
+      {
+        title: '班级',
+        dataIndex: 'className',
+        key: 'className',
+        render: (v: string | null) => v || '-',
+      },
+      {
+        title: '身份',
+        dataIndex: 'identityType',
+        key: 'identityType',
+        render: (v: string | null) => v || '-',
+      },
       {
         title: '签到方式',
         dataIndex: 'signType',
         key: 'signType',
         width: 100,
-        render: (v: string | null) => (v ? SIGN_TYPE_TEXT[v] ?? v : '-'),
+        render: (v: string | null) => (v ? (SIGN_TYPE_TEXT[v] ?? v) : '-'),
       },
       {
         title: '签到时间',
         dataIndex: 'signTime',
         key: 'signTime',
         width: 160,
-        render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+        render: (v: string | null) =>
+          v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
       },
-      { title: '定位', dataIndex: 'location', key: 'location', render: (v: string | null) => v || '-' },
+      {
+        title: '定位',
+        dataIndex: 'location',
+        key: 'location',
+        render: (v: string | null) => v || '-',
+      },
       {
         title: '操作',
         key: 'action',
+        align: 'right',
         width: 80,
         render: (_: unknown, r: SigninVO) => (
-          <Popconfirm title="确认删除该签到记录？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+          <Popconfirm
+            title="确认删除该签到记录？"
+            onConfirm={() => handleDelete(r.id)}
+            okText="删除"
+            cancelText="取消"
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         ),
@@ -193,10 +250,21 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
     <div>
       {/* 应签名单区（仅部长及以上：后端名单/字段/补签接口 @PreAuthorize 部长及以上） */}
       {isMinisterOrAbove && (
-        <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-          <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+          <Space
+            wrap
+            style={{ display: 'flex', justifyContent: 'space-between' }}
+          >
             <Space wrap>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand)' }}>应签名单</span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--brand-text)',
+                }}
+              >
+                应签名单
+              </span>
               <Tag color="red">应签 {summary?.expected ?? 0}</Tag>
               <Tag color="green">已签 {summary?.signed ?? 0}</Tag>
               <Tag color="orange">未签 {summary?.unsigned ?? 0}</Tag>
@@ -204,28 +272,49 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
           </Space>
 
           <div style={{ marginTop: 12 }}>
-            <SignInGroupList activityId={activityId} reloadKey={rosterVersion} onChanged={refreshAll} />
+            <SignInGroupList
+              activityId={activityId}
+              reloadKey={rosterVersion}
+              onChanged={refreshAll}
+            />
           </div>
         </GlassCard>
       )}
 
-      <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <Space wrap style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+        <Space
+          wrap
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 12,
+          }}
+        >
           <span style={{ fontSize: 14, fontWeight: 600 }}>扫码签到</span>
           <SigninFieldConfig activityId={activityId} onChanged={refreshAll} />
         </Space>
-        <SigninQR activityId={activityId} active={active} onSigned={refreshAll} />
+        <SigninQR
+          activityId={activityId}
+          active={active}
+          onSigned={refreshAll}
+        />
       </GlassCard>
-      <GlassCard style={{ padding: 16, marginBottom: 12 }}>
-        <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+        <Space
+          wrap
+          style={{ display: 'flex', justifyContent: 'space-between' }}
+        >
           <Space wrap>
-            <Tag color="red" style={{ fontSize: 14, padding: '2px 12px' }}>
-              总签到 {count} 人
-            </Tag>
+            {/* 不再内联放字号/内边距：同页其它 Tag 都走 global.css 的 caption 档，这个标签会高出一截 */}
+            <Tag color="red">总签到 {count} 人</Tag>
             <SearchOutlined style={{ color: 'var(--text-secondary)' }} />
           </Space>
           <Space wrap>
-            <Button icon={<DownloadOutlined />} onClick={() => exportCsv(list)} disabled={list.length === 0}>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => exportCsv(list)}
+              disabled={list.length === 0}
+            >
               导出 CSV
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -240,11 +329,17 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
         dataSource={list.map((x) => ({ ...x, key: x.id }))}
         rowKey="id"
         loading={loading}
-        pagination={list.length > 10 ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` } : false}
+        pagination={
+          list.length > 10
+            ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` }
+            : false
+        }
         locale={{ emptyText: <Empty description="暂无签到记录" /> }}
       />
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="补录人员、签到方式和时间，保存后加入签到记录。"
         title="新增签到"
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
@@ -252,13 +347,22 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
           <Space>
             <Button onClick={() => setModalOpen(false)}>取消</Button>
             <Button type="primary" loading={saving} onClick={handleSave}>
-              确认
+              保存签到记录
             </Button>
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={formInit}>
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={formInit}
+        >
+          <Form.Item
+            name="name"
+            label="姓名"
+            rules={[{ required: true, message: '请输入姓名' }]}
+          >
             <Input maxLength={50} placeholder="请输入姓名" />
           </Form.Item>
           <Form.Item name="studentNo" label="学号">
@@ -268,10 +372,19 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
             <Input maxLength={100} placeholder="请输入班级" />
           </Form.Item>
           <Form.Item name="identityType" label="身份">
-            <Select placeholder="选择身份" allowClear options={IDENTITY_OPTIONS.map((v) => ({ value: v, label: v }))} />
+            <Select
+              placeholder="选择身份"
+              allowClear
+              options={IDENTITY_OPTIONS.map((v) => ({ value: v, label: v }))}
+            />
           </Form.Item>
           <Space size={12} style={{ display: 'flex' }}>
-            <Form.Item name="signType" label="签到方式" style={{ flex: 1 }} rules={[{ required: true, message: '请选择签到方式' }]}>
+            <Form.Item
+              name="signType"
+              label="签到方式"
+              style={{ flex: 1 }}
+              rules={[{ required: true, message: '请选择签到方式' }]}
+            >
               <Select
                 options={[
                   { value: 'MANUAL', label: '手动' },
@@ -280,14 +393,18 @@ export default function SigninPanel({ activityId, active = true }: { activityId:
               />
             </Form.Item>
             <Form.Item name="signTime" label="签到时间" style={{ flex: 1 }}>
-              <DatePicker showTime style={{ width: '100%' }} placeholder="选择时间" />
+              <DatePicker
+                showTime
+                style={{ width: '100%' }}
+                placeholder="选择时间"
+              />
             </Form.Item>
           </Space>
           <Form.Item name="location" label="定位">
             <Input maxLength={255} placeholder="如 学院楼 A301" />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }

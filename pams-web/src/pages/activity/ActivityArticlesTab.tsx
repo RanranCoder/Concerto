@@ -1,3 +1,4 @@
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useState } from 'react'
 import {
   App,
@@ -79,7 +80,7 @@ export default function ActivityArticlesTab({
   const user = useAuthStore((s) => s.user)
   const { message } = App.useApp()
   // 管理/审核权限对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
-  const canManage = user?.roleCode === 'MEDIA_LEADER' || (user?.roleLevel ?? 0) >= 4
+  const canManage = (user?.permissions ?? []).includes('content:manage')
 
   const [articles, setArticles] = useState<ArticleVO[]>([])
   const [users, setUsers] = useState<UserVO[]>([])
@@ -163,10 +164,18 @@ export default function ActivityArticlesTab({
         : activity?.endDate
           ? dayjs(activity.endDate)
           : dayjs()
-    const deadline = (type === 'PREHEAT' ? base.subtract(3, 'day') : base.add(2, 'day')).format('YYYY-MM-DDTHH:mm:ss')
+    const deadline = (
+      type === 'PREHEAT' ? base.subtract(3, 'day') : base.add(2, 'day')
+    ).format('YYYY-MM-DDTHH:mm:ss')
     const title = `${activity?.name ?? '活动'}${type === 'PREHEAT' ? '预热' : '报道'}推文`
     try {
-      await createArticle({ title, articleType: type, activityId, deadline, authorId: user?.id })
+      await createArticle({
+        title,
+        articleType: type,
+        activityId,
+        deadline,
+        authorId: user?.id,
+      })
       message.success(type === 'PREHEAT' ? '已创建预热推文' : '已创建报道推文')
       fetchList()
     } catch {
@@ -224,7 +233,11 @@ export default function ActivityArticlesTab({
     }
     setReviewing(true)
     try {
-      await reviewArticle(reviewTarget.id, approved, values.comment?.trim() || undefined)
+      await reviewArticle(
+        reviewTarget.id,
+        approved,
+        values.comment?.trim() || undefined,
+      )
       message.success(approved ? '审核通过，待发布' : '已驳回')
       setReviewTarget(null)
       reviewForm.resetFields()
@@ -268,7 +281,10 @@ export default function ActivityArticlesTab({
     }
     setUpdating(true)
     try {
-      await updateArticleStats(statsTarget.id, { readCount: values.readCount ?? 0, likeCount: values.likeCount ?? 0 })
+      await updateArticleStats(statsTarget.id, {
+        readCount: values.readCount ?? 0,
+        likeCount: values.likeCount ?? 0,
+      })
       message.success('数据已更新')
       setStatsTarget(null)
       statsForm.resetFields()
@@ -290,6 +306,179 @@ export default function ActivityArticlesTab({
     }
   }
 
+  if (modalOpen)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="先确定活动与负责人，再补充底稿、摘要和排版长图。"
+        title={editing ? '编辑推文' : '新建推文'}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setModalOpen(false)}>取消</Button>
+            <Button type="primary" loading={saving} onClick={handleSave}>
+              保存
+            </Button>
+          </Space>
+        }
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          key={editing ? `article-edit-${editing.id}` : 'article-create'}
+          initialValues={
+            editing
+              ? {
+                  title: editing.title,
+                  articleType: editing.articleType,
+                  authorId: editing.authorId ?? undefined,
+                  deadline: editing.deadline
+                    ? dayjs(editing.deadline)
+                    : undefined,
+                  summary: editing.summary ?? undefined,
+                  content: editing.content ?? undefined,
+                  imageUrls: editing.imageUrls ?? [],
+                }
+              : { articleType: 'REPORT', deadline: dayjs().endOf('day') }
+          }
+        >
+          <FormSection title="稿件信息">
+            <Form.Item
+              className="form-field-wide"
+              name="title"
+              label="标题"
+              rules={[{ required: true, message: '请输入推文标题' }]}
+            >
+              <Input maxLength={150} placeholder="推文标题" />
+            </Form.Item>
+            <Form.Item
+              name="articleType"
+              label="类型"
+              rules={[{ required: true, message: '请选择类型' }]}
+            >
+              <Select
+                options={ARTICLE_TYPE_OPTIONS}
+                placeholder="预热 / 报道 / 宣传视频"
+              />
+            </Form.Item>
+            <Form.Item
+              name="authorId"
+              label="负责人"
+              rules={[{ required: true, message: '请指定负责人' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                options={users.map((u) => ({ value: u.id, label: u.realName }))}
+                placeholder="选择负责人"
+                disabled={!!editing && !canManage}
+              />
+            </Form.Item>
+            <Form.Item
+              name="deadline"
+              label="截止时间"
+              rules={[{ required: true, message: '请设置截止时间' }]}
+            >
+              <DatePicker showTime style={{ width: '100%' }} />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="摘要与底稿">
+            <Form.Item name="summary" label="摘要">
+              <Input.TextArea
+                rows={3}
+                maxLength={500}
+                placeholder="一句话摘要"
+              />
+            </Form.Item>
+            <Form.Item name="content" label="底稿（可选）">
+              <Input.TextArea
+                rows={6}
+                maxLength={20000}
+                placeholder="可选文字底稿，排版以长图截图为准"
+              />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="排版长图">
+            <Form.Item
+              className="form-field-wide"
+              name="imageUrls"
+              label="长图截图"
+            >
+              <LongImageUpload />
+            </Form.Item>
+          </FormSection>
+        </Form>
+      </FormSurface>
+    )
+
+  if (!!reviewTarget)
+    return (
+      <FormSurface
+        mode="workspace"
+        description="查看完整稿件与长图，在下方填写审核意见。"
+        title="审核推文"
+        open={!!reviewTarget}
+        onCancel={() => {
+          setReviewTarget(null)
+          reviewForm.resetFields()
+        }}
+        footer={
+          <Space>
+            <Button
+              danger
+              loading={reviewing}
+              onClick={() => handleReview(false)}
+            >
+              驳回
+            </Button>
+            <Button
+              type="primary"
+              loading={reviewing}
+              icon={<CheckOutlined />}
+              onClick={() => handleReview(true)}
+            >
+              通过（待发布）
+            </Button>
+          </Space>
+        }
+      >
+        {reviewTarget && (
+          <>
+            <Typography.Title level={5} style={{ marginTop: 0 }}>
+              {reviewTarget.title}
+            </Typography.Title>
+            <Typography.Paragraph type="secondary">
+              {reviewTarget.summary}
+            </Typography.Paragraph>
+            {reviewTarget.imageUrls?.map((u) => (
+              <img
+                key={u}
+                src={u}
+                alt="长图"
+                style={{
+                  width: '100%',
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  display: 'block',
+                }}
+              />
+            ))}
+            <Form form={reviewForm} layout="vertical" preserve={false}>
+              <Form.Item name="comment" label="审核意见">
+                <Input.TextArea
+                  rows={3}
+                  maxLength={500}
+                  placeholder="选填，驳回时建议填写原因"
+                />
+              </Form.Item>
+            </Form>
+          </>
+        )}
+      </FormSurface>
+    )
+
   return (
     <div>
       <Space style={{ marginBottom: 16 }} wrap>
@@ -298,10 +487,16 @@ export default function ActivityArticlesTab({
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建推文
             </Button>
-            <Button icon={<ThunderboltOutlined />} onClick={() => quickCreate('PREHEAT')}>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => quickCreate('PREHEAT')}
+            >
               快捷创建预热
             </Button>
-            <Button icon={<ThunderboltOutlined />} onClick={() => quickCreate('REPORT')}>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => quickCreate('REPORT')}
+            >
               快捷创建报道
             </Button>
           </>
@@ -333,14 +528,28 @@ export default function ActivityArticlesTab({
                       <Tag color={ARTICLE_STATUS_COLOR[a.status] ?? 'default'}>
                         {ARTICLE_STATUS_MAP[a.status] ?? a.status}
                       </Tag>
-                      <Tag>{ARTICLE_TYPE_MAP[a.articleType] ?? a.articleType}</Tag>
+                      <Tag>
+                        {ARTICLE_TYPE_MAP[a.articleType] ?? a.articleType}
+                      </Tag>
                     </Space>
                   </div>
 
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                      marginBottom: 8,
+                    }}
+                  >
                     负责人：{userNameOf(a.authorId)} · 截止：
-                    <span style={{ color: isOverdue(a) ? 'var(--brand)' : undefined }}>
-                      {a.deadline ? dayjs(a.deadline).format('YYYY-MM-DD HH:mm') : '-'}
+                    <span
+                      style={{
+                        color: isOverdue(a) ? 'var(--danger)' : undefined,
+                      }}
+                    >
+                      {a.deadline
+                        ? dayjs(a.deadline).format('YYYY-MM-DD HH:mm')
+                        : '-'}
                     </span>
                   </div>
 
@@ -352,13 +561,25 @@ export default function ActivityArticlesTab({
                           src={u}
                           alt="长图"
                           onClick={() => setPreviewTarget(u)}
-                          style={{ maxWidth: 60, maxHeight: 80, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
+                          style={{
+                            maxWidth: 60,
+                            maxHeight: 80,
+                            objectFit: 'cover',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                          }}
                         />
                       ))}
                     </div>
                   ) : null}
 
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                      marginBottom: 8,
+                    }}
+                  >
                     {a.wxUrl ? (
                       <a href={a.wxUrl} target="_blank" rel="noreferrer">
                         公众号链接
@@ -373,41 +594,74 @@ export default function ActivityArticlesTab({
                   </div>
 
                   <Space size="small" wrap>
-                    {(a.status === 'DRAFT' || a.status === 'REJECTED') && (canManage || a.authorId === user?.id) && (
-                      <>
-                        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(a)}>
-                          编辑
-                        </Button>
-                        <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(a)}>
-                          提交
-                        </Button>
-                        <Popconfirm
-                          title="确认删除该推文？"
-                          onConfirm={() => handleDelete(a.id)}
-                          okText="删除"
-                          cancelText="取消"
-                        >
-                          <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                            删除
+                    {(a.status === 'DRAFT' || a.status === 'REJECTED') &&
+                      (canManage || a.authorId === user?.id) && (
+                        <>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => openEdit(a)}
+                          >
+                            编辑
                           </Button>
-                        </Popconfirm>
-                      </>
-                    )}
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<SendOutlined />}
+                            onClick={() => handleSubmit(a)}
+                          >
+                            提交
+                          </Button>
+                          <Popconfirm
+                            title="确认删除该推文？"
+                            onConfirm={() => handleDelete(a.id)}
+                            okText="删除"
+                            cancelText="取消"
+                          >
+                            <Button
+                              type="link"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                            >
+                              删除
+                            </Button>
+                          </Popconfirm>
+                        </>
+                      )}
                     {a.status === 'PENDING' && canManage && (
-                      <Button type="link" size="small" icon={<AuditOutlined />} onClick={() => setReviewTarget(a)}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<AuditOutlined />}
+                        onClick={() => setReviewTarget(a)}
+                      >
                         审核
                       </Button>
                     )}
-                    {a.status === 'APPROVED' && (canManage || a.authorId === user?.id) && (
-                      <Button type="link" size="small" icon={<SendOutlined />} onClick={() => setPublishTarget(a)}>
-                        标记发布
-                      </Button>
-                    )}
-                    {a.status === 'PUBLISHED' && (canManage || a.authorId === user?.id) && (
-                      <Button type="link" size="small" icon={<BarChartOutlined />} onClick={() => setStatsTarget(a)}>
-                        更新数据
-                      </Button>
-                    )}
+                    {a.status === 'APPROVED' &&
+                      (canManage || a.authorId === user?.id) && (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<SendOutlined />}
+                          onClick={() => setPublishTarget(a)}
+                        >
+                          标记发布
+                        </Button>
+                      )}
+                    {a.status === 'PUBLISHED' &&
+                      (canManage || a.authorId === user?.id) && (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<BarChartOutlined />}
+                          onClick={() => setStatsTarget(a)}
+                        >
+                          更新数据
+                        </Button>
+                      )}
                   </Space>
                 </GlassCard>
               </Col>
@@ -417,112 +671,12 @@ export default function ActivityArticlesTab({
       </Spin>
 
       {/* 新建 / 编辑（activityId 固定为当前活动，不显示活动下拉） */}
-      <GlassModal
-        title={editing ? '编辑推文' : '新建推文'}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          key={editing ? `article-edit-${editing.id}` : 'article-create'}
-          initialValues={
-            editing
-              ? {
-                  title: editing.title,
-                  articleType: editing.articleType,
-                  authorId: editing.authorId ?? undefined,
-                  deadline: editing.deadline ? dayjs(editing.deadline) : undefined,
-                  summary: editing.summary ?? undefined,
-                  content: editing.content ?? undefined,
-                  imageUrls: editing.imageUrls ?? [],
-                }
-              : { articleType: 'REPORT', deadline: dayjs().endOf('day') }
-          }
-        >
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入推文标题' }]}>
-            <Input maxLength={150} placeholder="推文标题" />
-          </Form.Item>
-          <Form.Item name="articleType" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
-            <Select options={ARTICLE_TYPE_OPTIONS} placeholder="预热 / 报道 / 宣传视频" />
-          </Form.Item>
-          <Form.Item name="authorId" label="负责人" rules={[{ required: true, message: '请指定负责人' }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              options={users.map((u) => ({ value: u.id, label: u.realName }))}
-              placeholder="选择负责人"
-              disabled={!!editing && !canManage}
-            />
-          </Form.Item>
-          <Form.Item name="deadline" label="截止时间" rules={[{ required: true, message: '请设置截止时间' }]}>
-            <DatePicker showTime style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="summary" label="摘要">
-            <Input.TextArea rows={3} maxLength={500} placeholder="一句话摘要" />
-          </Form.Item>
-          <Form.Item name="content" label="底稿（可选）">
-            <Input.TextArea rows={6} maxLength={20000} placeholder="可选文字底稿，排版以长图截图为准" />
-          </Form.Item>
-          <Form.Item name="imageUrls" label="长图截图">
-            <LongImageUpload />
-          </Form.Item>
-        </Form>
-      </GlassModal>
 
       {/* 审核（以长图为审核载体） */}
-      <GlassModal
-        title="审核推文"
-        open={!!reviewTarget}
-        onCancel={() => {
-          setReviewTarget(null)
-          reviewForm.resetFields()
-        }}
-        footer={
-          <Space>
-            <Button danger loading={reviewing} onClick={() => handleReview(false)}>
-              驳回
-            </Button>
-            <Button type="primary" loading={reviewing} icon={<CheckOutlined />} onClick={() => handleReview(true)}>
-              通过（待发布）
-            </Button>
-          </Space>
-        }
-      >
-        {reviewTarget && (
-          <>
-            <Typography.Title level={5} style={{ marginTop: 0 }}>
-              {reviewTarget.title}
-            </Typography.Title>
-            <Typography.Paragraph type="secondary">{reviewTarget.summary}</Typography.Paragraph>
-            {reviewTarget.imageUrls?.map((u) => (
-              <img
-                key={u}
-                src={u}
-                alt="长图"
-                style={{ width: '100%', borderRadius: 8, marginBottom: 8, display: 'block' }}
-              />
-            ))}
-            <Form form={reviewForm} layout="vertical" preserve={false}>
-              <Form.Item name="comment" label="审核意见">
-                <Input.TextArea rows={3} maxLength={500} placeholder="选填，驳回时建议填写原因" />
-              </Form.Item>
-            </Form>
-          </>
-        )}
-      </GlassModal>
 
       {/* 标记发布 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
         title="标记发布"
         open={!!publishTarget}
         onCancel={() => {
@@ -541,19 +695,28 @@ export default function ActivityArticlesTab({
         {publishTarget && (
           <>
             <Typography.Paragraph type="secondary">
-              「{publishTarget.title}」已通过审核，填公众号发布链接后完成发布归档。
+              「{publishTarget.title}
+              」已通过审核，填公众号发布链接后完成发布归档。
             </Typography.Paragraph>
             <Form form={publishForm} layout="vertical" preserve={false}>
-              <Form.Item name="wxUrl" label="公众号链接" rules={[{ required: true, message: '请输入公众号链接' }]}>
-                <Input maxLength={500} placeholder="https://mp.weixin.qq.com/s/..." />
+              <Form.Item
+                name="wxUrl"
+                label="公众号链接"
+                rules={[{ required: true, message: '请输入公众号链接' }]}
+              >
+                <Input
+                  maxLength={500}
+                  placeholder="https://mp.weixin.qq.com/s/..."
+                />
               </Form.Item>
             </Form>
           </>
         )}
-      </GlassModal>
+      </FormSurface>
 
       {/* 更新数据 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
         title="更新阅读数据"
         open={!!statsTarget}
         onCancel={() => {
@@ -574,17 +737,28 @@ export default function ActivityArticlesTab({
             form={statsForm}
             layout="vertical"
             preserve={false}
-            initialValues={{ readCount: statsTarget.readCount ?? 0, likeCount: statsTarget.likeCount ?? 0 }}
+            initialValues={{
+              readCount: statsTarget.readCount ?? 0,
+              likeCount: statsTarget.likeCount ?? 0,
+            }}
           >
-            <Form.Item name="readCount" label="阅读量" rules={[{ required: true, message: '请输入阅读量' }]}>
+            <Form.Item
+              name="readCount"
+              label="阅读量"
+              rules={[{ required: true, message: '请输入阅读量' }]}
+            >
               <InputNumber min={0} precision={0} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="likeCount" label="在看数" rules={[{ required: true, message: '请输入在看数' }]}>
+            <Form.Item
+              name="likeCount"
+              label="在看数"
+              rules={[{ required: true, message: '请输入在看数' }]}
+            >
               <InputNumber min={0} precision={0} style={{ width: '100%' }} />
             </Form.Item>
           </Form>
         )}
-      </GlassModal>
+      </FormSurface>
 
       {/* 长图大图预览 */}
       <GlassModal
@@ -593,7 +767,9 @@ export default function ActivityArticlesTab({
         onCancel={() => setPreviewTarget(null)}
         footer={<Button onClick={() => setPreviewTarget(null)}>关闭</Button>}
       >
-        {previewTarget && <img src={previewTarget} alt="长图预览" style={{ width: '100%' }} />}
+        {previewTarget && (
+          <img src={previewTarget} alt="长图预览" style={{ width: '100%' }} />
+        )}
       </GlassModal>
     </div>
   )

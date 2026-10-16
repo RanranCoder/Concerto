@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Checkbox, Collapse, Empty, Input, Popconfirm, Space, Tag } from 'antd'
+import {
+  App,
+  Button,
+  Checkbox,
+  Collapse,
+  Empty,
+  Input,
+  Popconfirm,
+  Space,
+  Tag,
+} from 'antd'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -7,7 +17,7 @@ import {
   SearchOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import GlassModal from '@/components/glass/GlassModal'
+import FormSurface from '@/components/form/FormSurface'
 import {
   deleteSignInGroup,
   deleteSignInGroups,
@@ -35,7 +45,11 @@ interface SignInGroupListProps {
  * - 折叠展示：分组名 + 人数 + 已签/未签 + 上传时间
  * - 支持分组级删除 / 批量删除 / 人员级删除 / 分组重命名 / 跨分组搜索
  */
-export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }: SignInGroupListProps) {
+export default function SignInGroupList({
+  activityId,
+  reloadKey = 0,
+  onChanged,
+}: SignInGroupListProps) {
   const { message } = App.useApp()
   const [groups, setGroups] = useState<SignInGroupVO[]>([])
   const [summary, setSummary] = useState<SignInGroupSummary | null>(null)
@@ -46,11 +60,16 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
   const [renameName, setRenameName] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const isMinisterOrAbove = (useAuthStore((s) => s.user?.roleLevel) ?? 0) >= 3
+  const isMinisterOrAbove = useAuthStore(
+    (s) => s.user?.permissions?.includes('checkin:manage') ?? false,
+  )
 
   const fetchData = useCallback(async () => {
     try {
-      const [gs, sm] = await Promise.all([listSignInGroups(activityId, keyword || undefined), signInGroupSummary(activityId)])
+      const [gs, sm] = await Promise.all([
+        listSignInGroups(activityId, keyword || undefined),
+        signInGroupSummary(activityId),
+      ])
       setGroups(gs ?? [])
       setSummary(sm ?? null)
     } catch {
@@ -66,7 +85,9 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
     setUploading(true)
     try {
       const res = await uploadSignInGroup(activityId, file)
-      message.success(`已上传「${res.groupName}」：新增 ${res.added} 人${res.skipped ? `，跳过重复 ${res.skipped} 人` : ''}`)
+      message.success(
+        `已上传「${res.groupName}」：新增 ${res.added} 人${res.skipped ? `，跳过重复 ${res.skipped} 人` : ''}`,
+      )
       onChanged()
     } catch {
       /* http 拦截已提示 */
@@ -138,7 +159,9 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
   }
 
   // 分组内人员多选删除
-  const [personSelection, setPersonSelection] = useState<Record<number, number[]>>({})
+  const [personSelection, setPersonSelection] = useState<
+    Record<number, number[]>
+  >({})
 
   const collapsibleItems = groups.map((g) => ({
     key: String(g.id),
@@ -148,19 +171,31 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
           <Checkbox
             checked={checkedGroups.includes(g.id)}
             onChange={(e) => {
-              setCheckedGroups((prev) => (e.target.checked ? [...prev, g.id] : prev.filter((x) => x !== g.id)))
+              setCheckedGroups((prev) =>
+                e.target.checked
+                  ? [...prev, g.id]
+                  : prev.filter((x) => x !== g.id),
+              )
             }}
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <FolderOutlined style={{ color: 'var(--brand)' }} />
+          <FolderOutlined style={{ color: 'var(--brand-text)' }} />
         )}
         <span style={{ fontWeight: 600 }}>{g.groupName}</span>
         <Tag color="blue">{g.count} 人</Tag>
         <Tag color="green">已签 {g.signedCount}</Tag>
         <Tag color="orange">未签 {g.unsignedCount}</Tag>
         <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-          上传于 {g.createdAt ? new Date(g.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+          上传于{' '}
+          {g.createdAt
+            ? new Date(g.createdAt).toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : '-'}
         </span>
         {!batchMode && (
           <Space size={0} onClick={(e) => e.stopPropagation()}>
@@ -173,8 +208,18 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
                 setRenameName(g.groupName)
               }}
             />
-            <Popconfirm title={`确认删除分组「${g.groupName}」及其 ${g.count} 名人员？`} onConfirm={() => handleDeleteGroup(g.id)} okText="删除" cancelText="取消">
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Popconfirm
+              title={`确认删除分组「${g.groupName}」及其 ${g.count} 名人员？`}
+              onConfirm={() => handleDeleteGroup(g.id)}
+              okText="删除"
+              cancelText="取消"
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
             </Popconfirm>
           </Space>
         )}
@@ -184,11 +229,15 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
       <div>
         <div style={{ marginBottom: 8 }}>
           <Space wrap size={8}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>选择要删除的人员：</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              选择要删除的人员：
+            </span>
             {(personSelection[g.id] ?? []).length > 0 && (
               <Popconfirm
                 title={`确认删除选中的 ${(personSelection[g.id] ?? []).length} 名人员？`}
-                onConfirm={() => handleDeletePersons(g, personSelection[g.id] ?? [])}
+                onConfirm={() =>
+                  handleDeletePersons(g, personSelection[g.id] ?? [])
+                }
                 okText="删除"
                 cancelText="取消"
               >
@@ -220,22 +269,50 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
                 onClick={() => {
                   setPersonSelection((prev) => {
                     const cur = prev[g.id] ?? []
-                    const next = checked ? cur.filter((x) => x !== p.id) : [...cur, p.id]
+                    const next = checked
+                      ? cur.filter((x) => x !== p.id)
+                      : [...cur, p.id]
                     return { ...prev, [g.id]: next }
                   })
                 }}
               >
                 <Checkbox checked={checked} style={{ marginRight: 2 }} />
                 <span>{p.fields['姓名'] ?? '-'}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{p.fields['学号'] ?? ''}</span>
-                {p.signed ? <Tag color="green" style={{ margin: 0 }}>已签</Tag> : <Tag color="red" style={{ margin: 0 }}>未签</Tag>}
-                <Popconfirm title="确认删除该人员？" onConfirm={() => handleDeletePerson(p.id)} okText="删除" cancelText="取消">
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: 0, height: 20 }} />
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {p.fields['学号'] ?? ''}
+                </span>
+                {p.signed ? (
+                  <Tag color="green" style={{ margin: 0 }}>
+                    已签
+                  </Tag>
+                ) : (
+                  <Tag color="red" style={{ margin: 0 }}>
+                    未签
+                  </Tag>
+                )}
+                <Popconfirm
+                  title="确认删除该人员？"
+                  onConfirm={() => handleDeletePerson(p.id)}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    style={{ padding: 0, height: 20 }}
+                  />
                 </Popconfirm>
               </span>
             )
           })}
-          {(g.people ?? []).length === 0 && <Empty description="该分组暂无人员" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+          {(g.people ?? []).length === 0 && (
+            <Empty
+              description="该分组暂无人员"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          )}
         </div>
       </div>
     ),
@@ -253,7 +330,8 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
           onSearch={(v) => setKeyword(v)}
         />
         <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-          共 {summary?.groupCount ?? 0} 组 · {summary?.total ?? 0} 人（已签 {summary?.signed ?? 0} / 未签 {summary?.unsigned ?? 0}）
+          共 {summary?.groupCount ?? 0} 组 · {summary?.total ?? 0} 人（已签{' '}
+          {summary?.signed ?? 0} / 未签 {summary?.unsigned ?? 0}）
         </span>
         {isMinisterOrAbove && (
           <>
@@ -276,7 +354,11 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
                 cancelText="取消"
                 disabled={checkedGroups.length === 0}
               >
-                <Button size="small" danger disabled={checkedGroups.length === 0}>
+                <Button
+                  size="small"
+                  danger
+                  disabled={checkedGroups.length === 0}
+                >
                   删除选中（{checkedGroups.length}）
                 </Button>
               </Popconfirm>
@@ -296,7 +378,7 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
               padding: '6px 16px',
               border: '1px dashed var(--brand)',
               borderRadius: 8,
-              color: 'var(--brand)',
+              color: 'var(--brand-text)',
               cursor: 'pointer',
               fontSize: 14,
             }}
@@ -315,7 +397,13 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
               }}
             />
           </label>
-          <span style={{ marginLeft: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
+          <span
+            style={{
+              marginLeft: 8,
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+            }}
+          >
             支持 .xlsx / .xls，上传后自动按文件名分组
           </span>
         </div>
@@ -330,7 +418,9 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
       />
 
       {/* 重命名弹窗 */}
-      <GlassModal
+      <FormSurface
+        mode="dialog"
+        description="修改后，当前分组的人员将沿用新的名称。"
         title="重命名分组"
         open={!!renameTarget}
         onCancel={() => setRenameTarget(null)}
@@ -343,8 +433,18 @@ export default function SignInGroupList({ activityId, reloadKey = 0, onChanged }
           </Space>
         }
       >
-        <Input value={renameName} onChange={(e) => setRenameName(e.target.value)} maxLength={100} placeholder="分组名称" />
-      </GlassModal>
+        <label className="form-control-label">
+          分组名称
+          <Input
+            autoFocus
+            aria-label="分组名称"
+            value={renameName}
+            onChange={(e) => setRenameName(e.target.value)}
+            maxLength={100}
+            placeholder="分组名称"
+          />
+        </label>
+      </FormSurface>
     </div>
   )
 }

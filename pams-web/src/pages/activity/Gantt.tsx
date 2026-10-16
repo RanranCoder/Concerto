@@ -1,14 +1,32 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useMemo, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, Popconfirm, Select, Slider, Space, Switch } from 'antd'
+import {
+  App,
+  Button,
+  DatePicker,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Slider,
+  Space,
+  Switch,
+} from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/glass/PageHeader'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import GanttChart from '@/components/gantt/GanttChart'
 import type { GanttTask } from '@/components/gantt/gantt.utils'
-import { listTasks, createTask, updateTask, deleteTask, toGanttTask, type TaskSave } from '@/api/task'
+import {
+  listTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  toGanttTask,
+  type TaskSave,
+} from '@/api/task'
 import { listDepts, type DeptVO } from '@/api/dept'
 
 export default function Gantt() {
@@ -48,7 +66,14 @@ export default function Gantt() {
     if (!activityId) return
     try {
       const rows = await listTasks(activityId)
-      setTasks(rows.map((t) => toGanttTask(t, t.deptId != null ? deptNameById.get(t.deptId) : undefined)))
+      setTasks(
+        rows.map((t) =>
+          toGanttTask(
+            t,
+            t.deptId != null ? deptNameById.get(t.deptId) : undefined,
+          ),
+        ),
+      )
     } catch {
       /* http 拦截已提示 */
     }
@@ -71,9 +96,14 @@ export default function Gantt() {
     setEditing(t)
     setFormInit({
       name: t.name,
-      deptId: t.deptName ? depts.find((d) => d.name === t.deptName)?.id : undefined,
+      deptId: t.deptName
+        ? depts.find((d) => d.name === t.deptName)?.id
+        : undefined,
       assignee: t.assignee,
-      range: t.startDate && t.endDate ? [dayjs(t.startDate), dayjs(t.endDate)] : undefined,
+      range:
+        t.startDate && t.endDate
+          ? [dayjs(t.startDate), dayjs(t.endDate)]
+          : undefined,
       dependsOn: t.dependsOn,
       isMilestone: t.isMilestone,
       progress: t.progress,
@@ -154,7 +184,9 @@ export default function Gantt() {
             <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
               新增任务
             </Button>
-            <Button onClick={() => navigate(`/activities/${activityId}`)}>返回详情</Button>
+            <Button onClick={() => navigate(`/activities/${activityId}`)}>
+              返回详情
+            </Button>
           </>
         }
       />
@@ -163,16 +195,34 @@ export default function Gantt() {
         <GanttChart tasks={tasks} onUpdate={handleUpdate} onEdit={openEdit} />
       </GlassCard>
 
-      <GlassModal
+      <FormSurface
+        mode="drawer"
+        description="维护任务安排、进度与依赖关系。"
         title={editing ? '编辑任务' : '新增任务'}
         open={open}
         onCancel={() => setOpen(false)}
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <div>
               {editing && (
-                <Popconfirm title="确认删除该任务？" onConfirm={() => { setOpen(false); handleDelete(editing) }} okText="删除" cancelText="取消">
-                  <Button danger icon={<DeleteOutlined />}>删除</Button>
+                <Popconfirm
+                  title="确认删除该任务？"
+                  onConfirm={() => {
+                    setOpen(false)
+                    handleDelete(editing)
+                  }}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
                 </Popconfirm>
               )}
             </div>
@@ -192,16 +242,28 @@ export default function Gantt() {
           key={editing ? `task-edit-${editing.id}` : 'task-create'}
           initialValues={formInit}
         >
-          <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+          <Form.Item
+            name="name"
+            label="任务名称"
+            rules={[{ required: true, message: '请输入任务名称' }]}
+          >
             <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="deptId" label="负责部门">
-            <Select options={deptOptions} placeholder="选择负责部门" allowClear />
+            <Select
+              options={deptOptions}
+              placeholder="选择负责部门"
+              allowClear
+            />
           </Form.Item>
           <Form.Item name="assignee" label="负责人">
             <Input maxLength={50} placeholder="负责人姓名" />
           </Form.Item>
-          <Form.Item name="range" label="起止日期" rules={[{ required: true, message: '请选择起止日期' }]}>
+          <Form.Item
+            name="range"
+            label="起止日期"
+            rules={[{ required: true, message: '请选择起止日期' }]}
+          >
             <DatePicker.RangePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="dependsOn" label="前置任务">
@@ -216,7 +278,7 @@ export default function Gantt() {
           <Form.Item name="isMilestone" label="里程碑" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="progress" label="进度" >
+          <Form.Item name="progress" label="进度">
             <Slider
               min={0}
               max={100}
@@ -224,7 +286,7 @@ export default function Gantt() {
             />
           </Form.Item>
         </Form>
-      </GlassModal>
+      </FormSurface>
     </div>
   )
 }
