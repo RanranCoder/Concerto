@@ -4,7 +4,7 @@
 
 协奏把活动筹备、排班考勤、成员资料、内容宣传和档案归集放进同一个工作台，并通过「灵思」AI 助手连接资料检索与业务操作。项目起源于信息与智能工程学院党建办公室的党务管理场景，现已支持多组织注册、数据隔离、组织主题和领域包配置。
 
-本文对应 **`design` 分支**，包含 UI v6、灵思任务工作区和租户角色权限管理。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。
+本文对应 **`Concerto` 分支**，包含 UI v6、灵思任务工作区和租户角色权限管理。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。
 
 [快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
@@ -46,7 +46,7 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.12+ 和 MySQL 8**，并确保相关命令已加入 PATH。
 
 ```bash
-git clone --branch design git@github.com:RanranCoder/PAMS.git
+git clone --branch Concerto git@github.com:RanranCoder/PAMS.git
 cd PAMS
 
 cd pams-web
@@ -197,7 +197,7 @@ docker compose ps
 
 Flyway 迁移已包含 V35 / V36 思考记录字段及 Java 迁移 **V37 租户授权模型**。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。
 
-仓库的镜像构建工作流在推送 `main` 或手动触发时运行；推送 `design` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
+仓库的镜像构建工作流在推送 `main` 或手动触发时运行；推送 `Concerto` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
 
 ## 开发与验证
 
