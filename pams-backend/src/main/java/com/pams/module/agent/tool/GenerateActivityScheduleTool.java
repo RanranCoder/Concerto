@@ -20,11 +20,8 @@ import java.util.Map;
  * ——这是项目里既有的<b>规则算法</b>（读无课表、按节次匹配空闲人员、全局均衡分配）。
  * 灵思不做排班算法，只做"把自然语言参数翻译成 generate 的入参"。
  *
- * <p><b>dry-run 的诚实边界</b>：真正的候选人是 {@code generate} 内部算出来的，
- * 而 generate <b>会写库</b>。因此 dry-run 阶段只校验参数、展示"将在哪些日期、
- * 什么时段、为哪些部门排班"，不预先算出具体人员名单——
- * 并在清单里<b>明确告知</b>"具体人员将在确认后由无课表自动匹配"。
- * 这是对"预览必须真实"的诚实处理：宁可少预览，不假预览。
+ * <p>V6：dry-run 复用业务服务的只读预计算，展示真实候选人与空缺。
+ * 确认时使用相同计算器复核指纹；名单变化则拒绝写入，要求重新核对。
  *
  * <p>权限码 {@code schedule:generate}；数据级 normal。
  */
@@ -123,8 +120,7 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
         detailLines.add("时段：每日 " + startTime + " - " + endTime);
         detailLines.add("部门：共 " + deptIds.size() + " 个"
                 + (peoplePerSlot != null && peoplePerSlot > 0 ? "，每时段 " + peoplePerSlot + " 人" : "，人数不限"));
-        detailLines.add("说明：具体排班人员将在确认后按无课表自动匹配空闲人员，"
-                + "同一人不会被反复安排。");
+        detailLines.add("保存为排班草稿，复核后在活动排班中发布。候选发生变化时需重新生成清单。");
 
         Map<String, Object> exec = new LinkedHashMap<>();
         exec.put("activityId", activityId);
@@ -135,16 +131,42 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
         exec.put("deptIds", deptIds);
         if (peoplePerSlot != null) exec.put("peoplePerSlot", peoplePerSlot);
         if (semester != null) exec.put("semester", semester);
+
+        ActivityScheduleGenerateRequest req = requestFrom(exec);
+        List<Map<String, Object>> candidates = scheduleService.preview(req);
+        exec.put("previewFingerprint", ActivityScheduleService.previewFingerprint(candidates));
+        items.clear();
+        StringBuilder preview = new StringBuilder("## 活动排班候选清单\n\n| 日期 | 时段 | 人员 | 核对情况 |\n| --- | --- | --- | --- |\n");
+        for (Map<String, Object> day : candidates) {
+            Object rawSlots = day.get("slots");
+            if (!(rawSlots instanceof List<?> slots)) continue;
+            if (slots.isEmpty()) skipped.add(new AgentActionPlan.SkippedItem(str(day.get("date")), "", "没有可匹配的无课表时段"));
+            for (Object rawSlot : slots) {
+                if (!(rawSlot instanceof Map<?, ?> slot)) continue;
+                String date = str(day.get("date"));
+                String time = str(slot.get("startTime")) + "–" + str(slot.get("endTime"));
+                int count = ((Number) slot.get("count")).intValue();
+                int missing = ((Number) slot.get("missingCount")).intValue();
+                List<?> persons = (List<?>) slot.get("persons");
+                String names = persons.stream().filter(p -> p instanceof Map<?, ?>)
+                        .map(p -> str(((Map<?, ?>) p).get("name"))).collect(java.util.stream.Collectors.joining("、"));
+                if (count > 0) items.add(new AgentActionPlan.PlanItem(null, date + " " + time, names));
+                if (count == 0 || missing > 0) skipped.add(new AgentActionPlan.SkippedItem(date + " " + time,
+                        count > 0 ? "已匹配 " + count + " 人" : "未分配", missing > 0 ? "尚缺 " + missing + " 人，请补齐或调整时段" : "无空闲候选人员"));
+                preview.append("| ").append(date).append(" | ").append(time).append(" | ")
+                        .append(names.isBlank() ? "未分配" : names.replace("|", "\\|"))
+                        .append(" | ").append(count == 0 ? "无候选" : missing > 0 ? "尚缺 " + missing + " 人" : "已匹配")
+                        .append(" |\n");
+            }
+        }
         detailLines.add(ARGS_MARK + writeJson(exec));
 
-        String summary = activityName + " · 活动排班（" + days + " 天）";
-        AgentActionPlan plan = new AgentActionPlan(null, summary, (int) days, items, skipped,
-                detailLines, true, null);
+        String summary = activityName + " · 保存排班草稿（" + items.size() + " 个班次）";
+        AgentActionPlan plan = new AgentActionPlan(null, summary, items.size(), items, skipped,
+                detailLines, true, null, preview.toString());
 
         return ToolResult.plan(
-                "已整理排班参数：为「" + activityName + "」在 " + startDate + " 至 " + endDate
-                        + " 每日 " + startTime + "-" + endTime + " 排班。\n"
-                        + "确认后将按无课表自动匹配各部门空闲人员。",
+                "已匹配「" + activityName + "」的 " + items.size() + " 个候选班次。请核对人员与空缺，确认后保存草稿。",
                 plan);
     }
 
@@ -168,31 +190,50 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
                 req.setSemester(String.valueOf(exec.get("semester")));
             }
 
-            List<Map<String, Object>> details = scheduleService.generate(req);
-            int created = details.size();
+            List<Map<String, Object>> details = scheduleService.generateReviewed(req,
+                    exec.get("previewFingerprint") == null ? null : str(exec.get("previewFingerprint")));
+            int created = 0;
             int persons = 0;
             for (Map<String, Object> d : details) {
                 Object c = d.get("count");
                 if (c instanceof Number n) persons += n.intValue();
+                if (d.get("slots") instanceof List<?> slots) {
+                    for (Object slot : slots) if (slot instanceof Map<?, ?> m
+                            && m.get("count") instanceof Number n && n.intValue() > 0) created++;
+                }
             }
 
             List<Map<String, Object>> refs = new ArrayList<>();
             Long activityId = lng(exec.get("activityId"));
             refs.add(ToolArgs.map("type", "activity", "id", activityId,
-                    "label", "活动排班", "link", "/routine/schedule?activityId=" + activityId));
+                    "label", "活动排班", "link", "/routine/activity-schedules?activityId=" + activityId));
 
-            String msg = "已生成 " + created + " 天排班，共安排 " + persons + " 人次。"
+            String msg = "已生成 " + created + " 个班次，共安排 " + persons + " 人次。"
                     + "排班为草稿状态，可在排班管理中复核后发布。";
             if (persons == 0) {
-                return new CommitResult("PARTIAL", 0, created,
-                        "已生成日期框架，但没有匹配到空闲人员——请检查参与部门的无课表是否已维护。",
-                        ToolArgs.map("days", created, "persons", 0), refs);
+                return new CommitResult("FAILED", 0, plan.skipped().size(),
+                        "没有匹配到空闲人员，未生成班次。请检查参与部门的无课表后重新生成清单。",
+                        ToolArgs.map("slots", 0, "persons", 0), List.of());
             }
-            return new CommitResult("SUCCESS", persons, 0, msg,
-                    ToolArgs.map("days", created, "persons", persons), refs);
+            return new CommitResult(plan.skipped().isEmpty() ? "SUCCESS" : "PARTIAL", persons, plan.skipped().size(),
+                    msg + (plan.skipped().isEmpty() ? "" : "仍有空缺，请在活动排班中补齐。"),
+                    ToolArgs.map("slots", created, "persons", persons, "skipped", plan.skipped()), refs);
         } catch (Exception e) {
             return CommitResult.failed("排班生成失败：" + e.getMessage());
         }
+    }
+
+    private ActivityScheduleGenerateRequest requestFrom(Map<String, Object> exec) {
+        ActivityScheduleGenerateRequest req = new ActivityScheduleGenerateRequest();
+        req.setActivityId(lng(exec.get("activityId")));
+        req.setStartDate(LocalDate.parse(str(exec.get("startDate"))));
+        req.setEndDate(LocalDate.parse(str(exec.get("endDate"))));
+        req.setStartTime(LocalTime.parse(str(exec.get("startTime"))));
+        req.setEndTime(LocalTime.parse(str(exec.get("endTime"))));
+        req.setDeptIds(toLongList(exec.get("deptIds")));
+        if (exec.get("peoplePerSlot") != null) req.setPeoplePerSlot(Integer.parseInt(str(exec.get("peoplePerSlot"))));
+        if (exec.get("semester") != null) req.setSemester(str(exec.get("semester")));
+        return req;
     }
 
     private LocalDate parseDate(String s) {

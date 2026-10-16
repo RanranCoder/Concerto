@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -66,24 +67,60 @@ public class ActivityScheduleService {
      */
     @Transactional
     public List<Map<String, Object>> generate(ActivityScheduleGenerateRequest req) {
-        validate(req.getStartDate() != null && req.getEndDate() != null, "请选择日期范围");
-        validate(req.getStartTime() != null && req.getEndTime() != null, "请设置开始/结束时间");
-        validate(!req.getEndDate().isBefore(req.getStartDate()), "结束日期不能早于开始日期");
-        validate(req.getDeptIds() != null && !req.getDeptIds().isEmpty(), "请选择参与部门");
+        return generateReviewed(req, null);
+    }
 
+    /** 同一计算器用于只读预览及写入；预览不创建活动、排班、人员或考勤。 */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> preview(ActivityScheduleGenerateRequest req) {
+        return calculate(req).details();
+    }
+
+    /** 确认时若无课表改变，拒绝写入，让用户重新核对清单。 */
+    @Transactional
+    public List<Map<String, Object>> generateReviewed(ActivityScheduleGenerateRequest req, String expected) {
+        Calculation calculation = calculate(req);
+        if (expected != null && !expected.equals(previewFingerprint(calculation.details()))) {
+            throw new BizException(2408, "排班候选人员已变化，请重新生成清单并核对后确认。");
+        }
         Long activityId = resolveActivityId(req);
-
         List<String> deptNames = new ArrayList<>();
         for (Long deptId : req.getDeptIds()) {
             departmentRepository.findById(deptId).ifPresent(d -> deptNames.add(d.getName()));
         }
         String deptName = deptNames.isEmpty() ? null : String.join("/", deptNames);
-        Long firstDeptId = req.getDeptIds().get(0);
+        for (Assignment a : calculation.assignments()) {
+            createSchedule(activityId, a.date(), a.slot().startTime(), a.slot().endTime(),
+                    deptName, req.getDeptIds().getFirst(), req.getSemester(), a.people(), a.slot().label());
+        }
+        return calculation.details();
+    }
+
+    public static String previewFingerprint(List<Map<String, Object>> details) {
+        try {
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(details.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private record Assignment(LocalDate date, FreeSlotMatcher.PeriodSlot slot,
+                              List<FreeSlotMatcher.Candidate> people) {}
+    private record Calculation(List<Map<String, Object>> details, List<Assignment> assignments) {}
+
+    private Calculation calculate(ActivityScheduleGenerateRequest req) {
+        validate(req.getStartDate() != null && req.getEndDate() != null, "请选择日期范围");
+        validate(req.getStartTime() != null && req.getEndTime() != null, "请设置开始/结束时间");
+        validate(req.getEndTime().isAfter(req.getStartTime()), "结束时间必须晚于开始时间");
+        validate(!req.getEndDate().isBefore(req.getStartDate()), "结束日期不能早于开始日期");
+        validate(req.getDeptIds() != null && !req.getDeptIds().isEmpty(), "请选择参与部门");
 
         int limit = req.getPeoplePerSlot() == null || req.getPeoplePerSlot() <= 0 ? Integer.MAX_VALUE : req.getPeoplePerSlot();
 
         List<Map<String, Object>> details = new ArrayList<>();
-        int created = 0;
+        List<Assignment> assignments = new ArrayList<>();
         // 全局“已排次数”（按姓名），用于跨天/跨节次均衡分配，尽量不让同一人反复被排
         Map<String, Integer> usage = new java.util.HashMap<>();
         for (LocalDate d = req.getStartDate(); !d.isAfter(req.getEndDate()); d = d.plusDays(1)) {
@@ -96,16 +133,15 @@ public class ActivityScheduleService {
             for (FreeSlotMatcher.PeriodSlot slot : slots) {
                 // 本时段候选去重 + 按已排次数最少优先 + 限制人数
                 List<FreeSlotMatcher.Candidate> picked = pickBalanced(slot.candidates(), limit, usage);
-                if (picked.isEmpty()) continue;
-                long id = createSchedule(activityId, d, slot.startTime(), slot.endTime(),
-                        deptName, firstDeptId, req.getSemester(), picked, slot.label());
-                if (id > 0) created++;
+                if (!picked.isEmpty()) assignments.add(new Assignment(d, slot, picked));
                 for (FreeSlotMatcher.Candidate c : picked) {
                     usage.merge(c.name(), 1, Integer::sum);
                     dayPersons.add(personMap(c));
                 }
                 dayTotal += picked.size();
-                slotDetails.add(slotMap(slot, picked));
+                Map<String, Object> slotDetail = slotMap(slot, picked);
+                slotDetail.put("missingCount", limit == Integer.MAX_VALUE ? 0 : Math.max(0, limit - picked.size()));
+                slotDetails.add(slotDetail);
             }
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("date", d);
@@ -114,7 +150,7 @@ public class ActivityScheduleService {
             detail.put("slots", slotDetails);
             details.add(detail);
         }
-        return details;
+        return new Calculation(details, assignments);
     }
 
     /**
@@ -197,8 +233,9 @@ public class ActivityScheduleService {
         s.setCreatedAt(LocalDateTime.now());
         s.setUpdatedAt(LocalDateTime.now());
         Schedule saved = scheduleRepository.save(s);
-        for (FreeSlotMatcher.Candidate c : cands) {
-            savePerson(saved.getId(), c.userId(), c.name());
+        for (int i = 0; i < cands.size(); i++) {
+            FreeSlotMatcher.Candidate c = cands.get(i);
+            savePerson(saved.getId(), c.userId(), c.name(), i == 0 ? 1 : 0);
         }
         return saved.getId();
     }
@@ -277,7 +314,6 @@ public class ActivityScheduleService {
         if (s.getScheduleDate() == null || s.getStartTime() == null || s.getEndTime() == null) {
             throw new BizException(2406, "该排班缺少日期或时间，无法重新生成");
         }
-        schedulePersonRepository.deleteByScheduleId(id);
         Long dpt = deptId != null ? deptId : s.getDeptId();
         String sem = semester != null && !semester.isBlank() ? semester : s.getSemester();
         List<FreeSlotMatcher.PeriodSlot> slots = matcher.matchByPeriod(s.getScheduleDate(), s.getStartTime(), s.getEndTime(),
@@ -290,14 +326,15 @@ public class ActivityScheduleService {
         if (target == null && !slots.isEmpty()) target = slots.get(0);
         List<FreeSlotMatcher.Candidate> cands = target == null ? List.of() : target.candidates();
         if (cands.isEmpty()) throw new BizException(2407, "该日期时段无符合无课表的候选人员");
-        for (FreeSlotMatcher.Candidate c : cands) {
-            savePerson(id, c.userId(), c.name());
+        schedulePersonRepository.deleteByScheduleId(id);
+        for (int i = 0; i < cands.size(); i++) {
+            FreeSlotMatcher.Candidate c = cands.get(i);
+            savePerson(id, c.userId(), c.name(), i == 0 ? 1 : 0);
         }
         s.setUpdatedAt(LocalDateTime.now());
         scheduleRepository.save(s);
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
-            attendanceRepository.deleteByScheduleId(id);
-            ensureAttendanceRows(s);
+            syncAttendanceRows(s);
         }
         return cands.size();
     }
@@ -337,8 +374,7 @@ public class ActivityScheduleService {
         schedulePersonRepository.deleteByScheduleId(id);
         savePersons(id, req.getPersons());
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
-            attendanceRepository.deleteByScheduleId(id);
-            ensureAttendanceRows(s);
+            syncAttendanceRows(s);
         }
     }
 
@@ -353,7 +389,9 @@ public class ActivityScheduleService {
     /** 发布后为每位排班人员预建 PENDING 考勤行（自动判断引擎将据此落考勤）。 */
     private void ensureAttendanceRows(Schedule s) {
         List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(s.getId());
+        List<Attendance> existing = new ArrayList<>(attendanceRepository.findByScheduleId(s.getId()));
         for (SchedulePerson p : persons) {
+            if (existing.stream().anyMatch(a -> samePerson(a, p))) continue;
             Attendance a = new Attendance();
             a.setScheduleId(s.getId());
             a.setPersonId(p.getUserId());
@@ -366,23 +404,42 @@ public class ActivityScheduleService {
             a.setRecordTime(LocalDateTime.now());
             a.setCreatedAt(LocalDateTime.now());
             attendanceRepository.save(a);
+            existing.add(a);
         }
+    }
+
+    /** 人员调整只移除不再排班的自动记录；人工修正及其审计保持原 ID。 */
+    private void syncAttendanceRows(Schedule s) {
+        List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(s.getId());
+        for (Attendance a : attendanceRepository.findByScheduleId(s.getId())) {
+            if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())) continue;
+            if (persons.stream().noneMatch(p -> samePerson(a, p))) attendanceRepository.deleteById(a.getId());
+        }
+        ensureAttendanceRows(s);
+    }
+
+    private boolean samePerson(Attendance a, SchedulePerson p) {
+        if (p.getUserId() != null) return Objects.equals(a.getPersonId(), p.getUserId());
+        return a.getPersonId() == null && Objects.equals(a.getPersonName(), p.getPersonName());
     }
 
     private void savePersons(Long scheduleId, List<ScheduleRequest.SchedulePersonItem> persons) {
         if (persons == null) return;
+        int index = 0;
         for (ScheduleRequest.SchedulePersonItem p : persons) {
             if (p.getPersonName() == null || p.getPersonName().isBlank()) continue;
-            savePerson(scheduleId, p.getUserId(), p.getPersonName());
+            int primary = p.getIsPrimary() == null ? (index == 0 ? 1 : 0) : (p.getIsPrimary() == 1 ? 1 : 0);
+            savePerson(scheduleId, p.getUserId(), p.getPersonName(), primary);
+            index++;
         }
     }
 
-    private void savePerson(Long scheduleId, Long userId, String personName) {
+    private void savePerson(Long scheduleId, Long userId, String personName, int isPrimary) {
         SchedulePerson sp = new SchedulePerson();
         sp.setScheduleId(scheduleId);
         sp.setUserId(userId);
         sp.setPersonName(personName);
-        sp.setIsPrimary(1);
+        sp.setIsPrimary(isPrimary);
         sp.setCreatedAt(LocalDateTime.now());
         schedulePersonRepository.save(sp);
     }
