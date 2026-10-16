@@ -1,363 +1,600 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App, Button, DatePicker, Input, Modal, Select, Space, Table, Tag } from 'antd'
+import FormSurface from '@/components/form/FormSurface'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  App,
+  Button,
+  DatePicker,
+  Empty,
+  Form,
+  Input,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+} from 'antd'
+import { DownloadOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { AuditOutlined, CheckOutlined, SearchOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
-import GlassCard from '@/components/glass/GlassCard'
-import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
+import GlassCard from '@/components/glass/GlassCard'
+import RoutineLayout, {
+  RoutineNote,
+  RoutineStatus,
+  RoutineSummary,
+} from '@/components/routine/RoutineLayout'
 import {
   ATTENDANCE_MANUAL_OPTIONS,
   ATTENDANCE_STATUS_MAP,
   ATTENDANCE_STATUS_OPTIONS,
-  getAttendanceStats,
-  listAttendanceAudits,
   listAttendances,
-  makeupAttendance,
+  listMyAttendances,
+  listAttendanceAudits,
   updateAttendanceStatus,
+  makeupAttendance,
+  type AttendanceVO,
   type AttendanceAuditVO,
   type AttendanceFilter,
-  type AttendanceStats,
-  type AttendanceVO,
 } from '@/api/attendance'
 import { listActivities, type ActivityVO } from '@/api/activity'
+import { ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
 import { useAuthStore } from '@/stores/auth'
-import { Form, Input as AInput } from 'antd'
+import { downloadCsv } from '@/utils/routine'
 
-const STATUS_COLOR: Record<string, string> = {
-  PENDING: 'default',
-  NORMAL: 'green',
-  LATE: 'orange',
-  ABSENT: 'red',
-  LEAVE: 'blue',
-  EARLY_LEAVE: 'magenta',
-  MAKEUP: 'purple',
-  CANCELED: 'default',
-}
-
-interface Row extends AttendanceVO {
-  key: number
-}
-
-function StatCard({ label, value, color }: { label: string; value: number; color?: string }) {
+function matchFilters(r: AttendanceVO, f: AttendanceFilter) {
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 100,
-        background: 'var(--canvas)',
-        border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '12px 16px',
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ fontSize: 'var(--fs-symbol)', fontWeight: 700, color: color ?? 'var(--text-primary)' }}>{value}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</div>
-    </div>
+    (!f.activityId || r.activityId === f.activityId) &&
+    (!f.date || r.activityDate === f.date) &&
+    (!f.dateFrom || (!!r.activityDate && r.activityDate >= f.dateFrom)) &&
+    (!f.dateTo || (!!r.activityDate && r.activityDate <= f.dateTo)) &&
+    (!f.type || r.activityType === f.type) &&
+    (!f.status || r.status === f.status) &&
+    (!f.keyword || `${r.personName} ${r.studentNo ?? ''}`.includes(f.keyword))
   )
 }
-
-const defaultStats: AttendanceStats = {
-  totalActivities: 0,
-  shouldAttend: 0,
-  signed: 0,
-  normal: 0,
-  late: 0,
-  absent: 0,
-  leave: 0,
-  makeup: 0,
-  pending: 0,
-}
-
 export default function AttendanceList() {
-  const { message } = App.useApp()
-  const canManage = (useAuthStore((s) => s.user?.permissions) ?? []).some(
-    (p) => p === 'attendance:manage' || p === 'checkin:manage' || p === 'schedule:check',
-  )
-
-  const [filters, setFilters] = useState<AttendanceFilter>({})
-  const [rows, setRows] = useState<Row[]>([])
-  const [stats, setStats] = useState<AttendanceStats>(defaultStats)
-  const [loading, setLoading] = useState(false)
-  const [activities, setActivities] = useState<ActivityVO[]>([])
-  // 联动：从排班列表/活动详情带 ?activityId= 进入时预选该活动
-  const [searchParams, setSearchParams] = useSearchParams()
-  const urlActivityId = (() => {
-    const v = searchParams.get('activityId')
-    return v && /^\d+$/.test(v) ? Number(v) : undefined
-  })()
-
-  // 编辑状态
-  const [editTarget, setEditTarget] = useState<Row | null>(null)
-  const [editForm] = Form.useForm<{ newStatus: string; remark?: string }>()
-  const [audits, setAudits] = useState<AttendanceAuditVO[]>([])
-  const [auditOpen, setAuditOpen] = useState(false)
-
+  const { message } = App.useApp(),
+    permissions = useAuthStore((s) => s.user?.permissions) ?? []
+  const canViewAll = permissions.some((p) =>
+      ['attendance:view', 'schedule:check'].includes(p),
+    ),
+    canManage = permissions.some((p) =>
+      ['attendance:manage', 'checkin:manage', 'schedule:check'].includes(p),
+    ),
+    canAudit = permissions.some((p) =>
+      ['attendance:view', 'attendance:manage', 'schedule:check'].includes(p),
+    )
+  const [params, setParams] = useSearchParams()
+  const scope = !canViewAll || params.get('scope') === 'mine' ? 'mine' : 'all'
+  const initialActivity = Number(params.get('activityId')) || undefined
+  const [filters, setFilters] = useState<AttendanceFilter>({
+      activityId: initialActivity,
+    }),
+    [advanced, setAdvanced] = useState(false)
+  const [rows, setRows] = useState<AttendanceVO[]>([]),
+    [loading, setLoading] = useState(false),
+    [revision, setRevision] = useState(0),
+    [activities, setActivities] = useState<ActivityVO[]>([])
+  const [detail, setDetail] = useState<AttendanceVO | null>(null),
+    [mode, setMode] = useState<'detail' | 'edit' | 'makeup'>('detail'),
+    [audits, setAudits] = useState<AttendanceAuditVO[]>([]),
+    [auditLoading, setAuditLoading] = useState(false),
+    [saving, setSaving] = useState(false)
+  const [form] = Form.useForm<{ newStatus: string; remark: string }>()
   useEffect(() => {
-    listActivities({ page: 1, size: 200 }).then((r) => setActivities(r?.records ?? [])).catch(() => {})
+    listActivities({ page: 1, size: 200 })
+      .then((r) => setActivities(r.records ?? []))
+      .catch(() => {})
   }, [])
-
-  const refresh = useCallback(async (f: AttendanceFilter) => {
+  useEffect(() => {
+    setFilters((f) => ({ ...f, activityId: initialActivity }))
+  }, [initialActivity])
+  useEffect(() => {
+    let current = true
     setLoading(true)
-    try {
-      const [list, st] = await Promise.all([listAttendances(f), getAttendanceStats(f)])
-      setRows((list ?? []).map((x) => ({ ...x, key: x.id })))
-      setStats(st ?? defaultStats)
-    } catch {
-      /* http 拦截已提示 */
-    } finally {
-      setLoading(false)
+    const request =
+      scope === 'mine' ? listMyAttendances() : listAttendances(filters)
+    request
+      .then((r) => {
+        if (current) setRows(r ?? [])
+      })
+      .catch(() => {
+        if (current) setRows([])
+      })
+      .finally(() => {
+        if (current) setLoading(false)
+      })
+    return () => {
+      current = false
     }
-  }, [])
-
+  }, [filters, scope, revision])
   useEffect(() => {
-    refresh(filters)
-  }, [filters, refresh])
-
-  // 联动：接收 ?activityId= 一次性预选活动后清除参数，避免刷新残留
-  useEffect(() => {
-    if (!urlActivityId) return
-    setFilters((f) => ({ ...f, activityId: urlActivityId }))
-    const next = new URLSearchParams(searchParams)
-    next.delete('activityId')
-    setSearchParams(next, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const openEdit = (r: Row) => {
-    setEditTarget(r)
-    editForm.setFieldsValue({ newStatus: r.status === 'PENDING' ? undefined : r.status, remark: r.remark ?? undefined })
-  }
-
-  const handleSaveStatus = async () => {
-    const v = await editForm.validateFields()
-    if (!editTarget) return
-    try {
-      await updateAttendanceStatus(editTarget.id, { newStatus: v.newStatus, remark: v.remark })
-      message.success('状态已更新（审计已记录）')
-      setEditTarget(null)
-      refresh(filters)
-    } catch {
-      /* http 拦截已提示 */
+    let current = true
+    setAudits([])
+    if (!detail || !canAudit) return
+    setAuditLoading(true)
+    listAttendanceAudits(detail.id)
+      .then((r) => {
+        if (current) setAudits(r ?? [])
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (current) setAuditLoading(false)
+      })
+    return () => {
+      current = false
     }
-  }
-
-  const handleMakeup = async (r: Row) => {
-    try {
-      await makeupAttendance(r.id)
-      message.success('已补签')
-      refresh(filters)
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }
-
-  const openAudit = async (r: Row) => {
-    try {
-      setAudits(await listAttendanceAudits(r.id))
-      setAuditOpen(true)
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }
-
-  const columns = useMemo<ColumnsType<Row>>(
-    () => [
-      { title: '姓名', dataIndex: 'personName', key: 'personName', width: 110 },
-      { title: '学号', dataIndex: 'studentNo', key: 'studentNo', width: 120, render: (v) => v || '-' },
-      { title: '活动名称', dataIndex: 'activityName', key: 'activityName', ellipsis: true },
-      { title: '活动日期', dataIndex: 'activityDate', key: 'activityDate', width: 110, render: (v) => v || '-' },
-      {
-        title: '活动时间',
-        key: 'timeRange',
-        width: 130,
-        render: (_, r) =>
-          r.activityStart ? `${(r.activityStart ?? '').slice(0, 5)}-${(r.activityEnd ?? '').slice(0, 5)}` : '-',
-      },
-      {
-        title: '签到时间',
-        dataIndex: 'checkedInAt',
-        key: 'checkedInAt',
-        width: 150,
-        render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: '考勤状态',
-        dataIndex: 'status',
-        key: 'status',
-        width: 100,
-        fixed: 'right',
-        render: (v: string, r) => (
-          <Space size={4}>
-            <Tag color={STATUS_COLOR[v] ?? 'default'}>{ATTENDANCE_STATUS_MAP[v] ?? v}</Tag>
-            {r.statusSource === 'MANUAL' && <Tag color="geekblue">人工</Tag>}
-          </Space>
-        ),
-      },
-      { title: '签到次数', dataIndex: 'signCount', key: 'signCount', width: 90, align: 'center' as const },
-      { title: '备注', dataIndex: 'remark', key: 'remark', ellipsis: true, render: (v) => v || '-' },
-      {
-        title: '操作',
-        key: 'action',
-        width: 190,
-        fixed: 'right',
-        render: (_, r) => (
-          <Space size={4}>
-            <Button size="small" icon={<AuditOutlined />} onClick={() => openAudit(r)}>
-              审计
-            </Button>
-            {canManage && (
-              <>
-                <Button size="small" icon={<CheckOutlined />} onClick={() => openEdit(r)}>
-                  改状态
-                </Button>
-                {r.status !== 'MAKEUP' && (
-                  <Button size="small" onClick={() => handleMakeup(r)}>
-                    补签
-                  </Button>
-                )}
-              </>
-            )}
-          </Space>
-        ),
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManage],
+  }, [detail?.id, canAudit, revision])
+  const visible = useMemo(
+    () => rows.filter((r) => matchFilters(r, filters)),
+    [rows, filters],
   )
-
-  return (
-    <div>
-      <PageHeader title="活动考勤中心" description="自动判定的排班考勤 + 人工调整（含审计）" />
-
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap style={{ display: 'flex' }}>
-          <StatCard label="今日活动" value={stats.totalActivities} color="var(--brand)" />
-          <StatCard label="应签到" value={stats.shouldAttend} />
-          <StatCard label="已签到" value={stats.signed} color="green" />
-          <StatCard label="正常" value={stats.normal} color="green" />
-          <StatCard label="迟到" value={stats.late} color="orange" />
-          <StatCard label="缺勤" value={stats.absent} color="red" />
-          <StatCard label="请假" value={stats.leave} color="blue" />
+  const count = (s: string) => visible.filter((r) => r.status === s).length
+  const signed = visible.filter((r) =>
+    ['NORMAL', 'LATE', 'MAKEUP'].includes(r.status),
+  ).length
+  const change = (patch: Partial<AttendanceFilter>) =>
+    setFilters((f) => ({ ...f, ...patch }))
+  const open = (r: AttendanceVO, next: typeof mode) => {
+    setDetail(r)
+    setMode(next)
+  }
+  const update = async (v: { newStatus: string; remark: string }) => {
+    if (!detail || !canManage) return
+    const remark = v.remark.trim()
+    if (!remark) {
+      form.setFields([{ name: 'remark', errors: ['请填写修改原因'] }])
+      return
+    }
+    if (mode === 'edit' && v.newStatus === detail.status) {
+      message.warning('请选择不同于当前结果的考勤状态')
+      return
+    }
+    setSaving(true)
+    try {
+      if (mode === 'makeup' || v.newStatus === 'MAKEUP')
+        await makeupAttendance(detail.id, remark)
+      else
+        await updateAttendanceStatus(detail.id, {
+          newStatus: v.newStatus,
+          remark,
+        })
+      message.success(
+        mode === 'makeup' || v.newStatus === 'MAKEUP'
+          ? '已补签并记录审计'
+          : '考勤已修正并记录审计',
+      )
+      setDetail(null)
+      setRevision((n) => n + 1)
+    } catch {
+    } finally {
+      setSaving(false)
+    }
+  }
+  const columns: ColumnsType<AttendanceVO> = [
+    {
+      title: '成员 / 学号',
+      key: 'person',
+      width: 150,
+      render: (_, r) => (
+        <>
+          <strong>{r.personName}</strong>
+          <small>{r.studentNo || '未登记学号'}</small>
+        </>
+      ),
+    },
+    {
+      title: '活动 / 班次',
+      key: 'activity',
+      render: (_, r) => (
+        <>
+          <strong>{r.activityName || '例行事务'}</strong>
+          <small>
+            {r.activityDate || '未设置日期'}　
+            {r.activityStart
+              ? `${r.activityStart.slice(0, 5)}–${r.activityEnd?.slice(0, 5) ?? '待定'}`
+              : r.sessionName || '未设置时段'}
+          </small>
+        </>
+      ),
+    },
+    {
+      title: '考勤结果',
+      dataIndex: 'status',
+      width: 100,
+      render: (s) => <RoutineStatus status={s} />,
+    },
+    {
+      title: '签到时间',
+      key: 'time',
+      width: 130,
+      render: (_, r) => (
+        <>
+          {r.checkedInAt ? dayjs(r.checkedInAt).format('HH:mm') : '—'}
+          <small>{r.signCount} 次签到</small>
+        </>
+      ),
+    },
+    {
+      title: '来源',
+      dataIndex: 'statusSource',
+      width: 100,
+      render: (s) => <small>{s === 'MANUAL' ? '人工修正' : '自动判定'}</small>,
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 130,
+      render: (_, r) => (
+        <Space>
+          <Button type="link" onClick={() => open(r, 'detail')}>
+            详情
+          </Button>
+          {scope === 'all' && canManage && r.status !== 'CANCELED' && (
+            <Button type="link" onClick={() => open(r, 'edit')}>
+              修正
+            </Button>
+          )}
         </Space>
-      </GlassCard>
-
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
+      ),
+    },
+  ]
+  const table = (
+    <GlassCard>
+      <div className="routine-toolbar">
+        <label className="routine-filter wide">
+          活动
           <Select
-            placeholder="活动"
+            aria-label="考勤活动"
+            placeholder="全部活动"
             allowClear
             showSearch
             optionFilterProp="label"
-            style={{ width: 180 }}
+            value={filters.activityId}
+            onChange={(v) => {
+              change({ activityId: v })
+              const p = new URLSearchParams(params)
+              if (v) p.set('activityId', String(v))
+              else p.delete('activityId')
+              setParams(p, { replace: true })
+            }}
             options={activities.map((a) => ({ value: a.id, label: a.name }))}
-            onChange={(v) => setFilters((f) => ({ ...f, activityId: v }))}
           />
+        </label>
+        <label className="routine-filter">
+          班次日期
           <DatePicker
-            placeholder="活动日期"
-            style={{ width: 140 }}
-            onChange={(d) => setFilters((f) => ({ ...f, date: d ? d.format('YYYY-MM-DD') : undefined }))}
-          />
-          <DatePicker.RangePicker
-            placeholder={['开始日期', '结束日期']}
-            onChange={(ds) =>
-              setFilters((f) => ({
-                ...f,
-                dateFrom: ds?.[0] ? ds[0].format('YYYY-MM-DD') : undefined,
-                dateTo: ds?.[1] ? ds[1].format('YYYY-MM-DD') : undefined,
-              }))
+            aria-label="考勤日期"
+            value={filters.date ? dayjs(filters.date) : null}
+            onChange={(d) =>
+              change({
+                date: d?.format('YYYY-MM-DD'),
+                dateFrom: undefined,
+                dateTo: undefined,
+              })
             }
           />
+        </label>
+        <label className="routine-filter wide">
+          姓名 / 学号
           <Input
-            placeholder="姓名 / 学号"
-            allowClear
-            style={{ width: 160 }}
+            aria-label="考勤人员查询"
             prefix={<SearchOutlined />}
-            onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value || undefined }))}
-          />
-          <Select
-            placeholder="考勤状态"
             allowClear
-            style={{ width: 140 }}
+            value={filters.keyword ?? ''}
+            onChange={(e) => change({ keyword: e.target.value || undefined })}
+            placeholder="输入姓名或学号"
+          />
+        </label>
+        <label className="routine-filter">
+          考勤状态
+          <Select
+            aria-label="考勤状态"
+            allowClear
+            placeholder="全部状态"
             options={ATTENDANCE_STATUS_OPTIONS}
-            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+            value={filters.status}
+            onChange={(status) => change({ status })}
           />
-        </Space>
-      </GlassCard>
-
-      <GlassTable<Row>
-        columns={columns}
-        dataSource={rows}
-        rowKey="id"
-        loading={loading}
-        scroll={{ x: 1100 }}
-        pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        locale={{ emptyText: '暂无考勤数据' }}
-      />
-
-      {/* 修改考勤状态 */}
-      <Modal
-        title="修改考勤状态"
-        open={!!editTarget}
-        onCancel={() => setEditTarget(null)}
-        onOk={handleSaveStatus}
-        okText="确认修改"
-      >
-        <Form form={editForm} layout="vertical">
-          <Form.Item name="newStatus" label="新状态" rules={[{ required: true, message: '请选择状态' }]}>
-            <Select options={ATTENDANCE_MANUAL_OPTIONS} placeholder="选择考勤状态" />
-          </Form.Item>
-          <Form.Item name="remark" label="修改原因 / 备注">
-            <AInput.TextArea maxLength={255} rows={3} placeholder="如：因病请假 / 现场签到补录" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 审计记录 */}
-      <Modal
-        title="考勤修改审计"
-        open={auditOpen}
-        onCancel={() => setAuditOpen(false)}
-        footer={null}
-        width={560}
-      >
-        {audits.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>暂无人工修改记录</div>
-        ) : (
-          <Table<AttendanceAuditVO>
-            size="small"
-            rowKey="id"
-            pagination={false}
-            dataSource={audits}
-            columns={[
-              {
-                title: '变更',
-                key: 'change',
-                render: (_, a) => (
-                  <Space size={4}>
-                    <Tag>{a.oldStatus ? ATTENDANCE_STATUS_MAP[a.oldStatus] ?? a.oldStatus : '-'}</Tag>
-                    →
-                    <Tag color={STATUS_COLOR[a.newStatus ?? ''] ?? 'default'}>
-                      {a.newStatus ? ATTENDANCE_STATUS_MAP[a.newStatus] ?? a.newStatus : '-'}
-                    </Tag>
-                  </Space>
-                ),
-              },
-              { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 100 },
-              {
-                title: '时间',
-                dataIndex: 'operateTime',
-                key: 'operateTime',
-                width: 150,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
-              },
-              { title: '备注', dataIndex: 'remark', key: 'remark' },
-            ]}
-          />
+        </label>
+        <Button
+          type="link"
+          onClick={() => {
+            setFilters({})
+            const p = new URLSearchParams(params)
+            p.delete('activityId')
+            setParams(p, { replace: true })
+          }}
+        >
+          重置
+        </Button>
+        <Button type="link" onClick={() => setAdvanced((v) => !v)}>
+          {advanced ? '收起筛选' : '更多筛选'}
+        </Button>
+        {advanced && (
+          <div className="routine-advanced">
+            <label className="routine-filter">
+              日期范围
+              <DatePicker.RangePicker
+                aria-label="考勤日期范围"
+                value={
+                  filters.dateFrom && filters.dateTo
+                    ? [dayjs(filters.dateFrom), dayjs(filters.dateTo)]
+                    : null
+                }
+                onChange={(d) =>
+                  change({
+                    date: undefined,
+                    dateFrom: d?.[0]?.format('YYYY-MM-DD'),
+                    dateTo: d?.[1]?.format('YYYY-MM-DD'),
+                  })
+                }
+              />
+            </label>
+            <label className="routine-filter">
+              活动类型
+              <Select
+                aria-label="考勤活动类型"
+                allowClear
+                placeholder="全部类型"
+                options={ACTIVITY_TYPE_OPTIONS}
+                value={filters.type}
+                onChange={(type) => change({ type })}
+              />
+            </label>
+          </div>
         )}
-      </Modal>
-    </div>
+      </div>
+      <div className="routine-caption">
+        <span>
+          {[
+            'NORMAL',
+            'LATE',
+            'ABSENT',
+            'LEAVE',
+            'MAKEUP',
+            'EARLY_LEAVE',
+            'CANCELED',
+          ]
+            .map((s) => `${ATTENDANCE_STATUS_MAP[s]} ${count(s)}`)
+            .join('　')}
+        </span>
+        <span>摘要随筛选更新</span>
+      </div>
+      <Table
+        className="routine-data-table"
+        rowKey="id"
+        columns={columns}
+        dataSource={visible}
+        loading={loading}
+        scroll={{ x: 950 }}
+        pagination={{ pageSize: 15, showTotal: (n) => `共 ${n} 条考勤记录` }}
+        locale={{
+          emptyText: <Empty description="没有匹配的考勤记录，请调整筛选" />,
+        }}
+      />
+    </GlassCard>
+  )
+  return (
+    <RoutineLayout>
+      <PageHeader
+        title={scope === 'mine' ? '我的考勤' : '考勤中心'}
+        description="查看排班对应的签到结果，人工修正保留原因和完整操作记录。"
+        extra={
+          <Button
+            icon={<DownloadOutlined />}
+            disabled={!visible.length}
+            onClick={() =>
+              downloadCsv('考勤明细', [
+                [
+                  '姓名',
+                  '学号',
+                  '活动',
+                  '日期',
+                  '状态',
+                  '签到时间',
+                  '来源',
+                  '备注',
+                ],
+                ...visible.map((r) => [
+                  r.personName,
+                  r.studentNo,
+                  r.activityName,
+                  r.activityDate,
+                  ATTENDANCE_STATUS_MAP[r.status] || r.status,
+                  r.checkedInAt,
+                  r.statusSource,
+                  r.remark,
+                ]),
+              ])
+            }
+          >
+            导出明细
+          </Button>
+        }
+      />
+      <RoutineSummary
+        items={[
+          { label: '当前记录', value: visible.length, note: '筛选范围' },
+          { label: '已签到', value: signed, note: '正常 / 迟到 / 补签' },
+          { label: '待签到', value: count('PENDING'), note: '活动结束前' },
+          {
+            label: '缺勤 / 迟到',
+            value: count('ABSENT') + count('LATE'),
+            note: '需要核实',
+            attention: true,
+          },
+        ]}
+      />
+      <Tabs
+        className="routine-tabs"
+        activeKey={scope}
+        onChange={(key) => {
+          const p = new URLSearchParams(params)
+          p.set('scope', key)
+          setParams(p, { replace: true })
+          setDetail(null)
+        }}
+        items={[
+          ...(canViewAll
+            ? [{ key: 'all', label: '考勤管理', children: table }]
+            : []),
+          { key: 'mine', label: '我的考勤', children: table },
+        ]}
+      />
+      <RoutineNote>
+        活动排班发布后进入待签到；活动结束后，未签到自动判为缺勤。人工修正的记录不会被自动任务覆盖。
+      </RoutineNote>
+      <FormSurface
+        mode="drawer"
+        title={
+          mode === 'detail'
+            ? '考勤详情'
+            : mode === 'makeup'
+              ? '人工补签'
+              : '人工修正考勤'
+        }
+        className="routine-drawer"
+        open={!!detail}
+        width="min(540px, 100vw)"
+        onCancel={() => setDetail(null)}
+        destroyOnHidden
+        footer={
+          <Space>
+            <Button onClick={() => setDetail(null)}>关闭</Button>
+            {mode !== 'detail' && (
+              <Button
+                type="primary"
+                loading={saving}
+                onClick={() => form.submit()}
+              >
+                {mode === 'makeup' ? '确认补签' : '保存修正'}
+              </Button>
+            )}
+          </Space>
+        }
+      >
+        {detail && (
+          <>
+            <div className="routine-detail-heading">
+              <h3>
+                {detail.personName}　<RoutineStatus status={detail.status} />
+              </h3>
+              <p>
+                学号 {detail.studentNo || '未登记'} /{' '}
+                {detail.statusSource === 'MANUAL' ? '人工修正' : '自动判定'}
+              </p>
+            </div>
+            <dl className="routine-detail-kv">
+              <dt>关联活动</dt>
+              <dd>{detail.activityName || '例行事务'}</dd>
+              <dt>班次时间</dt>
+              <dd>
+                {detail.activityDate || '未设置日期'}{' '}
+                {detail.activityStart?.slice(0, 5)}–
+                {detail.activityEnd?.slice(0, 5)}
+              </dd>
+              <dt>签到信息</dt>
+              <dd>
+                {detail.checkedInAt
+                  ? dayjs(detail.checkedInAt).format('YYYY-MM-DD HH:mm')
+                  : '未签到'}{' '}
+                / {detail.signCount} 次记录
+              </dd>
+              <dt>备注</dt>
+              <dd>{detail.remark || '无'}</dd>
+            </dl>
+            {mode !== 'detail' ? (
+              <Form
+                form={form}
+                layout="vertical"
+                key={`${detail.id}-${mode}`}
+                initialValues={{
+                  newStatus:
+                    detail.status === 'PENDING' ? undefined : detail.status,
+                  remark: '',
+                }}
+                onFinish={update}
+              >
+                {mode === 'edit' && (
+                  <Form.Item
+                    name="newStatus"
+                    label="修正后状态"
+                    rules={[{ required: true, message: '请选择考勤状态' }]}
+                  >
+                    <Select
+                      aria-label="修正后状态"
+                      options={ATTENDANCE_MANUAL_OPTIONS}
+                    />
+                  </Form.Item>
+                )}
+                <Form.Item
+                  name="remark"
+                  label={mode === 'makeup' ? '补签原因' : '修改原因'}
+                  rules={[
+                    { required: true, whitespace: true, message: '请填写原因' },
+                  ]}
+                >
+                  <Input.TextArea
+                    aria-label={mode === 'makeup' ? '补签原因' : '修改原因'}
+                    rows={3}
+                    maxLength={255}
+                    placeholder="填写已核实的原因，如因病请假、现场签到漏记"
+                  />
+                </Form.Item>
+                <RoutineNote>
+                  保存后记录操作人、时间、原状态和新状态；自动任务不再覆盖此记录。
+                </RoutineNote>
+              </Form>
+            ) : (
+              scope === 'all' &&
+              canManage &&
+              detail.status !== 'CANCELED' && (
+                <Space>
+                  <Button type="primary" onClick={() => setMode('edit')}>
+                    人工修正
+                  </Button>
+                  {detail.status !== 'MAKEUP' && (
+                    <Button onClick={() => setMode('makeup')}>补签</Button>
+                  )}
+                </Space>
+              )
+            )}
+            {mode === 'detail' && canAudit && (
+              <section className="routine-audit">
+                <h3>人工修改记录</h3>
+                <Spin spinning={auditLoading}>
+                  {audits.length ? (
+                    audits
+                      .slice()
+                      .sort((a, b) =>
+                        (b.operateTime ?? '').localeCompare(
+                          a.operateTime ?? '',
+                        ),
+                      )
+                      .map((a) => (
+                        <div key={a.id} className="routine-audit-row">
+                          <RoutineStatus status={a.oldStatus} /> →{' '}
+                          <RoutineStatus status={a.newStatus} />
+                          <p>{a.remark || '未填写备注'}</p>
+                          <small>
+                            {a.operatorName || '未知操作人'} /{' '}
+                            {a.operateTime
+                              ? dayjs(a.operateTime).format('YYYY-MM-DD HH:mm')
+                              : '时间未记录'}
+                          </small>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="routine-muted">暂无人工修改记录。</p>
+                  )}
+                </Spin>
+              </section>
+            )}
+          </>
+        )}
+      </FormSurface>
+    </RoutineLayout>
   )
 }

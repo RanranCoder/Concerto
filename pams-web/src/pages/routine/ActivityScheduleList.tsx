@@ -1,687 +1,1118 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { App, AutoComplete, Button, DatePicker, Form, Input, InputNumber, Pagination, Popconfirm, Radio, Select, Space, Spin, Tag, TimePicker } from 'antd'
-import { DeleteOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined, QrcodeOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import FormSurface, { FormSection } from '@/components/form/FormSurface'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  App,
+  Button,
+  DatePicker,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  TimePicker,
+} from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import {
+  PlusOutlined,
+  QrcodeOutlined,
+  ReloadOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { closeActivitySignin, generateActivitySigninToken, getSigninFields, listSignins, type ActivitySigninToken, type SigninFieldConfigVO, type SigninVO } from '@/api/signin'
-import SigninFieldsConfig from '@/components/signin/SigninFieldsConfig'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassModal from '@/components/glass/GlassModal'
 import PageHeader from '@/components/glass/PageHeader'
+import RoutineLayout, {
+  RoutineNote,
+  RoutineStatus,
+  RoutineSummary,
+} from '@/components/routine/RoutineLayout'
+import PeopleFields from '@/components/routine/PeopleFields'
+import { ScheduleDetail, ShiftPeople } from '@/components/routine/ScheduleViews'
+import SigninFieldsConfig from '@/components/signin/SigninFieldsConfig'
+import { listActivities, type ActivityVO } from '@/api/activity'
+import { listDepts, type DeptVO } from '@/api/dept'
+import { listUserOptions, type UserOptionVO } from '@/api/user'
 import {
-  cancelActivitySchedule,
-  deleteActivitySchedule,
-  generateActivitySchedules,
   listActivitySchedules,
   listSemesters,
+  generateActivitySchedules,
+  createActivitySchedule,
+  updateActivitySchedule,
   publishActivitySchedule,
   publishAllActivitySchedules,
+  cancelActivitySchedule,
   regenerateActivitySchedule,
-  updateActivitySchedule,
-  type ActivityScheduleSave,
+  deleteActivitySchedule,
   type GenerateResult,
+  type ActivityScheduleSave,
 } from '@/api/activitySchedule'
-import { listActivities, type ActivityVO } from '@/api/activity'
-import { listDepts } from '@/api/dept'
-import { listUserOptions, type UserOptionVO } from '@/api/user'
-import type { ScheduleVO } from '@/api/schedule'
+import {
+  closeActivitySignin,
+  generateActivitySigninToken,
+  getSigninFields,
+  listSignins,
+  type ActivitySigninToken,
+  type SigninFieldConfigVO,
+  type SigninVO,
+} from '@/api/signin'
+import type { ScheduleVO, SchedulePersonItem } from '@/api/schedule'
+import { useAuthStore } from '@/stores/auth'
+import { timeRange } from '@/utils/routine'
 
-const STATUS_TEXT: Record<string, { text: string; color: string }> = {
-  DRAFT: { text: '草稿', color: 'default' },
-  PUBLISHED: { text: '已发布', color: 'green' },
-  ENDED: { text: '已结束', color: 'blue' },
-  CANCELLED: { text: '已取消', color: 'red' },
-}
-
-const thStyle: CSSProperties = {
-  textAlign: 'left',
-  padding: '6px 8px',
-  borderBottom: '1px solid var(--border)',
-  color: 'var(--text-secondary)',
-  fontWeight: 600,
-}
-const tdStyle: CSSProperties = { padding: '6px 8px', borderBottom: '1px solid var(--border)' }
-
-const SIGN_PAGE_SIZE = 8
-
-interface GenerateFormValues {
-  activityMode?: 'existing' | 'custom'
+interface GenerateValues {
+  activityMode: 'existing' | 'custom'
   activityId?: number
   customActivityName?: string
   dateRange: [Dayjs, Dayjs]
   timeRange: [Dayjs, Dayjs]
-  deptIds?: number[]
+  deptIds: number[]
   peoplePerSlot?: number
   semester?: string
   semesterStartDate?: Dayjs
 }
-
-interface ManualFormValues {
-  scheduleDate?: Dayjs
-  timeRange?: [Dayjs, Dayjs]
+interface ManualValues {
+  activityId: number
+  scheduleDate: Dayjs
+  timeRange: [Dayjs, Dayjs]
   location?: string
-  persons?: Array<{ userId?: number; personName?: string }>
+  note?: string
+  persons: SchedulePersonItem[]
 }
-
+interface RegenerateValues {
+  deptId?: number
+  semester?: string
+  semesterStartDate?: Dayjs
+}
 export default function ActivityScheduleList() {
-  const { message } = App.useApp()
-  const navigate = useNavigate()
-  const [list, setList] = useState<ScheduleVO[]>([])
-  const [loading, setLoading] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<string | undefined>()
-
-  const [activities, setActivities] = useState<ActivityVO[]>([])
-  const [depts, setDepts] = useState<Array<{ id: number; name: string }>>([])
-  const [userOptions, setUserOptions] = useState<UserOptionVO[]>([])
-  const [semesters, setSemesters] = useState<string[]>([])
-
-  const [generating, setGenerating] = useState(false)
-  const [preview, setPreview] = useState<GenerateResult[] | null>(null)
-
-  const [genForm] = Form.useForm<GenerateFormValues>()
-  const genMode = Form.useWatch('activityMode', genForm) || 'existing'
-  const [genOpen, setGenOpen] = useState(false)
-
-  const [manualOpen, setManualOpen] = useState(false)
-  const [manualEditing, setManualEditing] = useState<ScheduleVO | null>(null)
-  const [manualForm] = Form.useForm<ManualFormValues>()
-
-  // —— 活动级单码签到（拆合容器）——
-  const [selActivityId, setSelActivityId] = useState<number>()
-  const [qr, setQr] = useState<ActivitySigninToken | null>(null)
-  const [closed, setClosed] = useState(false)
-  const [qrLoading, setQrLoading] = useState(false)
-  const [signRows, setSignRows] = useState<SigninVO[]>([])
-  const [fieldConfigs, setFieldConfigs] = useState<SigninFieldConfigVO[]>([])
-  const [signLoading, setSignLoading] = useState(false)
-  const [signPage, setSignPage] = useState(1)
-
-  const refreshQr = useCallback(async (id: number) => {
-    setQrLoading(true)
-    try {
-      const t = await generateActivitySigninToken(id)
-      setQr(t)
-      setClosed(false)
-    } catch {
-      /* http 拦截已提示 */
-    } finally {
-      setQrLoading(false)
-    }
-  }, [])
-
-  const doCloseSignin = async (id: number) => {
-    try {
-      await closeActivitySignin(id)
-      setQr(null)
-      setClosed(true)
-      message.success('签到已关闭，当前码已作废')
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }
-
-  // 加载所选活动的签到记录 + 自定义字段配置
-  const refreshSignups = useCallback(async (id: number) => {
-    setSignLoading(true)
-    try {
-      const [rows, fields] = await Promise.all([listSignins(id), getSigninFields(id)])
-      setSignRows(rows ?? [])
-      setFieldConfigs(fields ?? [])
-    } catch {
-      /* http 拦截已提示 */
-    } finally {
-      setSignLoading(false)
-    }
-  }, [])
-
-  // 选择活动：自动拉取该活动签到码与签到记录
-  useEffect(() => {
-    if (!selActivityId) {
-      setQr(null)
-      setSignRows([])
-      setFieldConfigs([])
-      setSignPage(1)
-      return
-    }
-    setSignPage(1)
-    refreshQr(selActivityId)
-    refreshSignups(selActivityId)
-  }, [selActivityId, refreshQr, refreshSignups])
-
-  const pageSignRows = useMemo(
-    () => signRows.slice((signPage - 1) * SIGN_PAGE_SIZE, signPage * SIGN_PAGE_SIZE),
-    [signRows, signPage],
+  const { message } = App.useApp(),
+    navigate = useNavigate(),
+    [params, setParams] = useSearchParams()
+  const permissions = useAuthStore((s) => s.user?.permissions) ?? [],
+    canManage = permissions.includes('schedule:manage'),
+    canGenerate = canManage || permissions.includes('schedule:generate'),
+    canReadSignin = permissions.includes('checkin:view'),
+    canManageSignin = permissions.includes('checkin:manage')
+  const [activityId, setActivityId] = useState<number | undefined>(
+    Number(params.get('activityId')) || undefined,
   )
-
-  // 轮询：签到记录随扫码实时变化
-  useEffect(() => {
-    if (!selActivityId) return
-    const timer = setInterval(() => refreshSignups(selActivityId), 6000)
-    return () => clearInterval(timer)
-  }, [selActivityId, refreshSignups])
-
-  const fetchList = useCallback(() => {
-    setLoading(true)
-    listActivitySchedules({ status: statusFilter, activityId: selActivityId })
-      .then((res) => setList(res ?? []))
-      .catch(() => {
-        /* http 拦截已提示 */
-      })
-      .finally(() => setLoading(false))
-  }, [statusFilter, selActivityId])
-
-  useEffect(() => {
-    fetchList()
-  }, [fetchList])
-
+  const currentId = useRef(activityId)
+  currentId.current = activityId
+  const [activities, setActivities] = useState<ActivityVO[]>([]),
+    [depts, setDepts] = useState<DeptVO[]>([]),
+    [users, setUsers] = useState<UserOptionVO[]>([]),
+    [semesters, setSemesters] = useState<string[]>([])
+  const [rows, setRows] = useState<ScheduleVO[]>([]),
+    [loading, setLoading] = useState(false),
+    [revision, setRevision] = useState(0),
+    [status, setStatus] = useState<string>(),
+    [tab, setTab] = useState('shifts'),
+    [busy, setBusy] = useState(false)
+  const [detail, setDetail] = useState<ScheduleVO | null>(null),
+    [manualEditing, setManualEditing] = useState<ScheduleVO | null>(null),
+    [manualOpen, setManualOpen] = useState(false)
+  const [genOpen, setGenOpen] = useState(false),
+    [preview, setPreview] = useState<GenerateResult[] | null>(null),
+    [publishTarget, setPublishTarget] = useState<{
+      activityId: number
+      rows: ScheduleVO[]
+      all: boolean
+    } | null>(null),
+    [cancelTarget, setCancelTarget] = useState<ScheduleVO | null>(null),
+    [deleteTarget, setDeleteTarget] = useState<ScheduleVO | null>(null),
+    [regenTarget, setRegenTarget] = useState<ScheduleVO | null>(null)
+  const [genForm] = Form.useForm<GenerateValues>(),
+    [manualForm] = Form.useForm<ManualValues>(),
+    [regenForm] = Form.useForm<RegenerateValues>()
+  const genMode = Form.useWatch('activityMode', genForm)
+  const [qr, setQr] = useState<ActivitySigninToken | null>(null),
+    [signRows, setSignRows] = useState<SigninVO[]>([]),
+    [fields, setFields] = useState<SigninFieldConfigVO[]>([]),
+    [signLoading, setSignLoading] = useState(false),
+    [qrBusy, setQrBusy] = useState(false)
+  const selected = activities.find((a) => a.id === activityId),
+    drafts = rows.filter((s) => s.status === 'DRAFT'),
+    shown = rows.filter((s) => !status || s.status === status)
   useEffect(() => {
     listActivities({ page: 1, size: 200 })
       .then((r) => {
-        const rows = r?.records ?? []
-        setActivities(rows)
-        // 默认选中最近一次创建的活动（id 最大）
-        if (rows.length > 0) {
-          const recent = rows.reduce((a, b) => (b.id > a.id ? b : a))
-          setSelActivityId(recent.id)
-        }
+        setActivities(r.records ?? [])
+        if (!currentId.current && r.records.length)
+          setActivityId(Math.max(...r.records.map((a) => a.id)))
       })
       .catch(() => {})
-    listDepts().then((r) => setDepts(r ?? [])).catch(() => {})
-    listUserOptions().then((r) => setUserOptions(r ?? [])).catch(() => {})
-    listSemesters().then((r) => setSemesters(r ?? [])).catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    listDepts()
+      .then(setDepts)
+      .catch(() => {})
+    listUserOptions()
+      .then(setUsers)
+      .catch(() => {})
+    listSemesters()
+      .then(setSemesters)
+      .catch(() => {})
   }, [])
-
-  // 生成后刷新活动列表（含新建/复用的自定义活动）
-  const reloadActivities = useCallback(() => {
-    listActivities({ page: 1, size: 200 }).then((r) => setActivities(r?.records ?? [])).catch(() => {})
-  }, [])
-
-  const personOptions = useMemo(
-    () => userOptions.map((u) => ({ value: u.realName, label: `${u.realName}（${u.deptName ?? ''}）` })),
-    [userOptions],
-  )
-
-  const activityOptions = activities.map((a) => ({ value: a.id, label: a.name }))
-
-  const handleGenerate = async () => {
-    const v = await genForm.validateFields()
-    setGenerating(true)
+  useEffect(() => {
+    const id = Number(params.get('activityId'))
+    if (id) setActivityId(id)
+  }, [params])
+  useEffect(() => {
+    let current = true
+    setRows([])
+    if (!activityId) return
+    setLoading(true)
+    listActivitySchedules({ activityId })
+      .then((r) => {
+        if (current) setRows(r ?? [])
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (current) setLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [activityId, revision])
+  useEffect(() => {
+    setQr(null)
+    setSignRows([])
+    setFields([])
+    setStatus(undefined)
+    setDetail(null)
+  }, [activityId])
+  const refreshSigns = useCallback(async (id: number) => {
+    setSignLoading(true)
     try {
-      const res = await generateActivitySchedules({
+      const [records, configs] = await Promise.all([
+        listSignins(id),
+        getSigninFields(id),
+      ])
+      if (currentId.current === id) {
+        setSignRows(records ?? [])
+        setFields(configs ?? [])
+      }
+    } catch {
+    } finally {
+      if (currentId.current === id) setSignLoading(false)
+    }
+  }, [])
+  useEffect(() => {
+    if (tab !== 'signin' || !activityId || !canReadSignin) return
+    void refreshSigns(activityId)
+    const timer = setInterval(() => {
+      if (!document.hidden) void refreshSigns(activityId)
+    }, 6000)
+    return () => clearInterval(timer)
+  }, [tab, activityId, canReadSignin, refreshSigns])
+  const reload = () => setRevision((n) => n + 1)
+  const selectActivity = (id: number) => {
+    setActivityId(id)
+    const next = new URLSearchParams(params)
+    next.set('activityId', String(id))
+    setParams(next, { replace: true })
+  }
+  const mutate = async (fn: () => Promise<unknown>, text: string) => {
+    setBusy(true)
+    try {
+      await fn()
+      message.success(text)
+      setPublishTarget(null)
+      setCancelTarget(null)
+      setDeleteTarget(null)
+      setRegenTarget(null)
+      setDetail(null)
+      reload()
+    } catch {
+    } finally {
+      setBusy(false)
+    }
+  }
+  const generate = async (v: GenerateValues) => {
+    if (!v.timeRange[1].isAfter(v.timeRange[0])) {
+      message.warning('结束时间必须晚于开始时间')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await generateActivitySchedules({
         activityId: v.activityMode === 'existing' ? v.activityId : undefined,
-        customActivityName: v.activityMode === 'custom' ? v.customActivityName : undefined,
+        customActivityName:
+          v.activityMode === 'custom'
+            ? v.customActivityName?.trim()
+            : undefined,
         startDate: v.dateRange[0].format('YYYY-MM-DD'),
         endDate: v.dateRange[1].format('YYYY-MM-DD'),
         startTime: v.timeRange[0].format('HH:mm:ss'),
         endTime: v.timeRange[1].format('HH:mm:ss'),
-        deptIds: v.deptIds ?? [],
+        deptIds: v.deptIds,
         peoplePerSlot: v.peoplePerSlot,
         semester: v.semester,
-        semesterStartDate: v.semesterStartDate ? v.semesterStartDate.format('YYYY-MM-DD') : null,
+        semesterStartDate: v.semesterStartDate?.format('YYYY-MM-DD') ?? null,
       })
-      setPreview(res ?? [])
-      message.success('已按无课表生成草稿排班')
-      reloadActivities()
-      fetchList()
+      setGenOpen(false)
+      setPreview(result ?? [])
+      setStatus('DRAFT')
+      reload()
+      const updated = await listActivities({ page: 1, size: 200 })
+      setActivities(updated.records ?? [])
+      const targetId =
+        v.activityMode === 'existing'
+          ? v.activityId
+          : updated.records.find((a) => a.name === v.customActivityName?.trim())
+              ?.id
+      if (targetId) selectActivity(targetId)
+      reload()
+      if (result.some((r) => r.slots?.length))
+        message.success('已按无课表生成草稿排班')
+      else message.warning('未找到可排时段，请核对无课表与周次')
     } catch {
-      /* http 拦截已提示 */
     } finally {
-      setGenerating(false)
+      setBusy(false)
     }
   }
-
-  const doPublish = async (id: number) => {
-    await publishActivitySchedule(id)
-    message.success('已发布，进入签到考勤')
-    fetchList()
-  }
-  const doPublishAll = async () => {
+  const manual = async (v: ManualValues) => {
+    if (!v.timeRange[1].isAfter(v.timeRange[0])) {
+      message.warning('结束时间必须晚于开始时间')
+      return
+    }
+    setBusy(true)
+    const payload: ActivityScheduleSave = {
+      activityId: v.activityId,
+      scheduleDate: v.scheduleDate.format('YYYY-MM-DD'),
+      startTime: v.timeRange[0].format('HH:mm:ss'),
+      endTime: v.timeRange[1].format('HH:mm:ss'),
+      location: v.location,
+      note: v.note,
+      persons: v.persons.map((p) => ({
+        userId: p.userId,
+        personName: p.personName.trim(),
+        isPrimary: p.isPrimary ?? 0,
+      })),
+    }
     try {
-      const n = await publishAllActivitySchedules(selActivityId)
-      message.success(`已一键发布 ${n} 条草稿排班`)
-      fetchList()
+      if (manualEditing) await updateActivitySchedule(manualEditing.id, payload)
+      else await createActivitySchedule(payload)
+      setManualOpen(false)
+      selectActivity(v.activityId)
+      reload()
+      message.success(manualEditing ? '班次已保存' : '活动排班草稿已保存')
     } catch {
-      /* http 拦截已提示 */
+    } finally {
+      setBusy(false)
     }
   }
-  const doCancel = async (id: number) => {
-    await cancelActivitySchedule(id)
-    message.success('已取消')
-    fetchList()
-  }
-  const doRegenerate = async (id: number) => {
-    const n = await regenerateActivitySchedule(id)
-    message.success(`重新生成，命中 ${n} 人`)
-    fetchList()
-  }
-  const doDelete = async (id: number) => {
-    await deleteActivitySchedule(id)
-    message.success('已删除')
-    fetchList()
-  }
-
-  const openManualEdit = (s: ScheduleVO) => {
+  const edit = (s: ScheduleVO | null) => {
+    setDetail(null)
     setManualEditing(s)
-    const persons = (s.persons ?? []).map((p) => ({ userId: p.userId ?? undefined, personName: p.personName }))
-    manualForm.setFieldsValue({
-      scheduleDate: s.scheduleDate ? dayjs(s.scheduleDate) : undefined,
-      timeRange: s.startTime && s.endTime ? [dayjs(s.startTime, 'HH:mm:ss'), dayjs(s.endTime, 'HH:mm:ss')] : undefined,
-      location: s.location ?? undefined,
-      persons,
-    })
     setManualOpen(true)
   }
-
-  const handleManualSave = async () => {
-    const v = await manualForm.validateFields()
-    if (!manualEditing) return
-    const data: ActivityScheduleSave = {
-      activityId: manualEditing.activityId ?? 0,
-      scheduleDate: v.scheduleDate ? v.scheduleDate.format('YYYY-MM-DD') : '',
-      startTime: v.timeRange?.[0] ? v.timeRange[0].format('HH:mm:ss') : '',
-      endTime: v.timeRange?.[1] ? v.timeRange[1].format('HH:mm:ss') : '',
-      location: v.location ?? null,
-      persons: (v.persons ?? [])
-        .filter((p): p is { userId?: number; personName: string } => !!p.personName?.trim())
-        .map((p) => ({ userId: p.userId ?? null, personName: p.personName.trim() })),
-    }
+  const operateQr = async (close = false) => {
+    if (!activityId) return
+    const id = activityId
+    setQrBusy(true)
     try {
-      await updateActivitySchedule(manualEditing.id, data)
-      message.success('保存成功')
-      setManualOpen(false)
-      fetchList()
+      if (close) {
+        await closeActivitySignin(id)
+        if (currentId.current === id) setQr(null)
+        message.success('签到已关闭，当前码已作废')
+      } else {
+        const token = await generateActivitySigninToken(id)
+        if (currentId.current === id) setQr(token)
+        message.success('签到码已生成，刷新会使旧码作废')
+      }
     } catch {
-      /* http 拦截已提示 */
+    } finally {
+      setQrBusy(false)
     }
   }
-
-  return (
-    <div>
-      <PageHeader
-        title="活动排班"
-        description="基于无课表一键生成活动排班，发布后作为考勤判断依据"
-        extra={
-          <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>
-              一键生成排班
+  const showPublish = (s?: ScheduleVO) => {
+    if (!activityId) return
+    const targetRows = s ? [s] : drafts
+    if (targetRows.length)
+      setPublishTarget({ activityId, rows: targetRows, all: !s })
+  }
+  const columns: ColumnsType<ScheduleVO> = [
+    {
+      title: '日期 / 节次',
+      key: 'time',
+      width: 190,
+      render: (_, s) => (
+        <>
+          <strong>
+            {s.scheduleDate || '未设置日期'}{' '}
+            {s.scheduleDate ? dayjs(s.scheduleDate).format('ddd') : ''}
+          </strong>
+          <small>
+            {timeRange(s)} {s.sessionName && `/ ${s.sessionName}`}
+          </small>
+        </>
+      ),
+    },
+    {
+      title: '值班人员',
+      key: 'people',
+      render: (_, s) => (
+        <>
+          <ShiftPeople shift={s} />
+          <small>{s.location || '地点未设置'}</small>
+        </>
+      ),
+    },
+    {
+      title: '来源',
+      key: 'source',
+      width: 115,
+      render: (_, s) => (
+        <small>{s.source === 'AUTO' ? '无课表生成' : '人工排班'}</small>
+      ),
+    },
+    {
+      title: '状态',
+      key: 'status',
+      width: 105,
+      render: (_, s) => <RoutineStatus status={s.status} />,
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 170,
+      render: (_, s) => (
+        <Space>
+          <Button type="link" onClick={() => setDetail(s)}>
+            查看
+          </Button>
+          {canManage && s.status === 'DRAFT' && (
+            <Button type="link" onClick={() => showPublish(s)}>
+              发布
             </Button>
-          </Space>
-        }
-      />
-
-      {/* —— 活动签到：签到码 + 签到记录 两个独立容器 —— */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* 容器A：签到码（一个活动一个码） */}
-        <GlassCard style={{ padding: 16, flex: 1, minWidth: 300 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <QrcodeOutlined /> 签到码
-            </span>
-            {selActivityId && <SigninFieldsConfig activityId={selActivityId} />}
-          </div>
+          )}
+          {canManage && s.status === 'PUBLISHED' && (
+            <Button type="link" onClick={() => setCancelTarget(s)}>
+              取消
+            </Button>
+          )}
+          {canManage && ['DRAFT', 'PUBLISHED'].includes(s.status ?? '') && (
+            <Button type="link" onClick={() => edit(s)}>
+              编辑
+            </Button>
+          )}
+        </Space>
+      ),
+    },
+  ]
+  const shiftsPanel = (
+    <GlassCard>
+      <div className="routine-process">
+        <span>
+          <i>1</i>读取无课表
+        </span>
+        <hr />
+        <span className="current">
+          <i>2</i>复核草稿
+        </span>
+        <hr />
+        <span>
+          <i>3</i>发布班次
+        </span>
+        <hr />
+        <span>
+          <i>4</i>签到与考勤
+        </span>
+      </div>
+      <div className="routine-toolbar">
+        <label className="routine-filter">
+          班次状态
           <Select
-            showSearch
-            optionFilterProp="label"
-            placeholder="选择活动后自动生成该活动唯一签到码"
-            style={{ width: '100%', marginBottom: 12 }}
-            options={activityOptions}
-            value={selActivityId}
-            onChange={setSelActivityId}
+            aria-label="班次状态"
+            value={status}
+            onChange={setStatus}
+            allowClear
+            placeholder="全部状态"
+            options={['DRAFT', 'PUBLISHED', 'ENDED', 'CANCELLED'].map((s) => ({
+              value: s,
+              label: {
+                DRAFT: '草稿',
+                PUBLISHED: '已发布',
+                ENDED: '已结束',
+                CANCELLED: '已取消',
+              }[s],
+            }))}
           />
-          {!selActivityId ? (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>请先选择活动</div>
-          ) : closed ? (
-            <div style={{ textAlign: 'center', padding: 16 }}>
-              <div style={{ color: 'var(--brand)', marginBottom: 12 }}>签到已关闭，扫码已停止</div>
-              <Button type="primary" icon={<PlayCircleOutlined />} loading={qrLoading} onClick={() => refreshQr(selActivityId)}>
-                重新开启签到
-              </Button>
+        </label>
+        <span className="routine-muted">按当前活动查看，避免跨活动误操作</span>
+        <div className="routine-toolbar-actions">
+          <Button
+            type="link"
+            disabled={!activityId}
+            onClick={() =>
+              navigate(`/routine/attendance?activityId=${activityId}`)
+            }
+          >
+            查看考勤
+          </Button>
+          {canManage && (
+            <Button
+              type="primary"
+              disabled={!activityId || !drafts.length || loading}
+              onClick={() => showPublish()}
+            >
+              发布草稿（{drafts.length}）
+            </Button>
+          )}
+        </div>
+      </div>
+      {drafts.length > 0 && (
+        <div className="routine-scope">
+          <span>{drafts.length} 个草稿班次尚未进入考勤，请核对人员与时段</span>
+          <Button type="link" onClick={() => setStatus('DRAFT')}>
+            复核草稿
+          </Button>
+        </div>
+      )}
+      <Table
+        className="routine-data-table"
+        rowKey="id"
+        loading={loading}
+        columns={columns}
+        dataSource={shown}
+        scroll={{ x: 900 }}
+        pagination={{ pageSize: 15, showTotal: (n) => `共 ${n} 个班次` }}
+        locale={{
+          emptyText: (
+            <Empty
+              description={
+                activityId ? '当前活动暂无匹配班次' : '先选择关联活动'
+              }
+            >
+              {canGenerate && (
+                <Button onClick={() => setGenOpen(true)}>生成排班</Button>
+              )}
+            </Empty>
+          ),
+        }}
+      />
+    </GlassCard>
+  )
+  const signinPanel = (
+    <div className="routine-signin-workspace">
+      <GlassCard className="routine-qr">
+        <h3>活动签到码</h3>
+        {qr ? (
+          <>
+            <span className="tone-tag tone-success">签到已开启</span>
+            <div className="routine-qr-box">
+              <QRCodeSVG
+                value={`${window.location.origin}/signin/${qr.token}`}
+                size={182}
+                level="M"
+              />
             </div>
-          ) : qr ? (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 8 }}>
-                {/* 用前端 origin 拼扫码链接，避免后端拼出的 host（vite changeOrigin）指向 8080 而非 SPA */}
-                <QRCodeSVG value={`${window.location.origin}/signin/${qr.token}`} size={170} level="M" />
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-                有效期至 {qr.expiresAt ? new Date(qr.expiresAt).toLocaleTimeString() : '-'}
-              </div>
-              <Space style={{ marginTop: 10 }} wrap>
-                <Button size="small" icon={<ReloadOutlined />} loading={qrLoading} onClick={() => refreshQr(selActivityId)}>
-                  刷新
+            <small>有效期至 {dayjs(qr.expiresAt).format('HH:mm:ss')}</small>
+          </>
+        ) : (
+          <Empty description="开启签到后生成活动统一签到码" />
+        )}
+        {canManageSignin && (
+          <Space wrap>
+            {qr ? (
+              <>
+                <Button
+                  icon={<ReloadOutlined />}
+                  loading={qrBusy}
+                  onClick={() => operateQr()}
+                >
+                  刷新签到码
                 </Button>
-                <Button size="small" danger icon={<StopOutlined />} onClick={() => doCloseSignin(selActivityId)}>
+                <Button danger loading={qrBusy} onClick={() => operateQr(true)}>
                   关闭签到
                 </Button>
-              </Space>
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: 20 }}>
-              <Spin />
-            </div>
-          )}
-        </GlassCard>
-
-        {/* 容器B：签到记录（含自定义表单字段回显） */}
-        <GlassCard style={{ padding: 16, flex: 1.6, minWidth: 380 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>签到记录</div>
-          {!selActivityId ? (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>
-              选择左侧活动后显示其签到记录
-            </div>
-          ) : signLoading && signRows.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 20 }}>
-              <Spin />
-            </div>
-          ) : signRows.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 20 }}>该活动暂无签到记录</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, whiteSpace: 'nowrap' }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>姓名</th>
-                    <th style={thStyle}>学号</th>
-                    <th style={thStyle}>签到时间</th>
-                    {fieldConfigs
-                      .filter((f) => f.fieldName !== '姓名' && f.fieldName !== '学号')
-                      .map((f) => (
-                        <th key={f.id} style={thStyle}>
-                          {f.fieldName}
-                        </th>
-                      ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageSignRows.map((row) => {
-                    let fv: Record<string, string> = {}
-                    if (row.fieldsJson) {
-                      try {
-                        fv = JSON.parse(row.fieldsJson)
-                      } catch {
-                        fv = {}
-                      }
-                    }
-                    return (
-                      <tr key={row.id}>
-                        <td style={tdStyle}>{row.name}</td>
-                        <td style={tdStyle}>{row.studentNo || '-'}</td>
-                        <td style={tdStyle}>{row.signTime ? dayjs(row.signTime).format('MM-DD HH:mm') : '-'}</td>
-                        {fieldConfigs
-                          .filter((f) => f.fieldName !== '姓名' && f.fieldName !== '学号')
-                          .map((f) => (
-                            <td key={f.id} style={tdStyle}>
-                              {fv[f.fieldName] || '-'}
-                            </td>
-                          ))}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {signRows.length > SIGN_PAGE_SIZE && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <Pagination
-                current={signPage}
-                pageSize={SIGN_PAGE_SIZE}
-                total={signRows.length}
-                showSizeChanger={false}
-                showTotal={(t) => `共 ${t} 条`}
-                onChange={(p) => setSignPage(p)}
-              />
-            </div>
-          )}
-        </GlassCard>
-      </div>
-
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <span style={{ color: 'var(--text-secondary)' }}>状态</span>
-          <Select
-            placeholder="全部状态"
-            allowClear
-            style={{ width: 140 }}
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={Object.entries(STATUS_TEXT).map(([value, s]) => ({ value, label: s.text }))}
-          />
-          <Button type="primary" icon={<ThunderboltOutlined />} onClick={doPublishAll}>
-            一键发布
-          </Button>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {selActivityId ? '将发布所选活动的全部草稿排班' : '将发布全部活动下的草稿排班'}
-          </span>
-        </Space>
+              </>
+            ) : (
+              <Button
+                type="primary"
+                disabled={!activityId}
+                loading={qrBusy}
+                icon={<QrcodeOutlined />}
+                onClick={() => operateQr()}
+              >
+                开启签到
+              </Button>
+            )}
+          </Space>
+        )}
+        <RoutineNote>
+          活动使用统一签到码；刷新后旧码作废。班次发布后才进入排班考勤。
+        </RoutineNote>
       </GlassCard>
-
-      <GlassCard style={{ padding: 16 }}>
-        {list.length === 0 && !loading ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 32 }}>
-            暂无活动排班，点击右上角「一键生成排班」
+      <div>
+        <GlassCard>
+          <div className="business-section-head">
+            <h3>签到记录</h3>
+            <Button
+              icon={<ReloadOutlined />}
+              disabled={!activityId}
+              onClick={() => activityId && refreshSigns(activityId)}
+            >
+              刷新
+            </Button>
           </div>
-        ) : (
+          <Table<SigninVO>
+            className="routine-data-table"
+            rowKey="id"
+            dataSource={signRows}
+            loading={signLoading}
+            scroll={{ x: 620 }}
+            pagination={{ pageSize: 8 }}
+            columns={[
+              { title: '姓名', dataIndex: 'name' },
+              {
+                title: '学号',
+                dataIndex: 'studentNo',
+                render: (v) => v || '—',
+              },
+              {
+                title: '签到时间',
+                dataIndex: 'signTime',
+                render: (v) => (v ? dayjs(v).format('MM-DD HH:mm') : '—'),
+              },
+              ...fields
+                .filter((f) => !['姓名', '学号'].includes(f.fieldName))
+                .map((f) => ({
+                  title: f.fieldName,
+                  key: f.id,
+                  render: (_: unknown, r: SigninVO) => {
+                    try {
+                      return (
+                        JSON.parse(r.fieldsJson || '{}')[f.fieldName] ?? '—'
+                      )
+                    } catch {
+                      return '—'
+                    }
+                  },
+                })),
+            ]}
+          />
+        </GlassCard>
+        {canManageSignin && activityId && (
+          <GlassCard className="routine-pad" style={{ marginTop: 20 }}>
+            <h3>签到字段配置</h3>
+            <SigninFieldsConfig activityId={activityId} />
+          </GlassCard>
+        )}
+      </div>
+    </div>
+  )
+  return (
+    <RoutineLayout>
+      <PageHeader
+        title="活动排班"
+        description="把无课人员安排到活动各节次，复核草稿后发布并进入考勤。"
+        extra={
           <>
-            {list.map((s) => {
-              const st = STATUS_TEXT[s.status ?? ''] ?? { text: s.status ?? '-', color: 'default' }
-              const names = (s.persons ?? []).map((p) => p.personName).join('、')
-              return (
-                <div
-                  key={s.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: 12,
-                    borderBottom: '1px solid var(--border)',
-                    flexWrap: 'wrap',
+            {canManage && (
+              <Button
+                icon={<PlusOutlined />}
+                disabled={!activityId}
+                onClick={() => edit(null)}
+              >
+                人工排班
+              </Button>
+            )}
+            {canGenerate && (
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                onClick={() => setGenOpen(true)}
+              >
+                生成排班
+              </Button>
+            )}
+          </>
+        }
+      />
+      <div className="routine-context">
+        <div>
+          <span className="tone-tag tone-brand">关联活动</span>
+          <h3>{selected?.name || '请选择关联活动'}</h3>
+          <p>
+            {selected?.organizer}　{selected?.location}　
+            {selected && (
+              <Button
+                type="link"
+                onClick={() => navigate(`/activities/${selected.id}`)}
+              >
+                查看活动详情
+              </Button>
+            )}
+          </p>
+        </div>
+        <Select
+          aria-label="切换活动"
+          showSearch
+          optionFilterProp="label"
+          value={activityId}
+          placeholder="选择活动"
+          onChange={selectActivity}
+          options={activities.map((a) => ({ value: a.id, label: a.name }))}
+        />
+      </div>
+      <RoutineSummary
+        items={[
+          { label: '活动班次', value: rows.length, note: '当前活动' },
+          {
+            label: '待发布草稿',
+            value: drafts.length,
+            note: '需要复核',
+            attention: true,
+          },
+          {
+            label: '已发布',
+            value: rows.filter((s) => s.status === 'PUBLISHED').length,
+            note: '进入考勤',
+          },
+          {
+            label: '已结束',
+            value: rows.filter((s) => s.status === 'ENDED').length,
+            note: '可查看考勤',
+          },
+        ]}
+      />
+      <Tabs
+        className="routine-tabs"
+        activeKey={tab}
+        onChange={setTab}
+        items={[
+          { key: 'shifts', label: '班次安排', children: shiftsPanel },
+          ...(canReadSignin
+            ? [{ key: 'signin', label: '签到现场', children: signinPanel }]
+            : []),
+        ]}
+      />
+      <RoutineNote>
+        生成结果按节次分别选人。周末活动请使用人工排班；发布后自动建立待签到记录。
+      </RoutineNote>
+      <ScheduleDetail
+        shift={detail}
+        activities={activities}
+        onClose={() => setDetail(null)}
+        onEdit={
+          canManage &&
+          detail &&
+          ['DRAFT', 'PUBLISHED'].includes(detail.status ?? '')
+            ? edit
+            : undefined
+        }
+        extra={
+          <>
+            {canGenerate &&
+              detail?.source === 'AUTO' &&
+              ['DRAFT', 'PUBLISHED'].includes(detail.status ?? '') && (
+                <Button
+                  onClick={() => {
+                    setRegenTarget(detail)
+                    setDetail(null)
                   }}
                 >
-                  <span style={{ fontWeight: 500, minWidth: 110 }}>{s.scheduleDate ?? '-'}</span>
-                  <span style={{ color: 'var(--text-primary)', width: 130 }}>
-                    {s.startTime ? s.startTime.slice(0, 5) : ''}-{s.endTime ? s.endTime.slice(0, 5) : ''}
-                  </span>
-                  <Tag color={st.color}>{st.text}</Tag>
-                  <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{names || '无人员'}</span>
-                  <Space>
-                    {s.activityId && (
-                      <Button
-                        size="small"
-                        type="link"
-                        onClick={() => navigate(`/routine/attendance?activityId=${s.activityId}`)}
-                      >
-                        查看考勤
-                      </Button>
-                    )}
-                    {s.status === 'DRAFT' && (
-                      <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={() => doPublish(s.id)}>
-                        发布
-                      </Button>
-                    )}
-                    {s.status === 'PUBLISHED' && (
-                      <Button size="small" icon={<StopOutlined />} onClick={() => doCancel(s.id)}>
-                        取消
-                      </Button>
-                    )}
-                    {s.source === 'AUTO' && s.status !== 'CANCELLED' && (
-                      <Button size="small" icon={<ReloadOutlined />} onClick={() => doRegenerate(s.id)}>
-                        重新生成
-                      </Button>
-                    )}
-                    <Button size="small" onClick={() => openManualEdit(s)}>
-                      编辑
-                    </Button>
-                    <Popconfirm title="确认删除该排班？" onConfirm={() => doDelete(s.id)}>
-                      <Button size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
-                </div>
-              )
-            })}
+                  按无课表重新生成
+                </Button>
+              )}
+            {canManage && detail?.status === 'DRAFT' && (
+              <Button
+                danger
+                onClick={() => {
+                  setDeleteTarget(detail)
+                  setDetail(null)
+                }}
+              >
+                删除草稿
+              </Button>
+            )}
           </>
-        )}
-      </GlassCard>
-
-      {/* 一键生成弹窗 */}
-      <GlassModal title="一键生成排班" open={genOpen} onCancel={() => setGenOpen(false)} width={560}>
-        <Form form={genForm} layout="vertical" initialValues={{ activityMode: 'existing' }}>
-          <Form.Item name="activityMode" label="活动" rules={[{ required: true, message: '请选择活动方式' }]}>
-            <Radio.Group
-              options={[
-                { value: 'existing', label: '选择现有活动' },
-                { value: 'custom', label: '自定义活动' },
-              ]}
-              optionType="button"
-              buttonStyle="solid"
-            />
-          </Form.Item>
-          {genMode === 'existing' ? (
-            <Form.Item
-              name="activityId"
-              label="选择活动"
-              rules={[{ required: true, message: '请选择活动' }]}
-              dependencies={['activityMode']}
-            >
-              <Select showSearch optionFilterProp="label" options={activityOptions} placeholder="选择活动" />
-            </Form.Item>
-          ) : (
-            <Form.Item
-              name="customActivityName"
-              label="自定义活动名称"
-              rules={[{ required: true, message: '请输入自定义活动名称' }]}
-              dependencies={['activityMode']}
-            >
-              <Input maxLength={100} placeholder="如 秋季招新摆摊" />
-            </Form.Item>
-          )}
-          <Form.Item name="dateRange" label="活动日期范围" rules={[{ required: true, message: '请选择日期范围' }]}>
-            <DatePicker.RangePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="timeRange" label="活动时间（开始-结束）" rules={[{ required: true, message: '请设置时间段' }]}>
-            <TimePicker.RangePicker format="HH:mm" style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="deptIds" label="参与部门（多选，用于读取无课表）" rules={[{ required: true, message: '请选择参与部门' }]}>
-            <Select
-              mode="multiple"
-              allowClear
-              options={depts.map((d) => ({ value: d.id, label: d.name }))}
-              placeholder="可选择多个部门"
-            />
-          </Form.Item>
-          <Form.Item name="peoplePerSlot" label="每个时间段人数（留空=不限制）">
-            <InputNumber min={1} precision={0} style={{ width: 160 }} placeholder="如 10" />
-          </Form.Item>
-          <Space size={12} style={{ display: 'flex' }}>
-            <Form.Item name="semester" label="学期" style={{ flex: 1 }}>
+        }
+      />
+      <FormSurface
+        mode="drawer"
+        description="设置活动范围与人员来源，先生成草稿再核对发布。"
+        title="从无课表生成活动排班"
+        width={650}
+        open={genOpen}
+        destroyOnHidden
+        onCancel={() => setGenOpen(false)}
+        confirmLoading={busy}
+        okText="生成草稿"
+        onOk={() => genForm.submit()}
+      >
+        <Form
+          form={genForm}
+          preserve={false}
+          layout="vertical"
+          initialValues={{
+            activityMode: 'existing',
+            activityId,
+            semester: params.get('semester') || semesters[0],
+            deptIds: Number(params.get('deptId'))
+              ? [Number(params.get('deptId'))]
+              : undefined,
+          }}
+          onFinish={generate}
+        >
+          <FormSection title="活动范围">
+            <Form.Item name="activityMode" label="活动方式">
               <Select
-                allowClear
-                showSearch
-                options={semesters.map((s) => ({ value: s, label: s }))}
-                placeholder="选择学期（来自已上传无课表）"
+                options={[
+                  { value: 'existing', label: '选择现有活动' },
+                  { value: 'custom', label: '自定义活动名称' },
+                ]}
               />
             </Form.Item>
-            <Form.Item name="semesterStartDate" label="开学日期（用于周次匹配）" style={{ flex: 1 }}>
-              <DatePicker style={{ width: '100%' }} placeholder="周一为第1周" />
+            {genMode !== 'custom' ? (
+              <Form.Item
+                name="activityId"
+                label="关联活动"
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={activities.map((a) => ({
+                    value: a.id,
+                    label: a.name,
+                  }))}
+                />
+              </Form.Item>
+            ) : (
+              <Form.Item
+                name="customActivityName"
+                label="自定义活动名称"
+                rules={[{ required: true, whitespace: true }]}
+              >
+                <Input maxLength={100} />
+              </Form.Item>
+            )}
+            <Form.Item
+              name="dateRange"
+              label="活动日期范围"
+              rules={[{ required: true }]}
+            >
+              <DatePicker.RangePicker style={{ width: '100%' }} />
             </Form.Item>
-          </Space>
-          <Button type="primary" block loading={generating} onClick={handleGenerate}>
-            按无课表生成草稿排班
-          </Button>
+            <Form.Item
+              name="timeRange"
+              label="每天的活动时段"
+              rules={[{ required: true }]}
+            >
+              <TimePicker.RangePicker
+                format="HH:mm"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </FormSection>
+          <FormSection title="人员与无课表">
+            <Form.Item
+              name="deptIds"
+              label="参与部门"
+              rules={[{ required: true, type: 'array', min: 1 }]}
+            >
+              <Select
+                mode="multiple"
+                options={depts.map((d) => ({ value: d.id, label: d.name }))}
+              />
+            </Form.Item>
+            <div className="routine-form-grid">
+              <Form.Item name="semester" label="无课表学期">
+                <Select
+                  allowClear
+                  options={[
+                    ...new Set(
+                      [params.get('semester'), ...semesters].filter(
+                        (s): s is string => !!s,
+                      ),
+                    ),
+                  ].map((s) => ({ value: s, label: s }))}
+                />
+              </Form.Item>
+              <Form.Item name="semesterStartDate" label="第一教学周的周一">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </div>
+            <Form.Item name="peoplePerSlot" label="每节次人数（留空不限）">
+              <InputNumber min={1} precision={0} />
+            </Form.Item>
+            <RoutineNote>
+              按每个覆盖节次分别匹配无课人员，在本次生成范围内尽量均衡安排。生成后先存为草稿。
+            </RoutineNote>
+            <RoutineNote warning>
+              未填写开学日期时不筛选单双周，请人工核对；周末和无可用人员的时段不自动排班。
+            </RoutineNote>
+          </FormSection>
         </Form>
-        {preview && (
-          <div style={{ marginTop: 16, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>生成结果预览</div>
-            {preview.length === 0 && <div style={{ color: 'var(--text-secondary)' }}>无课表无匹配或未上传，未生成任何排班</div>}
-            {preview.map((p) => (
-              <div key={p.date} style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{p.date}：共命中 {p.count} 人</div>
-                {(p.slots ?? []).map((slot, i) => (
-                  <div key={`${p.date}-${i}`} style={{ marginLeft: 12, fontSize: 14, marginBottom: 4 }}>
-                    <span style={{ color: 'var(--brand)', fontWeight: 500 }}>
-                      {slot.label || `第${slot.period}节`}
-                    </span>
-                    {slot.startTime ? ` ${(slot.startTime ?? '').slice(0, 5)}-${(slot.endTime ?? '').slice(0, 5)}` : ''}
-                    <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>
-                      {slot.count} 人：{slot.persons.map((x) => x.name).join('、')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
+      </FormSurface>
+      <FormSurface
+        mode="dialog"
+        title="排班生成结果"
+        width={650}
+        open={preview !== null}
+        onCancel={() => setPreview(null)}
+        footer={
+          <Button type="primary" onClick={() => setPreview(null)}>
+            查看草稿
+          </Button>
+        }
+      >
+        <p className="routine-muted">
+          已生成 {preview?.reduce((n, r) => n + (r.slots?.length ?? 0), 0)}{' '}
+          个草稿班次，合计 {preview?.reduce((n, r) => n + r.count, 0)} 人次。
+        </p>
+        {preview?.map((r) => (
+          <div key={r.date}>
+            <h4>{r.date}</h4>
+            {r.slots?.length ? (
+              r.slots.map((slot) => (
+                <div className="routine-preview-row" key={slot.period}>
+                  <span>
+                    {slot.label}
+                    <small>
+                      {slot.startTime?.slice(0, 5)}–{slot.endTime?.slice(0, 5)}
+                    </small>
+                  </span>
+                  <span>
+                    {slot.persons.map((p) => p.name).join('、')}
+                    <small>{slot.count} 人</small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <RoutineNote warning>
+                当天无可排班时段，请核对无课表，或人工安排周末班次。
+              </RoutineNote>
+            )}
           </div>
-        )}
-      </GlassModal>
-
-      {/* 手动新增/编辑排班弹窗 */}
-      <GlassModal
-        title={manualEditing ? '编辑排班' : '新增排班'}
+        ))}
+      </FormSurface>
+      <FormSurface
+        mode="drawer"
+        description="指定活动、时段与值班人员，保存后核对并发布。"
+        title={manualEditing ? '编辑班次' : '人工创建活动排班'}
+        className="routine-drawer"
+        width="min(540px, 100vw)"
         open={manualOpen}
         onCancel={() => setManualOpen(false)}
+        destroyOnHidden
         footer={
           <Space>
             <Button onClick={() => setManualOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleManualSave}>
-              保存
+            <Button
+              type="primary"
+              loading={busy}
+              onClick={() => manualForm.submit()}
+            >
+              {manualEditing ? '保存修改' : '保存草稿'}
             </Button>
           </Space>
         }
       >
-        <Form form={manualForm} layout="vertical">
-          {!manualEditing && (
-            <div style={{ color: 'var(--text-secondary)', marginBottom: 12 }}>
-              手动新增建议从活动详情页创建场次；此处仅按所选活动新增草稿排班。
-            </div>
-          )}
-          <Form.Item name="scheduleDate" label="排班日期" rules={[{ required: true, message: '请选择日期' }]}>
+        <Form
+          form={manualForm}
+          preserve={false}
+          layout="vertical"
+          key={manualEditing?.id ?? 'new'}
+          initialValues={
+            manualEditing
+              ? {
+                  activityId: manualEditing.activityId,
+                  scheduleDate: manualEditing.scheduleDate
+                    ? dayjs(manualEditing.scheduleDate)
+                    : undefined,
+                  timeRange:
+                    manualEditing.startTime && manualEditing.endTime
+                      ? [
+                          dayjs(`2000-01-01T${manualEditing.startTime}`),
+                          dayjs(`2000-01-01T${manualEditing.endTime}`),
+                        ]
+                      : undefined,
+                  location: manualEditing.location,
+                  note: manualEditing.notes,
+                  persons: manualEditing.persons.map((p) => ({
+                    userId: p.userId,
+                    personName: p.personName,
+                    isPrimary: p.isPrimary,
+                  })),
+                }
+              : { activityId, persons: [{ personName: '', isPrimary: 1 }] }
+          }
+          onFinish={manual}
+        >
+          <Form.Item
+            name="activityId"
+            label="关联活动"
+            rules={[{ required: true }]}
+          >
+            <Select
+              disabled={!!manualEditing}
+              showSearch
+              optionFilterProp="label"
+              options={activities.map((a) => ({ value: a.id, label: a.name }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="scheduleDate"
+            label="排班日期"
+            rules={[{ required: true }]}
+          >
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="timeRange" label="时间段" rules={[{ required: true, message: '请设置时间段' }]}>
+          <Form.Item
+            name="timeRange"
+            label="班次时间"
+            rules={[{ required: true }]}
+          >
             <TimePicker.RangePicker format="HH:mm" style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="location" label="地点">
-            <Input maxLength={100} placeholder="如 学院楼 A301" />
+            <Input maxLength={100} />
           </Form.Item>
-          <Form.Item label="排班人员" required>
-            <Form.List name="persons">
-              {(fields, { add, remove }) => (
-                <>
-                  {fields.map((field) => (
-                    <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
-                      <Form.Item
-                        name={[field.name, 'personName']}
-                        rules={[{ required: true, message: '请输入或选择姓名' }]}
-                        style={{ marginBottom: 0 }}
-                      >
-                        <AutoComplete
-                          options={personOptions}
-                          placeholder="输入搜索或选择人员"
-                          style={{ width: 240 }}
-                          filterOption={(input, option) =>
-                            ((option?.value as string) ?? '').toLowerCase().includes(input.toLowerCase())
-                          }
-                          onSelect={(value: string) => {
-                            const matched = userOptions.find((u) => u.realName === value)
-                            manualForm.setFieldValue(['persons', field.name, 'userId'], matched?.id ?? undefined)
-                          }}
-                        />
-                      </Form.Item>
-                      <Button type="text" size="small" danger onClick={() => remove(field.name)}>
-                        删除
-                      </Button>
-                    </Space>
-                  ))}
-                  <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add()}>
-                    添加人员
-                  </Button>
-                </>
-              )}
-            </Form.List>
+          <PeopleFields form={manualForm} users={users} />
+          <Form.Item name="note" label="工作备注">
+            <Input.TextArea maxLength={255} rows={3} />
           </Form.Item>
+          <RoutineNote warning={manualEditing?.status === 'PUBLISHED'}>
+            {manualEditing?.status === 'PUBLISHED'
+              ? '修改已发布班次会同步刷新人员考勤，请核对人员变动。'
+              : '保存为草稿，复核后发布。'}
+          </RoutineNote>
         </Form>
-      </GlassModal>
-    </div>
+      </FormSurface>
+      <FormSurface
+        mode="dialog"
+        title="发布活动排班"
+        open={!!publishTarget}
+        onCancel={() => setPublishTarget(null)}
+        confirmLoading={busy}
+        okText="确认发布"
+        onOk={() =>
+          publishTarget &&
+          mutate(
+            () =>
+              publishTarget.all
+                ? publishAllActivitySchedules(publishTarget.activityId)
+                : publishActivitySchedule(publishTarget.rows[0].id),
+            '已发布班次并建立待签到考勤',
+          )
+        }
+      >
+        <p>
+          {activities.find((a) => a.id === publishTarget?.activityId)?.name}
+        </p>
+        <RoutineNote>
+          本次发布 {publishTarget?.rows.length} 个草稿班次，将建立{' '}
+          {publishTarget?.rows.reduce((n, s) => n + s.persons.length, 0)}{' '}
+          条待签到记录。
+        </RoutineNote>
+        {publishTarget?.rows.map((s) => (
+          <div className="routine-preview-row" key={s.id}>
+            <span>
+              {s.scheduleDate} {timeRange(s)}
+              <small>{s.persons.map((p) => p.personName).join('、')}</small>
+            </span>
+            <span>{s.persons.length} 人</span>
+          </div>
+        ))}
+      </FormSurface>
+      <FormSurface
+        mode="dialog"
+        title="取消已发布班次"
+        open={!!cancelTarget}
+        onCancel={() => setCancelTarget(null)}
+        okText="确认取消班次"
+        confirmLoading={busy}
+        onOk={() =>
+          cancelTarget &&
+          mutate(
+            () => cancelActivitySchedule(cancelTarget.id),
+            '已取消班次，人工修正考勤保留',
+          )
+        }
+      >
+        <p>
+          {cancelTarget?.scheduleDate} {cancelTarget && timeRange(cancelTarget)}
+        </p>
+        <RoutineNote warning>
+          此班次的自动考勤同步置为取消；人工修正过的考勤保留。
+        </RoutineNote>
+      </FormSurface>
+      <FormSurface
+        mode="dialog"
+        title="删除排班草稿"
+        open={!!deleteTarget}
+        onCancel={() => setDeleteTarget(null)}
+        okText="删除草稿"
+        okButtonProps={{ danger: true }}
+        confirmLoading={busy}
+        onOk={() =>
+          deleteTarget &&
+          mutate(() => deleteActivitySchedule(deleteTarget.id), '草稿已删除')
+        }
+      >
+        <p>
+          {deleteTarget?.scheduleDate} {deleteTarget && timeRange(deleteTarget)}
+        </p>
+        <p>{deleteTarget?.persons.map((p) => p.personName).join('、')}</p>
+      </FormSurface>
+      <FormSurface
+        mode="dialog"
+        title="重新生成班次人员"
+        open={!!regenTarget}
+        destroyOnHidden
+        onCancel={() => setRegenTarget(null)}
+        okText="确认重新生成"
+        confirmLoading={busy}
+        onOk={() => regenForm.submit()}
+      >
+        <Form
+          form={regenForm}
+          preserve={false}
+          layout="vertical"
+          initialValues={{ semester: params.get('semester') || semesters[0] }}
+          onFinish={(v: RegenerateValues) =>
+            regenTarget &&
+            mutate(
+              () =>
+                regenerateActivitySchedule(
+                  regenTarget.id,
+                  v.deptId,
+                  v.semester,
+                  v.semesterStartDate?.format('YYYY-MM-DD'),
+                ),
+              '已重新生成班次人员',
+            )
+          }
+        >
+          <p>
+            {regenTarget?.scheduleDate} {regenTarget && timeRange(regenTarget)}
+          </p>
+          <Form.Item name="deptId" label="参与部门（留空沿用班次部门）">
+            <Select
+              allowClear
+              options={depts.map((d) => ({ value: d.id, label: d.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="semester" label="无课表学期">
+            <Select
+              allowClear
+              options={semesters.map((s) => ({ value: s, label: s }))}
+            />
+          </Form.Item>
+          <Form.Item name="semesterStartDate" label="第一教学周的周一">
+            <DatePicker />
+          </Form.Item>
+          <RoutineNote warning>
+            重新选人会同步刷新已发布班次的自动考勤，人工修正记录保留。未填写开学日期时不筛选单双周。
+          </RoutineNote>
+        </Form>
+      </FormSurface>
+    </RoutineLayout>
   )
 }

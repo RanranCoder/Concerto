@@ -59,5 +59,5 @@ export const publishActivitySchedule = (id: number) => post<void>(`/activity-sch
 export const publishAllActivitySchedules = (activityId?: number) =>
   post<number>('/activity-schedules/publish-all', undefined, { params: { activityId } })
 export const cancelActivitySchedule = (id: number) => post<void>(`/activity-schedules/${id}/cancel`)
-export const regenerateActivitySchedule = (id: number, deptId?: number, semester?: string) =>
-  post<number>(`/activity-schedules/${id}/re-generate`, undefined, { params: { deptId, semester } })
+export const regenerateActivitySchedule = (id: number, deptId?: number, semester?: string, semesterStartDate?: string) =>
+  post<number>(`/activity-schedules/${id}/re-generate`, undefined, { params: { deptId, semester, semesterStartDate } })

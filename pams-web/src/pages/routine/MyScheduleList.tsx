@@ -1,167 +1,226 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Empty, Select, Space, Spin, Tag } from 'antd'
+import { useEffect, useState } from 'react'
+import { Button, Select, Segmented, Spin } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import PageHeader from '@/components/glass/PageHeader'
-import { listMySchedules, SCHEDULE_TYPE_MAP, WEEKDAY_NAMES, type ScheduleVO } from '@/api/schedule'
+import RoutineLayout, {
+  RoutineSummary,
+} from '@/components/routine/RoutineLayout'
+import {
+  ScheduleDetail,
+  ScheduleGrid,
+  ScheduleTable,
+  shiftTitle,
+  WeekControls,
+} from '@/components/routine/ScheduleViews'
+import { listMySchedules, type ScheduleVO } from '@/api/schedule'
 import { listActivities, type ActivityVO } from '@/api/activity'
-
-/** 节次列：第1-2 / 第3-4 / 第5-6 / 第7-8 节 */
-const PERIOD_ROWS: Array<{ key: string; label: string; range: [number, number] }> = [
-  { key: 'p1', label: '第1-2节', range: [1, 2] },
-  { key: 'p3', label: '第3-4节', range: [3, 4] },
-  { key: 'p5', label: '第5-6节', range: [5, 6] },
-  { key: 'p7', label: '第7-8节', range: [7, 8] },
-]
-
-function periodRowIndex(sessionName?: string | null): number {
-  const m = sessionName?.match(/(\d+)/)
-  if (!m) return -1
-  const p = Number(m[1])
-  return PERIOD_ROWS.findIndex((r) => p >= r.range[0] && p <= r.range[1])
-}
-
-function effWeekday(s: ScheduleVO): number | undefined {
-  if (s.weekday != null) return s.weekday
-  if (s.scheduleDate) return new Date(s.scheduleDate).getDay() || 7
-  return undefined
-}
-
-const thStyle: CSSProperties = {
-  padding: 10,
-  textAlign: 'center',
-  border: '1px solid var(--border)',
-  background: 'var(--soft)',
-  fontWeight: 600,
-  color: 'var(--text-secondary)',
-}
-const tdStyle: CSSProperties = {
-  padding: 10,
-  verticalAlign: 'top',
-  border: '1px solid var(--border)',
-  minWidth: 150,
-  minHeight: 44,
-}
+import { getScheduleConfigs, type ScheduleConfigVO } from '@/api/courseSchedule'
+import { useAuthStore } from '@/stores/auth'
+import {
+  FALLBACK_PERIODS,
+  monday,
+  inCalendarWeek,
+  weekday,
+  periodFor,
+  timeRange,
+} from '@/utils/routine'
 
 export default function MyScheduleList() {
-  const [list, setList] = useState<ScheduleVO[]>([])
-  const [loading, setLoading] = useState(false)
-  const [activityId, setActivityId] = useState<number | undefined>()
-  const [activities, setActivities] = useState<ActivityVO[]>([])
-
+  const navigate = useNavigate(),
+    user = useAuthStore((s) => s.user)
+  const [rows, setRows] = useState<ScheduleVO[]>([]),
+    [activities, setActivities] = useState<ActivityVO[]>([]),
+    [periods, setPeriods] = useState<ScheduleConfigVO[]>(FALLBACK_PERIODS)
+  const [loading, setLoading] = useState(false),
+    [start, setStart] = useState(monday),
+    [mode, setMode] = useState('week'),
+    [activityId, setActivityId] = useState<number>(),
+    [detail, setDetail] = useState<ScheduleVO | null>(null)
   useEffect(() => {
-    listActivities({ page: 1, size: 200 }).then((r) => setActivities(r?.records ?? [])).catch(() => {})
     setLoading(true)
     listMySchedules()
-      .then((res) => setList(res ?? []))
+      .then((r) => setRows(r ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
+    listActivities({ page: 1, size: 200 })
+      .then((r) => setActivities(r.records ?? []))
+      .catch(() => {})
+    getScheduleConfigs()
+      .then((r) => {
+        if (r.length) setPeriods(r)
+      })
+      .catch(() => {})
   }, [])
-
-  const filtered = useMemo(
-    () => list.filter((s) => !activityId || s.activityId === activityId),
-    [list, activityId],
+  const filtered = rows.filter(
+    (s) => !activityId || s.activityId === activityId,
   )
-
-  /** key=`{weekNo}-{rowIdx}` -> 该格排班 */
-  const map = useMemo(() => {
-    const m = new Map<string, ScheduleVO[]>()
-    filtered.forEach((s) => {
-      const row = periodRowIndex(s.sessionName)
-      if (row < 0) return
-      const key = `${s.weekNo ?? 0}-${row}`
-      const arr = m.get(key) ?? []
-      arr.push(s)
-      m.set(key, arr)
-    })
-    return m
-  }, [filtered])
-
-  const weeks = useMemo(
-    () => Array.from(new Set(filtered.map((s) => s.weekNo ?? 0))).filter((w) => w > 0).sort((a, b) => a - b),
-    [filtered],
-  )
-
+  const inferredWeek =
+    filtered.find((s) => s.scheduleDate && inCalendarWeek(s, start) && s.weekNo)
+      ?.weekNo ?? undefined
+  const weekRows = filtered.filter((s) =>
+      inCalendarWeek(s, start, inferredWeek),
+    ),
+    unplaced = weekRows.filter((s) => !weekday(s) || periodFor(s, periods) < 0)
+  const next = filtered
+    .filter(
+      (s) =>
+        s.status !== 'CANCELLED' &&
+        s.status !== 'ENDED' &&
+        s.scheduleDate &&
+        dayjs(
+          `${s.scheduleDate}T${s.endTime || periods[periodFor(s, periods)]?.endTime || '23:59:59'}`,
+        ).isAfter(dayjs()),
+    )
+    .sort((a, b) =>
+      `${a.scheduleDate} ${a.startTime ?? periods[periodFor(a, periods)]?.startTime ?? ''}`.localeCompare(
+        `${b.scheduleDate} ${b.startTime ?? periods[periodFor(b, periods)]?.startTime ?? ''}`,
+      ),
+    )[0]
+  const own = (s: ScheduleVO) =>
+    s.persons.find(
+      (p) =>
+        p.userId === user?.id || (!p.userId && p.personName === user?.realName),
+    )
   return (
-    <div>
-      <PageHeader title="我的排班" description="当前账号被排到的值班/活动班次（行为周次，列为节次）" />
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <span style={{ color: 'var(--text-secondary)' }}>活动名称</span>
-          <Select
-            placeholder="全部活动"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            style={{ width: 220 }}
-            options={activities.map((a) => ({ value: a.id, label: a.name }))}
-            value={activityId}
-            onChange={setActivityId}
-          />
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>共被排 {filtered.length} 个班次</span>
-        </Space>
-      </GlassCard>
-      <GlassCard style={{ padding: 16 }}>
-        <Spin spinning={loading}>
-          {weeks.length === 0 && !loading ? (
-            <Empty description="当前账号还没有被排到班次" />
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...thStyle, width: 80 }}>周次</th>
-                    {PERIOD_ROWS.map((p) => (
-                      <th key={p.key} style={thStyle}>
-                        {p.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {weeks.map((w) => (
-                    <tr key={w}>
-                      <td style={{ ...tdStyle, width: 80, textAlign: 'center', fontWeight: 600 }}>第{w}周</td>
-                      {PERIOD_ROWS.map((p, idx) => {
-                        const shifts = map.get(`${w}-${idx}`) ?? []
-                        return (
-                          <td key={p.key} style={tdStyle}>
-                            {shifts.length === 0 ? (
-                              <span style={{ color: 'var(--text-tertiary)' }}>—</span>
-                            ) : (
-                              shifts.map((s) => (
-                                <div key={s.id} style={{ paddingBottom: 6, marginBottom: 6, borderBottom: '1px dashed var(--border)' }}>
-                                  <Space size={4} wrap>
-                                    <span style={{ fontWeight: 500 }}>
-                                      {effWeekday(s) != null ? WEEKDAY_NAMES[effWeekday(s)! - 1] : ''}
-                                    </span>
-                                    <Tag color="red">{SCHEDULE_TYPE_MAP[s.scheduleType] ?? s.scheduleType}</Tag>
-                                  </Space>
-                                  {s.sessionName && (
-                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.sessionName}</div>
-                                  )}
-                                  {s.location && (
-                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.location}</div>
-                                  )}
-                                  {s.scheduleDate && (
-                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                      {dayjs(s.scheduleDate).format('YYYY-MM-DD')}
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    <RoutineLayout>
+      <PageHeader
+        title="我的排班"
+        description={`${user?.realName ?? ''} · ${user?.deptName ?? '当前组织'}，查看自己的值班与活动安排。`}
+        extra={
+          <Button onClick={() => navigate('/routine/attendance?scope=mine')}>
+            查看我的考勤
+          </Button>
+        }
+      />
+      {next && (
+        <section className="routine-next-shift">
+          <div className="routine-next-date">
+            {dayjs(next.scheduleDate).format('DD')}
+            <small>{dayjs(next.scheduleDate).format('MM 月 ddd')}</small>
+          </div>
+          <div>
+            <small>下一班</small>
+            <h3>{shiftTitle(next, activities)}</h3>
+            <p>
+              {timeRange(next, periods)}　{next.location || '地点未设置'}
+            </p>
+            <div className="routine-meta">
+              <span>
+                {own(next)?.isPrimary === 1 ? '你是主班' : '你是副班'}
+              </span>
+              <span>
+                同行：
+                {next.persons
+                  .filter((p) => p !== own(next))
+                  .map((p) => p.personName)
+                  .join('、') || '无'}
+              </span>
             </div>
+          </div>
+          <Button onClick={() => setDetail(next)}>查看安排</Button>
+        </section>
+      )}
+      <RoutineSummary
+        items={[
+          { label: '本周安排', value: weekRows.length, note: '班次' },
+          {
+            label: '主班任务',
+            value: weekRows.filter((s) => own(s)?.isPrimary === 1).length,
+            note: '班次',
+          },
+          {
+            label: '活动安排',
+            value: weekRows.filter((s) => s.scheduleType === 'ACTIVITY').length,
+            note: '班次',
+          },
+          {
+            label: '例行事务',
+            value: weekRows.filter((s) => s.scheduleType !== 'ACTIVITY').length,
+            note: '班次',
+          },
+        ]}
+      />
+      <GlassCard>
+        <WeekControls
+          start={start}
+          onChange={setStart}
+          extra={
+            <Segmented
+              value={mode}
+              onChange={(v) => setMode(String(v))}
+              options={[
+                { value: 'week', label: '周视图' },
+                { value: 'list', label: '全部安排' },
+              ]}
+            />
+          }
+        />
+        <div className="routine-toolbar">
+          <label className="routine-filter wide">
+            关联活动
+            <Select
+              aria-label="关联活动"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="全部安排"
+              value={activityId}
+              onChange={setActivityId}
+              options={activities.map((a) => ({ value: a.id, label: a.name }))}
+            />
+          </label>
+          <span className="routine-muted">只显示当前账号的安排</span>
+        </div>
+        <div className="routine-caption">
+          <div className="routine-legend">
+            <span>例行事务</span>
+            <span className="activity">活动排班</span>
+          </div>
+          <span>左右滑动查看整周</span>
+        </div>
+        <Spin spinning={loading}>
+          {mode === 'week' ? (
+            <>
+              <ScheduleGrid
+                rows={weekRows}
+                periods={periods}
+                start={start}
+                activities={activities}
+                onOpen={setDetail}
+                sevenDays
+              />
+              {unplaced.length > 0 && (
+                <ScheduleTable
+                  rows={unplaced}
+                  activities={activities}
+                  onOpen={setDetail}
+                />
+              )}
+            </>
+          ) : (
+            <ScheduleTable
+              rows={filtered}
+              activities={activities}
+              onOpen={setDetail}
+            />
           )}
         </Spin>
+        <div className="routine-table-foot">
+          <span>共 {filtered.length} 个个人班次</span>
+          {mode === 'week' && (
+            <Button type="link" onClick={() => setMode('list')}>
+              查看全部安排（含未设置日期的班次）
+            </Button>
+          )}
+        </div>
       </GlassCard>
-    </div>
+      <ScheduleDetail
+        shift={detail}
+        activities={activities}
+        onClose={() => setDetail(null)}
+      />
+    </RoutineLayout>
   )
 }
