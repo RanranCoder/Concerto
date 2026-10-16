@@ -107,6 +107,7 @@ export default function LingsiSources({ citations }: Props) {
                           `cite-${key}`,
                           `${sourceLabel(c.sourceType)} · ${c.sourceTitle}`,
                           c.snippet,
+                          { source:c, citations },
                         )
                       }
                     >

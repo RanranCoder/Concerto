@@ -8,6 +8,13 @@ import { get, post, del } from './http'
 /** 过程事件类型（D7）。MESSAGE_DELTA 为二期字符流预留，一期后端不发。 */
 export type AgentStreamEventType =
   | 'THINKING'
+  /**
+   * 模型推理增量（V35 思维链）。
+   *
+   * <p>与 THINKING 是两种东西：THINKING 是后端编排旁白（「正在理解你的问题…」），
+   * THINKING_DELTA 是模型 reasoning 原文片段。前端把同 round 的片段拼成一段推理。
+   */
+  | 'THINKING_DELTA'
   | 'TOOL_START'
   | 'TOOL_END'
   | 'PLAN_READY'
@@ -86,6 +93,62 @@ export interface AgentToolCallEntry {
   write: boolean
   sensitivity: string
   error?: string
+  /**
+   * 本次调用的入参（V36 工具行下钻）。
+   *
+   * - 值是**遮罩后的明文**（后端 `PolicyGuard.sanitizeArgs`：idCard/phone/mobile 键置 `***`，
+   *   字符串值里的证件/手机/学号过 mask）
+   * - **只有 `sensitivity === 'normal'` 才有值**；sensitive / restricted 一律 `null`
+   * - 因此前端只认这一个字段：`null` = 不可下钻，**不要自己按 sensitivity 猜**
+   * - 流式进行中天然拿不到（回合结束才随消息回来），这是正常的
+   */
+  argsJson?: string | null
+  /**
+   * 本次调用的**开始**时刻（epoch ms）—— **只用于把工具行与推理段/旁白行按时间交错，不渲染**。
+   *
+   * <p>后端取的是 `now - cost`（cost 为执行耗时）而不是落库时刻：落库发生在工具结束之后，
+   * 用结束时刻排序会让"耗时长的工具"整行漂到它之后的推理段后面，读起来顺序是错的。
+   *
+   * <p>老消息（本次契约之前落库的）没有这个字段 → `undefined`；
+   * 前端必须回落到原有分组顺序，不能拿 `undefined` 参与比较。
+   */
+  ts?: number | null
+}
+
+/**
+ * 编排旁白的一行（V36）。
+ *
+ * <p>与 `AgentThinkingStep` 的主体不同：旁白是**后端编排说的**
+ * （「正在理解你的问题…」「已找到 3 条相关依据，正在整理…」），
+ * 一行一句话、没有正文可展开；推理是**模型说的**，可按轮次分段展开读原文。
+ * 历史回放时两者按 `ts` 合并排序，才是"刷新前后同一条时间轴"。
+ */
+export interface AgentThinkingNote {
+  note: string
+  /** 事件时间戳（毫秒）——历史回放按它把旁白与推理段排回真实顺序 */
+  ts: number
+  /** 持续到下一句旁白/下一步的时长；最后一条没有（后端不给 0，避免渲染成"耗时 0ms"） */
+  durationMs?: number
+}
+
+/**
+ * 思维链的一段（V35）。
+ *
+ * <p>一段 = 本轮问答内**一次 LLM 调用**产生的模型推理原文
+ * （DeepSeek reasoner 的 `reasoning_content`）。同一轮里工具调用会触发第二次 LLM 调用，
+ * 因此一次回答通常有 1~N 段 —— 分段而不是拼成一坨，折叠态才能显示"推理 N 段"，
+ * 展开态才能逐段读。
+ *
+ * <p>与 `AgentToolCallEntry` 互补：一个是"为什么这么做"（推理），一个是"做了什么"（动作）。
+ */
+export interface AgentThinkingStep {
+  /** 本轮问答内的第几次 LLM 调用（从 0 起；重试/降级会 +1000/+2000） */
+  round: number
+  /** 推理原文（后端已按段截断，前端仍需按行数折叠） */
+  text: string
+  startedAt?: number
+  endedAt?: number
+  durationMs?: number
 }
 
 /** 表单字段 schema（D2.5 Form Elicitation，自描述 → 新增表单型工具前端零改动） */
@@ -228,6 +291,10 @@ export interface AgentChatResponse {
   provider: string
   degraded: boolean
   durationMs: number
+  /** 本轮思维链快照（V35）。与落库的是同一份 —— 下一轮开始时靠它回放，不必再拉接口 */
+  thinking?: AgentThinkingStep[]
+  /** 本轮编排旁白快照（V36）。同样与落库一致 */
+  thinkingNotes?: AgentThinkingNote[]
   pendingTaskCount: number
 }
 
@@ -237,7 +304,10 @@ export interface AgentConversationVO {
   createdAt: string
   updatedAt: string
   pendingTaskCount: number
+  status?: AgentConversationStatus
 }
+
+export type AgentConversationStatus = 'READY' | 'RUNNING' | 'WAITING_INPUT' | 'PENDING_CONFIRM' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED' | 'STOPPED'
 
 export interface AgentConversationsPage {
   records: AgentConversationVO[]
@@ -259,6 +329,17 @@ export interface AgentMessageVO {
   durationMs: number | null
   createdAt: string
   toolCalls: AgentToolCallEntry[]
+  /**
+   * 该轮的思维链（V35）。老数据为空数组 —— 前端据此只渲染工具行，不报错。
+   * 与 toolCalls 合起来才是完整的过程时间轴。
+   */
+  thinking?: AgentThinkingStep[]
+  /**
+   * 该轮的编排旁白（V36）。老数据为空数组。
+   * 与 `thinking` 一起按 ts 合并回放 —— 只回放推理的话，刷新后过程区会少掉
+   * 「正在理解你的问题…」「已找到 N 条相关依据」这些行。
+   */
+  thinkingNotes?: AgentThinkingNote[]
   /** V26 历史恢复：随消息持久化的工具结果引用（此前只随 /chat 同步返回） */
   references: AgentReference[]
   /** 该轮产生的产物（UI v2）：历史上已执行完的动作，重进会话时用于渲染产物卡 */
@@ -277,6 +358,14 @@ export interface AgentMessageVO {
   plan: AgentActionPlan | null
   /** 仍待填写的表单卡（WAITING_INPUT 时后端挂回本消息），否则 null */
   form: AgentInputForm | null
+  taskResult?: {
+    status: string
+    taskId: number
+    message?: string
+    skipped?: AgentSkippedItem[]
+    detail?: Record<string, unknown>
+    artifacts?: AgentArtifact[]
+  } | null
 }
 
 export interface AgentMessagesPage {

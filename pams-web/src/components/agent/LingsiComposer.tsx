@@ -3,10 +3,13 @@ import { useState, useRef, useEffect } from 'react'
 import type { AgentChatRef, AgentMode } from '@/api/agent'
 import { listActivities } from '@/api/activity'
 import type { ActivityVO } from '@/api/activity'
-import { Book, Check, Close, Lock, Plus, Rules, Send, Stop, Toolbox } from './LingsiIcons'
+import { Close, Plus, Rules, Send, Stop, Toolbox } from './LingsiIcons'
+import GlassSelect from '@/components/glass/GlassSelect'
+import type { GlassSelectOption } from '@/components/glass/GlassSelect'
 
 interface Props {
   busy: boolean
+  canStop?: boolean
   disabled?: boolean
   /** 运行模式（UI v2 §E）：只读 / 标准，由 store 持有 */
   mode: AgentMode
@@ -43,6 +46,13 @@ interface ActivityOption {
   activity: ActivityVO
 }
 
+/** 运行模式三档：与后端 normalizeMode 的取值一一对应（UI v2 §E） */
+const MODE_OPTIONS: GlassSelectOption<AgentMode>[] = [
+  { value: 'standard', label: '标准模式' },
+  { value: 'readonly', label: '只读模式' },
+  { value: 'kb', label: '资料问答' },
+]
+
 /**
  * 输入区（灵思 §6.3 + UI v2 §E「单侧控制点」）。
  *
@@ -58,6 +68,7 @@ interface ActivityOption {
  */
 export default function LingsiComposer({
   busy,
+  canStop = true,
   disabled,
   mode,
   onModeChange,
@@ -162,7 +173,7 @@ export default function LingsiComposer({
         value={picked as unknown as ActivityOption}
         options={options}
         onSearch={searchActivity}
-        onDropdownVisibleChange={(open) => {
+        onOpenChange={(open) => {
           // 首次打开就给一份最近活动，避免"空列表让人以为不能搜"
           if (open && options.length === 0) searchActivity('')
         }}
@@ -211,10 +222,10 @@ export default function LingsiComposer({
               disabled
                 ? '正在加载会话…'
                 : kb
-                  ? '问制度、问流程、问以前怎么做的，例如「发展党员要走哪些流程」'
-                  : '问我任何党务相关的事，例如「南湖革命纪念馆活动谁还没签到」'
+                  ? '问一个资料问题，例如：活动结束后要归档哪些材料？'
+                  : '说说你要准备什么，或补充当前任务的要求…'
             }
-            autoSize={{ minRows: 1, maxRows: 6 }}
+            autoSize={{ minRows: 2, maxRows: 6 }}
             disabled={disabled}
             variant="borderless"
             className="lingsi-composer-ta"
@@ -248,79 +259,23 @@ export default function LingsiComposer({
               </button>
             </Tooltip>
 
-            {/* ---- 档位：只读 / 标准 / 对话 ---- */}
-            <span className="lingsi-seg" role="group" aria-label="运行模式">
-              <Tooltip title="本次会话不写入任何数据。你的账号权限没有变化，只是主动放弃写能力。">
-                <button
-                  type="button"
-                  className={`lingsi-seg-btn${readonly ? ' lingsi-seg-btn-on' : ''}`}
-                  aria-pressed={readonly}
-                  onClick={() => onModeChange('readonly')}
-                >
-                  <Lock size={11.5} />
-                  只读
-                </button>
-              </Tooltip>
-              <Tooltip title="可执行写操作，但每次写入前都会先给你一份清单，确认后才落库。">
-                <button
-                  type="button"
-                  className={`lingsi-seg-btn${mode === 'standard' ? ' lingsi-seg-btn-on' : ''}`}
-                  aria-pressed={mode === 'standard'}
-                  onClick={() => onModeChange('standard')}
-                >
-                  <Check size={11.5} />
-                  标准
-                </button>
-              </Tooltip>
-              <Tooltip
-                title={
-                  '只在制度、公告、稿件、策划书等资料里找答案，并给出出处。'
-                  + '不执行任何操作，也不会改动数据。'
-                }
-              >
-                <button
-                  type="button"
-                  className={`lingsi-seg-btn${kb ? ' lingsi-seg-btn-on' : ''}`}
-                  aria-pressed={kb}
-                  onClick={() => onModeChange('kb')}
-                >
-                  <Book size={11.5} />
-                  对话
-                </button>
-              </Tooltip>
-            </span>
-
-            {/*
-              自动协作开关：只在标准档位出现 —— 只读不会升级协作，对话档位走的是
-              完全不同的问答流水线（KbPipeline），两者都不涉及「派不派专家」。
-              关闭时给一个显式状态，而不是让开关消失，否则用户会以为功能坏了。
-            */}
-            {mode === 'standard' && (
-              <Tooltip
-                title={
-                  autoCollab
-                    ? '遇到跨领域的复合任务时，灵思会自动派专家团队协作（检索/策划/写作/审查）。'
-                      + '简单问题仍然单 Agent 处理。'
-                    : '已关闭：所有任务都由单个 Agent 处理。'
-                }
-              >
-                <button
-                  type="button"
-                  className={`lingsi-collab-toggle${autoCollab ? ' lingsi-collab-toggle-on' : ''}`}
-                  aria-pressed={autoCollab}
-                  onClick={() => onAutoCollabChange(!autoCollab)}
-                >
-                  <Rules size={11.5} />
-                  自动协作
-                </button>
-              </Tooltip>
-            )}
+            <GlassSelect
+              className="lingsi-v6-mode"
+              ariaLabel="运行模式"
+              value={mode}
+              options={MODE_OPTIONS}
+              disabled={busy || disabled}
+              onChange={onModeChange}
+            />
+            <label className="lingsi-v6-collab" title="标准模式下按任务需要自动使用专家协作">
+              <input type="checkbox" checked={mode === 'standard' && autoCollab} disabled={mode !== 'standard' || busy || disabled} onChange={e => onAutoCollabChange(e.target.checked)}/>自动协作
+            </label>
 
             {modelNode}
 
             {busy ? (
-              <Tooltip title="停止本次回答">
-                <button type="button" className="lingsi-send lingsi-send-stop" onClick={onStop}>
+              <Tooltip title={canStop ? '停止本次回答' : '正在建立连接，请稍候'}>
+                <button type="button" className="lingsi-send lingsi-send-stop" aria-label="停止任务" disabled={!canStop} onClick={onStop}>
                   <Stop size={13} />
                 </button>
               </Tooltip>
@@ -329,6 +284,7 @@ export default function LingsiComposer({
                 <button
                   type="button"
                   className="lingsi-send"
+                  aria-label="发送任务"
                   onClick={submit}
                   disabled={disabled || !value.trim()}
                 >
@@ -343,7 +299,7 @@ export default function LingsiComposer({
           <span>Enter 发送 · Shift+Enter 换行</span>
           <span className="lingsi-composer-hint-r">
             {kb
-              ? '对话模式 · 只查资料，不会改动任何数据；回答都带出处'
+              ? '资料问答 · 只检索资料，回答附带出处'
               : readonly
                 ? '只读模式 · 本次会话不会改动任何数据'
                 : '涉及变更的操作会先生成清单，你确认后才执行'}

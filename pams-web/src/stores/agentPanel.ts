@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AgentArtifact } from '@/api/agent'
+import type { AgentActionPlan, AgentArtifact, AgentCitation } from '@/api/agent'
 
 /**
  * 灵思右侧实体面板（UI v2 §A「产物分屏」）。
@@ -28,6 +28,9 @@ export interface PanelItem {
   path?: string | null
   /** kind === 'text' 时的正文（Markdown 原文，渲染前会过净化） */
   text?: string
+  plan?: AgentActionPlan
+  citations?: AgentCitation[]
+  source?: AgentCitation
 }
 
 interface PanelState {
@@ -42,7 +45,7 @@ interface PanelState {
   width: number
 
   openArtifact: (a: AgentArtifact) => void
-  openText: (id: string, title: string, text: string) => void
+  openText: (id: string, title: string, text: string, context?: Pick<PanelItem, 'plan' | 'citations' | 'source'>) => void
   activate: (id: string) => void
   close: (id: string) => void
   closeAll: () => void
@@ -62,7 +65,7 @@ function loadWidth(): number {
   } catch {
     /* 隐私模式/无 localStorage：退回默认值，不影响功能 */
   }
-  return 452
+  return 350
 }
 
 function saveWidth(w: number) {
@@ -105,12 +108,13 @@ export const useAgentPanel = create<PanelState>()((set) => ({
       }
     }),
 
-  openText: (id, title, text) =>
+  openText: (id, title, text, context) =>
     set((s) => {
       const key = `t:${id}`
       const exists = s.items.some((it) => it.id === key)
       return {
-        items: exists ? s.items : [...s.items, { id: key, kind: 'text', title, text }],
+        items: exists ? s.items.map(it => it.id === key ? { ...it, title, text, ...context } : it)
+          : [...s.items, { id: key, kind: 'text', title, text, ...context }],
         activeId: key,
         collapsed: false,
       }
@@ -126,7 +130,7 @@ export const useAgentPanel = create<PanelState>()((set) => ({
       return { items, activeId }
     }),
 
-  closeAll: () => set({ items: [], activeId: null }),
+  closeAll: () => set({ items: [], activeId: null, collapsed:true }),
 
   toggle: () => set((s) => ({ collapsed: !s.collapsed })),
 

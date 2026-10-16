@@ -81,7 +81,7 @@ const dateValues = () =>
 
 /** 文本类输入框（含名称） */
 const textValues = () =>
-  Array.from(document.querySelectorAll('.ant-modal input.ant-input')).map((i) => (i as HTMLInputElement).value)
+  Array.from(document.querySelectorAll('.form-surface input.ant-input')).map((i) => (i as HTMLInputElement).value)
 
 describe('LingsiFormCard 预填与提交', () => {
   it('预填的日期显示在控件里（不能只存在 form store 里）', async () => {

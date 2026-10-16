@@ -1,12 +1,19 @@
+import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useRef, useState } from 'react'
-import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { App, Button, DatePicker, Form, Input, InputNumber, Select } from 'antd'
 import dayjs from 'dayjs'
 import { EditOutlined } from '@ant-design/icons'
-import type { AgentFormField, AgentInputForm, TaskInputResult } from '@/api/agent'
+import type {
+  AgentFormField,
+  AgentInputForm,
+  TaskInputResult,
+} from '@/api/agent'
 
 interface Props {
   form: AgentInputForm
   busy?: boolean
+  inline?: boolean
+  readonly?: boolean
   /** 提交表单：由 store.submitForm 实现；返回结果决定弹窗去留 */
   onSubmit: (values: Record<string, string>) => Promise<TaskInputResult>
 }
@@ -28,7 +35,10 @@ function toInitialValues(form: AgentInputForm): Record<string, unknown> {
 }
 
 /** 提交前归一化：dayjs → 'YYYY-MM-DD'，select(tags) 取第一项，number 转字符串 */
-function normalize(fields: AgentFormField[], raw: Record<string, unknown>): Record<string, string> {
+function normalize(
+  fields: AgentFormField[],
+  raw: Record<string, unknown>,
+): Record<string, string> {
   const out: Record<string, string> = {}
   for (const f of fields) {
     const v = raw[f.name]
@@ -54,11 +64,18 @@ function normalize(fields: AgentFormField[], raw: Record<string, unknown>): Reco
  *
  * 硬约束：只依赖 AgentInputForm 结构，不感知具体业务 —— 新增表单型工具前端零改动（D11）。
  */
-export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
+export default function LingsiFormCard({
+  form,
+  busy,
+  inline,
+  readonly,
+  onSubmit,
+}: Props) {
   const { message } = App.useApp()
   const [antdForm] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const openedFor = useRef<string | null>(null)
 
   /**
@@ -101,12 +118,15 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
   }).length
 
   const handleOk = async () => {
+    if (readonly) return
+    setSubmitError('')
     try {
       const raw = await antdForm.validateFields()
       setSubmitting(true)
       const res = await onSubmit(normalize(form.fields, raw))
       if (res.status === 'ERROR') {
-        message.error(res.error ?? '提交失败，请检查后重试')
+        setSubmitError(res.error ?? '提交失败，请检查后重试')
+        if (!inline) message.error(res.error ?? '提交失败，请检查后重试')
         return // 保留弹窗让用户修改
       }
       if (res.status === 'CANCELLED') {
@@ -124,77 +144,133 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
     <div className="lingsi-form">
       <div className="lingsi-form-head">
         <EditOutlined />
-        <span className="lingsi-form-title">{form.title || '需要补充信息'}</span>
+        <span className="lingsi-form-title">
+          {form.title || '需要补充信息'}
+        </span>
         <span className="lingsi-form-summary">
           已预填 {prefilled} 项 · 还需你核对补全
         </span>
       </div>
 
       <div className="lingsi-form-sec">
-        {form.description && <div className="lingsi-form-desc">{form.description}</div>}
-        <div className="lingsi-form-fields">
-          {form.fields.map((f) => (
-            <span className="lingsi-form-field" key={f.name}>
-              {f.label}
-              {f.required && <em>*</em>}
-              {form.values?.[f.name] != null && form.values[f.name] !== '' && (
-                <span className="lingsi-form-prefill" title={String(form.values[f.name])}>
-                  已预填
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
+        {form.description && (
+          <div className="lingsi-form-desc">{form.description}</div>
+        )}
+        {inline && (
+          <Form
+            form={antdForm}
+            layout="vertical"
+            initialValues={toInitialValues(form)}
+            disabled={busy || readonly}
+            onFinish={handleOk}
+          >
+            <div className="lingsi-inline-form-grid">
+              {form.fields.map((f) => (
+                <Form.Item
+                  key={f.name}
+                  name={f.name}
+                  label={f.label}
+                  rules={
+                    f.required
+                      ? [{ required: true, message: `${f.label}为必填` }]
+                      : undefined
+                  }
+                >
+                  <FormFieldControl field={f} />
+                </Form.Item>
+              ))}
+            </div>
+            {submitError && (
+              <p className="lingsi-inline-form-error" role="alert">
+                {submitError}
+              </p>
+            )}
+          </Form>
+        )}
+        {!inline && (
+          <div className="lingsi-form-fields">
+            {form.fields.map((f) => (
+              <span className="lingsi-form-field" key={f.name}>
+                {f.label}
+                {f.required && <em>*</em>}
+                {form.values?.[f.name] != null &&
+                  form.values[f.name] !== '' && (
+                    <span
+                      className="lingsi-form-prefill"
+                      title={String(form.values[f.name])}
+                    >
+                      已预填
+                    </span>
+                  )}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="lingsi-form-foot">
         <span className="lingsi-form-summary">
           提交后将生成待确认清单，确认后才会执行
         </span>
-        <Button size="small" type="primary" onClick={() => setOpen(true)}>
-          打开表单
+        <Button
+          size="small"
+          type="primary"
+          disabled={busy || readonly}
+          loading={submitting}
+          onClick={() => (inline ? void handleOk() : setOpen(true))}
+        >
+          {inline ? '补充并继续' : '打开表单'}
         </Button>
       </div>
 
-      <Modal
-        title={form.title || '需要补充信息'}
-        open={open}
-        onOk={handleOk}
-        onCancel={() => setOpen(false)}
-        forceRender
-        maskClosable={false}
-        width={520}
-        okText="提交并生成清单"
-        cancelText="稍后再填"
-        confirmLoading={submitting || Boolean(busy)}
-        okButtonProps={{ disabled: busy }}
-      >
-        <Form
-          /*
+      {!inline && (
+        <FormSurface
+          mode="drawer"
+          description="补充任务所需信息，提交后继续核对待确认清单。"
+          title={form.title || '需要补充信息'}
+          open={open}
+          onOk={handleOk}
+          onCancel={() => setOpen(false)}
+          forceRender
+          destroyOnHidden={false}
+          maskClosable={false}
+          width={520}
+          okText="提交并生成清单"
+          cancelText="稍后再填"
+          confirmLoading={submitting || Boolean(busy)}
+          okButtonProps={{ disabled: busy }}
+        >
+          <Form
+            /*
             key 不能只跟 taskId 走：**首次下发的表单没有 taskId**（后端只在 submitInput
             的返回里补 taskId），而本弹窗设了 destroyOnHidden —— 关闭时 Form 卸载，
             下次打开重新挂载。若 key 用 undefined，重挂载时 initialValues 可能来自旧对象，
             用户会看到「日期是空的却被标必填」，提交时报「开始日期为必填」（实测复现）。
             用「表单标识 + 预填值指纹」做 key：预填值一变就重建，保证 initialValues 永远是最新的。
           */
-          key={`${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`}
-          form={antdForm}
-          layout="vertical"
-          initialValues={toInitialValues(form)}
-          requiredMark
-        >
-          {form.fields.map((f) => (
-            <Form.Item
-              key={f.name}
-              name={f.name}
-              label={f.label}
-              rules={f.required ? [{ required: true, message: `${f.label}为必填` }] : undefined}
-            >
-              <FormFieldControl field={f} />
-            </Form.Item>
-          ))}
-        </Form>
-      </Modal>
+            key={`${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`}
+            form={antdForm}
+            layout="vertical"
+            initialValues={toInitialValues(form)}
+            requiredMark
+          >
+            {form.fields.map((f) => (
+              <Form.Item
+                key={f.name}
+                name={f.name}
+                label={f.label}
+                rules={
+                  f.required
+                    ? [{ required: true, message: `${f.label}为必填` }]
+                    : undefined
+                }
+              >
+                <FormFieldControl field={f} />
+              </Form.Item>
+            ))}
+          </Form>
+        </FormSurface>
+      )}
     </div>
   )
 }
@@ -207,7 +283,13 @@ export default function LingsiFormCard({ form, busy, onSubmit }: Props) {
  * 会出现**表单 store 里有值、输入框却显示为空**——用户看到空框却被标 `*` 必填，
  * 提交时报「开始日期为必填」。显式受控绕开该时序问题，也让预填值必然可见可改。
  */
-function FormFieldControl({ field }: { field: AgentFormField }) {
+function FormFieldControl({
+  field,
+  id,
+}: {
+  field: AgentFormField
+  id?: string
+}) {
   const { placeholder } = field
   const { getFieldValue, setFieldValue } = Form.useFormInstance()
   const v = getFieldValue(field.name)
@@ -219,6 +301,7 @@ function FormFieldControl({ field }: { field: AgentFormField }) {
     case 'textarea':
       return (
         <Input.TextArea
+          id={id}
           rows={3}
           placeholder={placeholder}
           maxLength={1000}
@@ -229,6 +312,7 @@ function FormFieldControl({ field }: { field: AgentFormField }) {
     case 'date':
       return (
         <DatePicker
+          id={id}
           style={{ width: '100%' }}
           placeholder={placeholder ?? '选择日期'}
           value={asDayjs()}
@@ -240,6 +324,7 @@ function FormFieldControl({ field }: { field: AgentFormField }) {
       const arr = Array.isArray(v) ? (v as string[]) : v ? [String(v)] : []
       return (
         <Select
+          id={id}
           mode="tags"
           maxCount={1}
           value={arr}
@@ -252,6 +337,7 @@ function FormFieldControl({ field }: { field: AgentFormField }) {
     case 'number':
       return (
         <InputNumber
+          id={id}
           style={{ width: '100%' }}
           placeholder={placeholder}
           value={v == null || v === '' ? null : Number(v)}
@@ -261,6 +347,7 @@ function FormFieldControl({ field }: { field: AgentFormField }) {
     default:
       return (
         <Input
+          id={id}
           placeholder={placeholder}
           maxLength={200}
           value={v == null ? '' : String(v)}

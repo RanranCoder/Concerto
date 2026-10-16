@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { TimelineItem } from '@/stores/agent'
 import { agentColorOf, agentShortOf } from '@/styles/categoryColors'
+import { formatDuration, hasTeamPanel } from '@/utils/thinking'
 import { Caret, Sparkles } from './LingsiIcons'
 
 interface Props {
@@ -41,8 +42,11 @@ export default function LingsiTeamPanel({ items, active }: Props) {
     return { agents: Array.from(seen.values()), mode: collabMode, reason: collabReason, reviews: rv }
   }, [items])
 
-  // 没有协作事件 → 这一轮是单 Agent，整块不渲染（不占位、不打扰）
-  if (agents.length === 0 && reviews.length === 0) return null
+  // 没有协作事件 → 这一轮是单 Agent，整块不渲染（不占位、不打扰）。
+  // 判据用 utils/thinking.ts 的 hasTeamPanel：过程区要靠**同一个**判据决定
+  // 是否把 agent/collab 行让给本面板渲染 —— 两处各写一份必然漂移
+  // （一边藏了、一边没渲染 → 信息直接消失）
+  if (!hasTeamPanel(items)) return null
 
   const open = manual ?? Boolean(active)
   const done = agents.filter((a) => a.completed && a.status !== 'FAILED').length
@@ -88,7 +92,7 @@ export default function LingsiTeamPanel({ items, active }: Props) {
                   </span>
                   <span className="lingsi-team-name">{a.label}</span>
                   {typeof a.durationMs === 'number' && a.durationMs > 0 && (
-                    <span className="lingsi-team-dur">{a.durationMs}ms</span>
+                    <span className="lingsi-team-dur">{formatDuration(a.durationMs)}</span>
                   )}
                   <span className={`tone-tag tone-${st === 'ok' ? 'success' : st === 'warn' ? 'warning' : 'processing'}`}>
                     {text}

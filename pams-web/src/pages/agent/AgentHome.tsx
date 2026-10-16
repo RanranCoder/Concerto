@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Drawer, Spin, Tag, Tooltip } from 'antd'
+import { Drawer, Spin, Tooltip } from 'antd'
 import { useAgentStore } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
-import { useMediaQuery, useNarrow } from '@/hooks/useMediaQuery'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { AgentActionPlan, TaskInputResult } from '@/api/agent'
 import LingsiConversationList from '@/components/agent/LingsiConversationList'
 import LingsiComposer from '@/components/agent/LingsiComposer'
@@ -11,7 +11,9 @@ import LingsiMessageBody from '@/components/agent/LingsiMessageBody'
 import LingsiUserBubble from '@/components/agent/LingsiUserBubble'
 import LingsiToolDrawer from '@/components/agent/LingsiToolDrawer'
 import LingsiEntityPanel from '@/components/agent/LingsiEntityPanel'
-import { Menu, PanelRight, Tool } from '@/components/agent/LingsiIcons'
+import { Menu, PanelRight, Toolbox } from '@/components/agent/LingsiIcons'
+import { agentStatusLabels, conversationStatus } from '@/utils/agentTask'
+import type { AgentConversationStatus, AgentMode } from '@/api/agent'
 
 /**
  * 灵思主页（灵思设计方案 §5 / §7 + UI 改版方案 v2 §A）。
@@ -37,6 +39,7 @@ export default function AgentHome() {
   const userTexts = useAgentStore((s) => s.userTexts)
   const timeline = useAgentStore((s) => s.timeline)
   const thinking = useAgentStore((s) => s.thinking)
+  const activeStreamId = useAgentStore((s) => s.activeStreamId)
   const pendingTaskCount = useAgentStore((s) => s.pendingTaskCount)
   const mode = useAgentStore((s) => s.mode)
   const setMode = useAgentStore((s) => s.setMode)
@@ -59,11 +62,10 @@ export default function AgentHome() {
   const panelItems = useAgentPanel((s) => s.items)
   const panelCollapsed = useAgentPanel((s) => s.collapsed)
   const togglePanel = useAgentPanel((s) => s.toggle)
-  const setPanelCollapsed = useAgentPanel((s) => s.setCollapsed)
 
-  const narrow = useNarrow()
+  const narrow = useMediaQuery('(max-width: 1250px)')
   /** <900px：任务栏放不下了，改走抽屉（对齐原设计方案 §3.2 的窄屏降级） */
-  const isPhone = useMediaQuery('(max-width: 900px)')
+  const isPhone = useMediaQuery('(max-width: 960px)')
 
   const [toolsOpen, setToolsOpen] = useState(false)
   const [siderOpen, setSiderOpen] = useState(false)
@@ -85,10 +87,19 @@ export default function AgentHome() {
     }
   }, [fetchConversations])
 
-  // 窄屏不分屏：直接把面板收起，避免对话区被挤到读不了
-  useEffect(() => {
-    if (narrow) setPanelCollapsed(true)
-  }, [narrow, setPanelCollapsed])
+  const conversation = conversations.find(c => c.id === currentConversationId)
+  const lastOutcome = outcomes.at(-1)
+  const currentStatus: AgentConversationStatus = thinking ? 'RUNNING'
+    : outcomes.some(o => o.form) ? 'WAITING_INPUT'
+    : outcomes.some(o => o.plan) ? 'PENDING_CONFIRM'
+    : lastOutcome?.notice?.level === 'failed' ? 'FAILED'
+    : lastOutcome?.notice?.level === 'partial' ? 'PARTIAL'
+    : lastOutcome?.notice?.level === 'info' ? 'CANCELLED'
+    : lastOutcome?.status === 'stopped' ? 'STOPPED'
+    : lastOutcome?.status === 'failed' ? 'FAILED'
+    : lastOutcome?.timeline.some(t => t.kind === 'error') ? 'FAILED'
+    : outcomes.length > 0 ? 'COMPLETED'
+    : conversation ? conversationStatus(conversation) : 'READY'
 
   // 用户提问与助手回复按下标一一对齐（store 在 sendMessage 的同一次 set 里同时写入两者）。
   // 结果块/异步完成追加的消息没有用户文案，userTexts 侧补空串占位，因此下标恒等。
@@ -119,12 +130,16 @@ export default function AgentHome() {
 
   const handleSelect = useCallback(
     (id: number) => {
+      useAgentPanel.getState().closeAll()
+      setSeed({ text:'', nonce:Date.now() })
       void selectConversation(id)
     },
     [selectConversation],
   )
 
   const handleNew = useCallback(() => {
+    useAgentPanel.getState().closeAll()
+    setSeed({ text:'', nonce:Date.now() })
     void selectConversation(null)
   }, [selectConversation])
 
@@ -190,6 +205,11 @@ export default function AgentHome() {
     setSeed({ text, nonce: Date.now() })
   }, [])
 
+  const handleStarter = (text: string, target?: AgentMode) => {
+    if (target) void setMode(target)
+    setSeed({ text, nonce: Date.now() })
+  }
+
   const isEmpty = rows.length === 0
 
   /** 模型档位展示：取最近一轮的 provider */
@@ -212,23 +232,26 @@ export default function AgentHome() {
       loading={conversationsLoading}
       currentId={currentConversationId}
       pendingTaskCount={pendingTaskCount}
+      currentStatus={currentStatus}
+      busy={thinking || messagesLoading}
       onNew={handleNew}
       onSelect={handleSelect}
       onDelete={handleDelete}
+      onOpenTools={() => setToolsOpen(true)}
       onNavigate={() => setSiderOpen(false)}
     />
   )
 
   return (
-    <div className={`lingsi-page${narrow ? ' lingsi-page-narrow' : ''}`}>
+    <div className={`lingsi-page lingsi-v6${narrow ? ' lingsi-page-narrow' : ''}`}>
       {isPhone ? (
         <Drawer
-          className="lingsi-sider-drawer"
+          className="lingsi-sider-drawer lingsi-v6-task-drawer"
           open={siderOpen}
           onClose={() => setSiderOpen(false)}
           placement="left"
           width={288}
-          closable={false}
+          title="任务列表"
           styles={{ body: { padding: 0 } }}
         >
           {siderNode}
@@ -237,40 +260,32 @@ export default function AgentHome() {
         siderNode
       )}
 
-      <div className="lingsi-main glass-card">
+      <div className="lingsi-main">
         <div className="lingsi-main-head">
           {isPhone && (
             <Tooltip title="任务列表">
-              <button type="button" className="lingsi-icon-btn" onClick={() => setSiderOpen(true)}>
+              <button type="button" className="lingsi-icon-btn" aria-label="打开任务列表" onClick={() => setSiderOpen(true)}>
                 <Menu size={16} />
               </button>
             </Tooltip>
           )}
-          <span className="lingsi-main-title">
-            <Tool size={14} />
-            {currentConversationId ? '任务进行中' : '新任务'}
-            {mode === 'readonly' && <span className="lingsi-main-mode">只读</span>}
-            {mode === 'kb' && <span className="lingsi-main-mode">对话</span>}
-          </span>
+          <div className="lingsi-main-title"><h1>{conversation?.title || (currentConversationId ? userTexts[0]?.slice(0,22) || '当前任务' : '新任务')}</h1><small>{currentConversationId ? '当前组织资料与关联活动' : '组织工作，从一句话开始'}</small></div>
           <span className="lingsi-main-head-actions">
-            {pendingTaskCount > 0 && (
-              <Tooltip title="有待确认的操作，请在会话中确认后再离开">
-                <Tag color="orange" className="lingsi-main-pending">
-                  {pendingTaskCount} 项待确认
-                </Tag>
-              </Tooltip>
-            )}
+            {currentConversationId && <button type="button" className={`lingsi-status-chip status-${currentStatus}`} onClick={() => scrollRef.current?.querySelector('.lingsi-plan, .lingsi-form')?.scrollIntoView({ behavior:'smooth', block:'center' })}>{agentStatusLabels[currentStatus]}</button>}
             {showPanelToggle && (
               <Tooltip title={panelCollapsed ? '展开产物面板' : '收起产物面板'}>
                 <button
                   type="button"
                   className={`lingsi-icon-btn${panelCollapsed ? '' : ' lingsi-icon-btn-on'}`}
                   onClick={togglePanel}
+                  aria-label={panelCollapsed ? '展开工作成果' : '收起工作成果'}
+                  aria-expanded={!panelCollapsed}
                 >
-                  <PanelRight size={15} />
+                  <PanelRight size={15} /><span>工作成果</span>
                 </button>
               </Tooltip>
             )}
+            <button type="button" className="lingsi-icon-btn" aria-label="能力与资料范围" title="能力与资料范围" onClick={() => setToolsOpen(true)}><Toolbox size={16}/></button>
           </span>
         </div>
 
@@ -281,7 +296,7 @@ export default function AgentHome() {
                 <Spin />
               </div>
             ) : isEmpty ? (
-              <LingsiEmptyState onPick={handleSend} onOpenTools={() => setToolsOpen(true)} mode={mode} />
+              <LingsiEmptyState onPick={handleStarter} onOpenTools={() => setToolsOpen(true)} mode={mode} recent={conversations} onSelect={handleSelect}/>
             ) : (
               rows.map((r, i) => {
                 const msg = r.outcomeIdx >= 0 ? outcomes[r.outcomeIdx] : undefined
@@ -299,7 +314,7 @@ export default function AgentHome() {
                         active={isLast && (thinking || msg.streaming)}
                         planBusy={planBusy}
                         formBusy={formBusy}
-                        readonly={mode === 'readonly'}
+                        readonly={mode !== 'standard'}
                         // 重新生成仅最后一条：历史重生成会产生分叉（一期不做）
                         onRegenerate={isLast && r.user ? () => handleSend(r.user as string) : undefined}
                         onConfirmPlan={doConfirm}
@@ -316,6 +331,7 @@ export default function AgentHome() {
 
         <LingsiComposer
           busy={thinking}
+          canStop={Boolean(activeStreamId)}
           disabled={messagesLoading}
           mode={mode}
           onModeChange={(m) => void setMode(m)}

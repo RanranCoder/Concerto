@@ -63,7 +63,7 @@ export default function LingsiMessageBody({
     const c = citations.find((x) => x.index === index)
     if (!c || c.revoked) return   // 已不可见的引用不展示内容
     openText(`cite-${c.sourceType}-${c.sourceId}-${index}`,
-      `${c.sourceTitle}${c.path ? ` · ${c.path}` : ''}`, c.snippet)
+      `${c.sourceTitle}${c.path ? ` · ${c.path}` : ''}`, c.snippet, { source:c, citations })
   }
   // 产物：优先取消息级（历史水合与确认回写都写在这里），仅在没有时回退到结果块上挂的
   const artifacts = msg.artifacts?.length ? msg.artifacts : (msg.notice?.artifacts ?? [])
@@ -78,9 +78,8 @@ export default function LingsiMessageBody({
 
   return (
     <div className="lingsi-turn">
-      <LingsiAvatar size={24} />
-
       <div className="lingsi-turn-body">
+        <div className="lingsi-answer-heading"><LingsiAvatar size={30}/><span>灵思</span><small>{active ? '正在处理' : '内容与事实需核对'}</small></div>
         {/*
           协作团队面板：仅在标准模式被判定升级为协作时才有内容（单 Agent 轮次整块不渲染）。
           位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，
@@ -120,6 +119,7 @@ export default function LingsiMessageBody({
             plan={msg.plan}
             busy={planBusy}
             readonly={readonly}
+            citations={citations}
             onConfirm={() => onConfirmPlan(msg.plan as AgentActionPlan)}
             onCancel={() => onCancelPlan(msg.plan as AgentActionPlan)}
           />
@@ -129,6 +129,8 @@ export default function LingsiMessageBody({
         {!hasPlan && msg.form && (
           <LingsiFormCard
             form={msg.form}
+            inline
+            readonly={readonly}
             busy={formBusy}
             onSubmit={(values) => onSubmitForm(msg.form!.taskId, values)}
           />
@@ -138,6 +140,7 @@ export default function LingsiMessageBody({
         {msg.notice && (
           <div className={`lingsi-notice lingsi-notice-${msg.notice.level}`}>{msg.notice.text}</div>
         )}
+        {msg.notice?.skipped && msg.notice.skipped.length > 0 && <div className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{msg.notice.skipped.map((s,i) => <p key={i}>{s.label}{s.sub ? ` / ${s.sub}` : ''}：{s.reason}</p>)}</div>}
 
         {/* 产物卡（UI v2 §C）：notice 回答"成没成"，这里回答"改了哪几样" */}
         {artifacts.length > 0 && (

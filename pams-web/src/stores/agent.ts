@@ -9,15 +9,39 @@ import type {
   AgentMode,
   AgentReference,
   AgentStreamEvent,
+  AgentSkippedItem,
+  AgentThinkingNote,
+  AgentThinkingStep,
   AgentToolCallEntry,
   TaskInputResult,
 } from '@/api/agent'
 import * as api from '@/api/agent'
+import { thinkingHeadline, timelineFromMessage } from '@/utils/thinking'
 
 /** 协作过程事件：需要按会话归属过滤的那几类（见 applyStreamEvent） */
 const COLLAB_EVENT_TYPES = new Set([
   'COLLAB_DECISION', 'AGENT_START', 'AGENT_END', 'AGENT_DELEGATE', 'REVIEW_RESULT',
 ])
+let requestVersion = 0
+const stoppedStreams = new Set<string>()
+
+/**
+ * 收到这些事件就说明"这一轮的推理已经结束"：模型要么开始调工具、要么开始出正文、要么收官。
+ *
+ * <p>为什么需要它：{@code THINKING_DELTA} 到达时那一行是"推理中"（前缀脉冲），
+ * 而推理结束后**不会**再发一个"推理结束"事件 —— 不封口的话，
+ * 一段早已读完的推理会一直显示成正在思考，用户以为卡住了。
+ */
+const SEAL_THINKING_EVENTS = new Set([
+  'TOOL_START', 'TOOL_END', 'PLAN_READY', 'INPUT_NEEDED', 'MESSAGE_DELTA',
+  'MESSAGE_DONE', 'ERROR', 'ABORTED', 'REVIEW_RESULT',
+])
+
+/** 把仍在"推理中"的思维链段标记为完成（没有待封口段时原样返回，避免无谓重建） */
+function sealThinking(list: TimelineItem[]): TimelineItem[] {
+  if (!list.some((x) => x.kind === 'thinking' && !x.completed)) return list
+  return list.map((x) => (x.kind === 'thinking' && !x.completed ? { ...x, completed: true } : x))
+}
 
 /** 过程区时间轴的一行（由 AgentStreamEvent 归并而成） */
 export interface TimelineItem {
@@ -33,6 +57,19 @@ export interface TimelineItem {
   kind: 'thinking' | 'tool' | 'plan' | 'error' | 'aborted' | 'agent' | 'review' | 'collab'
   tool?: string
   label: string
+  /**
+   * 思维链原文（V35）：kind==='thinking' 时的模型推理正文（可展开阅读）。
+   * label 是它的折叠标题 —— 两者同源，label 由 detail 派生（见 utils/thinking.ts），
+   * 不要手工各写一份，否则标题与正文会对不上。
+   */
+  detail?: string
+  /** 该行所属的 LLM 调用轮次（thinking 行必有；工具行跟随其所在段） */
+  round?: number
+  /**
+   * 工具行的入参（V36 下钻）。**只有后端给了才有值**（`normal` 级工具），
+   * 值为遮罩后的明文；`undefined` 就表示不可下钻 —— 前端不自己按 sensitivity 猜。
+   */
+  argsJson?: string
   status?: string
   durationMs?: number
   error?: string
@@ -48,6 +85,7 @@ export interface TimelineItem {
 
 /** 结果区的一条助手消息 */
 export interface OutcomeMessage {
+  status?: 'failed' | 'stopped'
   messageId: number | null
   streamId: string | null
   reply: string
@@ -67,6 +105,13 @@ export interface OutcomeMessage {
   provider: string
   degraded: boolean
   durationMs: number
+  /** 本轮思维链（V35）：由落库/接口回放，历史轮次的过程区因此不再只有工具行 */
+  thinking: AgentThinkingStep[]
+  /**
+   * 本轮编排旁白（V36）。与 thinking 一起按 ts 合并回放 ——
+   * 只回放推理的话，刷新后过程区会少掉「正在理解你的问题…」这些行。
+   */
+  thinkingNotes: AgentThinkingNote[]
   /** 该轮自己的过程时间轴（V26 历史恢复：由 toolCalls 摘要派生，历史轮次不再空白） */
   timeline: TimelineItem[]
   /** 该条是否仍在等待后续事件（用于"进行中"骨架） */
@@ -97,6 +142,7 @@ export interface AgentResultNotice {
   artifacts?: AgentArtifact[]
   /** 变更量（卡片头右侧），由 detail 派生 */
   deltas?: DeltaChip[]
+  skipped?: AgentSkippedItem[]
 }
 
 /** 产物卡头部的变更量标签（如「+41 条任务」「3 人跳过」） */
@@ -120,6 +166,7 @@ const DELTA_RULES: { key: string; unit: string; tone: DeltaChip['tone']; sign?: 
   { key: 'skipped', unit: '人跳过', tone: 'warn' },
   { key: 'days', unit: '天排班', tone: 'add' },
   { key: 'persons', unit: '人次', tone: 'add' },
+  { key: 'slots', unit: '个班次', tone: 'add' },
 ]
 
 function deltaChips(detail: unknown, affectedCount: unknown, failedCount: unknown): DeltaChip[] {
@@ -176,6 +223,8 @@ function emptyOutcome(): OutcomeMessage {
     provider: '',
     degraded: false,
     durationMs: 0,
+    thinking: [],
+    thinkingNotes: [],
     timeline: [],
     streaming: false,
   }
@@ -192,6 +241,7 @@ function noticeFromStatus(
     artifacts?: unknown
     detail?: unknown
     taskId?: number
+    skipped?: AgentSkippedItem[]
   },
 ): AgentResultNotice {
   const level: NoticeLevel =
@@ -205,6 +255,7 @@ function noticeFromStatus(
     taskId: src.taskId,
     artifacts: sanitizeArtifacts(src.artifacts),
     deltas: deltaChips(src.detail, src.affectedCount, src.failedCount),
+    skipped: src.skipped ?? [],
   }
 }
 
@@ -297,7 +348,9 @@ interface AgentState {
  * 把过程事件归并进时间轴。
  *
  * 归并规则（灵思 §7.1）：
- * - THINKING → 追加一行
+ * - THINKING → 追加一行（编排旁白，一次性过渡态）
+ * - THINKING_DELTA → **不新起行**：同 round 的推理片段就地拼进已有 thinking 行的 detail，
+ *   标题随原文重算。这是"思维链"能读的前提 —— 每个片段一行的话，一次回答会刷出上百行
  * - TOOL_START → 该 seq 预留一行（completed=false，前端显示"进行中"）
  * - TOOL_END → 用 tool 名匹配最近一条未完成的 tool 行并补全
  * - seq 单调递增，按 seq 排序 → 乱序到达不错位
@@ -317,6 +370,34 @@ function mergeTimeline(list: TimelineItem[], e: AgentStreamEvent): TimelineItem[
           ts: e.ts,
         },
       ]
+    case 'THINKING_DELTA': {
+      const round = Number(p.round ?? 0)
+      const piece = String(p.text ?? '')
+      if (!piece) return list
+      // 从后往前找同 round 且仍在进行的推理段（重试会换 round → 自然新起一段）
+      const idx = [...list].reverse().findIndex((x) => x.kind === 'thinking' && x.round === round)
+      if (idx === -1) {
+        return [
+          ...list,
+          {
+            key: `think-${round}-${e.seq}`,
+            seq: e.seq,
+            kind: 'thinking',
+            round,
+            label: thinkingHeadline(piece),
+            detail: piece,
+            completed: false,
+            ts: e.ts,
+          },
+        ]
+      }
+      const realIdx = list.length - 1 - idx
+      const next = [...list]
+      const prev = next[realIdx]
+      const detail = (prev.detail ?? '') + piece
+      next[realIdx] = { ...prev, detail, label: thinkingHeadline(detail), completed: false }
+      return next
+    }
     case 'TOOL_START':
       return [
         ...list,
@@ -478,6 +559,79 @@ export function timelineFromToolCalls(toolCalls: AgentToolCallEntry[]): Timeline
   }))
 }
 
+/* ============================================================ 字符流批量落地 */
+
+/**
+ * 字符流缓冲（MESSAGE_DELTA）。
+ *
+ * <p><b>为什么必须缓冲</b>：后端按 24 字符 / 60ms 合并后才推，但一条长回复仍有几十条
+ * delta；每条都 `set` 一次会整条消息列表重渲染 + Markdown 重解析，
+ * 在长思维链叠加时肉眼可见地卡。这里按帧合并：**每帧最多一次状态写入**。
+ *
+ * <p>跨 round 必须先落地：round 变化表示"重新生成一段"（重试 +1000 / 降级 +2000），
+ * 若把两个 round 的片段并进同一个缓冲，重置语义就丢了 —— 会拼出半截旧文 + 半截新文。
+ */
+let deltaBuffer: { round: number; text: string } | null = null
+let deltaFrame = 0
+
+const scheduleFrame = (cb: () => void): number =>
+  typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame(cb)
+    : (setTimeout(cb, 16) as unknown as number)
+
+const cancelFrame = (id: number): void => {
+  if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id)
+  else clearTimeout(id as unknown as ReturnType<typeof setTimeout>)
+}
+
+/**
+ * 把缓冲的字符流一次性写进"进行中"的那条回复。
+ *
+ * <p>导出有两个用途：①测试里不必等帧；②收官事件（MESSAGE_DONE/ERROR/ABORTED）
+ * 到达时先同步落地，否则最后一段正文可能还没 flush 就被收官收走。
+ */
+export function flushStreamDeltas(): void {
+  const buffered = deltaBuffer
+  deltaBuffer = null
+  if (deltaFrame) {
+    cancelFrame(deltaFrame)
+    deltaFrame = 0
+  }
+  if (!buffered || !buffered.text) return
+  useAgentStore.setState((s) => {
+    const list = [...s.outcomes]
+    const idx = list.length - 1
+    // REST 返回已用权威全文覆盖过（streaming=false）→ 这段缓冲作废，别追加到终稿后面
+    if (idx < 0 || !list[idx].streaming) return {}
+    list[idx] = { ...list[idx], reply: list[idx].reply + buffered.text }
+    return { outcomes: list }
+  })
+}
+
+/** 收下一个 MESSAGE_DELTA（按帧合并；跨 round 先落地） */
+function acceptStreamDelta(e: AgentStreamEvent): void {
+  const round = Number(e.payload?.['round'] ?? 0)
+  const text = String(e.payload?.['text'] ?? '')
+  if (!text) return
+  const state = useAgentStore.getState()
+  if (state.deltaRound !== round) {
+    flushStreamDeltas()
+    useAgentStore.setState((s) => {
+      const list = [...s.outcomes]
+      const idx = list.length - 1
+      if (idx >= 0) list[idx] = { ...list[idx], reply: '' }
+      return { outcomes: list, deltaRound: round, activeStreamId: e.streamId, thinking: true }
+    })
+  }
+  deltaBuffer = { round, text: (deltaBuffer?.round === round ? deltaBuffer.text : '') + text }
+  if (!deltaFrame) {
+    deltaFrame = scheduleFrame(() => {
+      deltaFrame = 0
+      flushStreamDeltas()
+    })
+  }
+}
+
 export const useAgentStore = create<AgentState>()((set, get) => ({
   conversations: [],
   conversationsLoading: false,
@@ -538,6 +692,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   selectConversation: async (id) => {
+    requestVersion++
     set({
       currentConversationId: id,
       outcomes: [],
@@ -548,11 +703,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       deltaRound: null,
       // 切会话顺手清掉待附加引用：它们是针对"接下来要问什么"选的，跨会话残留只会误导
       pendingRefs: [],
+      messagesLoading: id != null,
     })
     if (id == null) return
     set({ messagesLoading: true })
     try {
       const res = await api.listMessages(id, 1, 100)
+      if (get().currentConversationId !== id) return
       const outcomes: OutcomeMessage[] = []
       const users: string[] = []
       const userRefs: AgentChatRef[][] = []
@@ -582,15 +739,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           provider: m.provider ?? 'stub',
           degraded: (m.provider ?? '') === 'stub',
           durationMs: m.durationMs ?? 0,
-          timeline: timelineFromToolCalls(m.toolCalls ?? []),
+          // V35：水合时把思维链一起回放 —— 只派生 toolCalls 的话，
+          // 刷新/切会话后过程区会缺掉"思考"那一半（V26 的老行为）
+          thinking: m.thinking ?? [],
+          // V36：旁白也回放（按 ts 与推理段合并排序），否则少了「正在理解你的问题…」这些行
+          thinkingNotes: m.thinkingNotes ?? [],
+          timeline: timelineFromMessage({
+            thinking: m.thinking,
+            thinkingNotes: m.thinkingNotes,
+            toolCalls: m.toolCalls ?? [],
+          }),
           streaming: false,
+          notice: m.taskResult ? noticeFromStatus(m.taskResult.status, m.taskResult) : undefined,
         })
       }
       set({ outcomes, userTexts: users, userRefs })
     } catch {
       // http 拦截器已提示
     } finally {
-      set({ messagesLoading: false })
+      if (get().currentConversationId === id) set({ messagesLoading: false })
     }
   },
 
@@ -608,12 +775,17 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   sendMessage: async (text) => {
     const content = text.trim()
     if (!content) return
+    if (get().thinking) return
+    const version = ++requestVersion
 
     // 附加上下文必须在 set 之前取走：set 里会清空 pendingRefs，之后再读就是空数组
     const refs = get().pendingRefs
 
     // 立刻清空过程区并进入"思考中"——本地先给即时反馈，
     // 真正的 THINKING 事件随后到达（TTFE P95 < 800ms）
+    // 上一轮若还有未落地的字符流缓冲，先落地再开新轮（否则那半句话会写进新轮的回复）
+    flushStreamDeltas()
+
     set((s) => ({
       timeline: [],
       pendingPlan: null,
@@ -643,6 +815,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           provider: '',
           degraded: false,
           durationMs: 0,
+          thinking: [],
+          thinkingNotes: [],
           timeline: [],
           streaming: true,
         },
@@ -653,6 +827,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const res = await api.agentChat(
         content, get().currentConversationId, get().mode, refs, get().autoCollab,
       )
+      if (version !== requestVersion) return
       set((s) => {
         // 用真实结果替换最后那条占位
         const list = [...s.outcomes]
@@ -674,8 +849,17 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
             provider: res.provider,
             degraded: res.degraded,
             durationMs: res.durationMs,
-            // 本轮自己的时间轴由 toolCalls 派生：下一轮发起后它成为"历史轮次"仍有过程区
-            timeline: timelineFromToolCalls(res.toolCalls ?? []),
+            // V35：思维链随 /chat 一起回来。此刻它还是"当前轮"，下一轮发起时它会随
+            // 这条消息变成历史轮次 —— timeline 必须**同时**含推理与工具，
+            // 否则切换到历史形态的瞬间思维链就没了（V26 的老行为）
+            thinking: res.thinking ?? [],
+            // V36：编排旁白同样随 /chat 回来，历史回放按 ts 与推理段合并排序
+            thinkingNotes: res.thinkingNotes ?? [],
+            timeline: timelineFromMessage({
+              thinking: res.thinking,
+              thinkingNotes: res.thinkingNotes,
+              toolCalls: res.toolCalls ?? [],
+            }),
             streaming: false,
           }
         }
@@ -708,15 +892,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           pendingTaskCount: res.pendingTaskCount ?? s.pendingTaskCount,
         }
       })      // 新会话首次问答后刷新列表（标题已确定）
-      if (!get().currentConversationId || get().conversations.every((c) => c.id !== res.conversationId)) {
-        void get().fetchConversations()
-      }
+      void get().fetchConversations()
     } catch {
+      if (version !== requestVersion) return
       set((s) => {
         const list = [...s.outcomes]
         const idx = list.length - 1
         if (idx >= 0 && list[idx].streaming) {
-          list[idx] = { ...list[idx], streaming: false, reply: '请求失败，请稍后重试。' }
+          list[idx] = { ...list[idx], streaming: false, status:'failed', reply: '请求失败，请稍后重试。' }
         }
         return { outcomes: list, thinking: false }
       })
@@ -726,7 +909,6 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   stop: async () => {
     const streamId = get().activeStreamId
     if (!streamId) {
-      set({ thinking: false })
       return
     }
     try {
@@ -734,10 +916,21 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     } catch {
       // 中止失败也让前端恢复可交互状态
     }
-    set({ thinking: false })
+    requestVersion++
+    stoppedStreams.add(streamId)
+    if (stoppedStreams.size > 256) stoppedStreams.delete(stoppedStreams.values().next().value!)
+    set(s => ({ thinking:false, activeStreamId:null, outcomes:s.outcomes.map((o,i) => i===s.outcomes.length-1 ? {...o,streaming:false,status:'stopped',reply:o.reply || '任务已停止，未继续生成内容。'}:o) }))
   },
 
   applyStreamEvent: (e) => {
+    if (stoppedStreams.has(e.streamId)) return
+    // 收官/中止类事件：先把字符流缓冲同步落地，否则最后一段正文会丢
+    if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') flushStreamDeltas()
+    // 字符流走按帧合并的旁路（不进入下面的 set，避免一个 token 一次全列表重渲染）
+    if (e.type === 'MESSAGE_DELTA') {
+      acceptStreamDelta(e)
+      return
+    }
     set((s) => {
       /*
         协作事件的归属校验（C 批次）。
@@ -755,10 +948,35 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         }
       }
 
-      const next: Partial<AgentState> = {
-        timeline: mergeTimeline(s.timeline, e),
+      /*
+        归属过滤（按 streamId）：过程事件按**用户**广播，且一个用户可能同时有
+        别的轮次在跑（后台任务、另一个标签页确认后的补推）。带 streamId 且不属于
+        当前这一轮的事件，只写进**那一轮消息自带的时间轴**，不碰实时区 ——
+        否则上一轮的迟到事件会串进当前这轮的思维链。
+
+        判据用"是否属于最后一条 outcome"，不引入第二个状态源：每轮的时间轴
+        就存在它自己的 outcome.timeline 上（历史轮次读它，实时轮次读全局 timeline）。
+      */
+      const ownerIdx = e.streamId ? s.outcomes.findIndex((o) => o.streamId === e.streamId) : -1
+      const liveIdx = s.outcomes.length - 1
+      if (ownerIdx >= 0 && ownerIdx !== liveIdx) {
+        const list = [...s.outcomes]
+        const owned = list[ownerIdx].timeline
+        const mergedOwned = mergeTimeline(owned, e)
+        list[ownerIdx] = {
+          ...list[ownerIdx],
+          timeline: SEAL_THINKING_EVENTS.has(e.type) ? sealThinking(mergedOwned) : mergedOwned,
+        }
+        return { outcomes: list } as AgentState
       }
-      if (e.type === 'THINKING' || e.type === 'TOOL_START') {
+
+      const merged = mergeTimeline(s.timeline, e)
+      const next: Partial<AgentState> = {
+        // 推理段在该轮的推理结束时封口：模型一旦开始调工具/出正文，这一轮就不再"推理中"。
+        // 只在真正有待封口的段时才重建数组，避免每个字符事件都刷新整条时间轴
+        timeline: SEAL_THINKING_EVENTS.has(e.type) ? sealThinking(merged) : merged,
+      }
+      if (e.type === 'THINKING' || e.type === 'THINKING_DELTA' || e.type === 'TOOL_START') {
         next.activeStreamId = e.streamId
         next.thinking = true
       }
@@ -782,24 +1000,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         // PLAN_READY 的 payload 即 plan.toJson()
         next.pendingPlan = e.payload as unknown as AgentActionPlan
       }
-      // 字符流（UI v2）：增量写进最后那条"进行中"的占位回复。
-      // REST 返回会用权威全文覆盖它，这里只是让用户在等待期就能读到内容。
-      if (e.type === 'MESSAGE_DELTA') {
-        const round = Number(e.payload?.['round'] ?? 0)
-        const text = String(e.payload?.['text'] ?? '')
-        if (text) {
-          const reset = s.deltaRound !== round
-          const list = [...s.outcomes]
-          const idx = list.length - 1
-          if (idx >= 0 && list[idx].streaming) {
-            list[idx] = { ...list[idx], reply: (reset ? '' : list[idx].reply) + text }
-            next.outcomes = list
-          }
-          next.deltaRound = round
-          next.activeStreamId = e.streamId
-          next.thinking = true
-        }
-      }
+      // 字符流（MESSAGE_DELTA）在进入本 updater 之前已被 acceptStreamDelta 批量接管
+      // （见文件上方的 deltaBuffer / flushStreamDeltas）
       return next as AgentState
     })
   },
@@ -822,6 +1024,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       artifacts: payload['artifacts'],
       detail: payload['detail'],
       taskId: taskId > 0 ? taskId : undefined,
+      skipped: Array.isArray(payload['skipped']) ? payload['skipped'] as AgentSkippedItem[] : [],
     })
     set((s) => {
       // 已由 confirmPlan 的 REST 返回写入过同一任务的结果 → 不重复
@@ -877,6 +1080,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       artifacts: (task?.artifacts?.length ? task.artifacts : r['references']) ?? [],
       detail: r['detail'],
       taskId: planId,
+      skipped: Array.isArray(r['skipped']) ? r['skipped'] as AgentSkippedItem[] : get().outcomes.find(o => o.plan?.planId === planId)?.plan?.skipped,
     })
     // 原位把确认卡换成结果块：既回答"确认后到底做了什么"，也不留下还能再点的僵尸按钮
     set((s) => ({
@@ -888,6 +1092,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       pendingPlan: null,
       pendingTaskCount: Math.max(0, s.pendingTaskCount - 1),
     }))
+    void get().fetchConversations()
   },
 
   cancelPlan: async (planId) => {
@@ -895,12 +1100,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set((s) => ({
       outcomes: s.outcomes.map((o) =>
         o.plan && o.plan.planId === planId
-          ? { ...o, plan: null, notice: { level: 'info', text: '已取消该操作', taskId: planId } }
+          ? { ...o, plan: null, notice: { level: 'info', text: '已取消该操作，未执行写入', taskId: planId, skipped: o.plan.skipped } }
           : o,
       ),
       pendingPlan: null,
       pendingTaskCount: Math.max(0, s.pendingTaskCount - 1),
     }))
+    void get().fetchConversations()
   },
 
   dismissPlan: () => set({ pendingPlan: null }),
@@ -929,6 +1135,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       }
       return next as AgentState
     })
+    if (res.status === 'PLAN' || res.status === 'CANCELLED') void get().fetchConversations()
     return res
   },
 

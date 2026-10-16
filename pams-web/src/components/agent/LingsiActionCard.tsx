@@ -1,10 +1,8 @@
 import { useState } from 'react'
-import { Button, Drawer, Tooltip } from 'antd'
-import type { AgentActionPlan } from '@/api/agent'
+import { Button, Tooltip } from 'antd'
+import type { AgentActionPlan, AgentCitation } from '@/api/agent'
 import { stripArgsMarker } from '@/utils/markdown'
 import { useAgentPanel } from '@/stores/agentPanel'
-import { useNarrow } from '@/hooks/useMediaQuery'
-import LingsiMarkdown from './LingsiMarkdown'
 import { Lock, Warn } from './LingsiIcons'
 
 interface Props {
@@ -12,6 +10,7 @@ interface Props {
   busy?: boolean
   /** 只读模式：清单仍展示（它是真实存在的待办），但不可确认 */
   readonly?: boolean
+  citations?: AgentCitation[]
   onConfirm: () => void
   onCancel: () => void
 }
@@ -39,11 +38,9 @@ const ITEM_LIMIT = 12
  *       藏起来又冒出来会让人以为任务丢了。</li>
  * </ul>
  */
-export default function LingsiActionCard({ plan, busy, readonly, onConfirm, onCancel }: Props) {
+export default function LingsiActionCard({ plan, busy, readonly, citations, onConfirm, onCancel }: Props) {
   const [detailOpen, setDetailOpen] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
   const openText = useAgentPanel((s) => s.openText)
-  const narrow = useNarrow()
 
   const detailLines = stripArgsMarker(plan.detailLines)
   const shown = plan.items.slice(0, ITEM_LIMIT)
@@ -52,19 +49,15 @@ export default function LingsiActionCard({ plan, busy, readonly, onConfirm, onCa
   const preview = (plan.preview ?? '').trim()
 
   const viewFullText = () => {
-    if (narrow) {
-      setPreviewOpen(true)
-      return
-    }
     // 分屏：对话不被遮挡，用户可以对照清单核正文
-    openText(`plan-${plan.planId}`, plan.summary || '内容预览', preview)
+    openText(`plan-${plan.planId}`, plan.summary || '内容预览', preview, { plan, citations })
   }
 
   return (
     <div className="lingsi-plan">
       <div className="lingsi-plan-head">
         <Warn size={14} />
-        <span className="lingsi-plan-title">即将执行的操作</span>
+        <span className="lingsi-plan-title">执行前请核对变更</span>
         <span className="lingsi-plan-summary">
           {plan.summary}
           {plan.total > 0 && ` · 共 ${plan.total} 项`}
@@ -75,7 +68,7 @@ export default function LingsiActionCard({ plan, busy, readonly, onConfirm, onCa
       {preview.length > 0 && (
         <div className="lingsi-plan-sec">
           <Button size="small" type="link" style={{ padding: 0 }} onClick={viewFullText}>
-            查看全文（约 {preview.length} 字）
+            预览工作成果
           </Button>
           <span className="lingsi-plan-more" style={{ marginLeft: 8 }}>
             这是即将写入的内容，建议通读后再确认
@@ -122,9 +115,9 @@ export default function LingsiActionCard({ plan, busy, readonly, onConfirm, onCa
       {/* ---- 明细（默认折叠） ---- */}
       {detailLines.length > 0 && (
         <>
-          <div className="lingsi-plan-more" onClick={() => setDetailOpen((v) => !v)} role="button" tabIndex={0}>
+          <button type="button" className="lingsi-plan-more" onClick={() => setDetailOpen((v) => !v)} aria-expanded={detailOpen}>
             {detailOpen ? '收起明细 ▲' : `查看明细 ${detailLines.length} 行 ▼`}
-          </div>
+          </button>
           {detailOpen && <div className="lingsi-plan-detail">{detailLines.join('\n')}</div>}
         </>
       )}
@@ -168,17 +161,6 @@ export default function LingsiActionCard({ plan, busy, readonly, onConfirm, onCa
         </span>
       </div>
 
-      {/* 窄屏降级：没有分屏空间时仍用抽屉（行为分叉而非样式分叉） */}
-      <Drawer
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        title={plan.summary || '内容预览'}
-        width={720}
-        destroyOnHidden
-        styles={{ body: { fontSize: 14, lineHeight: 1.8 } }}
-      >
-        <LingsiMarkdown text={preview} />
-      </Drawer>
     </div>
   )
 }
