@@ -1,182 +1,272 @@
-# 党务管理系统（PAMS）
+# 协奏 Concerto
 
-信息与智能工程学院党建办公室 · 党务管理系统
+**学生组织智能工作台 · PAMS**
 
-覆盖活动管理（策划书/议程/座位表/评分/签到/任务甘特图/活动排班）、例行事务（排班/考勤/无课表）、党务台账（党员发展/考察/转入转出/名册）、内容宣传（推文/新闻稿）、档案资产、成员管理与通知中心；内置「灵思」AI 助手（对话工具调用 / 多 Agent 协作 / 知识库问答 / 对比评估实验）。支持多组织注册与数据隔离（党建/学生会/社团等组织类型），组织可按领域包与术语表定制菜单与文案，并沿用基于角色（指导老师/主任/部长/干事）的细粒度权限控制。
+协奏把活动筹备、排班考勤、成员资料、内容宣传和档案归集放进同一个工作台，并通过「灵思」AI 助手连接资料检索与业务操作。项目起源于信息与智能工程学院党建办公室的党务管理场景，现已支持多组织注册、数据隔离、组织主题和领域包配置。
+
+本文对应 **`design` 分支**，包含 UI v6、灵思任务工作区和租户角色权限管理。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。
+
+[快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
+
+![协奏工作台：周历、活动概况与待办](docs/ui-v6-implementation/dashboard-light.png)
+
+*截图来自 UI 验收样本，用于展示布局与交互；示例名称、日期和数量不代表实际部署数据。*
+
+## 功能概览
+
+| 工作区 | 主要能力 |
+| --- | --- |
+| 工作台 | 本周活动、排班和任务截止聚合，待办入口，工作日 / 全周切换 |
+| 活动管理 | 活动阶段推进、策划书编写与审核、议程、座位表、评分、签到、任务甘特图与活动排班 |
+| 排班考勤 | 常规排班、我的排班、活动排班预览与发布、考勤核对与修正、课表导入、无课时间查询 |
+| 成员与党务 | 成员名册、届别、发展阶段、考察记录、转入转出和党务名册 |
+| 宣传与档案 | 推文、新闻稿、材料、模板、素拓加分、公告和群聊资料 |
+| 智能协作 | 灵思对话、资料问答、工具调用、多 Agent 协作、变更预览与执行回执 |
+| 组织管理 | 自助注册、组织架构树、岗位、用户、租户角色、权限工作稿、发布历史与管理员委派 |
+| 通知中心 | 业务消息、未读提醒、WebSocket 实时更新 |
+
+UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航。活动、排班、档案与灵思采用各自的业务工作面，创建和编辑表单复用公共组件。菜单与操作入口会根据当前账号权限及组织领域包调整。
 
 ## 技术栈
 
-| 层 | 技术 |
+| 层次 | 实现 |
 | --- | --- |
-| 后端 | Spring Boot 4.0.2（Java 21）、Spring Data JPA（Hibernate 多租户 `@TenantId` 隔离）、Spring Security + JWT（含用户级吊销水位）、Flyway（V1–V34 迁移）、MySQL 8（测试用 H2 MySQL 模式）、WebSocket（STOMP/SockJS）、Jsoup |
-| 前端 | React 18、TypeScript 5.7、Vite 7、Ant Design 5、Zustand、React Router 6、dayjs、@stomp/stompjs + sockjs-client |
-| AI | DeepSeek（OpenAI 兼容接口）接入，未配置密钥时自动降级为 stub 规则模式、不阻塞启动；知识库采用关键词检索（MySQL ngram 全文索引，失败自动降级 LIKE） |
-| 测试 | 后端 JUnit 5 + MockMvc + H2（MySQL 模式）；前端 Vitest + Playwright e2e |
-| 样式 | 自研 glass 组件体系 + 灵思（lingsi）灰阶极简设计层；品牌色由组织主题配置驱动 |
+| 前端 | React 18、TypeScript 5.7、Vite 7、Ant Design 5、Zustand、React Router 6 |
+| 后端 | Java 21、Spring Boot 4.0.2、Spring Data JPA、Spring Security、JWT |
+| 数据 | MySQL 8、Flyway；测试使用 H2 的 MySQL 兼容模式 |
+| 实时通信 | WebSocket、STOMP、SockJS |
+| AI | DeepSeek 接入、stub 规则模式、工具注册与确认门禁、多 Agent 编排 |
+| 资料处理 | 关键词检索、MySQL ngram 全文索引及 LIKE 降级，Excel 与 Word 文档处理 |
+| 验证与部署 | JUnit / MockMvc、Vitest、Playwright、Docker Compose、Nginx |
 
 ## 快速启动
 
-### 一键启动（推荐）
+### 1. 准备环境与依赖
 
-确保已安装 MySQL / JDK 21+ / Maven / Node.js，然后双击或运行：
+本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.12+ 和 MySQL 8**，并确保相关命令已加入 PATH。
 
 ```bash
-cmd //c start.bat
+git clone --branch design git@github.com:RanranCoder/PAMS.git
+cd PAMS
+
+cd pams-web
+npm ci
+cd ..
 ```
 
-脚本会自动：检查 MySQL 服务（密码默认 `root`，可设环境变量 `DB_PASSWORD` 覆盖）→ 创建数据库 `pams_db` → 生成随机 JWT 密钥 → 分别弹出窗口启动后端（8080）与前端（5173）→ 自动打开浏览器访问登录页。
+### 2. 配置本地环境
 
-### IDEA 启动
+在 Git Bash 或其他 Bash 终端复制配置示例，随后编辑 `.env`：
 
-根目录 `pom.xml` 是聚合工程（`<modules>` 指向 `pams-backend`），用 IntelliJ IDEA 打开**项目根目录**即可：
-
-1. 用 IDEA 打开本仓库根目录 → 自动识别 Maven 聚合工程与 `pams-backend` 子模块
-2. 等待 Maven 依赖导入完成（右下角进度条结束；首次需下载依赖，耗时较长）
-3. 运行配置里找到 **`PartyAffairsManagementSystemApplication`** 主类，点击 Run/Debug 一键启动后端（端口 8080）
-   - 若没有自动生成，可手动创建：`Run → Edit Configurations → + → Spring Boot → Main class` 选 `com.pams.PartyAffairsManagementSystemApplication`
-   - 无需配置 JWT 密钥：未设置 `PAMS_JWT_SECRET` 时自动使用**每次启动随机生成**的密钥（重启后端后需重新登录）；希望本地会话跨重启保留时，可在 Run Configuration 的 Environment variables 里显式设置该变量
-   - 需要演示账号（teacher/zhuren/...）时，在 Active profiles 填 `dev`（仅空库首启注入，已有账号的库不受影响）
-4. 前端另开终端启动：`cd pams-web && npm run dev`（端口 5173）
-5. 浏览器访问 `http://localhost:5173`（后端需已启动，MySQL 需已运行）
-
-> 提示：后端启动前确认 MySQL 服务已运行（默认账号 `root / root`），首次启动会自动建表并注入演示数据。
-
-### 手动启动
-
-1. 创建数据库：`mysql -u root -p < database/init_db.sql`（创建 `pams_db`，默认 utf8mb4）
-2. 后端：`cd pams-backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev`（端口 8080）
-   - 数据库账号密码默认 `root / root`，可用环境变量覆盖：`DB_PASSWORD=yourpass`
-   - 启动时 Flyway 自动建表；**空库首次启动（dev profile）会自动注入演示种子数据**（含"第四十期入党积极分子培训班"全流程示例，便于验收演示；已有数据的库不会重复注入）
-   - `dev` profile 才注入 8 个演示账号；生产部署**不要**激活 dev profile（docker-compose 默认不激活，空库首启不落任何弱口令账号）
-   - 灵思 AI 默认无密钥以 stub 规则模式运行；接入 DeepSeek 时设置环境变量 `PAMS_AGENT_API_KEY`
-3. 前端：`cd pams-web && npm i && npm run dev`（端口 5173，已配置 `/api`、`/uploads`、`/ws` 代理到 8080）
-
-### 生产部署首个管理员账号
-
-生产环境（未激活 dev profile）空库首启后 `sys_user` 为空、无人能登录。两种方式创建首个管理员：
-
-**方式一：自助注册组织（推荐）** — 浏览器打开 `http://<host>/register`，一次提交创建「组织 + 组织架构树 + 岗位模板 + DIRECTOR 管理员账号」。该接口免登录（新组织尚无账号），按来源 IP 每小时限流 5 次。
-
-**方式二：手工插入** — 密码用 BCrypt 哈希值（可用 `mvn -f pams-backend/pom.xml exec:java -Dexec.mainClass=org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder` 或在线 bcrypt 工具生成，cost 10）：
-
-```sql
-INSERT INTO sys_user (username, real_name, role_id, password, status, org_id, created_at)
-SELECT 'admin', '系统管理员', id, '$2a$10$xxxBCrypt哈希xxx', 1, 1, NOW() FROM sys_role WHERE code='TEACHER';
+```bash
+cp .env.example .env
 ```
 
-### 容器化部署（可选）
+`.env.example` 中的 `MYSQL_*` 供 Docker Compose 使用；**本地直连 MySQL 的密码使用 `DB_PASSWORD`**。可在 `.env` 中追加：
 
-复制 `.env.example` 为 `.env` 并填写 `MYSQL_ROOT_PASSWORD` / `MYSQL_USER` / `MYSQL_PASSWORD` / `PAMS_JWT_SECRET`（可选 `PAMS_AGENT_API_KEY`），然后：
+```dotenv
+# 本地开发：连接 localhost:3306，默认用户 root
+DB_PASSWORD=your_local_mysql_password
+
+# 可选：启用灵思真实模型；不填时使用 stub 规则模式
+PAMS_AGENT_API_KEY=
+```
+
+同时替换示例中的 `PAMS_JWT_SECRET`。本地未设置该项时，后端每次启动生成随机密钥，重启后需要重新登录。`.env` 已被 Git 忽略；系统环境变量优先于文件配置。后端会尝试从启动目录及其上级目录读取 `.env`，从仓库根目录或后端模块目录启动均可。
+
+### 3. 启动应用
+
+**Windows 一键启动**：先启动 MySQL，再在仓库根目录的 PowerShell 中运行：
+
+```powershell
+.\start.bat
+```
+
+脚本会读取 `.env`、检查 MySQL、创建 `pams_db`，并在独立窗口中启动后端和前端，随后打开浏览器。它使用 MySQL `root` 用户和 `DB_PASSWORD`，后端启用 `dev` profile；前端依赖需提前安装。
+
+**手动启动**：在仓库根目录执行以下命令。建库命令中的密码应与后端配置一致。
+
+```bash
+# 创建数据库；表结构由后端启动时的 Flyway 迁移维护
+mysql -u root -p < database/init_db.sql
+
+# 终端一：后端（dev profile 用于首次初始化演示账号）
+mvn -f pams-backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+```bash
+# 终端二：前端
+cd pams-web
+npm run dev
+```
+
+| 服务 | 地址 |
+| --- | --- |
+| 前端 | <http://localhost:5173> |
+| 后端 | <http://localhost:8080> |
+| 注册组织 | <http://localhost:5173/register> |
+
+Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等待 Maven 下载依赖、Flyway 迁移和种子初始化完成。
+
+**使用 IntelliJ IDEA**：打开仓库根目录，导入根 `pom.xml` 聚合工程，运行 `com.pams.PartyAffairsManagementSystemApplication`。需要演示账号时设置 Active profiles 为 `dev`；前端仍单独运行 `npm run dev`。
+
+### 演示账号与新组织
+
+开发 / 测试环境首次初始化基础部门与角色时，会创建以下演示账号，密码均为 **`123456`**：
+
+| 用户名 | 初始业务角色 |
+| --- | --- |
+| `teacher` | 指导老师 |
+| `zhuren` | 主任 |
+| `orgleader` | 组织部长 |
+| `secleader` | 文秘部长 |
+| `medialeader` | 新媒体部长 |
+| `techleader` | 青年科技部长 |
+| `admin` | 主任（账号显示名为系统管理员） |
+| `staff` | 干事 |
+
+这些账号仅在 `dev` / `test` profile 下初始化；为已有数据库补开 `dev` 不会自动补齐演示账号。角色名称和历史级别不直接决定当前治理权限，实际授权以组织内已发布配置为准。
+
+默认组织的示例活动、策划书、党务资料等由 `DataSeeder` 在非 `test` 环境、活动表为空时幂等生成；**示例业务数据与演示账号的初始化条件不同**。
+
+需要独立组织时，从登录页进入「注册组织」，配置组织名称、架构、领域包与管理员账号。新组织拥有独立的租户角色和数据空间。生产部署不启用 `dev`，通过注册流程创建组织及其管理账号。
+
+## 灵思与知识库
+
+灵思入口为 `/agent`，任务列表、对话过程和工作成果在同一个工作区内呈现。
+
+| 模式 | 行为 |
+| --- | --- |
+| 标准模式 | 查询和准备业务操作；写入前展示待确认清单，确认后执行 |
+| 只读模式 | 查询业务信息，写工具不可用 |
+| 资料问答 | 检索知识库资料，按引用来源回答，使用独立问答流水线 |
+
+![灵思：确认清单与工作成果预览](docs/ui-v6-lingsi-implementation/plan-preview-light.png)
+
+- **先准备，再确认**：缺少信息时在对话中补齐；执行前可检查内容、变更与参考资料，执行后查看回执、失败或跳过项。
+- **排班预览不写库**：确认时重新计算并核对候选指纹；人员或条件变化后要求重新生成，确认成功只创建草稿，仍需在活动排班页发布。
+- **自动协作**：多 Agent 协作已内聚到灵思标准模式，专家进度与审查过程在对话内展示；不再提供独立 `/agent/team` 页面。后端保留串行、并行汇聚、反思和委派等编排能力。
+- **历史可恢复**：保存会话、任务状态、模型思考记录与过程旁白；历史内容仍按任务归属、数据敏感级别和当前权限处理。
+- **资料可追溯**：知识库覆盖制度文档、公告、推文、策划书、事实快照和成员名册，检索与查看来源时检查访问权限。当前使用关键词检索，并非向量数据库方案。
+- **实验入口**：`/admin/benchmark` 提供单 Agent / 多 Agent 对比，访问受权限守卫控制。
+
+未配置 `PAMS_AGENT_API_KEY` 时，后端自动使用 stub 规则模式，业务页面仍可启动；规则模式不能替代真实模型的开放式问答能力。模型、超时、输出长度和思考开关由 `pams.agent.*` 配置控制，具体值见 [application.yml](pams-backend/src/main/resources/application.yml)。
+
+## 组织与权限
+
+业务数据按组织隔离，Hibernate 租户过滤、请求上下文和异步任务上下文共同传递组织身份。组织可配置主题色、术语及领域包（`party` / `volunteer` / `club`），控制业务入口与文案。
+
+当前授权模型将**业务主角色**与**组织治理身份**分开：
+
+- 用户采用一个业务主角色；角色可从模板创建、复制，经历草稿、启用、停用和归档等状态。
+- 权限工作稿不参与运行鉴权；预览并发布后生成生效授权及不可变历史快照。
+- 所有者可委派或撤销组织管理员，配置可授权清单和有效期；管理身份不等于自动获得全部业务数据访问权。
+- 用户角色替换通过预览与应用流程校验，角色发布、分配和委派变更保留审计记录。
+- Agent 工具执行、知识来源读取和聚合接口同样执行权限检查，不能依赖前端菜单隐藏实现鉴权。
+
+首版权限配置仅开放 **`ORG`（本组织）范围**，尚未实现节点子树、本人、指定资源等新范围，也不支持多业务角色叠加。旧批量开户与固定密码重置入口已关闭。所有者交接、平台治理后台、历史恢复和审计导出等能力仍在后续范围内。完整边界见[首版落地记录](docs/PAMS-角色权限与租户管理-首版落地记录.md)。
+
+## 配置与部署
+
+### 常用配置
+
+| 配置项 | 用途与默认行为 |
+| --- | --- |
+| `DB_PASSWORD` | 本地 MySQL 密码，默认 `root`；本地默认地址 `localhost:3306/pams_db`、用户 `root` |
+| `SPRING_DATASOURCE_URL` | 通过系统环境变量覆盖数据库连接地址 |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | 通过系统环境变量覆盖数据库账号与密码 |
+| `PAMS_JWT_SECRET` | JWT 签名密钥；本地未设置时随机生成，生产需显式配置 |
+| `PAMS_AGENT_API_KEY` | 灵思模型密钥；未配置时降级 stub |
+| `PAMS_AGENT_PROVIDER` | 模型提供方，可设为 `stub` 显式使用规则模式 |
+| `PAMS_AGENT_MODEL` | 覆盖后端默认模型标识，按实际供应商与部署配置填写 |
+| `PAMS_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads`，相对于后端进程工作目录 |
+| `MYSQL_ROOT_PASSWORD` / `MYSQL_USER` / `MYSQL_PASSWORD` | Docker Compose 中 MySQL 初始化与应用连接配置 |
+
+`PAMS_AGENT_PROVIDER`、`PAMS_AGENT_MODEL`、`PAMS_UPLOAD_DIR` 等通过系统环境变量覆盖 Spring 配置；Compose 默认只向后端传入编排文件中列出的环境变量，新增配置需同步修改其 `environment`。
+
+### Docker Compose
+
+编辑根目录 `.env`，替换 `.env.example` 中的数据库凭据和 JWT 密钥。需要真实模型时另加 `PAMS_AGENT_API_KEY`，然后运行：
 
 ```bash
 docker compose up -d --build
+docker compose ps
 ```
 
-编排包含 mysql + backend + web 三个服务，web 暴露在 `127.0.0.1:8081`。
+编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据和上传文件分别保存到 `pams-mysql-data`、`pams-uploads` 命名卷。
 
-## 初始账号（dev profile，密码均 `123456`）
+Flyway 迁移已包含 V35 / V36 思考记录字段及 Java 迁移 **V37 租户授权模型**。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。
 
-> 仅 `dev`/`test` profile 注入；生产环境不创建这些账号。
+仓库的镜像构建工作流在推送 `main` 或手动触发时运行；推送 `design` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
 
-| 用户名 | 角色 | 说明 |
-| --- | --- | --- |
-| `teacher` | 指导老师 | 最高权限，可查看/审批全部 |
-| `zhuren` | 主任 | 二级权限 |
-| `orgleader` | 组织部长 | 组织部，活动/党务主责 |
-| `secleader` | 文秘部长 | 文秘部，会务/材料/公告 |
-| `medialeader` | 新媒体部长 | 新媒体中心，推文/新闻稿 |
-| `techleader` | 青年科技部长 | 青年科技部 |
-| `admin` | 系统管理员（主任权限） | 系统管理 |
-| `staff` | 干事 | 数据范围限本部门（DEPT） |
+## 开发与验证
 
-> 角色权限：指导老师（5）> 主任（4）> 各部长（3）> 干事（1，仅本部门数据）。
-
-## 能力总览
-
-- **基础业务**：活动全流程（策划书/议程/座位表/评分/签到/任务甘特图/活动排班）、例行事务（排班/我的排班/考勤管理与人工修正审计/无课表）、党务台账（成员发展阶段/考察/转入转出/名册/届别）、内容宣传（推文/新闻稿）、档案资产（材料库/模板库/素拓加分/公告已读/群聊管理）、成员管理、通知中心。
-- **灵思 AI**（`/agent`）：对话式助手，内置 21 个工具（11 读 + 10 写），写操作经一次性确认令牌门禁；工具按「声明权限 → 派发前断言 → 测试兜底」三层防护，过程事件经 WebSocket 实时推送、支持断线补拉。
-- **多 Agent 协作**（`/agent/team`）：8 个内置 Agent 定义（协调/检索/策划/文书/排班/事务/审查专家 + 单 Agent 基线「通才」），四种协作模式 P1 串行 / P2 并行汇聚 / P3 反思循环 / P4 委派-汇报，黑板过程可按 Run 回放。
-- **对比评估实验**（`/admin/benchmark`，主任/指导老师）：在 5 个内置任务上对比单 Agent / 多 Agent 的完成率、步骤数、工具调用数与耗时。
-- **知识库**（`/knowledge`）：6 类知识源（制度文档/公告/推文/策划书/事实快照/成员名册），关键词检索（ngram 全文 + LIKE 降级），检索期按来源权限逐条复核；每日 03:10 生成事实快照、03:40 重建索引。
-- **多组织（多租户）**：`/register` 注册组织，`/org/structure` 维护组织架构树（物化路径）与岗位-角色映射；业务数据按组织自动隔离（Hibernate `@TenantId`，请求级组织回源校验）；领域包（party/volunteer/club）与术语表驱动菜单显隐与文案，组织主题色驱动前端主色。
-
-## 目录结构
-
-```
-PAMS/
-├── pams-backend/                 # Spring Boot 后端
-│   ├── src/main/java/com/pams/
-│   │   ├── config/               # 安全配置 / 多租户判别器 / 审计 / DataSeeder（基础字典 + 演示数据）
-│   │   ├── common/               # OrgContext / 租户回填监听 / ExcelGuard 等公共设施
-│   │   ├── entity/               # 用户组织（sys_user/sys_role/sys_department）
-│   │   ├── security/             # JWT 认证（含吊销水位）与角色权限
-│   │   ├── module/
-│   │   │   ├── activity/         # 活动：策划书/议程/座位/评分/签到（应签名单+核验字段）/任务（甘特）
-│   │   │   ├── routine/          # 排班/考勤/活动排班/无课表
-│   │   │   ├── party/            # 党务台账：成员/阶段/考察/转入转出/名册
-│   │   │   ├── content/          # 推文/新闻稿
-│   │   │   ├── archive/          # 档案材料/模板/素拓加分/公告/群聊/文件下载鉴权
-│   │   │   ├── member/           # 成员名册与届别
-│   │   │   ├── notification/     # 通知中心
-│   │   │   ├── agent/            # 灵思：对话/工具调用/多 Agent 协作/对比实验
-│   │   │   ├── knowledge/        # 知识库：索引源适配/关键词检索/事实快照/权限复核
-│   │   │   ├── org/              # 组织注册/架构树/岗位/邀请（多租户入口）
-│   │   │   └── user/ system/ dashboard/ seat/ schedule/ permission/ chat/ ...
-│   │   └── ...
-│   └── src/main/resources/db/
-│       ├── migration/            # Flyway 双库通用迁移（V1–V34）
-│       ├── migration-mysql/      # MySQL 专有迁移（V25–V27、V34）
-│       └── migration-h2/         # H2 对应实现（测试用）
-├── pams-web/                     # React 前端
-│   └── src/
-│       ├── api/                  # axios 封装与各模块接口（含 agent/knowledge/org）
-│       ├── components/           # glass 组件体系 / 灵思（agent）组件 / 甘特图
-│       ├── layouts/              # 主布局（侧边导航 + 顶栏）
-│       ├── pages/                # 业务页面 + agent 灵思 / knowledge 知识库 / org 组织
-│       ├── router/               # 路由与权限守卫
-│       ├── stores/               # zustand 状态（含组织主题/领域包/术语）
-│       └── styles/               # tokens / glass / lingsi / agent-team 样式
-├── database/                     # 建库脚本 / 存量材料迁移脚本
-├── docs/                         # 设计方案 / PRD / 灵思与知识库方案 / 审计报告等
-├── pom.xml                       # 聚合工程（Maven modules 指向 pams-backend，供 IDEA 打开根目录使用）
-├── docker-compose.yml            # 容器编排（mysql + backend + web）
-├── start.bat                     # Windows 一键启动：建库 → 后端 → 前端 → 打开浏览器
-└── README.md
-```
-
-## 常用命令
+在仓库根目录运行后端测试：
 
 ```bash
-# 后端测试（H2 内存库 + Flyway 全量迁移，不依赖本地 MySQL）
-cd pams-backend && mvn test
-
-# 前端单测与构建
-cd pams-web && npm run test && npm run build
-
-# 前端端到端冒烟（Playwright，需先启动 MySQL 与后端 dev profile）
-cd pams-web && npm run test:e2e
+mvn -f pams-backend/pom.xml test
 ```
 
-## 环境变量
+后端测试使用 H2 测试配置与 Flyway 迁移，不依赖本机 MySQL；测试 profile 默认使用 stub，避免因本机存在模型密钥而调用真实 API。
 
-| 变量 | 说明 | 默认 |
-| --- | --- | --- |
-| `PAMS_JWT_SECRET` | JWT 签名密钥；未设置时每次启动随机生成（重启后需重新登录） | 随机 |
-| `DB_PASSWORD` | 后端连接本地 MySQL 的密码 | `root` |
-| `PAMS_AGENT_API_KEY` | 灵思 LLM（DeepSeek）密钥；留空自动降级 stub 规则模式 | 空（降级） |
-| `PAMS_UPLOAD_DIR` | 上传文件目录（容器内为 `/app/uploads`） | `./uploads` |
+```bash
+cd pams-web
+npm test
+npm run build
+```
 
-> 容器编排另从 `.env` 读取 `MYSQL_ROOT_PASSWORD` / `MYSQL_USER` / `MYSQL_PASSWORD`（见 `.env.example`）。仓库内不存任何真实密钥。
+`npm run build` 会执行 TypeScript 检查和 Vite 生产构建。
 
-## 演示种子数据（仅空库注入，幂等）
+Playwright 包含模拟 API 的 UI 回归及需要真实后端的冒烟测试。运行完整集合前，准备好 MySQL、`dev` 后端和浏览器：
 
-- 基础字典（任何环境空库首启）：4 个部门（文秘部/组织部/新媒体中心/青年科技部）+ 7 个内置角色；届别「第九届」为当前届
-- 默认组织（V30 迁移种入，id=1）承接全部存量数据；新注册组织独立隔离
-- dev/test 追加 8 个演示账号（见上表）
-- 业务演示数据（非 test 环境、库中无活动时自动注入）：示例活动「第四十期入党积极分子培训班」（执行中），含 6 条甘特图任务（带依赖链）、已审核策划书（含流程/预算）、5 步议程、3 条签到、1 条已发布推文、1 条新闻稿、1 条归档材料、1 条公告；4 名不同发展阶段的党务成员（入党积极分子/重点发展对象/预备党员/正式党员）；1 条无课表、1 条素拓加分记录
+```bash
+cd pams-web
+npx playwright install chromium
+npm run test:e2e
+```
 
-演示数据的日期均挂当前日期前后，登录后即可在活动列表/详情、甘特图、党务台账、内容宣传等处直接查看。
+配置会启动或复用 5173 上的 Vite 服务，不负责启动后端。部分 UI 用例在 Windows 上指定 Microsoft Edge，需本机已安装；其他用例可通过 `PAMS_E2E_CHROME_CHANNEL` 选择本机浏览器。浏览器样本测试用于验证页面行为，不能代替真实接口与数据库联调。
 
-## 文档
+## 项目结构
 
-`docs/` 目录包含：总体设计方案与 PRD（`PAMS设计方案.md`、`PRD-v4.md`、`PRD-v5-开发规划.md`）、灵思与知识库方案（`PAMS-Agent业务设计方案.md`、`PAMS-灵思知识库问答方案-v1.md`）、通用化与多 Agent 协作策划（`PAMS-通用化与多Agent协作改造策划.md`）、UI 设计方案（`PAMS-UI-设计方案-v3-简约高效.md` 等）、接口文档（`API.md`）与历次代码/权限审计报告。
+```text
+PAMS/
+├── pams-backend/
+│   └── src/
+│       ├── main/java/com/pams/
+│       │   ├── common/、config/、security/     # 公共设施、租户上下文与认证
+│       │   └── module/                        # 活动、排班、党务、档案、Agent、知识库、组织与权限
+│       ├── main/java/db/migration/            # Java Flyway 迁移（含 V37）
+│       ├── main/resources/
+│       │   ├── application.yml
+│       │   └── db/                           # 通用 / MySQL / H2 迁移
+│       └── test/                             # 单元与集成测试
+├── pams-web/
+│   ├── src/
+│   │   ├── api/、stores/                     # 接口与应用状态
+│   │   ├── components/                       # 品牌、表单、灵思及业务共享组件
+│   │   ├── layouts/、pages/、router/          # 页面、导航与权限守卫
+│   │   └── styles/、utils/                   # v6 主题、样式与工具函数
+│   ├── dev/                                  # 开发代理辅助逻辑
+│   └── e2e/                                  # Playwright 用例
+├── database/                                 # 建库与存量材料处理脚本
+├── docs/                                     # 设计、实现记录、原型与验收截图
+├── pom.xml                                   # Maven 聚合入口
+├── .env.example                              # 容器环境配置示例
+├── docker-compose.yml
+├── deploy.sh
+└── start.bat                                 # Windows 本地开发启动入口
+```
+
+## 文档导航
+
+| 主题 | 文档 |
+| --- | --- |
+| 产品与规划 | [总体设计](docs/PAMS设计方案.md)、[PRD v5 开发规划](docs/PRD-v5-开发规划.md)、[通用化与多 Agent 策划](docs/PAMS-通用化与多Agent协作改造策划.md) |
+| 品牌与 UI | [协奏品牌标识](docs/协奏-品牌标识设计说明.md)、[UI v6 设计规范](docs/PAMS-UI-设计方案-v6-行业规范修订.md)、[表单工作面](docs/PAMS-表单工作面重设计.md) |
+| 业务界面落地 | [排班考勤](docs/PAMS-UI-v6-排班考勤落地记录.md)、[组织宣传档案与党务](docs/PAMS-UI-v6-组织宣传档案与党务台账落地记录.md)、[登录与注册](docs/PAMS-登录与组织注册-改版与修复.md) |
+| 灵思与资料 | [Agent 业务方案](docs/PAMS-Agent业务设计方案.md)、[灵思 v6 落地记录](docs/PAMS-UI-v6-灵思Agent落地记录.md)、[知识库问答方案](docs/PAMS-灵思知识库问答方案-v1.md) |
+| 授权模型 | [角色权限与租户管理方案](docs/PAMS-用户角色权限与多租户管理设计方案-v1.md)、[管理员业务设计](docs/PAMS-管理员角色权限管理业务设计-v1.md)、[首版落地记录](docs/PAMS-角色权限与租户管理-首版落地记录.md) |
+| 接口与变更 | [API 文档](docs/API.md)、[代码审计记录](docs/代码审计报告-2026-10-14.md)、[分支与分批推送记录](docs/分支梳理与分批推送记录-2026-10-16.md) |
+
+设计方案包含后续规划；判断当前可用能力时，以本分支代码、相应落地记录及实际授权配置为准。
