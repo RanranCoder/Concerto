@@ -18,6 +18,14 @@ public class DashboardController {
 
     @GetMapping
     public Result<Map<String, Object>> dashboard(@AuthenticationPrincipal LoginUser current) {
-        return Result.ok(service.dashboard(current));
+        var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+        Map<String,Object> result = new java.util.LinkedHashMap<>();
+        result.put("activityStats",ctx.hasPermission("activity:view") ? service.activityStats() : Map.of());
+        result.put("weekSchedules",ctx.hasPermission("schedule:view") ? service.weekScheduleCount() : 0);
+        result.put("recentArticles",ctx.hasPermission("content:view") ? service.recentArticles() : java.util.List.of());
+        result.put("recentMaterials",ctx.hasPermission("material:view") ? service.recentMaterials() : java.util.List.of());
+        result.put("recentAnnouncements",ctx.hasPermission("notice:view") ? service.recentAnnouncements() : java.util.List.of());
+        result.put("myTasks",ctx.hasPermission("activity:view") ? service.myTasks(current) : java.util.List.of());
+        return Result.ok(result);
     }
 }

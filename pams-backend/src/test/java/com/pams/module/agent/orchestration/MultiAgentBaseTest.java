@@ -43,6 +43,12 @@ class MultiAgentBaseTest {
     @Autowired
     AgentEventPublisher eventPublisher;
 
+    @org.junit.jupiter.api.BeforeEach
+    void establishTenant() { com.pams.common.OrgContext.set(1L); }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearTenant() { com.pams.common.OrgContext.clear(); }
+
     private static final ObjectMapper OM = new ObjectMapper();
 
     /** 构造一个带登录用户与流的工具上下文（授予 material:view 以便检索专家可用 searchMaterials）。 */
@@ -51,7 +57,7 @@ class MultiAgentBaseTest {
         LoginUser lu = new LoginUser(uid, "u" + uid, "测试用户", "DIRECTOR", 4, null, null, 1L);
         var authorities = List.of(
                 new org.springframework.security.core.authority.SimpleGrantedAuthority("material:view"),
-                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DIRECTOR"));
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("content:manage"));
         return new ToolContext(lu, authorities, null, streamId);
     }
 
@@ -150,9 +156,9 @@ class MultiAgentBaseTest {
 
     @Test
     void run_isOwnershipIsolated() {
-        ToolContext c = ctx(100L);
+        ToolContext c = ctx(8L);
         AgentRun run = coordinator.run("查活动", c, null, "P1", c.getStreamId());
-        assertThat(runService.getOwned(run.getId(), 100L).getId()).isEqualTo(run.getId());
+        assertThat(runService.getOwned(run.getId(), 8L).getId()).isEqualTo(run.getId());
         assertThatThrownBy(() -> runService.getOwned(run.getId(), 999L))
                 .isInstanceOf(BizException.class);
     }

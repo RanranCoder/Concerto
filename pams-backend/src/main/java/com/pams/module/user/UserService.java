@@ -24,6 +24,8 @@ import java.util.Map;
 
 @Service
 public class UserService {
+    @Autowired(required = false)
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final DepartmentRepository departmentRepository;
@@ -117,6 +119,7 @@ public class UserService {
         vo.put("deptId", u.getDept() == null ? null : u.getDept().getId());
         vo.put("deptName", u.getDept() == null ? null : u.getDept().getName());
         vo.put("roleCode", u.getRole() == null ? null : u.getRole().getCode());
+        vo.put("roleId", u.getRole() == null ? null : u.getRole().getId());
         vo.put("roleName", u.getRole() == null ? null : u.getRole().getName());
         vo.put("status", u.getStatus());
         return vo;
@@ -124,6 +127,7 @@ public class UserService {
 
     @Transactional
     public Long createUser(UserSaveRequest req, Integer currentLevel) {
+        if (req.getPassword() == null || req.getPassword().length() < 8) throw new BizException(400,"初始密码至少需要 8 位");
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new BizException(1003, "用户名已存在");
         }
@@ -131,8 +135,9 @@ public class UserService {
         //     规避 sys_user.username 硬唯一键与软删冲突（删除账号后无法重建同名）。
         User deleted = userRepository.findDeletedByUsername(req.getUsername()).orElse(null);
         if (deleted != null) {
+            if (!OrgContext.getOrDefault().equals(deleted.getOrgId())) throw new BizException(409,"用户名已被占用");
             deleted.setPassword(passwordEncoder.encode(
-                    req.getPassword() == null || req.getPassword().isBlank() ? "123456" : req.getPassword()));
+                    req.getPassword()));
             apply(deleted, req, currentLevel);
             deleted.setDeleted(0L);
             deleted.setUpdatedAt(LocalDateTime.now());
@@ -142,7 +147,7 @@ public class UserService {
         User u = new User();
         u.setUsername(req.getUsername());
         u.setPassword(passwordEncoder.encode(
-                req.getPassword() == null || req.getPassword().isBlank() ? "123456" : req.getPassword()));
+                req.getPassword()));
         apply(u, req, currentLevel);
         u.setDeleted(0L);
         return userRepository.save(u).getId();
@@ -160,7 +165,10 @@ public class UserService {
 
     @Transactional
     public void updateUser(Long id, UserSaveRequest req, Integer currentLevel) {
+        if (authorization != null) authorization.verifyUserMutation(id);
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        if (!OrgContext.getOrDefault().equals(u.getOrgId())) throw new BizException(404,"用户不存在");
+        if (authorization != null && !java.util.Objects.equals(u.getRole().getId(),req.getRoleId())) throw new BizException(409,"更换角色请使用角色变更预览");
         apply(u, req, currentLevel);
         userRepository.save(u);
     }
@@ -182,14 +190,19 @@ public class UserService {
         u.setStatus(req.getStatus() == null ? 1 : req.getStatus());
         if (req.getDeptId() != null) {
             Department d = departmentRepository.findById(req.getDeptId()).orElseThrow(() -> new BizException(1005, "部门不存在"));
+            if (!OrgContext.getOrDefault().equals(d.getOrgId())) throw new BizException(404,"部门不存在");
             u.setDept(d);
         } else {
             u.setDept(null);
         }
         Role role = roleRepository.findById(req.getRoleId()).orElseThrow(() -> new BizException(1006, "角色不存在"));
-        checkAssignableLevel(role, currentLevel);
+        if (!OrgContext.getOrDefault().equals(role.getOrgId())) throw new BizException(404,"角色不存在");
+        if (authorization != null) authorization.verifyAssignableRole(role.getId());
+        else checkAssignableLevel(role, currentLevel);
         u.setRole(role);
+        u.setOrgId(OrgContext.getOrDefault());
         u.setUpdatedAt(LocalDateTime.now());
+        if (authorization != null) authorization.userChanged(OrgContext.getOrDefault());
     }
 
     /**
@@ -223,9 +236,12 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id, Integer currentLevel) {
+        if (authorization != null) authorization.verifyUserMutation(id);
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
-        checkDeleteLevel(u, currentLevel);
+        if (!OrgContext.getOrDefault().equals(u.getOrgId())) throw new BizException(404,"用户不存在");
+        if (authorization == null) checkDeleteLevel(u, currentLevel);
         u.setDeleted(u.getId());
+        if (authorization != null) authorization.userChanged(OrgContext.getOrDefault());
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
     }
@@ -242,6 +258,8 @@ public class UserService {
 
     @Transactional
     public void resetPassword(Long id, Integer currentLevel) {
+        if (authorization != null) authorization.verifyUserMutation(id);
+        if (authorization != null) throw new BizException(409,"固定密码重置已关闭，需接入本人一次性设置凭证流程");
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         checkResetPasswordLevel(u, currentLevel);
         u.setPassword(passwordEncoder.encode("123456"));

@@ -15,7 +15,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/agent/bench")
-@PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+@PreAuthorize("hasAuthority('org:audit:view')")
 public class AgentBenchController {
 
     private final BenchmarkService benchmarkService;

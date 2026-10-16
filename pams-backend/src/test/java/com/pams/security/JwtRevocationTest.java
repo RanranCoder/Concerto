@@ -161,17 +161,17 @@ class JwtRevocationTest {
     }
 
     @Test
-    void adminResetPassword_revokesTargetUsersTokens() throws Exception {
+    void disabledFixedPasswordResetDoesNotMutateTargetOrRevokeTokens() throws Exception {
         User target = freshUser("rp_");
         String targetToken = jwtUtil.generate(target.getId(), target.getUsername(), target.getRole().getCode());
         String adminToken = loginToken("zhuren", "123456");
 
         mvc.perform(post("/api/users/" + target.getId() + "/reset-password")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isConflict());
 
-        // 修复前：管理员重置密码后，目标用户旧 token 仍可调用全部 API
+        // 拒绝的旧重置入口不能修改目标账号；本人改密的吊销行为由上面的用例验证。
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + targetToken))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
     }
 }

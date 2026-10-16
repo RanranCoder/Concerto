@@ -5,7 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface KbRetrievalLogRepository extends JpaRepository<KbRetrievalLog, Long> {
+public interface KbRetrievalLogRepository extends JpaRepository<KbRetrievalLog, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<KbRetrievalLog> {
 
     Page<KbRetrievalLog> findAllByOrderByIdDesc(Pageable pageable);
 

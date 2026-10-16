@@ -48,7 +48,10 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 @Component
+@org.springframework.core.annotation.Order(0)
 public class DataSeeder implements ApplicationRunner {
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.transaction.PlatformTransactionManager seedTransactionManager;
     private final DepartmentRepository departmentRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
@@ -111,13 +114,18 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
-        seedOrg();
-        seedMemberSessions();   // 届别种子独立于部门种子（dev 库部门已存在时也能补种）
-        // 演示业务数据只在非测试环境注入，避免影响 H2 集成测试断言。
-        if (isTestProfile()) return;
-        seedDemoData();
+        Long previous=com.pams.common.OrgContext.get();
+        try {
+            com.pams.common.OrgContext.set(com.pams.common.OrgContext.DEFAULT_ORG_ID);
+            new org.springframework.transaction.support.TransactionTemplate(seedTransactionManager).executeWithoutResult(status -> {
+                seedOrg();
+                seedMemberSessions();
+                if (!isTestProfile()) seedDemoData();
+            });
+        } finally {
+            if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
+        }
     }
 
     /** 种子届别：只建「第九届」为当前届，便于直接导入真实登记表。 */

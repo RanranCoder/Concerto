@@ -135,9 +135,7 @@ public class MemberController {
     @PostMapping("/import-accounts")
     public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req,
                                                         @AuthenticationPrincipal LoginUser current) {
-        return Result.ok(accountImportService.importAccounts(req,
-                current == null ? null : current.getId(),
-                current == null ? null : current.getRoleLevel()));
+        throw new com.pams.common.BizException(409,"批量开户需接入安全凭证发放与逐项授权预览，请先使用单用户创建");
     }
 
     private ResponseEntity<Resource> xlsxResponse(byte[] data, String filename) {

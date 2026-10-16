@@ -115,7 +115,13 @@ public class SigninController {
                 browserTime = null;
             }
         }
-        return Result.ok(service.scanSignin(token, trimmed, studentNo, fields, browserTime));
+        Long previous=com.pams.common.OrgContext.get();
+        try {
+            com.pams.common.OrgContext.set(service.resolveOrgByToken(token));
+            return Result.ok(service.scanSignin(token, trimmed, studentNo, fields, browserTime));
+        } finally {
+            if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
+        }
     }
 
     private static String asString(Object o) {
@@ -127,13 +133,19 @@ public class SigninController {
      */
     @GetMapping("/scan-config")
     public Result<Map<String, Object>> scanConfig(@RequestParam String token) {
-        Long activityId = service.resolveActivityByToken(token);
-        if (rosterService == null) throw new BizException(500, "服务不可用");
-        List<SigninFieldConfig> fields = rosterService.getFields(activityId);
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("activityId", activityId);
-        resp.put("fields", fields);
-        return Result.ok(resp);
+        Long previous=com.pams.common.OrgContext.get();
+        try {
+            com.pams.common.OrgContext.set(service.resolveOrgByToken(token));
+            Long activityId = service.resolveActivityByToken(token);
+            if (rosterService == null) throw new BizException(500, "服务不可用");
+            List<SigninFieldConfig> fields = rosterService.getFields(activityId);
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("activityId", activityId);
+            resp.put("fields", fields);
+            return Result.ok(resp);
+        } finally {
+            if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
+        }
     }
 
     /** 取第一个非空值（新格式优先），全空则返回 null */

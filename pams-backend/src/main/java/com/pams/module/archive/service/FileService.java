@@ -37,9 +37,6 @@ public class FileService {
     private static final Set<String> SENSITIVE_BIZ_TYPES = Set.of(
             "SIGNIN", "SCHEDULE", "ROSTER", "ATTENDANCE", "INVOICE");
 
-    /** 「部长及以上」级别阈值：种子角色中四部部长 level=3（见 DataSeeder.seedBaseDict） */
-    private static final int LEADER_LEVEL = 3;
-
     private final FileRecordRepository fileRecordRepository;
     private final UserRepository userRepository;
 
@@ -63,23 +60,16 @@ public class FileService {
         if (current == null) {
             return false;
         }
-        if (isLeader(current)) {
-            return true;
-        }
-        // 敏感件对非部长用户一律关闭（含本人上传）
-        if (isSensitive(rec)) {
-            return false;
-        }
+        if (!java.util.Objects.equals(rec.getOrgId(),current.getOrgId())) return false;
+        var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+        if (!ctx.hasPermission("file:view")) return false;
+        if (isSensitive(rec)) return ctx.hasPermission("file:sensitive:read");
+        if (ctx.hasPermission("file:org:read")) return true;
         if (rec.getUploaderId() != null && rec.getUploaderId().equals(current.getId())) {
             return true;
         }
         Long ownerDeptId = uploaderDeptId(rec);
         return ownerDeptId != null && ownerDeptId.equals(current.getDeptId());
-    }
-
-    /** 部长及以上：按角色 level 判定（RoleExprs.LEADER 的级别语义），不落角色名字面量 */
-    private boolean isLeader(LoginUser current) {
-        return current.getRoleLevel() != null && current.getRoleLevel() >= LEADER_LEVEL;
     }
 
     private boolean isSensitive(FileRecord rec) {

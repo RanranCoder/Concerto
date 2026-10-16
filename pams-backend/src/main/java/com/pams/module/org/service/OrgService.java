@@ -38,6 +38,8 @@ import java.util.UUID;
  */
 @Service
 public class OrgService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
     private final OrganizationRepository organizationRepository;
     private final DepartmentRepository departmentRepository;
@@ -100,6 +102,7 @@ public class OrgService {
         org.setUpdatedAt(LocalDateTime.now());
         org = organizationRepository.save(org);
         Long orgId = org.getId();
+        if (authorization != null) authorization.initializeOrg(orgId);
 
         // 2/3. 新组织的架构与管理员属于「新租户」。多租户判别器按 OrgContext 取值，
         //      故在供给期临时把租户上下文切到新组织，写完恢复（A3）。
@@ -120,6 +123,7 @@ public class OrgService {
             initPositions(orgId, req.getUnits());
 
             Role director = roleRepository.findAll().stream()
+                    .filter(r -> orgId.equals(r.getOrgId()))
                     .filter(r -> "DIRECTOR".equals(r.getCode()))
                     .findFirst()
                     .orElseThrow(() -> new BizException(2005, "系统角色 DIRECTOR 不存在，请先初始化基础数据"));
@@ -147,6 +151,7 @@ public class OrgService {
 
         org.setOwnerUserId(admin.getId());
         organizationRepository.save(org);
+        if (authorization != null) authorization.markProvisioned(orgId);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("orgId", orgId);
@@ -191,6 +196,25 @@ public class OrgService {
                 .orElseThrow(() -> new BizException(2006, "组织不存在"));
     }
 
+    /**
+     * 组织公开列表（免登录）：登录页组织选择与品牌用。
+     * 仅暴露非敏感字段——不含 ownerUserId / status / 时间戳等内部信息。
+     */
+    public List<Map<String, Object>> listPublic() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Organization o : organizationRepository.findByStatusOrderByIdAsc(1)) {
+            Map<String, Object> vo = new LinkedHashMap<>();
+            vo.put("id", o.getId());
+            vo.put("name", o.getName());
+            vo.put("type", o.getType());
+            vo.put("shortName", o.getShortName());
+            vo.put("logoUrl", o.getLogoUrl());
+            vo.put("themeJson", o.getThemeJson());
+            list.add(vo);
+        }
+        return list;
+    }
+
     @Transactional
     public void updateCurrent(String name, String shortName, String logoUrl, String themeColor,
                               List<String> enabledPacks) {
@@ -204,6 +228,7 @@ public class OrgService {
             org.setThemeJson("{\"primaryColor\":\"" + themeColor + "\"}");
         }
         if (enabledPacks != null) {
+            if (authorization != null) authorization.updatePacks(org.getId(), enabledPacks.contains("party"));
             org.setEnabledPacks(toJsonArray(enabledPacks));
         }
         org.setUpdatedAt(LocalDateTime.now());
@@ -356,6 +381,11 @@ public class OrgService {
     @Transactional
     public OrgInvitation createInvitation(String roleCode, Long orgUnitId, Integer ttlHours) {
         Long orgId = OrgContext.getOrDefault();
+        Role invitedRole = roleRepository.findByCodeAndOrgId(isBlank(roleCode) ? "STAFF" : roleCode,orgId)
+            .orElseThrow(() -> new BizException(404,"角色不存在"));
+        if (authorization != null) authorization.verifyAssignableRole(invitedRole.getId());
+        if (orgUnitId != null && departmentRepository.findById(orgUnitId).filter(d -> orgId.equals(d.getOrgId())).isEmpty()) throw new BizException(404,"组织节点不存在");
+        if (ttlHours != null && (ttlHours < 1 || ttlHours > 720)) throw new BizException(400,"邀请有效期须为 1—720 小时");
         OrgInvitation inv = new OrgInvitation();
         inv.setOrgId(orgId);
         inv.setCode(UUID.randomUUID().toString().replace("-", ""));

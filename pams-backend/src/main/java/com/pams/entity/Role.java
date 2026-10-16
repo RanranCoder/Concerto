@@ -17,4 +17,9 @@ public class Role implements OrgScoped {
     private String dataScope;
     private LocalDateTime createdAt;
     private Long orgId;
+    private String status = "ACTIVE";
+    private String description;
+    private Long configVersion = 0L;
+    private Long currentRevisionId;
+    private Long draftRevisionId;
 }

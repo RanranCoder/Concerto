@@ -46,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // 已禁用用户（status=0 或 null）即使持有有效 JWT 也不放行，保持匿名走 401。
                 // 与 AuthController.login 的 status 判定保持一致。
                 // isRevoked：审计 #3 用户级吊销水位——登出/改密后旧 token 同样不放行。
-                if (u != null && u.getStatus() != null && u.getStatus() != 0 && !isRevoked(claims, u)) {
+                if (u != null && u.getRole()!=null && permissionService.validUser(u.getId()) && !isRevoked(claims, u)) {
                     String roleCode = u.getRole().getCode();
                     LoginUser lu = new LoginUser(
                             u.getId(), u.getUsername(), u.getRealName(),
@@ -54,11 +54,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             u.getDept() == null ? null : u.getDept().getId(),
                             u.getDept() == null ? null : u.getDept().getName(),
                             u.getOrgId());
-                    // 双轨注入：ROLE_ 角色码（现有 hasRole/hasAnyRole 继续生效）+ 该角色权限码（hasAuthority 生效）。
-                    // 权限码来自 role_permission 表，由权限管理页配置；每请求查一次 DB，dev 可接受。
+                    // 每请求重新解析租户已发布业务授权与有效治理委派；不再注入固定 ROLE_* 宏。
                     List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                    authorities.add(new SimpleGrantedAuthority("ROLE_" + roleCode));
-                    Set<String> codes = permissionService.permissionsOfRole(roleCode);
+                    Set<String> codes = permissionService.permissionsOfUser(u.getId());
                     for (String code : codes) {
                         authorities.add(new SimpleGrantedAuthority(code));
                     }

@@ -41,6 +41,43 @@ import java.util.Map;
 @Slf4j
 @Service
 public class KnowledgeAdminService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private PermissionResolver accessResolver;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.jdbc.core.JdbcTemplate accessJdbc;
+
+    /** Enumerate candidate metadata, then resolve source access before pagination/counting. */
+    private java.util.Set<Long> visibleIds(String table,String sourceType) {
+        if (accessJdbc == null || accessResolver == null) return java.util.Set.of();
+        var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+        if (ctx.getUserId()==null) return java.util.Set.of();
+        Long org=com.pams.common.OrgContext.get();
+        if (org==null) throw new BizException(403,"知识库访问缺少组织上下文");
+        String sql = switch(table) {
+            case "kb_chunk" -> "SELECT id,source_type,source_id FROM kb_chunk WHERE org_id=? AND deleted=0";
+            case "kb_document" -> "SELECT id,created_by FROM kb_document WHERE org_id=? AND deleted=0";
+            case "kb_snapshot" -> "SELECT id FROM kb_snapshot WHERE org_id=? AND deleted=0";
+            default -> throw new IllegalArgumentException("Unsupported knowledge table");
+        };
+        var allowed=new java.util.HashSet<Long>();
+        var cache=new java.util.HashMap<String,Boolean>();
+        for(var row:accessJdbc.queryForList(sql,org)) {
+            long id=((Number)row.get("id")).longValue();
+            String type=sourceType==null?row.get("source_type").toString():sourceType;
+            long source=sourceType==null?((Number)row.get("source_id")).longValue():id;
+            boolean accessible=cache.computeIfAbsent(type+":"+source,key -> accessResolver.canAccess(type,source,ctx));
+            if(table.equals("kb_document") && ctx.hasPermission("kb:manage") && java.util.Objects.equals(row.get("created_by"),ctx.getUserId())) accessible=true;
+            if(accessible) allowed.add(id);
+        }
+        return allowed;
+    }
+
+    private List<Map<String,Object>> visibleMetadata(String table,String columns,java.util.Set<Long> ids) {
+        if (ids.isEmpty() || accessJdbc == null) return List.of();
+        if (!java.util.Set.of("kb_chunk","kb_snapshot").contains(table)) throw new IllegalArgumentException();
+        return accessJdbc.queryForList("SELECT "+columns+" FROM "+table+" WHERE org_id=? AND deleted=0",com.pams.common.OrgContext.get()).stream()
+            .filter(row -> ids.contains(((Number)row.get("id")).longValue())).toList();
+    }
 
     /** 引用片段在台账/记录里展示的截断长度 */
     private static final int SNIPPET_CHARS = 200;
@@ -82,6 +119,7 @@ public class KnowledgeAdminService {
      * 就是当初做决策时的理由，写在这里才不会被忘掉。
      */
     public List<Map<String, Object>> sources() {
+        var readable = visibleMetadata("kb_chunk", "id,source_type,source_id,indexed_at", visibleIds("kb_chunk", null));
         List<Map<String, Object>> out = new ArrayList<>();
         for (KnowledgeSource s : indexer.sources()) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -93,8 +131,8 @@ public class KnowledgeAdminService {
             m.put("visibility", s.visibility());
             m.put("requiredPermission", s.requiredPermission());
             m.put("sensitivity", s.sensitivity());
-            m.put("documentCount", chunkRepository.countDistinctSourceIdBySourceType(s.sourceType()));
-            m.put("chunkCount", chunkRepository.countBySourceType(s.sourceType()));
+            m.put("documentCount", readable.stream().filter(r -> s.sourceType().equals(r.get("source_type"))).map(r -> r.get("source_id")).distinct().count());
+            m.put("chunkCount", readable.stream().filter(r -> s.sourceType().equals(r.get("source_type"))).count());
             out.add(m);
         }
         return out;
@@ -106,26 +144,31 @@ public class KnowledgeAdminService {
         out.put("retriever", searchMode.mode());
         out.put("fulltextAvailable", searchMode.fulltextAvailable());
         out.put("searchModeNote", searchMode.note());
-        out.put("documentCount", docRepository.countByStatus(KbDocument.STATUS_PUBLISHED));
-        out.put("chunkCount", chunkRepository.count());
+        var docs = visibleIds("kb_document", "manual");
+        var chunks = visibleMetadata("kb_chunk", "id,source_type,source_id,indexed_at", visibleIds("kb_chunk", null));
+        var snapshots = visibleMetadata("kb_snapshot", "id,spec_code,as_of", visibleIds("kb_snapshot", "snapshot"));
+        out.put("documentCount", docs.isEmpty() ? 0 : docRepository.count((root,q,cb) -> cb.and(root.get("id").in(docs), cb.equal(root.get("status"), KbDocument.STATUS_PUBLISHED))));
+        out.put("chunkCount", chunks.size());
 
         // 事实快照（D12 的 B 形态）：单独报出来，因为它是"数据类问题能不能答"的开关
-        out.put("snapshotCount", snapshotRepository.count());
-        out.put("snapshotSpecCount", snapshotRepository.countDistinctSpecCodes());
-        out.put("snapshotLatestAsOf", snapshotRepository.latestAsOf());
+        out.put("snapshotCount", snapshots.size());
+        out.put("snapshotSpecCount", snapshots.stream().map(r -> r.get("spec_code")).distinct().count());
+        out.put("snapshotLatestAsOf", snapshots.stream().map(r -> (java.sql.Timestamp)r.get("as_of")).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).map(java.sql.Timestamp::toLocalDateTime).orElse(null));
 
         // 台账/记录的"知识库更新于…"用这个值 —— 取最近一次成功索引时间，
         // 而不是"任务运行时间"，否则任务失败时会显示假的新鲜度（方案 R19）
-        LocalDateTime last = chunkRepository.lastIndexedAt();
+        LocalDateTime last = chunks.stream().map(r -> (java.sql.Timestamp)r.get("indexed_at")).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).map(java.sql.Timestamp::toLocalDateTime).orElse(null);
         out.put("lastIndexedAt", last);
         out.put("staleMinutes", last == null ? null
                 : java.time.Duration.between(last, LocalDateTime.now()).toMinutes());
 
         // 检索健康度：拒答率突然升高 = 索引坏了（方案 §11 的强信号）
-        long total = logRepository.count();
-        long noHit = logRepository.countBySkipReason(KbRetrievalLog.SKIP_NO_HIT);
-        long noCitation = logRepository.countBySkipReason(KbRetrievalLog.SKIP_NO_CITATION);
-        long filtered = logRepository.countByFilteredCountGreaterThan(0);
+        Long requester = com.pams.module.agent.core.ToolContext.current(null,null).getUserId();
+        Specification<KbRetrievalLog> own = (root,q,cb) -> requester == null ? cb.disjunction() : cb.equal(root.get("userId"),requester);
+        long total = logRepository.count(own);
+        long noHit = logRepository.count(own.and((root,q,cb) -> cb.equal(root.get("skipReason"),KbRetrievalLog.SKIP_NO_HIT)));
+        long noCitation = logRepository.count(own.and((root,q,cb) -> cb.equal(root.get("skipReason"),KbRetrievalLog.SKIP_NO_CITATION)));
+        long filtered = logRepository.count(own.and((root,q,cb) -> cb.greaterThan(root.get("filteredCount"),0)));
         out.put("retrievalTotal", total);
         out.put("retrievalNoHit", noHit);
         out.put("retrievalNoCitation", noCitation);
@@ -143,12 +186,12 @@ public class KnowledgeAdminService {
      * 而且它存在的意义就是让人核对"这个数字对不对"，藏起来反而没用。
      */
     public PageResult<Map<String, Object>> pageSnapshots(String specCode, int page, int size) {
+        var allowed=visibleIds("kb_snapshot","snapshot");
         PageRequest pr = PageRequest.of(Math.max(page, 1) - 1, Math.min(Math.max(size, 1), 200),
                 Sort.by(Sort.Direction.DESC, "asOf"));
-        Page<KbSnapshot> p = (specCode == null || specCode.isBlank())
-                ? snapshotRepository.findAll(pr)
-                : snapshotRepository.findAll(
-                    (root, query, cb) -> cb.equal(root.get("specCode"), specCode.trim()), pr);
+        Page<KbSnapshot> p = snapshotRepository.findAll((root,query,cb) -> cb.and(
+                allowed.isEmpty()?cb.disjunction():root.get("id").in(allowed),
+                specCode==null||specCode.isBlank()?cb.conjunction():cb.equal(root.get("specCode"),specCode.trim())),pr);
 
         PageResult<Map<String, Object>> r = new PageResult<>();
         r.setRecords(p.getContent().stream().map(this::snapshotVo).toList());
@@ -199,7 +242,7 @@ public class KnowledgeAdminService {
             m.put("requiredPermission", s.requiredPermission());
             m.put("link", s.link());
             m.put("refreshHint", s.refreshHint());
-            m.put("scopeCount", s.scopes().get() == null ? 0 : s.scopes().get().size());
+            m.put("scopeCount", visibleMetadata("kb_snapshot", "id,spec_code", visibleIds("kb_snapshot", "snapshot")).stream().filter(row -> s.code().equals(row.get("spec_code"))).count());
             out.add(m);
         }
         return out;
@@ -215,8 +258,10 @@ public class KnowledgeAdminService {
      */
     public PageResult<Map<String, Object>> pageChunks(String sourceType, String keyword,
                                                      int page, int size) {
+        var allowed=visibleIds("kb_chunk",null);
         Specification<KbChunk> spec = (root, query, cb) -> {
             List<jakarta.persistence.criteria.Predicate> ps = new ArrayList<>();
+            ps.add(allowed.isEmpty()?cb.disjunction():root.get("id").in(allowed));
             if (sourceType != null && !sourceType.isBlank()) {
                 ps.add(cb.equal(root.get("sourceType"), sourceType));
             }
@@ -267,6 +312,7 @@ public class KnowledgeAdminService {
 
     /** 某个源记录的完整分块（点开台账行时用；这里才给完整正文） */
     public List<Map<String, Object>> chunksOf(String sourceType, Long sourceId) {
+        if (accessResolver == null || !accessResolver.canAccess(sourceType,sourceId,com.pams.module.agent.core.ToolContext.current(null,null))) throw new BizException(404,"知识源不存在或不可见");
         List<Map<String, Object>> out = new ArrayList<>();
         for (KbChunk c : chunkRepository.findBySourceTypeAndSourceIdOrderBySeqAsc(sourceType, sourceId)) {
             Map<String, Object> m = chunkVo(c);
@@ -280,8 +326,10 @@ public class KnowledgeAdminService {
 
     public PageResult<Map<String, Object>> pageDocuments(String status, String keyword,
                                                         int page, int size) {
+        var allowed=visibleIds("kb_document","manual");
         Specification<KbDocument> spec = (root, query, cb) -> {
             List<jakarta.persistence.criteria.Predicate> ps = new ArrayList<>();
+            ps.add(allowed.isEmpty()?cb.disjunction():root.get("id").in(allowed));
             if (status != null && !status.isBlank()) ps.add(cb.equal(root.get("status"), status));
             if (keyword != null && !keyword.isBlank()) {
                 String like = "%" + keyword.trim() + "%";
@@ -322,6 +370,7 @@ public class KnowledgeAdminService {
     }
 
     public Map<String, Object> document(Long id) {
+        if (!visibleIds("kb_document","manual").contains(id)) throw new BizException(404,"文档不存在或不可见");
         KbDocument d = docRepository.findById(id)
                 .orElseThrow(() -> new BizException(4404, "文档不存在"));
         Map<String, Object> m = docVo(d);
@@ -352,6 +401,7 @@ public class KnowledgeAdminService {
 
     @Transactional
     public void updateDocument(Long id, KbDocumentRequest req) {
+        if (!visibleIds("kb_document", "manual").contains(id)) throw new BizException(404,"文档不存在或不可见");
         KbDocument d = docRepository.findById(id)
                 .orElseThrow(() -> new BizException(4404, "文档不存在"));
         apply(d, req);
@@ -364,6 +414,7 @@ public class KnowledgeAdminService {
 
     @Transactional
     public void deleteDocument(Long id) {
+        if (!visibleIds("kb_document", "manual").contains(id)) throw new BizException(404,"文档不存在或不可见");
         KbDocument d = docRepository.findById(id)
                 .orElseThrow(() -> new BizException(4404, "文档不存在"));
         d.setDeleted(1);
@@ -416,9 +467,11 @@ public class KnowledgeAdminService {
      */
     public PageResult<Map<String, Object>> pageRetrievals(String skipReason, int page, int size) {
         PageRequest pr = PageRequest.of(Math.max(page, 1) - 1, Math.min(Math.max(size, 1), 100));
-        Page<KbRetrievalLog> p = (skipReason == null || skipReason.isBlank())
-                ? logRepository.findAllByOrderByIdDesc(pr)
-                : logRepository.findBySkipReasonOrderByIdDesc(skipReason, pr);
+        Long requester = com.pams.module.agent.core.ToolContext.current(null,null).getUserId();
+        Page<KbRetrievalLog> p = logRepository.findAll((root,query,cb) -> cb.and(
+                requester==null?cb.disjunction():cb.equal(root.get("userId"),requester),
+                skipReason==null||skipReason.isBlank()?cb.conjunction():cb.equal(root.get("skipReason"),skipReason)),
+                PageRequest.of(pr.getPageNumber(),pr.getPageSize(),Sort.by(Sort.Direction.DESC,"id")));
 
         PageResult<Map<String, Object>> r = new PageResult<>();
         r.setRecords(p.getContent().stream().map(this::logVo).toList());
@@ -444,8 +497,20 @@ public class KnowledgeAdminService {
         m.put("skipReason", l.getSkipReason());
         m.put("provider", l.getProvider());
         m.put("degraded", l.getDegraded() != null && l.getDegraded() == 1);
-        m.put("hitsJson", l.getHitsJson());
+        m.put("hitsJson", visibleHits(l.getHitsJson()));
         m.put("createdAt", l.getCreatedAt());
         return m;
     }
+    private String visibleHits(String raw) {
+        if (raw == null || accessResolver == null) return "[]";
+        try {
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var entries = mapper.readTree(raw);
+            var output = mapper.createArrayNode();
+            var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+            for (var item : entries) if (item.hasNonNull("sourceType") && item.hasNonNull("sourceId") && accessResolver.canAccess(item.path("sourceType").asText(), item.path("sourceId").asLong(), ctx)) output.add(item);
+            return output.toString();
+        } catch (Exception e) { return "[]"; }
+    }
+
 }

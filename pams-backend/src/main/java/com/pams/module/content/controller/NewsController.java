@@ -29,14 +29,14 @@ public class NewsController {
     }
 
     /** 新闻的增删改限干部，登录即可查询 */
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('news:manage')")
     @PostMapping
     public Result<News> create(@Valid @RequestBody NewsRequest req,
                                @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current == null ? null : current.getId(), req));
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('news:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody NewsRequest req) {
         service.update(id, req);
@@ -44,14 +44,14 @@ public class NewsController {
     }
 
     /** 发布新闻稿（DRAFT → PUBLISHED，记录发布日期）。与增删改同权限口径。 */
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('news:manage')")
     @PostMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id) {
         service.publish(id);
         return Result.ok();
     }
 
-    @PreAuthorize(ActivityController.LEADER)
+    @PreAuthorize("hasAuthority('news:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         service.delete(id);

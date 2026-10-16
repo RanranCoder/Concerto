@@ -30,7 +30,7 @@ public class UserController {
         return Result.ok(userService.options());
     }
 
-    /** 用户列表：user:view（V7 种子：仅 TEACHER/DIRECTOR）。数据权限按角色 dataScope 兜底。 */
+    /** 用户列表：由当前有效治理身份的 user:view 控制。 */
     @PreAuthorize("hasAuthority('user:view')")
     @GetMapping
     public Result<com.pams.common.PageResult<Map<String, Object>>> page(
@@ -39,16 +39,8 @@ public class UserController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal LoginUser current) {
-        // 数据权限兜底（Task 26）：按当前用户角色的 dataScope 判断，而非硬编码 STAFF。
-        // 角色 dataScope == "DEPT"（如干事 STAFF）时强制只能查看本部门，忽略前端传入的 deptId。
-        // 更高层的角色 dataScope == "ALL" 可全量查看，并保留前端部门筛选。
-        boolean forceOwnDept = false;
-        Long currentDeptId = current == null ? null : current.getDeptId();
-        if (current != null) {
-            Role role = roleRepository.findByCode(current.getRoleCode()).orElse(null);
-            forceOwnDept = userService.isDeptScoped(role);
-        }
-        return Result.ok(userService.page(keyword, deptId, currentDeptId, forceOwnDept, page, size));
+        // 首版治理委派固定管理全组织普通账号，与主业务角色的旧 dataScope 分开。
+        return Result.ok(userService.page(keyword, deptId, null, false, page, size));
     }
 
     /** 创建用户：user:manage（V7 种子：仅 TEACHER/DIRECTOR；级别防提权校验在 Service 层）。 */

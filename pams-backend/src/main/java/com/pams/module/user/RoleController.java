@@ -12,11 +12,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/roles")
 public class RoleController {
-    private final RoleRepository roleRepository;
-    public RoleController(RoleRepository roleRepository) { this.roleRepository = roleRepository; }
+    private final com.pams.module.permission.service.TenantAuthorizationService service;
+    public RoleController(com.pams.module.permission.service.TenantAuthorizationService service) { this.service = service; }
 
     @GetMapping
-    public Result<List<Role>> list() {
-        return Result.ok(roleRepository.findAll());
+    public Result<?> list() {
+        return Result.ok(service.list());
     }
 }

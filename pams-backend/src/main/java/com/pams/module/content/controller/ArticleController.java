@@ -33,7 +33,7 @@ public class ArticleController {
         return Result.ok(service.page(status, type, keyword, activityId, page, size));
     }
 
-    @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('content:manage')")
     @PostMapping
     public Result<Article> create(@Valid @RequestBody ArticleRequest req,
                                   @AuthenticationPrincipal LoginUser current) {
@@ -53,7 +53,7 @@ public class ArticleController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('content:manage')")
     @PutMapping("/{id}/review")
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody ReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {

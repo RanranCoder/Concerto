@@ -17,14 +17,14 @@ public class PermissionController {
     public PermissionController(PermissionService service) { this.service = service; }
 
     /** 权限树 + 各角色映射（权限管理页） */
-    @PreAuthorize("hasAuthority('user:permission')")
+    @PreAuthorize("hasAuthority('role:grant')")
     @GetMapping
     public Result<Map<String, Object>> rolePermissions() {
         return Result.ok(service.rolePermissions());
     }
 
     /** 保存某角色的权限配置 */
-    @PreAuthorize("hasAuthority('user:permission')")
+    @PreAuthorize("hasAuthority('role:grant')")
     @PutMapping("/roles/{role}")
     public Result<Void> saveRole(@PathVariable String role, @RequestBody List<String> permissionCodes) {
         service.saveRolePermissions(role, permissionCodes);
@@ -32,7 +32,7 @@ public class PermissionController {
     }
 
     /** 恢复默认权限 */
-    @PreAuthorize("hasAuthority('user:permission')")
+    @PreAuthorize("hasAuthority('role:grant')")
     @PostMapping("/restore-default")
     public Result<Void> restoreDefault() {
         service.restoreDefault();

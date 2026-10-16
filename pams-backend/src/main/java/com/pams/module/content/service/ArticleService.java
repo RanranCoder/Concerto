@@ -48,7 +48,8 @@ public class ArticleService {
     }
 
     public static boolean isLeader(String roleCode) {
-        return "MEDIA_LEADER".equals(roleCode) || "TEACHER".equals(roleCode) || "DIRECTOR".equals(roleCode);
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("content:manage"));
     }
 
     public PageResult<Map<String, Object>> page(String status, String type, String keyword, Long activityId,

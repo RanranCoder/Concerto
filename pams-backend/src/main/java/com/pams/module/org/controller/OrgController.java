@@ -39,8 +39,7 @@ public class OrgController {
     @PostMapping("/register")
     public Result<Map<String, Object>> register(@RequestBody OrgRegisterRequest req,
                                                 HttpServletRequest request) {
-        rateLimiter.checkAllowed(clientKey(request));
-        return Result.ok(orgService.register(req));
+        return Result.ok(rateLimiter.register(clientKey(request), () -> orgService.register(req)));
     }
 
     /** 取来源标识：优先 X-Forwarded-For 首段，其次 remoteAddr。 */
@@ -50,6 +49,12 @@ public class OrgController {
             return xff.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /** 组织公开列表（免登录）：登录页组织选择与品牌。仅返回非敏感字段。 */
+    @GetMapping("/public")
+    public Result<List<Map<String, Object>>> publicList() {
+        return Result.ok(orgService.listPublic());
     }
 
     /** 当前组织信息（品牌 / 术语 / 领域包）。 */
@@ -70,7 +75,7 @@ public class OrgController {
 
     /** 修改当前组织信息。限 ADMIN。 */
     @PutMapping("/current")
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('org:manage')")
     public Result<Void> updateCurrent(@RequestBody OrgUpdateRequest req) {
         orgService.updateCurrent(req.getName(), req.getShortName(), req.getLogoUrl(),
                 req.getThemeColor(), req.getEnabledPacks());
@@ -90,27 +95,27 @@ public class OrgController {
     }
 
     @PostMapping("/current/units")
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('org:structure:manage')")
     public Result<Long> createUnit(@RequestBody UnitSaveRequest req) {
         return Result.ok(orgService.createUnit(req));
     }
 
     @PutMapping("/current/units/{id}")
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('org:structure:manage')")
     public Result<Void> updateUnit(@PathVariable Long id, @RequestBody UnitSaveRequest req) {
         orgService.updateUnit(id, req);
         return Result.ok(null);
     }
 
     @DeleteMapping("/current/units/{id}")
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('org:structure:manage')")
     public Result<Void> deleteUnit(@PathVariable Long id) {
         orgService.deleteUnit(id);
         return Result.ok(null);
     }
 
     @PostMapping("/current/invitations")
-    @PreAuthorize("hasAnyRole('TEACHER','DIRECTOR')")
+    @PreAuthorize("hasAuthority('org:invite')")
     public Result<OrgInvitation> createInvitation(@RequestBody Map<String, Object> body) {
         String roleCode = (String) body.get("roleCode");
         Long orgUnitId = body.get("orgUnitId") == null ? null : Long.valueOf(body.get("orgUnitId").toString());

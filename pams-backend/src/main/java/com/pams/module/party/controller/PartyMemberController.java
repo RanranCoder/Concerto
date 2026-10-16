@@ -38,7 +38,7 @@ public class PartyMemberController {
      * <p>下面的 {@code staff} 标志保留：注解已经把非领导挡在门外，
      * 但脱敏不应依赖"调用方一定过了注解"这一假设（多一层无害，且将来口径若放开仍正确）。
      */
-    @PreAuthorize(RoleExprs.LEADER)
+    @PreAuthorize("hasAuthority('party:view')")
     @GetMapping
     public Result<PageResult<Map<String, Object>>> page(
             @RequestParam(required = false) String keyword,
@@ -46,16 +46,16 @@ public class PartyMemberController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal LoginUser current) {
-        boolean staff = current == null || "STAFF".equals(current.getRoleCode());
+        boolean staff = !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("party:sensitive:view");
         return Result.ok(service.page(keyword, stage, page, size, staff));
     }
 
     /** 成员详情。注解理由同上——列表与详情必须同口径，否则"列表挡住、详情绕过"。 */
-    @PreAuthorize(RoleExprs.LEADER)
+    @PreAuthorize("hasAuthority('party:view')")
     @GetMapping("/{id}")
     public Result<Map<String, Object>> detail(@PathVariable Long id,
                                               @AuthenticationPrincipal LoginUser current) {
-        boolean staff = current == null || "STAFF".equals(current.getRoleCode());
+        boolean staff = !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("party:sensitive:view");
         return Result.ok(service.detail(id, staff));
     }
 
@@ -96,7 +96,7 @@ public class PartyMemberController {
      * <p>与分页/详情同口径（审计 A9）：流转历史含阶段变更日期与文号，敏感度不低于名册本身。
      * 只挡列表不挡它，等于没挡。
      */
-    @PreAuthorize(RoleExprs.LEADER)
+    @PreAuthorize("hasAuthority('party:view')")
     @GetMapping("/stages")
     public Result<List<PartyStage>> stages(@RequestParam Long memberId) {
         return Result.ok(service.stages(memberId));

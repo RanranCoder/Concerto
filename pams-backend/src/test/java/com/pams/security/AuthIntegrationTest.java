@@ -91,7 +91,7 @@ class AuthIntegrationTest {
         // 对照：deleted=0 且 status=1 的正常用户持有效 JWT 应放行 → 200。
         // 与 disabledUser_... 成对证明"禁用才拦截、正常放行"；
         // 若哪天禁用用户检查被回退，本测试会继续通过而 disabledUser_... 会失败。
-        // PRD-v5 S2 后 /api/users 需 user:view（仅 TEACHER/DIRECTOR），故用主任角色验证。
+        // 认证有效性与管理委派分别检查；业务角色不能自动获得 user:view。
         Role role = roleRepository.findByCode("DIRECTOR").orElseThrow();
         String name = "enabled_" + System.nanoTime();
         User u = new User();
@@ -104,7 +104,7 @@ class AuthIntegrationTest {
         userRepository.save(u);
 
         String token = jwtUtil.generate(u.getId(), u.getUsername(), u.getRole().getCode());
-        mvc.perform(get("/api/users")
+        mvc.perform(get("/api/auth/me")
                 .header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200));

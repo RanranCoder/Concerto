@@ -13,7 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 public class GlobalExceptionHandler {
     @ExceptionHandler(BizException.class)
     public ResponseEntity<Result<Void>> handleBiz(BizException e) {
-        return ResponseEntity.badRequest().body(Result.fail(e.getCode(), e.getMessage()));
+        int status = java.util.Set.of(401,403,404,409).contains(e.getCode()) ? e.getCode() : 400;
+        return ResponseEntity.status(status).body(Result.fail(e.getCode(), e.getMessage()));
     }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<Void>> handleValid(MethodArgumentNotValidException e) {
@@ -21,8 +22,8 @@ public class GlobalExceptionHandler {
         String msg = fe == null ? "参数校验失败" : fe.getDefaultMessage();
         return ResponseEntity.badRequest().body(Result.fail(400, msg));
     }
-    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
-    public ResponseEntity<Result<Void>> handleDenied(org.springframework.security.authorization.AuthorizationDeniedException e) {
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleDenied(org.springframework.security.access.AccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.fail(403, "无权限访问"));
     }
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)

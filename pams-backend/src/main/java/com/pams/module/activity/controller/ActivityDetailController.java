@@ -18,6 +18,10 @@ public class ActivityDetailController {
     /** 活动详情聚合：策划书/议程/座位表/评分/签到/任务 */
     @GetMapping("/{id}/detail")
     public Result<Map<String, Object>> detail(@PathVariable Long id) {
-        return Result.ok(service.aggregate(id));
+        var data = service.aggregate(id);
+        var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+        if (!ctx.hasPermission("seat:view")) data.put("seatZones",Map.of());
+        if (!ctx.hasPermission("checkin:view")) data.put("signinCount",null);
+        return Result.ok(data);
     }
 }

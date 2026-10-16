@@ -35,6 +35,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
@@ -80,6 +82,7 @@ public class AuthController {
             throw new BizException(1001, "用户名或密码错误");
         }
         loginRateLimiter.clear(req.getUsername());
+        if (!authorization.valid(u.getId())) throw new BizException(403,"账号或组织已停用");
         if (u.getStatus() == null || u.getStatus() == 0) {
             throw new BizException(1002, "账号已禁用");
         }
@@ -109,7 +112,8 @@ public class AuthController {
         user.put("orgId", u.getOrgId());
         user.put("orgName", orgName(u.getOrgId()));
         // 下发该角色权限码集合，供前端按权限码显隐菜单/路由（与权限管理页配置一致）
-        user.put("permissions", permissionService.permissionsOfRole(roleCode));
+        user.put("permissions", permissionService.permissionsOfUser(u.getId()));
+        user.putAll(authorization.me(u.getId()));
         resp.setUser(user);
         return Result.ok(resp);
     }
@@ -190,7 +194,8 @@ public class AuthController {
         user.put("deptName", lu.getDeptName());
         user.put("orgId", lu.getOrgId());
         user.put("orgName", orgName(lu.getOrgId()));
-        user.put("permissions", permissionService.permissionsOfRole(lu.getRoleCode()));
+        user.put("permissions", permissionService.permissionsOfUser(lu.getId()));
+        user.putAll(authorization.me(lu.getId()));
         return Result.ok(user);
     }
 }

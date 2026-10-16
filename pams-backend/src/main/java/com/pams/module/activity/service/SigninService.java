@@ -54,6 +54,8 @@ public class SigninService {
     private SchedulePersonRepository schedulePersonRepository;
     private AttendanceRepository attendanceRepository;
     private UserRepository userRepository;
+    @Autowired(required=false)
+    private org.springframework.jdbc.core.JdbcTemplate tenantJdbc;
 
     public SigninService(SigninRepository repository, ActivityRepository activityRepository,
                          SigninRosterService rosterService) {
@@ -82,11 +84,17 @@ public class SigninService {
 
     public static class TokenEntry {
         private final Long activityId;
+        private final Long orgId;
         private final LocalDateTime expiresAt;
         public TokenEntry(Long activityId, LocalDateTime expiresAt) {
+            this(activityId,expiresAt,com.pams.common.OrgContext.getOrDefault());
+        }
+        public TokenEntry(Long activityId, LocalDateTime expiresAt, Long orgId) {
             this.activityId = activityId;
             this.expiresAt = expiresAt;
+            this.orgId = orgId;
         }
+        public Long getOrgId() { return orgId; }
         public Long getActivityId() { return activityId; }
         public LocalDateTime getExpiresAt() { return expiresAt; }
     }
@@ -115,7 +123,7 @@ public class SigninService {
     public void forceExpire(String token) {
         TokenEntry e = tokenStore.get(token);
         if (e != null) {
-            tokenStore.put(token, new TokenEntry(e.getActivityId(), LocalDateTime.now().minusSeconds(1)));
+            tokenStore.put(token, new TokenEntry(e.getActivityId(), LocalDateTime.now().minusSeconds(1), e.getOrgId()));
         }
     }
 
@@ -338,6 +346,16 @@ public class SigninService {
             throw new BizException(2303, "签到码已过期，请刷新");
         }
         return e.getActivityId();
+    }
+
+    /** Must run before the public controller invokes a transactional tenant service. */
+    public Long resolveOrgByToken(String token) {
+        resolveActivityByToken(token);
+        TokenEntry entry = tokenStore.get(token);
+        if (entry == null) throw new BizException(2302,"签到码无效或已失效");
+        Long org = entry.getOrgId();
+        if (tenantJdbc != null && tenantJdbc.queryForObject("SELECT COUNT(*) FROM organization WHERE id=? AND status=1 AND deleted=0",Integer.class,org) != 1) throw new BizException(403,"组织不可用");
+        return org;
     }
 
     public List<Signin> listByActivity(Long activityId, String keyword) {

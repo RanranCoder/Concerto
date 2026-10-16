@@ -182,12 +182,12 @@ public class ToolContext {
      * 工具漏传即脱敏失效。故统一从 LoginUser 推导，禁止各工具自行判断。
      */
     public boolean isStaff() {
-        return loginUser == null || ToolConventions.STAFF.equals(loginUser.getRoleCode());
+        return !hasPermission("party:sensitive:view");
     }
 
     /** 是否领导角色（content 模块的 LEADER 等价口径，G1） */
     public boolean isLeader() {
-        return loginUser != null && ToolConventions.LEADER_ROLES.contains(loginUser.getRoleCode());
+        return loginUser != null && hasPermission("kb:restricted:read");
     }
 
     /** 是否具备该权限码 */

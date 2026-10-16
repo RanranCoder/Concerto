@@ -34,6 +34,8 @@ class UserServiceTest {
     void resetPassword_encodesNewPassword() {
         User u = new User();
         u.setId(1L);
+        u.setOrgId(1L);
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(u));
         userService.resetPassword(1L, 3); // 部长重置下级（角色为 null → level 视作 0）的密码
         assertThat(u.getPassword()).isNotEqualTo("123456");
@@ -60,6 +62,8 @@ class UserServiceTest {
             targetRole.setLevel(leaderLevel);
             User existing = new User();
             existing.setId(1L);
+        existing.setOrgId(1L);
+
             existing.setRole(targetRole);
             when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
 
@@ -80,6 +84,8 @@ class UserServiceTest {
         staff.setLevel(1);
         User existing = new User();
         existing.setId(1L);
+        existing.setOrgId(1L);
+
         existing.setRole(staff);
         when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
 
@@ -93,6 +99,8 @@ class UserServiceTest {
         // currentLevel=null（旧调用路径）放行
         User existing = new User();
         existing.setId(1L);
+        existing.setOrgId(1L);
+
         existing.setRole(null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
         userService.deleteUser(1L);
@@ -126,11 +134,13 @@ class UserServiceTest {
 
         Role director = new Role();
         director.setId(10L);
+        director.setOrgId(1L);
         director.setCode("DIRECTOR");
         director.setLevel(4);
         when(roleRepo.findById(10L)).thenReturn(Optional.of(director));
 
         UserSaveRequest req = new UserSaveRequest();
+        req.setPassword("InitialPass88");
         req.setUsername("someone");
         req.setRealName("某人");
         req.setRoleId(10L);
@@ -150,15 +160,19 @@ class UserServiceTest {
 
         User existing = new User();
         existing.setId(1L);
+        existing.setOrgId(1L);
+
         when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
 
         Role teacher = new Role();
         teacher.setId(20L);
+        teacher.setOrgId(1L);
         teacher.setCode("TEACHER");
         teacher.setLevel(5);
         when(roleRepo.findById(20L)).thenReturn(Optional.of(teacher));
 
         UserSaveRequest req = new UserSaveRequest();
+        req.setPassword("InitialPass88");
         req.setUsername("u");
         req.setRealName("某人");
         req.setRoleId(20L);
@@ -178,11 +192,13 @@ class UserServiceTest {
 
         Role staff = new Role();
         staff.setId(30L);
+        staff.setOrgId(1L);
         staff.setCode("STAFF");
         staff.setLevel(1);
         when(roleRepo.findById(30L)).thenReturn(Optional.of(staff));
 
         UserSaveRequest req = new UserSaveRequest();
+        req.setPassword("InitialPass88");
         req.setUsername("newbie");
         req.setRealName("新干事");
         req.setRoleId(30L);
@@ -190,6 +206,8 @@ class UserServiceTest {
         when(userRepo.save(any())).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             u.setId(99L);
+        u.setOrgId(1L);
+
             return u;
         });
 

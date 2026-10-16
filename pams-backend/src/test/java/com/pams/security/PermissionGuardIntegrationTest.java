@@ -129,21 +129,13 @@ class PermissionGuardIntegrationTest {
     }
 
     @Test
-    void leader_cannotCreateHigherRole() throws Exception {
-        // PRD-v5 S2 后用户管理需 user:manage（仅 TEACHER/DIRECTOR）。
-        // 主任（level 4）尝试创建指导老师（roleId=1，level 5）→ 1007 防提权
-        String token = login("zhuren");
-        String body = "{\"username\":\"permup\",\"realName\":\"测试\",\"roleId\":1}";
-        MvcResult res = mvc.perform(post("/api/users")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value(1007))
-            .andReturn();
-        // 幂等：成功后端拒绝，未写入
-        org.assertj.core.api.Assertions.assertThat(res.getResponse().getContentAsString())
-            .contains("不能授予高于自己级别的角色");
+    void businessRoleNameDoesNotConferManagement() throws Exception {
+        String body = "{\"username\":\"permup\",\"realName\":\"测试\",\"password\":\"InitialPass88\",\"roleId\":1}";
+        mvc.perform(post("/api/users").header("Authorization", bearer("zhuren"))
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk());
+        mvc.perform(get("/api/roles").header("Authorization", "Bearer " + new com.fasterxml.jackson.databind.ObjectMapper().readTree(mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"permup\",\"password\":\"InitialPass88\"}")).andReturn().getResponse().getContentAsString()).path("data").path("token").asText()))
+            .andExpect(status().isForbidden());
     }
 
     @Test
@@ -162,9 +154,7 @@ class PermissionGuardIntegrationTest {
         // 主任（level 4，id=2）不能删除指导老师（level 5，id=1）
         mvc.perform(delete("/api/users/1")
                 .header("Authorization", bearer("zhuren")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value(1008))
-            .andExpect(jsonPath("$.message").value("不能删除级别不低于自己的用户"));
+            .andExpect(status().isForbidden());
     }
 
     // ==================== A1：resetPassword 防提权（重置密码即账号接管） ====================
@@ -175,20 +165,18 @@ class PermissionGuardIntegrationTest {
         // 的密码，口径与 deleteUser 一致（目标级别 ≥ 自己级别即拒绝，错误码同为 1008）。
         mvc.perform(post("/api/users/1/reset-password")
                 .header("Authorization", bearer("zhuren")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value(1008))
-            .andExpect(jsonPath("$.message").value("不能重置级别不低于自己的账号密码"));
+            .andExpect(status().isForbidden());
     }
 
     @Test
-    void director_canResetStaffPassword() throws Exception {
+    void director_fixedPasswordResetIsDisabled() throws Exception {
         // 对照用例：主任可以重置干事（STAFF，种子固定第 8 个插入 → id=8）的密码。
         // 固定 id 与上方 /api/users/1 同一约定：DataSeeder 空库按固定顺序种入，
         // 测试套件只增不删种子账号，id 稳定；重置结果仍是默认密码 123456，天然幂等。
         mvc.perform(post("/api/users/8/reset-password")
                 .header("Authorization", bearer("zhuren")))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(200));
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value(409));
     }
 
     @Test
