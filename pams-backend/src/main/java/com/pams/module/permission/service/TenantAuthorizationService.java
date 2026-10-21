@@ -329,7 +329,14 @@ public class TenantAuthorizationService {
     if (!owner(uid)
         && (target == uid
             || number(u.get("owner_user_id")) == target
-            || !capabilities(target).isEmpty())) throw new BizException(403, "不能修改本人、所有者或其他管理员");
+            || hasActiveDelegation(number(u.get("org_id")), target))) throw new BizException(403, "不能修改本人、所有者或其他管理员");
+  }
+
+  // A disabled administrator retains a delegation. Ordinary account managers must not reactivate it.
+  private boolean hasActiveDelegation(long organization, long target) {
+    return db.queryForList("SELECT capabilities_json FROM org_role_delegation WHERE org_id=? AND user_id=?"
+        + " AND status='ACTIVE' AND (expires_at IS NULL OR expires_at>CURRENT_TIMESTAMP)", organization, target)
+        .stream().anyMatch(row -> strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains));
   }
 
   public Map<String, Object> me(long uid) {
@@ -391,6 +398,40 @@ public class TenantAuthorizationService {
     bump(organization);
   }
 
+  public void invalidatePendingAccountCredentials(long userId) {
+    db.update("UPDATE member_account_credential SET token_hash=NULL,expires_at=NULL WHERE user_id=? AND consumed_at IS NULL", userId);
+  }
+
+  public boolean pendingAccountSetup(long userId) {
+    return db.queryForObject("SELECT COUNT(*) FROM member_account_credential c JOIN sys_user u ON u.id=c.user_id"
+        + " AND u.org_id=c.org_id WHERE c.user_id=? AND c.consumed_at IS NULL AND u.status=0 AND u.deleted=0"
+        + " AND u.password=c.pending_password_hash", Integer.class, userId) > 0;
+  }
+
+  /** Account directory metadata, scoped to the current organization; role names imply no governance. */
+  public Map<Long, String> accountManagementSources() {
+    Long organization = com.pams.common.OrgContext.get();
+    if (organization == null) throw new BizException(403, "缺少组织上下文");
+    Map<Long, String> result = new LinkedHashMap<>();
+    for (var row : db.queryForList("SELECT u.id,o.owner_user_id,u.status,d.capabilities_json FROM sys_user u"
+        + " JOIN organization o ON o.id=u.org_id LEFT JOIN org_role_delegation d ON d.org_id=u.org_id"
+        + " AND d.user_id=u.id AND d.status='ACTIVE' AND (d.expires_at IS NULL OR d.expires_at>CURRENT_TIMESTAMP)"
+        + " WHERE u.org_id=? AND u.deleted=0", organization)) {
+      long id = number(row.get("id"));
+      boolean delegated = strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains);
+      result.put(id, row.get("owner_user_id") != null && number(row.get("owner_user_id")) == id ? "OWNER" : delegated ? "DELEGATED" : "NONE");
+    }
+    return result;
+  }
+
+  public Set<Long> pendingAccountIds() {
+    Long organization = com.pams.common.OrgContext.get();
+    if (organization == null) throw new BizException(403, "缺少组织上下文");
+    return new LinkedHashSet<>(db.queryForList("SELECT DISTINCT u.id FROM member_account_credential c JOIN sys_user u"
+        + " ON u.id=c.user_id AND u.org_id=c.org_id WHERE u.org_id=? AND u.status=0 AND u.deleted=0"
+        + " AND c.consumed_at IS NULL AND u.password=c.pending_password_hash", Long.class, organization));
+  }
+
   public void verifyAssignableRole(long roleId) {
     long uid = actor("role:assign");
     lockOrg(org(uid));
@@ -399,6 +440,43 @@ public class TenantAuthorizationService {
     if (!"ACTIVE".equals(r.get("status"))
         || !grantable(uid).containsAll(rolePermissions(org(uid), roleId)))
       throw new BizException(403, "该角色不可分配");
+  }
+
+  public record AccountImportAuthority(long actorId, long orgId, long version) {}
+
+  /** Recheck live governance after taking the same organization lock as role changes. */
+  public AccountImportAuthority verifyAccountImport() {
+    long uid = actor("member:import_account");
+    long organization = org(uid);
+    lockOrg(organization);
+    actor("member:import_account");
+    actor("user:manage");
+    actor("role:assign");
+    if (!Objects.equals(com.pams.common.OrgContext.get(), organization))
+      throw new BizException(403, "组织上下文不匹配");
+    return new AccountImportAuthority(uid, organization, number(identity(uid).get("authz_version")));
+  }
+
+  public record AccountRolePreview(long id, String name, long version, List<String> permissions,
+                                   List<String> permissionNames) {}
+
+  public AccountRolePreview accountRolePreview(long roleId) {
+    verifyAssignableRole(roleId);
+    long uid = actor("role:assign");
+    var r = role(org(uid), roleId);
+    var permissions = rolePermissions(org(uid), roleId).stream().sorted().toList();
+    var names = db.queryForList("SELECT code,name FROM permission").stream()
+        .collect(Collectors.toMap(p -> p.get("code").toString(), p -> p.get("name").toString()));
+    return new AccountRolePreview(roleId, r.get("name").toString(),
+        number(r.get("config_version")), permissions,
+        permissions.stream().map(code -> names.getOrDefault(code, code)).toList());
+  }
+
+  public void accountBatchAudit(AccountImportAuthority authority, String batchId,
+                                String action, List<Long> users) {
+    audit(authority.orgId(), authority.actorId(), action, 0,
+        Map.of("batchId", batchId, "userIds", users));
+    if ("MEMBER_ACCOUNT_CREATE".equals(action)) bump(authority.orgId());
   }
 
   @Transactional
@@ -858,6 +936,10 @@ public class TenantAuthorizationService {
             roleId,
             "oldRoleId",
             u.get("role_id"),
+            "before",
+            u.get("role_id") == null ? List.of() : published(role(org, number(u.get("role_id")))),
+            "grants",
+            published(r),
             "roleVersion",
             r.get("config_version")));
   }

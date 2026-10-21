@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"dept", "role"})
+    List<User> findByOrgIdOrderByIdAsc(Long orgId);
     Optional<User> findByUsername(String username);
     boolean existsByUsername(String username);
     List<User> findByDeptId(Long deptId);

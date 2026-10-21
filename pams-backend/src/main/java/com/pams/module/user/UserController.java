@@ -19,9 +19,11 @@ import java.util.Map;
 public class UserController {
     private final UserService userService;
     private final RoleRepository roleRepository;
-    public UserController(UserService userService, RoleRepository roleRepository) {
+    private final UserAccountStatusService accountStatusService;
+    public UserController(UserService userService, RoleRepository roleRepository, UserAccountStatusService accountStatusService) {
         this.userService = userService;
         this.roleRepository = roleRepository;
+        this.accountStatusService = accountStatusService;
     }
 
     /** 用户选项（选人组件数据源，登录即可）：仅 id/姓名/部门/角色最小字段（PRD-v5 F5） */
@@ -36,11 +38,24 @@ public class UserController {
     public Result<com.pams.common.PageResult<Map<String, Object>>> page(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long deptId,
+            @RequestParam(required = false) String accountStatus,
+            @RequestParam(required = false) Long roleId,
+            @RequestParam(required = false) String managementSource,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @AuthenticationPrincipal LoginUser current) {
         // 首版治理委派固定管理全组织普通账号，与主业务角色的旧 dataScope 分开。
-        return Result.ok(userService.page(keyword, deptId, null, false, page, size));
+        return Result.ok(userService.page(keyword, deptId, null, false, accountStatus, roleId, managementSource, page, size));
+    }
+
+    @PreAuthorize("hasAuthority('user:view')")
+    @GetMapping("/summary")
+    public Result<Map<String, Object>> summary() { return Result.ok(userService.summary()); }
+
+    @PreAuthorize("hasAuthority('user:manage')")
+    @PostMapping("/status-changes")
+    public Result<java.util.List<Map<String, Object>>> statusChanges(@Valid @RequestBody com.pams.module.user.dto.UserStatusRequest request) {
+        return Result.ok(accountStatusService.apply(request));
     }
 
     /** 创建用户：user:manage（V7 种子：仅 TEACHER/DIRECTOR；级别防提权校验在 Service 层）。 */

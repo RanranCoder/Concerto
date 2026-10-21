@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/ping").permitAll()
                 // 组织注册：免登录（新组织尚无账号），限流在 OrgService 内做
                 .requestMatchers(HttpMethod.POST, "/api/orgs/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/account-setup").permitAll()
                 // 组织公开列表：免登录（登录页组织选择/品牌用，仅非敏感字段）
                 .requestMatchers(HttpMethod.GET, "/api/orgs/public").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/signins/scan").permitAll()

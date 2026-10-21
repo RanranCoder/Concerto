@@ -125,7 +125,7 @@ public class MemberController {
         return Result.ok(Map.of("count", service.archive(sessionId)));
     }
 
-    @PreAuthorize("hasAuthority('member:import_account')")
+    @PreAuthorize("hasAuthority('member:import_account') and hasAuthority('user:manage') and hasAuthority('role:assign')")
     @GetMapping("/unregistered")
     public Result<List<UnregisteredMemberVO>> unregistered(@RequestParam(required = false) Long sessionId) {
         return Result.ok(accountImportService.unregistered(sessionId));
@@ -135,7 +135,7 @@ public class MemberController {
     @PostMapping("/import-accounts")
     public Result<AccountImportResultVO> importAccounts(@RequestBody AccountImportRequest req,
                                                         @AuthenticationPrincipal LoginUser current) {
-        throw new com.pams.common.BizException(409,"批量开户需接入安全凭证发放与逐项授权预览，请先使用单用户创建");
+        throw new com.pams.common.BizException(409,"请通过批量开户预览确认后创建账号");
     }
 
     private ResponseEntity<Resource> xlsxResponse(byte[] data, String filename) {

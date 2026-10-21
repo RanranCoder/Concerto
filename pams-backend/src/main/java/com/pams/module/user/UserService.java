@@ -86,29 +86,69 @@ public class UserService {
 
     public PageResult<Map<String, Object>> page(String keyword, Long deptId, Long currentDeptId,
                                                 boolean forceOwnDept, int page, int size) {
+        return page(keyword, deptId, currentDeptId, forceOwnDept, null, null, null, page, size);
+    }
+
+    public PageResult<Map<String, Object>> page(String keyword, Long deptId, Long currentDeptId,
+            boolean forceOwnDept, String accountStatus, Long roleId, String managementSource, int page, int size) {
+        if (accountStatus != null && !java.util.Set.of("ENABLED", "PENDING", "DISABLED").contains(accountStatus))
+            throw new BizException(400, "不支持的账号状态");
+        if (managementSource != null && !java.util.Set.of("OWNER", "DELEGATED", "NONE").contains(managementSource))
+            throw new BizException(400, "不支持的管理身份");
+        var identities = authorization == null ? Map.<Long, String>of() : authorization.accountManagementSources();
+        var pending = authorization == null ? java.util.Set.<Long>of() : authorization.pendingAccountIds();
         Long filterDept = forceOwnDept ? currentDeptId : deptId;
         Page<User> p = userRepository.findAll((root, q, cb) -> {
             var preds = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
             // 账号表未参与 @TenantId 自动过滤（注册需跨租户供给），此处显式按组织过滤（A3）
             preds.add(cb.equal(root.get("orgId"), OrgContext.getOrDefault()));
             if (filterDept != null) preds.add(cb.equal(root.get("dept").get("id"), filterDept));
+            if (roleId != null) preds.add(cb.equal(root.get("role").get("id"), roleId));
+            if (accountStatus != null) {
+                if (accountStatus.equals("ENABLED")) preds.add(cb.equal(root.get("status"), 1));
+                else if (accountStatus.equals("PENDING")) preds.add(pending.isEmpty() ? cb.disjunction() : root.get("id").in(pending));
+                else {
+                    preds.add(cb.equal(root.get("status"), 0));
+                    if (!pending.isEmpty()) preds.add(cb.not(root.get("id").in(pending)));
+                }
+            }
+            if (managementSource != null) {
+                var ids = identities.entrySet().stream().filter(e -> managementSource.equals(e.getValue())).map(Map.Entry::getKey).toList();
+                preds.add(ids.isEmpty() ? cb.disjunction() : root.get("id").in(ids));
+            }
             if (keyword != null && !keyword.isBlank()) {
-                String like = "%" + keyword.trim() + "%";
-                preds.add(cb.or(cb.like(root.get("realName"), like),
-                                cb.like(root.get("username"), like)));
+                String like = "%" + keyword.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+                preds.add(cb.or(cb.like(root.get("realName"), like, '\\'),
+                                cb.like(root.get("username"), like, '\\'), cb.like(root.get("studentNo"), like, '\\')));
             }
             return cb.and(preds.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        }, PageRequest.of(page - 1, size, Sort.by(Sort.Direction.ASC, "id")));
+        }, PageRequest.of(Math.max(1, page) - 1, Math.clamp(size, 1, 100), Sort.by(Sort.Direction.DESC, "id")));
 
         PageResult<Map<String, Object>> r = new PageResult<>();
-        r.setRecords(p.getContent().stream().map(this::toVO).toList());
+        r.setRecords(p.getContent().stream().map(u -> toVO(u, identities.getOrDefault(u.getId(), "NONE"), pending.contains(u.getId()))).toList());
         r.setTotal(p.getTotalElements());
-        r.setCurrent(page);
-        r.setSize(size);
+        r.setCurrent(p.getNumber() + 1);
+        r.setSize(p.getSize());
         return r;
     }
 
-    private Map<String, Object> toVO(User u) {
+    public Map<String, Object> summary() {
+        var users = userRepository.findByOrgIdOrderByIdAsc(OrgContext.getOrDefault());
+        var identities = authorization == null ? Map.<Long, String>of() : authorization.accountManagementSources();
+        var pending = authorization == null ? java.util.Set.<Long>of() : authorization.pendingAccountIds();
+        var result = new HashMap<String, Object>();
+        result.put("total", users.size());
+        result.put("enabled", users.stream().filter(u -> Integer.valueOf(1).equals(u.getStatus())).count());
+        result.put("pendingActivation", pending.size());
+        result.put("disabled", users.stream().filter(u -> Integer.valueOf(0).equals(u.getStatus()) && !pending.contains(u.getId())).count());
+        result.put("ownerCount", identities.values().stream().filter("OWNER"::equals).count());
+        result.put("administratorCount", identities.values().stream().filter("DELEGATED"::equals).count());
+        result.put("roles", users.stream().map(User::getRole).filter(java.util.Objects::nonNull).distinct()
+                .map(r -> Map.of("id", r.getId(), "name", r.getName())).toList());
+        return result;
+    }
+
+    private Map<String, Object> toVO(User u, String managementSource, boolean pending) {
         // 用 HashMap 而非 Map.of：Map.of 遇 null value 抛 NPE，teacher/admin 无部门（dept 为 null）
         Map<String, Object> vo = new HashMap<>();
         vo.put("id", u.getId());
@@ -122,6 +162,8 @@ public class UserService {
         vo.put("roleId", u.getRole() == null ? null : u.getRole().getId());
         vo.put("roleName", u.getRole() == null ? null : u.getRole().getName());
         vo.put("status", u.getStatus());
+        vo.put("pendingActivation", pending);
+        vo.put("managementSource", managementSource);
         return vo;
     }
 
@@ -171,6 +213,7 @@ public class UserService {
         if (authorization != null && !java.util.Objects.equals(u.getRole().getId(),req.getRoleId())) throw new BizException(409,"更换角色请使用角色变更预览");
         apply(u, req, currentLevel);
         userRepository.save(u);
+        if (authorization != null) authorization.invalidatePendingAccountCredentials(id);
     }
 
     /**
@@ -241,6 +284,7 @@ public class UserService {
         if (!OrgContext.getOrDefault().equals(u.getOrgId())) throw new BizException(404,"用户不存在");
         if (authorization == null) checkDeleteLevel(u, currentLevel);
         u.setDeleted(u.getId());
+        if (authorization != null) authorization.invalidatePendingAccountCredentials(id);
         if (authorization != null) authorization.userChanged(OrgContext.getOrDefault());
         u.setUpdatedAt(LocalDateTime.now());
         userRepository.save(u);
