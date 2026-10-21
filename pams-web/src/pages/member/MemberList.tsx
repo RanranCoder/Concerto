@@ -86,7 +86,9 @@ export default function MemberList() {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(10)
   const [keyword, setKeyword] = useState('')
-  const [deptFilter, setDeptFilter] = useState<number | undefined>()
+  const requestedDept = Number(searchParams.get('deptId')) || undefined
+  const [deptFilter, setDeptFilter] = useState<number | undefined>(requestedDept)
+  useEffect(() => { setDeptFilter(requestedDept); setPage(1) }, [requestedDept])
   const [positionFilter, setPositionFilter] = useState<string | undefined>()
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [stats, setStats] = useState<MemberStats | null>(null)

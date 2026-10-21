@@ -318,7 +318,8 @@ body {
 /* 尊重系统「减少动态效果」偏好：关闭所有动效 */
 @media (prefers-reduced-motion: reduce) {
   .page-transition, .glass-card, .login-card { animation: none !important; }
-  * { transition-duration: 0.01ms !important; }
+  /* 非零时长会让浮层定位测量中的临时位移参与过渡，导致菜单被算到屏幕外。 */
+  * { transition: none !important; }
 }
 
 /* ============ 活动列表筛选 ============ */

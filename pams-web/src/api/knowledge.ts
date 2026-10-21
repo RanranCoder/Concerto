@@ -30,6 +30,8 @@ export interface KnowledgeSourceVO {
 }
 
 export interface KnowledgeStatsVO {
+  entryCount: number
+  retrievalUnanswered: number
   /** 实际生效的检索实现：fulltext-ngram / like-fallback */
   retriever: string
   fulltextAvailable: boolean
@@ -73,6 +75,17 @@ export interface KnowledgeChunkVO {
   /** 仅 `chunksOf` 返回（台账行展开时才有完整正文） */
   content?: string
 }
+
+export interface KnowledgeEntryVO extends KnowledgeChunkVO {
+  chunkCount: number
+  sourceLabel: string
+  visibility: string
+  requiredPermission: string | null
+  link: string | null
+}
+
+export const kbEntries = (params: {sourceType?: string; keyword?: string; tier?: KnowledgeTier; sort?: 'updated' | 'title'; page?: number; size?: number}) =>
+  get<KbPage<KnowledgeEntryVO>>('/kb/entries', params)
 
 export interface KbPage<T> {
   records: T[]
@@ -190,9 +203,10 @@ export const kbReindex = () =>
     '/kb/reindex',
   )
 
-export const kbRetrievals = (params: { skipReason?: string; page?: number; size?: number } = {}) =>
+export const kbRetrievals = (params: { skipReason?: string; keyword?: string; page?: number; size?: number } = {}) =>
   get<KbPage<KbRetrievalLogVO>>('/kb/retrievals', {
     skipReason: params.skipReason,
+    keyword: params.keyword,
     page: params.page ?? 1,
     size: params.size ?? 20,
   })
@@ -260,9 +274,10 @@ export interface KbSnapshotRefreshReport {
 
 export const kbSnapshotSpecs = () => get<KbSnapshotSpecVO[]>('/kb/snapshot-specs')
 
-export const kbSnapshots = (params: { specCode?: string; page?: number; size?: number } = {}) =>
+export const kbSnapshots = (params: { specCode?: string; keyword?: string; page?: number; size?: number } = {}) =>
   get<KbPage<KbSnapshotVO>>('/kb/snapshots', {
     specCode: params.specCode,
+    keyword: params.keyword,
     page: params.page ?? 1,
     size: params.size ?? 20,
   })

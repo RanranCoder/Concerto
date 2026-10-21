@@ -43,6 +43,7 @@ import { NotificationToast } from '@/components/notification/NotificationToast'
 import { changePassword } from '@/api/permission'
 import { buildBusinessTheme } from '@/styles/theme'
 import BrandIdentity from '@/components/BrandIdentity'
+import HeaderStaff from '@/components/HeaderStaff'
 
 const { Sider, Header, Content } = Layout
 
@@ -60,10 +61,10 @@ export default function MainLayout() {
   const [navOpen, setNavOpen] = useState(false)
   const [navOpenKeys, setNavOpenKeys] = useState<string[]>([])
   const agentLayout = location.pathname.startsWith('/agent')
-  const preserveLayout = ['/knowledge', '/admin/benchmark'].some((path) =>
+  const preserveContentLayout = ['/knowledge', '/admin/benchmark'].some((path) =>
     location.pathname.startsWith(path),
   )
-  const mobile = screens.md === false && !preserveLayout
+  const mobile = screens.md === false
   const businessTheme = useMemo(() => buildBusinessTheme(), [])
 
   // 修改密码弹窗
@@ -208,11 +209,9 @@ export default function MainLayout() {
         label: '协作实验',
         icon: <ExperimentOutlined />,
       })
-      items.push({
-        key: '/org/structure',
-        label: '组织架构',
-        icon: <ApartmentOutlined />,
-      })
+    }
+    if (isAdmin || hasPerm('org:structure:manage')) {
+      items.push({ key: '/org/structure', label: '组织架构', icon: <ApartmentOutlined /> })
     }
     return items
   }, [user?.roleCode, user?.roleLevel, user?.permissions, packs, terminology])
@@ -324,7 +323,7 @@ export default function MainLayout() {
   const navigation = (
     <div className="sidebar-v6">
       <div className="sidebar-brand">
-        <BrandIdentity compact />
+        <BrandIdentity variant="blue" />
       </div>
       <div className="sidebar-organization">
         <small>
@@ -381,12 +380,12 @@ export default function MainLayout() {
 
   return (
     <Layout
-      className={preserveLayout ? 'pams-shell' : 'pams-shell pams-shell-v6'}
+      className="pams-shell pams-shell-v6"
       style={{ height: '100vh', overflow: 'hidden' }}
     >
       <NotificationToast />
       {!mobile && (
-        <Sider width={preserveLayout ? 200 : 216} className="app-sider">
+        <Sider width={216} className="app-sider">
           {navigation}
         </Sider>
       )}
@@ -410,28 +409,29 @@ export default function MainLayout() {
       </Drawer>
       <Layout style={{ height: '100vh', minWidth: 0 }}>
         <Header className="app-header">
+          <HeaderStaff />
           {/* 内层容器与 .content-inner 同宽同轴：右边缘与内容列右边缘对齐 */}
           <div className="app-header-inner">
-            {!preserveLayout && (
-              <div className="business-breadcrumb">
-                {mobile && (
-                  <Button
-                    type="text"
-                    icon={<MenuOutlined />}
-                    aria-label="打开导航"
-                    onClick={() => setNavOpen(true)}
-                  />
-                )}
-                <span className="business-breadcrumb-org">
-                  {orgName || '当前组织'}
-                </span>
-                <span className="business-breadcrumb-separator">/</span>
-                <span>{currentLabel}</span>
-              </div>
-            )}
+            <div className="business-breadcrumb">
+              {mobile && (
+                <Button
+                  type="text"
+                  icon={<MenuOutlined />}
+                  aria-label="打开导航"
+                  onClick={() => setNavOpen(true)}
+                />
+              )}
+              <span className="business-breadcrumb-org">
+                {orgName || '当前组织'}
+              </span>
+              <span className="business-breadcrumb-separator">/</span>
+              <span>{currentLabel}</span>
+            </div>
             <ThemeSwitch />
             <NotificationBell />
             <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
               menu={{
                 items: [
                   {
@@ -456,16 +456,21 @@ export default function MainLayout() {
                 },
               }}
             >
-              <Space className="app-user">
+              <Button
+                type="text"
+                className="app-user"
+                aria-label="用户菜单"
+                aria-haspopup="menu"
+              >
                 <Avatar
                   size={26}
                   style={{ background: 'var(--brand)' }}
                   icon={<UserOutlined />}
                 />
-                <span>
+                <span className="app-user-label">
                   {user?.realName}（{user?.deptName ?? user?.roleCode}）
                 </span>
-              </Space>
+              </Button>
             </Dropdown>
           </div>
         </Header>
@@ -482,9 +487,9 @@ export default function MainLayout() {
             {/* key 用 pathname：路由切换时整个页面重挂载，触发 .page-transition 淡入动画 */}
             <div
               key={location.pathname}
-              className={`${preserveLayout ? 'page-transition content-inner' : 'page-transition content-inner ui-v6'}${agentLayout ? ' agent-content-inner' : ''}`}
+              className={`${preserveContentLayout ? 'page-transition content-inner' : 'page-transition content-inner ui-v6'}${agentLayout ? ' agent-content-inner' : ''}`}
             >
-              {preserveLayout ? (
+              {preserveContentLayout ? (
                 <Outlet />
               ) : (
                 <ConfigProvider theme={businessTheme}>

@@ -3,9 +3,9 @@ import { Button, Input } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import GlassSelect from '@/components/glass/GlassSelect'
 import type { OrgUnitInput } from '@/api/org'
-import type { UnitPath } from '@/utils/orgTree'
+import { UNIT_TYPES as UNIT_TYPE_NAMES, type UnitPath } from '@/utils/orgTree'
 
-const UNIT_TYPES = ['部门', '中心', '小组', '分队'].map((value) => ({ value, label: value }))
+const UNIT_TYPES = UNIT_TYPE_NAMES.map((value) => ({ value, label: value }))
 
 export default function OrgUnitEditor({ nodes, path = [], onUpdate, onAdd, onRemove }: {
   nodes: OrgUnitInput[]
@@ -25,7 +25,7 @@ export default function OrgUnitEditor({ nodes, path = [], onUpdate, onAdd, onRem
           <li key={key}>
             <div className="unit-row">
               <span className="unit-index" aria-hidden="true">{label}</span>
-              <Input aria-label={`节点 ${label} 名称`} placeholder={path.length ? '下级小组名称' : '如：组织部'} value={node.name}
+              <Input aria-label={`节点 ${label} 名称`} placeholder={path.length ? '下级小组名称' : '如：组织部'} value={node.name} maxLength={50}
                 onChange={(e) => onUpdate(current, { name: e.target.value })} />
               <GlassSelect ariaLabel={`节点 ${label} 类型`} value={node.unitType ?? '部门'} options={UNIT_TYPES}
                 onChange={(unitType) => onUpdate(current, { unitType })} />

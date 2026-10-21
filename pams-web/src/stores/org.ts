@@ -35,7 +35,7 @@ function parsePrimaryColor(themeJson: string | null): string {
   }
 }
 
-function parsePacks(json: string | null): string[] {
+export function parsePacks(json: string | null): string[] {
   if (!json || !json.trim()) return ALL_PACKS
   try {
     const a = JSON.parse(json) as unknown

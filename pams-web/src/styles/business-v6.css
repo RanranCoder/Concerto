@@ -1,11 +1,18 @@
-/* v6：内容尺寸变更限定于业务区域；全站侧栏按原型更新，受保护页面保留原侧栏宽度。 */
+/* v6：内容尺寸变更限定于业务区域；全站共用侧栏宽度与响应式导航。 */
 :root { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }
 ::selection { background: var(--brand-soft); color: var(--text-primary); }
 
 /* 原型侧栏独立作用域，不改变受保护页面的内容区宽高。 */
 .sidebar-v6 { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 24px 14px 18px; background: var(--sider-bg); color: var(--sider-text); }
-.sidebar-brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 22px; flex-shrink: 0; }
+.sidebar-brand { display: flex; align-items: center; padding: 0 0 22px; flex-shrink: 0; }
+.sidebar-brand .product-brand { width: 100%; gap: 0; padding: 8px 4px 8px 0; }
+.sidebar-brand .product-brand-symbol { width: 44px; height: 44px; }
+.sidebar-brand .product-brand-wordmark { gap: 3px; }
+.sidebar-brand .product-brand-english,
+.sidebar-brand .product-brand-name { font-size: 16px; }
+.sidebar-brand .product-brand-separator { font-size: 14px; }
+.sidebar-brand .product-brand-description { font-size: 9px; letter-spacing: 0; margin-top: 4px; }
 .sidebar-organization { padding: 12px 12px 18px; margin-bottom: 7px; border-block: 1px solid var(--sider-border); flex-shrink: 0; }
 .sidebar-organization small { display: block; font-size: var(--fs-caption); color: var(--sider-text-dim); }
 .sidebar-organization strong { display: block; margin-top: 5px; font-size: var(--fs-body); font-weight: 500; overflow-wrap: anywhere; }
@@ -36,6 +43,26 @@
 .sidebar-account small { display: block; margin-top: 3px; font-size: var(--fs-micro); color: var(--sider-text-dim); overflow-wrap: anywhere; }
 .pams-shell-v6 .app-header { height: 56px; line-height: normal; background: var(--canvas); }
 .pams-shell-v6 .app-header-inner { justify-content: flex-end; }
+/* 五线谱只铺在顶栏的空白区域，导航与操作始终位于装饰上层。 */
+.app-header { position: relative; isolation: isolate; }
+.app-header-staff {
+  position: absolute;
+  inset-block: 0;
+  right: 18%;
+  width: 70%;
+  height: 100%;
+  color: #1668DC;
+  opacity: .32;
+  mask-image: linear-gradient(90deg, transparent, #000 15%, #000 78%, transparent);
+  pointer-events: none;
+  z-index: -1;
+}
+.app-header-inner { position: relative; }
+[data-theme='dark'] .app-header-staff { color: #75AFFF; opacity: .3; }
+@media (max-width: 767px) {
+  .app-header-staff { width: 100%; right: 0; opacity: .18; }
+  [data-theme='dark'] .app-header-staff { opacity: .2; }
+}
 .business-breadcrumb { display: flex; align-items: center; gap: var(--sp-2); margin-right: auto; min-width: 0; font-size: var(--fs-caption); color: var(--text-secondary); }
 .business-breadcrumb-separator { color: var(--text-tertiary); }
 .pams-shell-v6 .app-content { padding: var(--sp-5); }
@@ -192,7 +219,7 @@
   .pams-shell-v6 .app-content { padding: var(--sp-3); }
   .pams-shell-v6 .app-header { padding: 0 var(--sp-3); }
   .business-breadcrumb-org, .business-breadcrumb-separator { display: none; }
-  .pams-shell-v6 .app-user > .ant-space-item:last-child { display: none; }
+  .pams-shell-v6 .app-user-label { display: none; }
   .pams-shell-v6 .app-header-inner { gap: var(--sp-1); }
   .ui-v6 .page-header-title { font-size: var(--fs-stat); }
   .business-summary { grid-template-columns: 1fr 1fr; padding: 0; }

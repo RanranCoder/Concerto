@@ -13,6 +13,8 @@ export interface UserVO {
   roleId?: number
   roleName: string | null
   status: number | null
+  pendingActivation?: boolean
+  managementSource?: 'OWNER' | 'DELEGATED' | 'NONE'
 }
 
 /** 新增/编辑用户请求体（对应后端 UserSaveRequest：username/realName 必填，roleId 必填，deptId 可为 null） */
@@ -36,8 +38,21 @@ export interface RoleVO {
   dataScope: string
 }
 
-export const listUsers = (params: { keyword?: string; deptId?: number; page?: number; size?: number }) =>
+export const listUsers = (params: { keyword?: string; deptId?: number; roleId?: number; accountStatus?: 'ENABLED' | 'PENDING' | 'DISABLED'; managementSource?: UserVO['managementSource']; page?: number; size?: number }) =>
   get<PageResult<UserVO>>('/users', params)
+
+export interface UserSummary {
+  total: number
+  enabled: number
+  pendingActivation: number
+  disabled: number
+  ownerCount: number
+  administratorCount: number
+  roles: {id: number; name: string}[]
+}
+export const userSummary = () => get<UserSummary>('/users/summary')
+export interface UserStatusResult {id: number; status: 'UPDATED' | 'UNCHANGED' | 'FAILED'; message: string}
+export const changeUserStatuses = (userIds: number[], status: number) => post<UserStatusResult[]>('/users/status-changes', {userIds, status})
 
 /** 选人组件数据源（PRD-v5 F5）：登录即可用，仅 id/姓名/部门/角色最小字段 */
 export interface UserOptionVO {

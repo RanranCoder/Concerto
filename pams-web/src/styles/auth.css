@@ -10,7 +10,6 @@
   --auth-brand-hover: var(--brand-hover);
 }
 .onboarding a { color: var(--brand-text); }
-.onboarding .product-brand-symbol { color: var(--auth-on-brand); }
 .onboarding button:focus-visible, .onboarding a:focus-visible {
   outline: 3px solid var(--auth-brand);
   outline-offset: 4px;
@@ -233,9 +232,6 @@
 }
 @media (max-width: 420px) {
   .onboarding-header { padding: 20px 16px; gap: 12px; }
-  .onboarding .product-brand-symbol { width: 36px; height: 36px; }
-  .onboarding .product-brand-name { font-size: var(--fs-symbol); }
-  .onboarding .product-brand-description { font-size: var(--fs-micro); }
   .onboarding-header-link { font-size: var(--fs-caption); }
   .onboarding-body { width: calc(100% - 24px); border-radius: var(--r-xl); }
   .onboarding-content, .onboarding-register .onboarding-content { padding: 26px 20px; }

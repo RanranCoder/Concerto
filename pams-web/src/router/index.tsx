@@ -9,6 +9,7 @@ import DocumentTitle from '@/components/DocumentTitle'
 import { RequirePerm } from '@/components/glass/RequireRole'
 
 const Login = lazy(() => import('@/pages/Login'))
+const ActivateAccount = lazy(() => import('@/pages/ActivateAccount'))
 const SigninScan = lazy(() => import('@/pages/signin/SigninScan'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
@@ -90,6 +91,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { path: '/login', element: <Login /> },
+      { path: '/activate-account', element: <ActivateAccount /> },
       // 注册组织：免登录公开访问（与 /login 同级，位于 MainLayout / RequireAuth 之外）
       { path: '/register', element: <OrgRegister /> },
       // 扫码签到落地页：免登录公开访问（与 /login 同级，位于 MainLayout / RequireAuth 之外）
@@ -174,7 +176,7 @@ export const router = createBrowserRouter([
           // 组织架构：ADMIN（主任 / 指导老师）可编辑本组织架构树
           {
             path: '/org/structure',
-            element: <RequirePerm codes={['org:manage']}><OrgStructure /></RequirePerm>,
+            element: <RequirePerm codes={['org:manage', 'org:structure:manage']}><OrgStructure /></RequirePerm>,
           },
 
           // 用户管理：拥有 user:view 权限码可访问（默认主任/指导老师）

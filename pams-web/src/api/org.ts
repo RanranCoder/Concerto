@@ -55,6 +55,23 @@ export interface OrgInvitation {
   expireAt: string | null
 }
 
+/** Complete minimal account directory, scoped to the managed organization. */
+export interface OrgAccount {
+  id: number
+  username: string
+  realName: string | null
+  deptId: number | null
+  roleName: string | null
+  status: number | null
+}
+
+export interface OrgStructureData {
+  units: OrgUnitNode[]
+  accounts: OrgAccount[]
+}
+
+export const getOrgStructure = () => get<OrgStructureData>('/orgs/current/structure')
+
 /** 注册组织（免登录） */
 export const registerOrg = (data: OrgRegisterPayload) =>
   post<{ orgId: number; orgName: string; adminUsername: string }>('/orgs/register', data)

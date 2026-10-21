@@ -150,7 +150,7 @@ export default function OrgRegister() {
       <p>「{done.orgName}」的工作台已经准备就绪。</p>
       <div className="success-account"><span>管理员账号</span><strong>{done.adminUsername}</strong><small>使用刚才设置的密码登录</small></div>
       <Button type="primary" className="onboarding-primary" block onClick={() => navigate('/login', { replace: true, state: done })}>使用管理员账号登录</Button>
-      <p className="onboarding-hint">登录后即可邀请成员，开始安排组织工作。</p>
+      <p className="onboarding-hint">登录后继续完善组织架构、设置负责人，再添加组织成员。</p>
     </div> : <div className="register-form-wrap">
       <div className="register-step-counter" role="status">创建组织 <span>第 {step + 1} 步，共 4 步</span></div>
       <div className="onboarding-title"><h2 ref={titleRef} tabIndex={-1}>{STEPS[step].heading}</h2><p>{STEPS[step].description}</p></div>

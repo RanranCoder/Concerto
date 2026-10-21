@@ -57,8 +57,22 @@ export interface MemberDetail {
   totalCredit: number
   credits: MemberCredit[]
 }
-export interface UnregisteredMember { id: number; name: string; studentNo: string; deptName: string; positionLabel: string }
-export interface AccountImportResult { created: number; skipped: number }
+export interface UnregisteredMember {
+  id: number; name: string; studentNo: string; deptName: string | null; positionLabel: string
+  position: string; recommendedRoleId: number | null; recommendationReason: string | null
+}
+export interface AccountImportRow {
+  memberId: number; name: string; username: string; deptId: number | null; deptName: string | null
+  roleId: number; roleName: string; permissions: string[]; permissionNames: string[]
+}
+export interface AccountImportPreview { id: string; expiresAt: string; rows: AccountImportRow[] }
+export interface AccountBatchAccount {
+  userId: number; name: string; username: string; roleName: string; deptName: string | null; activated: boolean; canIssue: boolean
+}
+export interface AccountImportResult { id: string; created: number; accounts: AccountBatchAccount[] }
+export interface AccountCredential {
+  name: string; username: string; roleName: string; deptName: string | null; token: string; expiresAt: string
+}
 
 /** 职位/状态枚举映射（与后端 MemberEnums 一致） */
 export const POSITION_LABELS: Record<string, string> = {
@@ -87,8 +101,12 @@ export const getMemberStats = (sessionId?: number) => get<MemberStats>('/members
 export const archiveSession = (sessionId: number) => post<{ count: number }>(`/members/${sessionId}/archive`)
 export const listUnregisteredMembers = (sessionId?: number) =>
   get<UnregisteredMember[]>('/members/unregistered', { sessionId })
-export const importAccounts = (data: { sessionId?: number; memberIds: number[]; roleCodes?: Record<number, string> }) =>
-  post<AccountImportResult>('/members/import-accounts', data)
+export const listAccountImportSessions = () => get<MemberSessionVO[]>('/members/account-batches/sessions')
+export const previewAccountImport = (data: { sessionId: number; memberIds: number[]; roleIds: Record<number, number> }) =>
+  post<AccountImportPreview>('/members/account-batches/previews', data)
+export const applyAccountImport = (id: string) => post<AccountImportResult>(`/members/account-batches/${id}/apply`)
+export const listAccountBatches = () => get<AccountImportResult[]>('/members/account-batches')
+export const issueAccountCredentials = (id: string) => post<AccountCredential[]>(`/members/account-batches/${id}/credentials`)
 
 /** blob 下载（模板 / 导出） */
 export const downloadMemberXlsx = (url: string, params?: Record<string, unknown>) =>

@@ -1,6 +1,7 @@
 import type { OrgUnitInput } from '@/api/org'
 
 export type UnitPath = number[]
+export const UNIT_TYPES = ['部门', '中心', '小组', '分队']
 
 /** 所有路径始终相对于根数组，递归视图不能把子树写回根。 */
 export function updateUnitAt(nodes: OrgUnitInput[], path: UnitPath, update: (node: OrgUnitInput) => OrgUnitInput): OrgUnitInput[] {
@@ -28,6 +29,7 @@ export function validateUnits(nodes: OrgUnitInput[]): string | null {
     for (const node of items) {
       const name = node.name.trim()
       if (!name) return '请填写每个部门或小组的名称，或删除空白节点'
+      if (name.length > 50) return '节点名称请控制在 50 字以内'
       if (names.has(name)) return `「${name}」名称重复，请使用不同的名称`
       names.add(name)
       const error = walk(node.children ?? [])

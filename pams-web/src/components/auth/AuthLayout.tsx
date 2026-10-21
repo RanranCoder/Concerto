@@ -8,11 +8,12 @@ import { useThemeStore } from '@/stores/theme'
 import { readableOn } from '@/styles/color'
 import '@/styles/auth.css'
 
-export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_COLOR, register = false }: {
+export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_COLOR, register = false, brandVariant = 'auto' }: {
   children: ReactNode
   aside: ReactNode
   brand?: string
   register?: boolean
+  brandVariant?: 'auto' | 'blue'
 }) {
   const mode = useThemeStore((state) => state.mode)
   const colors = resolveTokens(mode, brand)
@@ -21,7 +22,7 @@ export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_CO
     <ConfigProvider theme={{ token: { colorPrimary: brand, colorPrimaryText: colors.brandText, colorTextLightSolid: onBrand } }} button={{ autoInsertSpace: false }}>
       <div className={`onboarding${register ? ' onboarding-register' : ''}`} style={{ '--auth-brand': brand, '--auth-brand-hover': colors.brandHover, '--auth-on-brand': onBrand, '--brand-text': colors.brandText } as CSSProperties}>
         <header className="onboarding-header">
-          <Link to="/login" aria-label="协奏登录"><BrandIdentity /></Link>
+          <Link to="/login" aria-label="协奏登录"><BrandIdentity variant={brandVariant} /></Link>
           <div className="onboarding-header-link">
             <span>{register ? '已有账号？' : '为你的团队开启协作'}</span>
             <Link to={register ? '/login' : '/register'}>{register ? '返回登录' : '创建组织'}</Link>

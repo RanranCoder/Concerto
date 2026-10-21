@@ -1,13 +1,13 @@
 /**
  * 全站设计 token —— 唯一来源
- * 对应文档：docs/PAMS-UI-设计方案-v3-简约高效.md
+ * 对应文档：docs/design/PAMS-UI-设计方案-v3-简约高效.md
  *
  * 为什么用 TS 而不是 CSS 常量文件：
  * antd 的 ConfigProvider 需要 JS 值，CSS 需要变量。以前 App.tsx 里手抄 19 个颜色值、
  * tokens.css 里再抄一遍，两边必然漂移（见方案 §1.2）。这里以 TS 为唯一出处，
  * CSS 变量由 buildTokenCss() 生成后注入 <style>，从机制上消除两套值。
  *
- * v6 主色由用户指定为 rgb(22,104,220)，明暗配色见 docs/PAMS-UI-设计方案-v6-行业规范修订.md。
+ * v6 主色由用户指定为 rgb(22,104,220)，明暗配色见 docs/design/PAMS-UI-设计方案-v6-行业规范修订.md。
  */
 
 import { deriveBrandScale, lighten, parseColor, readableOn, toHex, withAlpha } from './color'

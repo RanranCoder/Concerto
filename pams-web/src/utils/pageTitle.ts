@@ -56,6 +56,7 @@ const RULES: Array<[RegExp, string]> = [
   [/^\/admin\/benchmark(\/|$)/, '协作实验'],
 
   [/^\/login(\/|$)/, '登录'],
+  [/^\/activate-account(\/|$)/, '激活账号'],
   [/^\/register(\/|$)/, '注册'],
   [/^\/signin(\/|$)/, '扫码签到'],
   [/^\/403(\/|$)/, '无权访问'],

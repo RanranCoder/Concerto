@@ -8,7 +8,7 @@ import { loginApi } from '@/api/auth'
 import { listPublicOrgs, type PublicOrg } from '@/api/org'
 import { DEFAULT_PRIMARY_COLOR } from '@/stores/org'
 import { normalizePrimaryColor } from '@/styles/tokens'
-import GlassSelect from '@/components/glass/GlassSelect'
+import LoginOrganization from '@/components/auth/LoginOrganization'
 import AuthLayout from '@/components/auth/AuthLayout'
 
 const ORG_KEY = 'pams.login.orgId'
@@ -54,7 +54,9 @@ export default function Login() {
     try {
       const data = await loginApi({ ...values, username: values.username.trim() })
       setLogin(data)
-      navigate('/', { replace: true })
+      const canManageStructure = data.user.permissions?.includes('org:manage') || data.user.permissions?.includes('org:structure:manage')
+      const continueSetup = created?.orgId === data.user.orgId && created?.adminUsername === data.user.username && canManageStructure
+      navigate(continueSetup ? '/org/structure' : '/', { replace: true, state: continueSetup ? { orgCreated: data.user.orgId } : null })
     } catch (err) {
       setError(isAxiosError(err)
         ? err.response?.data?.message || '暂时无法登录，请检查网络后重试'
@@ -63,7 +65,7 @@ export default function Login() {
   }
 
   return (
-    <AuthLayout brand={brand} aside={<>
+    <AuthLayout brand={brand} brandVariant="blue" aside={<>
       <div className="welcome-copy"><h1>把每一份热爱，<br />汇成共同的成果。</h1><p>从一次活动到一届传承，<br />让组织里的协作，在这里有序发生。</p></div>
       <div className="collaboration-map" aria-hidden="true">
         <div className="map-root"><ApartmentOutlined /><span>{orgLabel}</span></div>
@@ -77,12 +79,8 @@ export default function Login() {
         {created?.orgName && <div className="onboarding-notice" role="status">「{created.orgName}」已创建，使用管理员账号登录即可开始。</div>}
         {orgStatus === 'loading' && <p className="onboarding-hint" role="status">正在获取组织信息…</p>}
         {orgStatus === 'error' && <div className="onboarding-hint">组织信息暂时未加载，仍可使用账号登录。<button type="button" onClick={loadOrgs}>重新加载</button></div>}
-        {selected && <div className="login-org">
-          <span className="login-org-mark" aria-hidden="true">{selected.logoUrl ? <img src={selected.logoUrl} alt="" /> : orgLabel.charAt(0)}</span>
-          <div><span className="login-org-label">组织展示</span>{orgs.length > 1 ? <GlassSelect className="login-org-select" ariaLabel="组织展示" value={selected.id}
-            options={orgs.map((o) => ({ value: o.id, label: o.shortName || o.name }))}
-            onChange={(id) => { setOrgId(id); localStorage.setItem(ORG_KEY, String(id)) }} /> : <strong>{orgLabel}</strong>}</div>
-        </div>}
+        {selected && <LoginOrganization selected={selected} orgs={orgs}
+          onSelect={(id) => { setOrgId(id); localStorage.setItem(ORG_KEY, String(id)) }} />}
         <p className="onboarding-hint login-account-hint">账号由组织管理员分配，登录后自动进入所属组织。</p>
         <Form name="login" layout="vertical" requiredMark={false} onFinish={onFinish} initialValues={{ username: created?.adminUsername }} disabled={loading}>
           <Form.Item label="用户名" name="username" rules={[{ required: true, whitespace: true, message: '请输入用户名' }]}>
