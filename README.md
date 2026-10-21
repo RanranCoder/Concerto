@@ -8,7 +8,7 @@
 
 [快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
-![协奏工作台：周历、活动概况与待办](docs/ui-v6-implementation/dashboard-light.png)
+![协奏工作台：周历、活动概况与待办](docs/design/ui-v6-implementation/dashboard-light.png)
 
 *截图来自 UI 验收样本，用于展示布局与交互；示例名称、日期和数量不代表实际部署数据。*
 
@@ -141,7 +141,7 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 | 只读模式 | 查询业务信息，写工具不可用 |
 | 资料问答 | 检索知识库资料，按引用来源回答，使用独立问答流水线 |
 
-![灵思：确认清单与工作成果预览](docs/ui-v6-lingsi-implementation/plan-preview-light.png)
+![灵思：确认清单与工作成果预览](docs/design/ui-v6-lingsi-implementation/plan-preview-light.png)
 
 - **先准备，再确认**：缺少信息时在对话中补齐；执行前可检查内容、变更与参考资料，执行后查看回执、失败或跳过项。
 - **排班预览不写库**：确认时重新计算并核对候选指纹；人员或条件变化后要求重新生成，确认成功只创建草稿，仍需在活动排班页发布。
@@ -263,9 +263,9 @@ PAMS/
 | 主题 | 文档 |
 | --- | --- |
 | 产品与规划 | [总体设计](docs/PAMS设计方案.md)、[PRD v5 开发规划](docs/PRD-v5-开发规划.md)、[通用化与多 Agent 策划](docs/PAMS-通用化与多Agent协作改造策划.md) |
-| 品牌与 UI | [协奏品牌标识](docs/协奏-品牌标识设计说明.md)、[UI v6 设计规范](docs/PAMS-UI-设计方案-v6-行业规范修订.md)、[表单工作面](docs/PAMS-表单工作面重设计.md) |
-| 业务界面落地 | [排班考勤](docs/PAMS-UI-v6-排班考勤落地记录.md)、[组织宣传档案与党务](docs/PAMS-UI-v6-组织宣传档案与党务台账落地记录.md)、[登录与注册](docs/PAMS-登录与组织注册-改版与修复.md) |
-| 灵思与资料 | [Agent 业务方案](docs/PAMS-Agent业务设计方案.md)、[灵思 v6 落地记录](docs/PAMS-UI-v6-灵思Agent落地记录.md)、[知识库问答方案](docs/PAMS-灵思知识库问答方案-v1.md) |
+| 品牌与 UI | [协奏品牌标识](docs/design/协奏-品牌标识设计说明.md)、[UI v6 设计规范](docs/design/PAMS-UI-设计方案-v6-行业规范修订.md)、[表单工作面](docs/design/PAMS-表单工作面重设计.md) |
+| 业务界面落地 | [排班考勤](docs/design/PAMS-UI-v6-排班考勤落地记录.md)、[组织宣传档案与党务](docs/design/PAMS-UI-v6-组织宣传档案与党务台账落地记录.md)、[登录与注册](docs/design/PAMS-登录与组织注册-改版与修复.md) |
+| 灵思与资料 | [Agent 业务方案](docs/PAMS-Agent业务设计方案.md)、[灵思 v6 落地记录](docs/design/PAMS-UI-v6-灵思Agent落地记录.md)、[知识库问答方案](docs/PAMS-灵思知识库问答方案-v1.md) |
 | 授权模型 | [角色权限与租户管理方案](docs/PAMS-用户角色权限与多租户管理设计方案-v1.md)、[管理员业务设计](docs/PAMS-管理员角色权限管理业务设计-v1.md)、[首版落地记录](docs/PAMS-角色权限与租户管理-首版落地记录.md) |
 | 接口与变更 | [API 文档](docs/API.md)、[代码审计记录](docs/代码审计报告-2026-10-14.md)、[分支与分批推送记录](docs/分支梳理与分批推送记录-2026-10-16.md) |
 

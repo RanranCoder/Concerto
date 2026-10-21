@@ -1,0 +1,15 @@
+{
+  "result": "pass",
+  "checks": [
+    "A4 210×297mm fixed dimensions, white pages in both themes",
+    "desktop/mobile fit and 100% zoom, no layout reflow",
+    "DOCX local rendering: headings, table, image, header/footer, explicit and overflow page breaks",
+    "long paragraphs continue onto additional fixed A4 sheets",
+    "unsupported DOC and invalid DOCX feedback",
+    "all data-entry forms use full-height right drawers",
+    "fixed header/footer, independent scrolling, unsaved-change guard",
+    "activity/plan/article drawers in both themes and mobile",
+    "no script errors or external requests"
+  ],
+  "screenshots": 21
+}

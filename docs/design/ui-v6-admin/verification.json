@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "browserErrors": [],
+  "networkRequests": [],
+  "viewports": [
+    "1440×1080",
+    "390×844"
+  ],
+  "checks": [
+    "three routes and shared navigation",
+    "source/query/result filters",
+    "document create and excerpt drawer",
+    "snapshot data cutoff",
+    "retrieval explanation",
+    "account search and protected identity",
+    "role replacement preview and apply",
+    "bulk account status confirmation",
+    "new account form",
+    "unsaved preferences guard",
+    "density persistence",
+    "light/dark and mobile overflow",
+    "empty and error states",
+    "both HTML entry points"
+  ],
+  "screenshots": 23
+}

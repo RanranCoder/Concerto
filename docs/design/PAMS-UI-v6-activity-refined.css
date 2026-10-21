@@ -1,0 +1,64 @@
+/* Core workflow refinement: A4 document surface and consistent right-side forms. */
+.ev-plan-workspace{overflow:visible}
+.ev-plan-workspace>.ev-head{border-radius:8px 8px 0 0;background:var(--surface);align-items:center}
+.ev-plan-workspace>.ev-head>.ev-actions{justify-content:flex-end;gap:8px}
+.ev-plan-workspace>.ev-head p{margin-top:4px}
+.ev-word-layout{display:grid;grid-template-columns:166px minmax(0,1fr);min-width:0}
+.ev-word-outline{padding:20px 14px;background:var(--surface);border-right:1px solid var(--line);border-radius:0 0 0 8px;display:flex;flex-direction:column;gap:12px}
+.ev-word-outline-title{font-size:12px;font-weight:600;padding:0 8px;color:var(--ink)}
+.ev-word-outline button{display:block;background:none;color:var(--muted);font-size:12px;line-height:1.7;padding:9px 8px;border:0;border-left:2px solid transparent;text-align:left;width:100%;border-radius:0 4px 4px 0}
+.ev-word-outline button:hover,.ev-word-outline button:focus-visible{background:var(--brand-soft);color:var(--brand-text);border-left-color:var(--brand-text)}
+.ev-word-outline-footer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding:16px 8px 0;margin-top:15px;line-height:1.8}
+.ev-word-main{min-width:0;background:var(--quiet);border-radius:0 0 8px 0;overflow:hidden}
+.ev-word-toolbar{padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:57px;border-bottom:1px solid var(--line);background:var(--surface)}
+.ev-word-filename{font-size:12px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ev-word-filename small{font-size:10px;margin-left:10px;color:var(--muted);padding:2px 5px;border:1px solid var(--line);border-radius:3px}
+.ev-word-zoom{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.ev-word-zoom select{border:1px solid var(--control);padding:4px 8px;border-radius:4px;background:var(--surface);color:var(--ink);font-size:12px;min-height:30px}
+.ev-word-canvas{height:760px;min-height:540px;max-height:90vh;background:#e7e9ed;overflow:auto;overscroll-behavior:contain;padding:28px 24px;scrollbar-gutter:stable;position:relative}
+:root[data-theme=dark] .ev-word-canvas{background:#30343b}
+.ev-word-scaled{position:relative;margin:0 auto;flex-shrink:0;min-width:0}
+#ev-word-frame{display:block;position:absolute;top:0;left:0;border:0;background:transparent;transform-origin:top left;color-scheme:light;max-width:none}
+.ev-word-status{border-top:1px solid var(--line);background:var(--surface);padding:9px 18px;display:flex;gap:16px;align-items:center;justify-content:space-between;color:var(--muted);font-size:10px;min-height:35px}
+.ev-word-notice{padding:9px 18px;border-bottom:1px solid var(--line);font-size:11px;color:var(--brand-text);background:var(--brand-soft);line-height:1.8}
+.ev-word-notice.error{color:var(--danger);background:var(--danger-soft)}
+.ev-word-expanded{position:fixed;inset:12px;z-index:90;margin:0;background:var(--surface);box-shadow:0 0 0 20px var(--backdrop);display:flex;flex-direction:column}
+.ev-word-expanded .ev-word-layout{flex:1;min-height:0}
+.ev-word-expanded .ev-word-main{display:flex;flex-direction:column;min-height:0}
+.ev-word-expanded .ev-word-canvas{flex:1;min-height:0;max-height:none;height:auto}
+.ev-drawer{inset:0 0 0 auto;margin:0;border-radius:0;border-block:0;border-right:0;height:100dvh;max-height:100dvh;width:680px;max-width:100vw;box-shadow:-12px 0 42px #00000020;animation:ev-drawer-enter .2s cubic-bezier(.2,.7,.3,1)}
+.ev-drawer.ev-drawer-closing{animation:ev-drawer-leave .16s ease-out forwards}
+.ev-drawer::backdrop{background:var(--backdrop)}
+.ev-drawer #ev-dialog-form{height:100%;min-height:0;display:flex;flex-direction:column}
+.ev-drawer header{padding:22px 26px 20px;flex-shrink:0;align-items:flex-start;background:var(--surface)}
+.ev-drawer header h2{font-size:20px;line-height:1.6;margin:2px 0 4px}
+.ev-drawer header p{font-size:12px;line-height:1.8;max-width:58ch}
+.ev-drawer-context{display:block;font-size:11px;color:var(--muted);margin:0 0 5px;max-width:48ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev-drawer header .icon-btn{width:34px;height:34px;min-width:34px;border:1px solid var(--line);border-radius:5px;background:var(--quiet);margin-top:4px}
+.ev-drawer .ev-dialog-body{flex:1;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;padding:24px 26px 30px;scrollbar-gutter:stable}
+.ev-drawer .ev-form{gap:22px 18px}
+.ev-drawer .ev-form label{font-size:13px;gap:8px}
+.ev-drawer .ev-form input,.ev-drawer .ev-form select{min-height:40px}
+.ev-drawer .ev-form textarea{min-height:124px;font-size:13px;line-height:1.8;padding:10px 12px}
+.ev-drawer .ev-form textarea[name=body]{min-height:220px}
+.ev-word-toolbar #ev-word-reset{font-size:11px;white-space:nowrap}
+.ev-drawer .ev-form input:focus,.ev-drawer .ev-form textarea:focus,.ev-drawer .ev-form select:focus{border-color:var(--brand-text)}
+.ev-drawer .ev-form-section{padding-bottom:12px;border-bottom:1px solid var(--line);margin-top:8px}
+.ev-drawer .ev-form-section:first-child{margin-top:0}
+.ev-drawer .ev-form-section h3{font-size:14px}
+.ev-drawer .ev-form-section p{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.8}
+.ev-drawer footer{flex-shrink:0;background:var(--surface);padding:16px 26px;align-items:center;box-shadow:0 -4px 16px #00000004}
+.ev-drawer footer .btn{min-height:40px;min-width:84px}
+.ev-drawer-footnote{margin-right:auto;color:var(--muted);font-size:11px}
+.ev-unsaved{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:16px 26px;border-top:1px solid var(--line);background:var(--warning-soft);color:var(--warning);font-size:12px}
+.ev-unsaved[hidden]{display:none}
+.ev-unsaved>div{margin-right:auto}
+.ev-unsaved p{font-size:11px;margin-top:3px}
+@keyframes ev-drawer-enter{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes ev-drawer-leave{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@media(min-width:1700px){.ev-word-layout{grid-template-columns:186px minmax(0,1fr)}.ev-word-canvas{height:880px}}
+@media(max-width:1180px){.ev-plan-workspace>.ev-head{align-items:flex-start;flex-wrap:wrap}.ev-plan-workspace>.ev-head>.ev-actions{justify-content:flex-start}.ev-word-layout{grid-template-columns:140px minmax(0,1fr)}.ev-word-canvas{padding:24px}}
+@media(max-width:800px){.ev-word-layout{grid-template-columns:minmax(0,1fr)}.ev-word-outline{display:none}.ev-word-main{border-radius:0 0 8px 8px}.ev-word-toolbar{padding:10px 12px;gap:8px}.ev-word-canvas{height:650px;min-height:430px}.ev-word-filename small{display:none}.ev-drawer{width:640px}.ev-plan-workspace>.ev-head .btn{padding:6px 10px}}
+@media(max-width:600px){.ev-plan-workspace>.ev-head{gap:13px}.ev-plan-workspace>.ev-head>.ev-actions{gap:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.ev-plan-workspace>.ev-head>.ev-actions>.ev-field{grid-column:1/-1}.ev-plan-workspace>.ev-head .ev-field select{width:100%}.ev-word-toolbar .ev-actions{flex-wrap:nowrap;gap:4px}.ev-word-zoom{font-size:0;gap:0}.ev-word-zoom select{max-width:105px;font-size:11px;min-height:34px}.ev-word-toolbar .icon-btn{width:28px;height:34px}.ev-word-canvas{padding:22px 24px;height:570px;min-height:400px;max-height:none}.ev-word-status{padding:10px 12px;font-size:10px;gap:8px}.ev-word-status>span:nth-child(2){display:none}.ev-word-expanded{inset:0;border-radius:0}.ev-word-expanded>.ev-head{padding:12px}.ev-word-expanded .ev-word-canvas{height:auto}.ev-drawer{width:100vw;max-width:100vw}.ev-drawer header{padding:18px 18px 16px}.ev-drawer header h2{font-size:19px}.ev-drawer-context{max-width:29ch}.ev-drawer .ev-dialog-body{padding:20px 18px}.ev-drawer .ev-form{gap:20px}.ev-drawer footer{padding:12px 18px;padding-bottom:max(12px,env(safe-area-inset-bottom))}.ev-drawer footer .btn{min-height:44px;flex:1}.ev-drawer-footnote{display:none}.ev-unsaved{padding:14px 18px;flex-wrap:wrap}.ev-unsaved>div{width:100%;margin-bottom:6px}.ev-unsaved .btn{flex:1}}
+@media(prefers-reduced-motion:reduce){.ev-drawer,.ev-drawer.ev-drawer-closing{animation:none!important}}
+@media(max-width:600px){.ev-word-toolbar:has(#ev-word-reset:not([hidden])){flex-wrap:wrap}.ev-word-toolbar #ev-word-reset{font-size:10px}.ev-word-toolbar:has(#ev-word-reset:not([hidden]))>.ev-actions{width:100%;justify-content:flex-end}}
