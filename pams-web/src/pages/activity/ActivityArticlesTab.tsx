@@ -23,6 +23,7 @@ import {
   CheckOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   PlusOutlined,
   SendOutlined,
   ThunderboltOutlined,
@@ -78,7 +79,7 @@ export default function ActivityArticlesTab({
   activity?: ActivityVO
 }) {
   const user = useAuthStore((s) => s.user)
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   // 管理/审核权限对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
   const canManage = (user?.permissions ?? []).includes('content:manage')
 
@@ -87,6 +88,7 @@ export default function ActivityArticlesTab({
   const [loading, setLoading] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [reading, setReading] = useState<ArticleVO | null>(null)
   const [editing, setEditing] = useState<ArticleVO | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<ArticleFormValues>()
@@ -184,7 +186,12 @@ export default function ActivityArticlesTab({
   }
 
   const handleSave = async () => {
-    const values = await form.validateFields()
+    let values
+    try {
+      values = await form.validateFields()
+    } catch {
+      return
+    }
     setSaving(true)
     try {
       const payload: ArticleSave = {
@@ -306,181 +313,206 @@ export default function ActivityArticlesTab({
     }
   }
 
-  if (modalOpen)
-    return (
-      <FormSurface
-        mode="workspace"
-        description="先确定活动与负责人，再补充底稿、摘要和排版长图。"
-        title={editing ? '编辑推文' : '新建推文'}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              保存
-            </Button>
-          </Space>
+  const editorSurface = modalOpen ? (
+    <FormSurface
+      mode="drawer"
+      description="先确定活动与负责人，再补充底稿、摘要和排版长图。"
+      title={editing ? '编辑推文' : '新建推文'}
+      open={modalOpen}
+      onCancel={() => {
+        if (saving) return
+        if (form.isFieldsTouched())
+          modal.confirm({
+            title: '放弃未保存的稿件修改？',
+            okText: '放弃修改',
+            cancelText: '继续编辑',
+            onOk: () => setModalOpen(false),
+          })
+        else setModalOpen(false)
+      }}
+      footer={
+        <Space>
+          <Button
+            onClick={() => {
+              if (saving) return
+              if (form.isFieldsTouched())
+                modal.confirm({
+                  title: '放弃未保存的稿件修改？',
+                  okText: '放弃修改',
+                  cancelText: '继续编辑',
+                  onOk: () => setModalOpen(false),
+                })
+              else setModalOpen(false)
+            }}
+          >
+            取消
+          </Button>
+          <Button type="primary" loading={saving} onClick={handleSave}>
+            保存
+          </Button>
+        </Space>
+      }
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        preserve={false}
+        key={editing ? `article-edit-${editing.id}` : 'article-create'}
+        initialValues={
+          editing
+            ? {
+                title: editing.title,
+                articleType: editing.articleType,
+                authorId: editing.authorId ?? undefined,
+                deadline: editing.deadline
+                  ? dayjs(editing.deadline)
+                  : undefined,
+                summary: editing.summary ?? undefined,
+                content: editing.content ?? undefined,
+                imageUrls: editing.imageUrls ?? [],
+              }
+            : { articleType: 'REPORT', deadline: dayjs().endOf('day') }
         }
       >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          key={editing ? `article-edit-${editing.id}` : 'article-create'}
-          initialValues={
-            editing
-              ? {
-                  title: editing.title,
-                  articleType: editing.articleType,
-                  authorId: editing.authorId ?? undefined,
-                  deadline: editing.deadline
-                    ? dayjs(editing.deadline)
-                    : undefined,
-                  summary: editing.summary ?? undefined,
-                  content: editing.content ?? undefined,
-                  imageUrls: editing.imageUrls ?? [],
-                }
-              : { articleType: 'REPORT', deadline: dayjs().endOf('day') }
-          }
-        >
-          <FormSection title="稿件信息">
-            <Form.Item
-              className="form-field-wide"
-              name="title"
-              label="标题"
-              rules={[{ required: true, message: '请输入推文标题' }]}
-            >
-              <Input maxLength={150} placeholder="推文标题" />
-            </Form.Item>
-            <Form.Item
-              name="articleType"
-              label="类型"
-              rules={[{ required: true, message: '请选择类型' }]}
-            >
-              <Select
-                options={ARTICLE_TYPE_OPTIONS}
-                placeholder="预热 / 报道 / 宣传视频"
-              />
-            </Form.Item>
-            <Form.Item
-              name="authorId"
-              label="负责人"
-              rules={[{ required: true, message: '请指定负责人' }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                options={users.map((u) => ({ value: u.id, label: u.realName }))}
-                placeholder="选择负责人"
-                disabled={!!editing && !canManage}
-              />
-            </Form.Item>
-            <Form.Item
-              name="deadline"
-              label="截止时间"
-              rules={[{ required: true, message: '请设置截止时间' }]}
-            >
-              <DatePicker showTime style={{ width: '100%' }} />
-            </Form.Item>
-          </FormSection>
-          <FormSection title="摘要与底稿">
-            <Form.Item name="summary" label="摘要">
+        <FormSection title="稿件信息">
+          <Form.Item
+            className="form-field-wide"
+            name="title"
+            label="标题"
+            rules={[{ required: true, message: '请输入推文标题' }]}
+          >
+            <Input maxLength={150} placeholder="推文标题" />
+          </Form.Item>
+          <Form.Item
+            name="articleType"
+            label="类型"
+            rules={[{ required: true, message: '请选择类型' }]}
+          >
+            <Select
+              options={ARTICLE_TYPE_OPTIONS}
+              placeholder="预热 / 报道 / 宣传视频"
+            />
+          </Form.Item>
+          <Form.Item
+            name="authorId"
+            label="负责人"
+            rules={[{ required: true, message: '请指定负责人' }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={users.map((u) => ({ value: u.id, label: u.realName }))}
+              placeholder="选择负责人"
+              disabled={!!editing && !canManage}
+            />
+          </Form.Item>
+          <Form.Item
+            name="deadline"
+            label="截止时间"
+            rules={[{ required: true, message: '请设置截止时间' }]}
+          >
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+        </FormSection>
+        <FormSection title="摘要与底稿">
+          <Form.Item name="summary" label="摘要">
+            <Input.TextArea rows={3} maxLength={500} placeholder="一句话摘要" />
+          </Form.Item>
+          <Form.Item name="content" label="底稿（可选）">
+            <Input.TextArea
+              rows={6}
+              maxLength={20000}
+              placeholder="可选文字底稿，排版以长图截图为准"
+            />
+          </Form.Item>
+        </FormSection>
+        <FormSection title="排版长图">
+          <Form.Item
+            className="form-field-wide"
+            name="imageUrls"
+            label="长图截图"
+          >
+            <LongImageUpload />
+          </Form.Item>
+        </FormSection>
+      </Form>
+    </FormSurface>
+  ) : null
+
+  const reviewSurface = reviewTarget ? (
+    <FormSurface
+      mode="drawer"
+      description="查看完整稿件与长图，在下方填写审核意见。"
+      title="审核推文"
+      open={!!reviewTarget}
+      onCancel={() => {
+        setReviewTarget(null)
+        reviewForm.resetFields()
+      }}
+      footer={
+        <Space>
+          <Button
+            danger
+            loading={reviewing}
+            onClick={() => handleReview(false)}
+          >
+            驳回
+          </Button>
+          <Button
+            type="primary"
+            loading={reviewing}
+            icon={<CheckOutlined />}
+            onClick={() => handleReview(true)}
+          >
+            通过（待发布）
+          </Button>
+        </Space>
+      }
+    >
+      {reviewTarget && (
+        <>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            {reviewTarget.title}
+          </Typography.Title>
+          <Typography.Paragraph type="secondary">
+            {reviewTarget.summary}
+          </Typography.Paragraph>
+          {reviewTarget.imageUrls?.map((u) => (
+            <img
+              key={u}
+              src={u}
+              alt="长图"
+              style={{
+                width: '100%',
+                borderRadius: 8,
+                marginBottom: 8,
+                display: 'block',
+              }}
+            />
+          ))}
+          <div className="activity-article-body">{reviewTarget.content}</div>
+          <Form form={reviewForm} layout="vertical" preserve={false}>
+            <Form.Item name="comment" label="审核意见">
               <Input.TextArea
                 rows={3}
                 maxLength={500}
-                placeholder="一句话摘要"
+                placeholder="选填，驳回时建议填写原因"
               />
             </Form.Item>
-            <Form.Item name="content" label="底稿（可选）">
-              <Input.TextArea
-                rows={6}
-                maxLength={20000}
-                placeholder="可选文字底稿，排版以长图截图为准"
-              />
-            </Form.Item>
-          </FormSection>
-          <FormSection title="排版长图">
-            <Form.Item
-              className="form-field-wide"
-              name="imageUrls"
-              label="长图截图"
-            >
-              <LongImageUpload />
-            </Form.Item>
-          </FormSection>
-        </Form>
-      </FormSurface>
-    )
-
-  if (!!reviewTarget)
-    return (
-      <FormSurface
-        mode="workspace"
-        description="查看完整稿件与长图，在下方填写审核意见。"
-        title="审核推文"
-        open={!!reviewTarget}
-        onCancel={() => {
-          setReviewTarget(null)
-          reviewForm.resetFields()
-        }}
-        footer={
-          <Space>
-            <Button
-              danger
-              loading={reviewing}
-              onClick={() => handleReview(false)}
-            >
-              驳回
-            </Button>
-            <Button
-              type="primary"
-              loading={reviewing}
-              icon={<CheckOutlined />}
-              onClick={() => handleReview(true)}
-            >
-              通过（待发布）
-            </Button>
-          </Space>
-        }
-      >
-        {reviewTarget && (
-          <>
-            <Typography.Title level={5} style={{ marginTop: 0 }}>
-              {reviewTarget.title}
-            </Typography.Title>
-            <Typography.Paragraph type="secondary">
-              {reviewTarget.summary}
-            </Typography.Paragraph>
-            {reviewTarget.imageUrls?.map((u) => (
-              <img
-                key={u}
-                src={u}
-                alt="长图"
-                style={{
-                  width: '100%',
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  display: 'block',
-                }}
-              />
-            ))}
-            <Form form={reviewForm} layout="vertical" preserve={false}>
-              <Form.Item name="comment" label="审核意见">
-                <Input.TextArea
-                  rows={3}
-                  maxLength={500}
-                  placeholder="选填，驳回时建议填写原因"
-                />
-              </Form.Item>
-            </Form>
-          </>
-        )}
-      </FormSurface>
-    )
+          </Form>
+        </>
+      )}
+    </FormSurface>
+  ) : null
 
   return (
-    <div>
+    <div className="activity-articles-pane">
+      <header className="activity-panel-head">
+        <div>
+          <h2>活动推文</h2>
+          <p>跟进预热、撰写、审核与发布</p>
+        </div>
+      </header>
       <Space style={{ marginBottom: 16 }} wrap>
         {canManage && (
           <>
@@ -594,6 +626,14 @@ export default function ActivityArticlesTab({
                   </div>
 
                   <Space size="small" wrap>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => setReading(a)}
+                    >
+                      查看稿件
+                    </Button>
                     {(a.status === 'DRAFT' || a.status === 'REJECTED') &&
                       (canManage || a.authorId === user?.id) && (
                         <>
@@ -670,13 +710,81 @@ export default function ActivityArticlesTab({
         )}
       </Spin>
 
-      {/* 新建 / 编辑（activityId 固定为当前活动，不显示活动下拉） */}
+      {editorSurface}
+      {reviewSurface}
+      <FormSurface
+        mode="drawer"
+        className="activity-article-reader"
+        title="查看稿件"
+        description={reading?.title}
+        open={!!reading}
+        onCancel={() => setReading(null)}
+        footer={
+          <Space>
+            <Button onClick={() => setReading(null)}>关闭</Button>
+            {reading &&
+              ['DRAFT', 'REJECTED'].includes(reading.status) &&
+              (canManage || reading.authorId === user?.id) && (
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    const selected = reading
+                    setReading(null)
+                    openEdit(selected)
+                  }}
+                >
+                  编辑稿件
+                </Button>
+              )}
+          </Space>
+        }
+      >
+        {reading && (
+          <article>
+            <Space wrap>
+              <Tag>{ARTICLE_STATUS_MAP[reading.status]}</Tag>
+              <Tag>{ARTICLE_TYPE_MAP[reading.articleType]}</Tag>
+            </Space>
+            <h2>{reading.title}</h2>
+            <dl className="activity-info-list">
+              <dt>负责人</dt>
+              <dd>{userNameOf(reading.authorId)}</dd>
+              <dt>截止时间</dt>
+              <dd>
+                {reading.deadline
+                  ? dayjs(reading.deadline).format('YYYY-MM-DD HH:mm')
+                  : '未设置'}
+              </dd>
+            </dl>
+            {reading.summary && (
+              <p className="activity-article-summary">{reading.summary}</p>
+            )}
+            <div className="activity-article-body">
+              {reading.content ||
+                (!reading.imageUrls?.length ? '尚未填写稿件正文' : '')}
+            </div>
+            {reading.imageUrls?.map((url, i) => (
+              <img
+                key={url}
+                src={url}
+                alt={`稿件长图 ${i + 1}`}
+                style={{ width: '100%', display: 'block', marginTop: 16 }}
+              />
+            ))}
+            {reading.reviewComment && (
+              <p className="activity-inline-note">
+                审核意见：{reading.reviewComment}
+              </p>
+            )}
+          </article>
+        )}
+      </FormSurface>
 
       {/* 审核（以长图为审核载体） */}
 
       {/* 标记发布 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         title="标记发布"
         open={!!publishTarget}
         onCancel={() => {
@@ -716,7 +824,7 @@ export default function ActivityArticlesTab({
 
       {/* 更新数据 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         title="更新阅读数据"
         open={!!statsTarget}
         onCancel={() => {

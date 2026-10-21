@@ -1,9 +1,11 @@
 import { get, post, put } from './http'
-import type { ActivityPlanVO } from './activity'
+import type { ActivityDetail, ActivityPlanVO } from './activity'
 
 export interface PlanSave {
   activityId: number
   version?: number | null
+  expectedUpdatedAt?: string | null
+  expectedRevision?: number
   background?: string | null
   purpose?: string | null
   content?: string | null
@@ -29,8 +31,23 @@ export interface PlanSave {
 export const latestPlan = (activityId: number) =>
   get<ActivityPlanVO | null>('/plans', { activityId })
 export const getPlan = (id: number) => get<ActivityPlanVO>(`/plans/${id}`)
-export const createPlan = (data: PlanSave) => post<ActivityPlanVO>('/plans', data)
-export const updatePlan = (id: number, data: PlanSave) => put<void>(`/plans/${id}`, data)
-export const submitPlan = (id: number) => put<void>(`/plans/${id}/submit`)
+export const createPlan = (data: PlanSave) =>
+  post<ActivityPlanVO>('/plans', data)
+export const updatePlan = (id: number, data: PlanSave) =>
+  put<void>(`/plans/${id}`, data)
+export interface PlanReviewerCandidate {
+  id: number
+  name: string
+  deptName: string
+  roleName: string
+}
+export const planReviewers = () =>
+  get<PlanReviewerCandidate[]>('/plans/reviewers')
+export const planWorkspace = (activityId: number) =>
+  get<ActivityDetail['plan']>('/plans/workspace', { activityId })
+export const revisePlan = (id: number) =>
+  post<ActivityPlanVO>(`/plans/${id}/revision`)
+export const submitPlan = (id: number, reviewerIds: number[]) =>
+  put<void>(`/plans/${id}/submit`, { reviewerIds })
 export const reviewPlan = (id: number, approved: boolean, comment?: string) =>
   put<void>(`/plans/${id}/review`, { approved, comment })

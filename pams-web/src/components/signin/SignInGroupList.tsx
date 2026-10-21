@@ -419,7 +419,7 @@ export default function SignInGroupList({
 
       {/* 重命名弹窗 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         description="修改后，当前分组的人员将沿用新的名称。"
         title="重命名分组"
         open={!!renameTarget}

@@ -10,12 +10,12 @@ import {
   InputNumber,
   Popconfirm,
   Space,
-  Tag,
   Tooltip,
 } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { useHasPerm } from '@/components/glass/RequireRole'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassTable from '@/components/glass/GlassTable'
+import GlassTable from './ActivityTable'
 import {
   createScoreRecord,
   createScoreRule,
@@ -65,6 +65,8 @@ function parseDims(json: string | null): Record<string, number> {
 
 export default function ScorePanel({ activityId }: { activityId: number }) {
   const { message } = App.useApp()
+  const hasPerm = useHasPerm()
+  const canEdit = hasPerm('activity:edit')
   const [rules, setRules] = useState<ScoreRuleVO[]>([])
   const [records, setRecords] = useState<ScoreRecordVO[]>([])
   const [loading, setLoading] = useState(false)
@@ -102,7 +104,12 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   }
 
   const handleSaveRule = async () => {
-    const values = await ruleForm.validateFields()
+    let values
+    try {
+      values = await ruleForm.validateFields()
+    } catch {
+      return
+    }
     setRuleSaving(true)
     try {
       const payload: ScoreRuleSave = {
@@ -140,7 +147,12 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
   }
 
   const handleSaveRecord = async () => {
-    const values = await recordForm.validateFields()
+    let values
+    try {
+      values = await recordForm.validateFields()
+    } catch {
+      return
+    }
     setRecordSaving(true)
     try {
       // 维度边界校验兜底：维度必须是有效规则 id，且分值落在 0~满分 之间
@@ -221,20 +233,26 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         key: 'action',
         align: 'right',
         width: 80,
-        render: (_: unknown, r: ScoreRuleVO) => (
-          <Popconfirm
-            title="确认删除该规则？"
-            onConfirm={() => handleDeleteRule(r.id)}
-            okText="删除"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        ),
+        render: (_: unknown, r: ScoreRuleVO) =>
+          canEdit ? (
+            <Popconfirm
+              title="确认删除该规则？"
+              onConfirm={() => handleDeleteRule(r.id)}
+              okText="删除"
+              cancelText="取消"
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [canEdit],
   )
 
   const rows = useMemo<RecordRow[]>(
@@ -294,39 +312,60 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
         key: 'action',
         align: 'right',
         width: 80,
-        render: (_: unknown, row: RecordRow) => (
-          <Popconfirm
-            title="确认删除该评分记录？"
-            onConfirm={() => handleDeleteRecord(row.id)}
-            okText="删除"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        ),
+        render: (_: unknown, row: RecordRow) =>
+          canEdit ? (
+            <Popconfirm
+              title="确认删除该评分记录？"
+              onConfirm={() => handleDeleteRecord(row.id)}
+              okText="删除"
+              cancelText="取消"
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          ) : null,
       })
       return base as ColumnsType<RecordRow>
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rules, rows, ranks],
+    [rules, rows, ranks, canEdit],
   )
 
   return (
-    <div>
+    <div className="activity-score-pane">
+      {rules.length > 0 && (
+        <div className="activity-score-rules">
+          {rules.map((rule) => (
+            <div key={rule.id}>
+              <h3>{rule.dimensionName}</h3>
+              <div>
+                <strong>{rule.fullMarks}</strong>
+                <small>分</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space
           wrap
           style={{ display: 'flex', justifyContent: 'space-between' }}
         >
           <Space wrap>
-            <Tag color="red">评分规则</Tag>
+            <h2 style={{ fontSize: 16, margin: 0 }}>评分规则</h2>
             <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               {rules.length ? `${rules.length} 个维度` : '暂无评分维度'}
             </span>
           </Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openRule}>
-            新增规则
-          </Button>
+          {canEdit && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openRule}>
+              新增规则
+            </Button>
+          )}
         </Space>
       </GlassCard>
       <GlassTable<ScoreRuleVO>
@@ -343,22 +382,27 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
           style={{ display: 'flex', justifyContent: 'space-between' }}
         >
           <Space wrap>
-            <Tag color="blue">评分记录</Tag>
+            <h2 style={{ fontSize: 16, margin: 0 }}>评分结果</h2>
             <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               {records.length} 支队伍
             </span>
           </Space>
-          {rules.length ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={openRecord}>
-              录入记录
-            </Button>
-          ) : (
-            <Tooltip title="请先新增评分规则">
-              <Button type="primary" icon={<PlusOutlined />} disabled>
+          {canEdit &&
+            (rules.length ? (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openRecord}
+              >
                 录入记录
               </Button>
-            </Tooltip>
-          )}
+            ) : (
+              <Tooltip title="请先新增评分规则">
+                <Button type="primary" icon={<PlusOutlined />} disabled>
+                  录入记录
+                </Button>
+              </Tooltip>
+            ))}
         </Space>
       </GlassCard>
       <GlassTable<RecordRow>
@@ -376,7 +420,7 @@ export default function ScorePanel({ activityId }: { activityId: number }) {
 
       {/* 新增规则弹窗 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         title="新增评分规则"
         open={ruleModal}
         onCancel={() => setRuleModal(false)}

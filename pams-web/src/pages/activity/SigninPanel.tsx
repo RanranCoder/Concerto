@@ -17,21 +17,20 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   PlusOutlined,
-  SearchOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassTable from '@/components/glass/GlassTable'
+import GlassTable from './ActivityTable'
 import SigninQR from '@/components/signin/SigninQR'
 import SignInGroupList from '@/components/signin/SignInGroupList'
 import SigninFieldConfig from '@/components/signin/SigninFieldConfig'
+import { signInGroupSummary } from '@/api/signinGroup'
 import { useAuthStore } from '@/stores/auth'
 import {
   countSignins,
   createSignin,
   deleteSignin,
   listSignins,
-  rosterSummary,
   type SigninSave,
   type SigninSummaryVO,
   type SigninVO,
@@ -94,6 +93,11 @@ export default function SigninPanel({
   )
   const [rosterSummaryData, setRosterSummaryData] =
     useState<SigninSummaryVO | null>(null)
+  const [view, setView] = useState<'roster' | 'records'>(
+    isMinisterOrAbove ? 'roster' : 'records',
+  )
+  const [qrOpen, setQrOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [rosterVersion, setRosterVersion] = useState(0)
   const bumpRoster = () => setRosterVersion((v) => v + 1)
 
@@ -120,7 +124,13 @@ export default function SigninPanel({
   const fetchRosterSummary = useCallback(async () => {
     if (!isMinisterOrAbove) return
     try {
-      setRosterSummaryData(await rosterSummary(activityId))
+      setRosterSummaryData(
+        await signInGroupSummary(activityId).then((result) => ({
+          expected: result.total,
+          signed: result.signed,
+          unsigned: result.unsigned,
+        })),
+      )
     } catch {
       /* 干事无名单权限，静默 */
     }
@@ -145,7 +155,12 @@ export default function SigninPanel({
   }
 
   const handleSave = async () => {
-    const values = await form.validateFields()
+    let values
+    try {
+      values = await form.validateFields()
+    } catch {
+      return
+    }
     setSaving(true)
     try {
       const payload: SigninSave = {
@@ -228,28 +243,80 @@ export default function SigninPanel({
         key: 'action',
         align: 'right',
         width: 80,
-        render: (_: unknown, r: SigninVO) => (
-          <Popconfirm
-            title="确认删除该签到记录？"
-            onConfirm={() => handleDelete(r.id)}
-            okText="删除"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        ),
+        render: (_: unknown, r: SigninVO) =>
+          isMinisterOrAbove ? (
+            <Popconfirm
+              title="确认删除该签到记录？"
+              onConfirm={() => handleDelete(r.id)}
+              okText="删除"
+              cancelText="取消"
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          ) : null,
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [isMinisterOrAbove],
   )
 
   const summary = rosterSummaryData
+  const filteredRows = list.filter((row) =>
+    [row.name, row.studentNo, row.className].join(' ').includes(query),
+  )
 
   return (
-    <div>
+    <div className="activity-signin-pane">
+      <div className="activity-signin-metrics">
+        <div>
+          {(isMinisterOrAbove
+            ? [
+                ['应签人数', summary?.expected ?? '—'],
+                ['已签到', summary?.signed ?? '—'],
+                ['未签到', summary?.unsigned ?? '—'],
+                [
+                  '签到率',
+                  summary?.expected
+                    ? Math.round((summary.signed / summary.expected) * 100) +
+                      '%'
+                    : '—',
+                ],
+              ]
+            : [['签到记录', count]]
+          ).map(([label, value]) => (
+            <div key={String(label)}>
+              <small>{label}</small>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+        <Button type="primary" onClick={() => setQrOpen(true)}>
+          展示签到码
+        </Button>
+      </div>
+      <nav className="activity-signin-tabs" aria-label="签到管理视图">
+        {isMinisterOrAbove && (
+          <button
+            aria-pressed={view === 'roster'}
+            onClick={() => setView('roster')}
+          >
+            应签名单
+          </button>
+        )}
+        <button
+          aria-pressed={view === 'records'}
+          onClick={() => setView('records')}
+        >
+          签到记录
+        </button>
+      </nav>
       {/* 应签名单区（仅部长及以上：后端名单/字段/补签接口 @PreAuthorize 部长及以上） */}
-      {isMinisterOrAbove && (
+      {isMinisterOrAbove && view === 'roster' && (
         <GlassCard style={{ padding: 16, marginBottom: 16 }}>
           <Space
             wrap
@@ -281,7 +348,13 @@ export default function SigninPanel({
         </GlassCard>
       )}
 
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+      <FormSurface
+        mode="drawer"
+        title="扫码签到"
+        open={qrOpen}
+        onCancel={() => setQrOpen(false)}
+        footer={<Button onClick={() => setQrOpen(false)}>关闭</Button>}
+      >
         <Space
           wrap
           style={{
@@ -295,48 +368,62 @@ export default function SigninPanel({
         </Space>
         <SigninQR
           activityId={activityId}
-          active={active}
+          active={active && qrOpen}
           onSigned={refreshAll}
         />
-      </GlassCard>
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space
-          wrap
-          style={{ display: 'flex', justifyContent: 'space-between' }}
-        >
-          <Space wrap>
-            {/* 不再内联放字号/内边距：同页其它 Tag 都走 global.css 的 caption 档，这个标签会高出一截 */}
-            <Tag color="red">总签到 {count} 人</Tag>
-            <SearchOutlined style={{ color: 'var(--text-secondary)' }} />
-          </Space>
-          <Space wrap>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => exportCsv(list)}
-              disabled={list.length === 0}
+      </FormSurface>
+      {view === 'records' && (
+        <>
+          <GlassCard style={{ padding: 16, marginBottom: 16 }}>
+            <Space
+              wrap
+              style={{ display: 'flex', justifyContent: 'space-between' }}
             >
-              导出 CSV
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新增签到
-            </Button>
-          </Space>
-        </Space>
-      </GlassCard>
+              <Space wrap>
+                {/* 不再内联放字号/内边距：同页其它 Tag 都走 global.css 的 caption 档，这个标签会高出一截 */}
+                <Tag color="red">总签到 {count} 人</Tag>
+                <Input.Search
+                  aria-label="搜索签到记录"
+                  placeholder="搜索姓名 / 学号 / 班级"
+                  allowClear
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </Space>
+              <Space wrap>
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={() => exportCsv(list)}
+                  disabled={list.length === 0}
+                >
+                  导出 CSV
+                </Button>
+                {isMinisterOrAbove && (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={openCreate}
+                  >
+                    新增签到
+                  </Button>
+                )}
+              </Space>
+            </Space>
+          </GlassCard>
 
-      <GlassTable<SigninVO>
-        columns={columns}
-        dataSource={list.map((x) => ({ ...x, key: x.id }))}
-        rowKey="id"
-        loading={loading}
-        pagination={
-          list.length > 10
-            ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` }
-            : false
-        }
-        locale={{ emptyText: <Empty description="暂无签到记录" /> }}
-      />
-
+          <GlassTable<SigninVO>
+            columns={columns}
+            dataSource={filteredRows.map((x) => ({ ...x, key: x.id }))}
+            rowKey="id"
+            loading={loading}
+            pagination={
+              list.length > 10
+                ? { pageSize: 10, showTotal: (t) => `共 ${t} 条` }
+                : false
+            }
+            locale={{ emptyText: <Empty description="暂无签到记录" /> }}
+          />
+        </>
+      )}
       <FormSurface
         mode="drawer"
         description="补录人员、签到方式和时间，保存后加入签到记录。"

@@ -102,6 +102,7 @@ export function paperLayout(paper: PaperSize, margin: MarginPreset) {
 }
 
 interface WordEditorProps {
+  fixedA4?: boolean
   value: PlanFields
   onChange: (v: PlanFields) => void
   meta?: PlanMeta
@@ -240,11 +241,12 @@ export default function WordEditor({
   onOverridesChange,
   sectionOrder,
   onSectionOrderChange,
+  fixedA4 = false,
 }: WordEditorProps) {
   const ov = overrides ?? {}
 
   /** 当前纸张尺寸 + 页边距预设（localStorage 持久化） */
-  const [paper, setPaper] = useState<PaperSize>(loadPaper)
+  const [paper, setPaper] = useState<PaperSize>(() => fixedA4 ? PAPER_SIZES[0] : loadPaper())
   const [margin, setMargin] = useState<MarginPreset>(loadMargin)
   const layout = useMemo(() => paperLayout(paper, margin), [paper, margin])
 
@@ -427,6 +429,7 @@ export default function WordEditor({
           <Select
             size="middle"
             style={{ width: 110 }}
+            disabled={fixedA4}
             value={paper.key}
             onChange={changePaper}
             options={PAPER_SIZES.map((p) => ({ value: p.key, label: p.label }))}

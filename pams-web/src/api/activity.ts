@@ -14,6 +14,11 @@ export interface ActivityVO {
   host: string
   leader: string
   createdAt: string
+  targetAudience?: string
+  description?: string
+  taskCount?: number
+  completedTaskCount?: number
+  materialCount?: number
 }
 
 export interface ActivitySave {
@@ -30,14 +35,21 @@ export interface ActivitySave {
   description?: string
 }
 
-export const listActivities = (params: { keyword?: string; status?: string; type?: string; page?: number; size?: number }) =>
+export const listActivities = (params: { keyword?: string; status?: string; type?: string; organizer?: string; dateOrder?: string; page?: number; size?: number }) =>
   get<PageResult<ActivityVO>>('/activities', params)
 export const getActivity = (id: number) => get<ActivityVO>(`/activities/${id}`)
+export const listActivityOrganizers = () => get<string[]>('/activities/organizers')
 
 /** 活动详情聚合：策划书 / 议程 / 座位表 / 评分 / 签到 / 任务（后端 ActivityDetailService） */
 export interface ActivityDetail {
   activity: ActivityVO & { targetAudience?: string; description?: string }
-  plan: { latest: ActivityPlanVO | null; status: string | null } | null
+  plan: {
+    latest: ActivityPlanVO | null; status: string | null
+    currentHidden: boolean; currentId: number | null; canEdit: boolean
+    versions: Array<Pick<ActivityPlanVO, 'id' | 'version' | 'status' | 'updatedAt'> & {
+      ownerId?: number | null; ownerName?: string; note?: string
+    }>
+  } | null
   agendas: ActivityAgendaVO[]
   seatZones: Record<string, SeatMapVO[]>
   score: { rules: ScoreRuleVO[]; records: ScoreRecordVO[] }
@@ -63,7 +75,10 @@ export interface ActivityPlanVO {
   organizerOverride: string | null
   targetOverride: string | null
   sectionOrder: string | null
-  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
+  ownerId: number | null
+  revision: number
+  reviewers: Array<{ userId: number; name: string; approved: boolean | null; comment: string | null; reviewedAt: string | null }>
   submitterId: number | null
   reviewerId: number | null
   reviewComment: string | null

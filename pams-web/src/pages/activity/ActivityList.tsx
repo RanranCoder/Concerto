@@ -1,15 +1,18 @@
-import FormSurface, { FormSection } from '@/components/form/FormSurface'
-import { useEffect, useState } from 'react'
+import ActivityEditorDrawer from './ActivityEditorDrawer'
+import '@/styles/activity-v6.css'
+import { useEffect, useRef, useState } from 'react'
 import {
   App,
   Button,
-  DatePicker,
   Drawer,
   Dropdown,
-  Form,
   Grid,
   Input,
   Segmented,
+  Pagination,
+  Progress,
+  Spin,
+  Empty,
   Select,
   Space,
   Tag,
@@ -24,20 +27,17 @@ import {
   PlusOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
-import dayjs, { type Dayjs } from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
 import {
   listActivities,
-  getActivity,
-  createActivity,
-  updateActivity,
+  listActivityOrganizers,
   changeActivityStatus,
   deleteActivity,
 } from '@/api/activity'
-import type { ActivitySave, ActivityVO } from '@/api/activity'
+import type { ActivityVO } from '@/api/activity'
 import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUS_OPTIONS,
@@ -62,31 +62,6 @@ const TYPE_OPTIONS = ACTIVITY_TYPE_OPTIONS
 
 type ActivityRecord = ActivityVO & { key: number }
 
-interface FormValues extends Omit<ActivitySave, 'startDate' | 'endDate'> {
-  range?: Dayjs[] | null
-}
-
-/** 编辑回填用 initialValues + key 重挂载（GlassModal destroyOnHidden 关闭即卸载，setFieldsValue 在挂载前调用会丢失，Task 21 同款修复） */
-function toFormValues(
-  detail?: ActivityVO & { description?: string },
-): FormValues | undefined {
-  if (!detail) return undefined
-  return {
-    name: detail.name,
-    theme: detail.theme,
-    type: detail.type,
-    location: detail.location,
-    organizer: detail.organizer,
-    host: detail.host,
-    leader: detail.leader,
-    description: detail.description ?? '',
-    range:
-      detail.startDate && detail.endDate
-        ? [dayjs(detail.startDate), dayjs(detail.endDate)]
-        : undefined,
-  }
-}
-
 export default function ActivityList() {
   const { message, modal } = App.useApp()
   const navigate = useNavigate()
@@ -106,29 +81,42 @@ export default function ActivityList() {
   const [stats, setStats] = useState<ActivityStats | null>(null)
   const [density, setDensity] = useState<'middle' | 'small'>('middle')
   const [type, setType] = useState<string | undefined>()
+  const [organizer, setOrganizer] = useState<string>()
+  const [organizers, setOrganizers] = useState<string[]>([])
+  const [dateOrder, setDateOrder] = useState('desc')
+  const [failed, setFailed] = useState(false)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ActivityVO | null>(null)
-  const [formInit, setFormInit] = useState<FormValues | undefined>(undefined)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm<FormValues>()
+  const request = useRef(0)
+  useEffect(
+    () => () => {
+      request.current++
+    },
+    [],
+  )
 
   const fetchList = async () => {
+    const current = ++request.current
     setLoading(true)
     try {
       const res = await listActivities({
         keyword: keyword || undefined,
         status,
         type,
+        organizer,
+        dateOrder,
         page,
         size,
       })
+      if (current !== request.current) return
       setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
       setTotal(res.total)
+      setFailed(false)
     } catch {
-      /* http 拦截已提示 */
+      if (current === request.current) setFailed(true)
     } finally {
-      setLoading(false)
+      if (current === request.current) setLoading(false)
     }
   }
 
@@ -137,12 +125,14 @@ export default function ActivityList() {
       .then((dashboard) => setStats(dashboard.activityStats))
       .catch(() => {})
   useEffect(() => {
+    listActivityOrganizers()
+      .then(setOrganizers)
+      .catch(() => {})
     void refreshSummary()
   }, [])
   useEffect(() => {
     if (location.state?.create && hasPerm('activity:create')) {
       setEditing(null)
-      setFormInit(undefined)
       setModalOpen(true)
       navigate(location.pathname, { replace: true, state: null })
     }
@@ -151,10 +141,13 @@ export default function ActivityList() {
   useEffect(() => {
     fetchList()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, size, keyword, status, type])
+  }, [page, size, keyword, status, type, organizer, dateOrder])
 
   const activeFilterCount =
-    Number(Boolean(keyword)) + Number(Boolean(status)) + Number(Boolean(type))
+    Number(Boolean(keyword)) +
+    Number(Boolean(status)) +
+    Number(Boolean(type)) +
+    Number(Boolean(organizer))
   const applyKeyword = () => {
     setKeyword(keywordDraft.trim())
     setPage(1)
@@ -165,65 +158,19 @@ export default function ActivityList() {
     setKeywordDraft('')
     setStatus(undefined)
     setType(undefined)
+    setOrganizer(undefined)
     setPage(1)
     setFilterDrawerOpen(false)
   }
 
   const openCreate = () => {
     setEditing(null)
-    setFormInit(undefined)
     setModalOpen(true)
   }
 
-  const openEdit = async (record: ActivityVO) => {
+  const openEdit = (record: ActivityVO) => {
     setEditing(record)
-    try {
-      // 列表 VO 不含 description，编辑时拉详情补全；回填交给 initialValues（挂载时生效）
-      const detail = (await getActivity(record.id)) as ActivityVO & {
-        description?: string
-      }
-      setFormInit(toFormValues(detail))
-      setModalOpen(true)
-    } catch {
-      /* http 拦截已提示 */
-    }
-  }
-
-  const handleSave = async () => {
-    const values = await form.validateFields()
-    setSaving(true)
-    try {
-      const [start, end] = values.range ?? [null, null]
-      const payload: ActivitySave = {
-        name: values.name,
-        theme: values.theme,
-        type: values.type,
-        startDate: start ? start.format('YYYY-MM-DD') : null,
-        endDate: end ? end.format('YYYY-MM-DD') : null,
-        location: values.location,
-        organizer: values.organizer,
-        host: values.host,
-        leader: values.leader,
-        description: values.description,
-      }
-      if (editing) {
-        await updateActivity(editing.id, payload)
-        message.success('保存成功')
-        fetchList()
-      } else {
-        await createActivity(payload)
-        message.success('创建成功')
-        // E2E 发现的回归：page 已是 1 时 setPage(1) 不触发 effect，列表不刷新——当前页为 1 时手动刷新
-        if (page === 1) fetchList()
-        else setPage(1) // 翻页场景由 useEffect 触发刷新
-      }
-      setModalOpen(false)
-      void refreshSummary()
-    } catch {
-      /* 校验失败或 http 拦截已提示 */
-    } finally {
-      setSaving(false)
-    }
+    setModalOpen(true)
   }
 
   const handleAdvance = async (record: ActivityVO) => {
@@ -259,7 +206,7 @@ export default function ActivityList() {
     <div className="activity-filter-controls">
       <Input.Search
         className="activity-filter-keyword"
-        placeholder="搜索活动名称 / 主题"
+        placeholder="搜索活动名称 / 主题 / 负责人"
         allowClear
         value={keywordDraft}
         onChange={(event) => {
@@ -274,23 +221,25 @@ export default function ActivityList() {
       />
       <Select
         className="activity-filter-select"
-        placeholder="状态筛选"
-        allowClear
-        options={ACTIVITY_STATUS_OPTIONS}
-        value={status}
-        onChange={(value) => {
-          setStatus(value)
-          setPage(1)
-        }}
-      />
-      <Select
-        className="activity-filter-select"
         placeholder="类型筛选"
         allowClear
         options={TYPE_OPTIONS}
         value={type}
         onChange={(value) => {
           setType(value)
+          setPage(1)
+        }}
+      />
+      <Select
+        className="activity-filter-select"
+        aria-label="组织单位"
+        placeholder="全部组织单位"
+        allowClear
+        showSearch
+        options={organizers.map((value) => ({ value, label: value }))}
+        value={organizer}
+        onChange={(value) => {
+          setOrganizer(value)
           setPage(1)
         }}
       />
@@ -305,7 +254,13 @@ export default function ActivityList() {
       width: 320,
       render: (name: string, record: ActivityRecord) => (
         <>
-          <span className="business-table-name">{name}</span>
+          <Button
+            type="link"
+            className="activity-name-link"
+            onClick={() => navigate(`/activities/${record.id}`)}
+          >
+            {name}
+          </Button>
           <span className="business-table-meta">
             {record.organizer ||
               record.location ||
@@ -328,7 +283,18 @@ export default function ActivityList() {
       render: (s: string) => <StatusTag status={s} />,
     },
     {
-      title: '时间',
+      title: (
+        <Button
+          type="text"
+          aria-label="按活动日期排序"
+          onClick={() => {
+            setDateOrder(dateOrder === 'asc' ? 'desc' : 'asc')
+            setPage(1)
+          }}
+        >
+          活动日期 {dateOrder === 'asc' ? '↑' : '↓'}
+        </Button>
+      ),
       key: 'time',
       width: 240,
       align: 'right' as const,
@@ -341,6 +307,41 @@ export default function ActivityList() {
             ? `${r.startDate} ~ ${r.endDate}`
             : r.startDate
           : '-',
+    },
+    {
+      title: '任务进度',
+      key: 'tasks',
+      width: 120,
+      render: (_: unknown, r: ActivityRecord) => (
+        <div>
+          {r.taskCount == null ? (
+            '—'
+          ) : (
+            <>
+              <span>
+                {r.completedTaskCount ?? 0} / {r.taskCount}
+              </span>
+              <Progress
+                percent={
+                  r.taskCount
+                    ? Math.round(
+                        ((r.completedTaskCount ?? 0) / r.taskCount) * 100,
+                      )
+                    : 0
+                }
+                showInfo={false}
+                size="small"
+              />
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: '材料',
+      dataIndex: 'materialCount',
+      key: 'materials',
+      render: (v?: number) => (v == null ? '—' : v + ' 份'),
     },
     {
       title: '负责人',
@@ -356,7 +357,10 @@ export default function ActivityList() {
       fixed: 'right' as const,
       render: (_: unknown, r: ActivityRecord) => {
         const items: MenuProps['items'] = []
-        if (hasPerm('activity:edit'))
+        if (
+          hasPerm('activity:edit') &&
+          !['FINISHED', 'ARCHIVED'].includes(r.status)
+        )
           items.push({ key: 'edit', icon: <EditOutlined />, label: '编辑' })
         if (hasPerm('activity:edit') && NEXT_STATUS[r.status]) {
           items.push({
@@ -421,7 +425,7 @@ export default function ActivityList() {
   ]
 
   return (
-    <div>
+    <div className="activity-list-page">
       <PageHeader
         title="活动管理"
         description="跟进策划、审核、执行与归档"
@@ -456,6 +460,23 @@ export default function ActivityList() {
           ['已归档', stats?.ARCHIVED, '材料可查'],
         ].map(([label, value, note], index) => (
           <div
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              setStatus(
+                [undefined, 'PLAN_REVIEW', 'EXECUTING', 'ARCHIVED'][index],
+              )
+              setPage(1)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setStatus(
+                  [undefined, 'PLAN_REVIEW', 'EXECUTING', 'ARCHIVED'][index],
+                )
+                setPage(1)
+              }
+            }}
             className={
               index === 1 ? 'business-metric attention' : 'business-metric'
             }
@@ -489,7 +510,17 @@ export default function ActivityList() {
                 setPage(1)
               }}
             >
-              {option.label}
+              {option.label}{' '}
+              <small>
+                {stats
+                  ? option.value
+                    ? stats[option.value as keyof ActivityStats]
+                    : Object.values(stats).reduce(
+                        (sum, value) => sum + value,
+                        0,
+                      )
+                  : '—'}
+              </small>
             </button>
           ))}
         </div>
@@ -594,91 +625,128 @@ export default function ActivityList() {
           />
         </div>
 
-        <GlassTable<ActivityRecord>
-          size={density}
-          columns={columns}
-          dataSource={data}
-          scroll={{ x: 1000 }}
-          loading={loading}
-          pagination={{
-            current: page,
-            pageSize: size,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, s) => {
-              setPage(p)
-              setSize(s)
-            },
-          }}
-        />
+        {failed && (
+          <p className="activity-inline-note error" role="alert">
+            活动列表读取失败。
+            <Button type="link" onClick={fetchList}>
+              重新加载
+            </Button>
+          </p>
+        )}
+        {compactFilters ? (
+          <Spin spinning={loading}>
+            <div className="activity-mobile-list">
+              {data.length ? (
+                data.map((r) => (
+                  <article key={r.id}>
+                    <header>
+                      <Button
+                        type="link"
+                        onClick={() => navigate(`/activities/${r.id}`)}
+                      >
+                        {r.name}
+                      </Button>
+                      <StatusTag status={r.status} />
+                    </header>
+                    <p>
+                      {r.organizer || '组织单位待定'} /{' '}
+                      {r.location || '地点待定'}
+                    </p>
+                    <dl>
+                      <div>
+                        <dt>负责人</dt>
+                        <dd>{r.leader || '未设置'}</dd>
+                      </div>
+                      <div>
+                        <dt>活动日期</dt>
+                        <dd>
+                          {r.startDate || '待定'}
+                          {r.endDate && r.endDate !== r.startDate
+                            ? ' ~ ' + r.endDate
+                            : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>任务进度</dt>
+                        <dd>
+                          {r.taskCount == null
+                            ? '—'
+                            : (r.completedTaskCount ?? 0) + ' / ' + r.taskCount}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>关联材料</dt>
+                        <dd>
+                          {r.materialCount == null
+                            ? '—'
+                            : r.materialCount + ' 份'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <Space>
+                      <Button
+                        type="link"
+                        onClick={() => navigate(`/activities/${r.id}`)}
+                      >
+                        查看详情
+                      </Button>
+                      {hasPerm('activity:edit') && (
+                        <Button type="link" onClick={() => openEdit(r)}>
+                          编辑活动
+                        </Button>
+                      )}
+                    </Space>
+                  </article>
+                ))
+              ) : (
+                <Empty description="没有匹配的活动，请调整筛选条件。" />
+              )}
+            </div>
+            <Pagination
+              simple
+              current={page}
+              pageSize={size}
+              total={total}
+              onChange={setPage}
+            />
+          </Spin>
+        ) : (
+          <>
+            <GlassTable<ActivityRecord>
+              size={density}
+              columns={columns}
+              dataSource={data}
+              scroll={{ x: 1000 }}
+              loading={loading}
+              pagination={{
+                current: page,
+                pageSize: size,
+                total,
+                showSizeChanger: true,
+                showTotal: (t) => `共 ${t} 条`,
+                onChange: (p, s) => {
+                  setPage(p)
+                  setSize(s)
+                },
+              }}
+            />
+          </>
+        )}
       </GlassCard>
 
-      <FormSurface
-        mode="drawer"
-        description="设置活动信息、时间安排与负责人。"
-        title={editing ? '编辑活动' : '新增活动'}
+      <ActivityEditorDrawer
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={handleSave}
-        confirmLoading={saving}
-        okText="保存"
-        cancelText="取消"
-        footer={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>取消</Button>
-            <Button type="primary" loading={saving} onClick={handleSave}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          key={editing ? `edit-${editing.id}` : 'create'}
-          initialValues={formInit ?? { type: 'OTHER' }}
-        >
-          <FormSection title="活动信息">
-            <Form.Item
-              name="name"
-              label="活动名称"
-              rules={[{ required: true, message: '请输入活动名称' }]}
-            >
-              <Input maxLength={100} />
-            </Form.Item>
-            <Form.Item name="theme" label="活动主题">
-              <Input maxLength={200} />
-            </Form.Item>
-            <Form.Item name="type" label="活动类型">
-              <Select options={TYPE_OPTIONS} />
-            </Form.Item>
-            <Form.Item name="description" label="活动描述">
-              <Input.TextArea rows={3} maxLength={1000} />
-            </Form.Item>
-          </FormSection>
-          <FormSection title="时间与地点">
-            <Form.Item name="range" label="起止日期">
-              <DatePicker.RangePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="location" label="活动地点">
-              <Input maxLength={100} />
-            </Form.Item>
-          </FormSection>
-          <FormSection title="组织与分工">
-            <Form.Item name="organizer" label="组织单位">
-              <Input maxLength={100} />
-            </Form.Item>
-            <Form.Item name="leader" label="负责人">
-              <Input maxLength={50} />
-            </Form.Item>
-            <Form.Item name="host" label="主持人">
-              <Input maxLength={50} />
-            </Form.Item>
-          </FormSection>
-        </Form>
-      </FormSurface>
+        activityId={editing?.id}
+        onClose={() => setModalOpen(false)}
+        onSaved={() => {
+          if (page === 1) void fetchList()
+          else setPage(1)
+          void refreshSummary()
+          listActivityOrganizers()
+            .then(setOrganizers)
+            .catch(() => {})
+        }}
+      />
     </div>
   )
 }

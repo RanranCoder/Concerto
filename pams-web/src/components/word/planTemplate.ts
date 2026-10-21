@@ -256,6 +256,7 @@ export function normalizeSectionTitle(raw: string): string | null {
   const t = (raw || '').replace(/[ \t ]+/g, '').trim()
   if (!t) return null
   const noC = t.replace(/^(第?[一二三四五六七八九十\d]+)([、\.．:：])\s*/, '').trim()
+  if (noC === '活动流程') return '活动流程'
   for (const s of PLAN_TEMPLATE_SECTIONS) {
     if (noC === s.label.replace(/^(第?[一二三四五六七八九十\d]+[、\.．:：])/, '') && noC.length >= 2) return s.label
   }
@@ -347,6 +348,7 @@ export async function planToDocx(
 
     children.push(
       new Paragraph({
+        heading: mod.HeadingLevel.HEADING_2,
         spacing: { before: 160, after: 80 },
         children: [new TextRun({ text: label, font: '宋体', size: 28, bold: true })],
       }),
@@ -387,6 +389,16 @@ export async function planToDocx(
     children.push(...body)
   }
 
+  // The editor stores flow separately from the twelve template sections.
+  if (plan.flow?.trim() && !sections.some(section => section.field === 'flow')) {
+    children.push(new Paragraph({
+      heading: mod.HeadingLevel.HEADING_2,
+      spacing: { before: 160, after: 80 },
+      children: [new TextRun({ text: '活动流程', font: '宋体', size: 28, bold: true })],
+    }))
+    children.push(...await htmlToDocx(plan.flow, ctx))
+  }
+
   // 落款：右对齐；年份取活动 endDate 年份，拿不到再回退当前年
   children.push(
     new Paragraph({
@@ -405,7 +417,7 @@ export async function planToDocx(
   )
 
   const doc = new Document({
-    sections: [{ children }],
+    sections: [{ properties: { page: { size: { width: 11906, height: 16838 } } }, children }],
   })
   return Packer.toBlob(doc)
 }
@@ -427,6 +439,8 @@ export function planFromDocxText(text: string): Partial<PlanFields> {
     const hit = sections.find((s) => s.label === sec.label)
     if (hit && hit.body.trim()) out[sec.field] = hit.body.trim()
   }
+  const flow = sections.find(section => section.label === '活动流程')
+  if (flow?.body.trim()) out.flow = flow.body.trim()
   return out
 }
 
@@ -448,7 +462,11 @@ export function splitSectionsHtml(html: string): { label: string; bodyHtml: stri
     const text = (node.textContent ?? '').replace(/[ \t ]+/g, '').trim()
     if (!text) continue
     const tag = (node as Element).tagName?.toLowerCase() ?? ''
-    const title = tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' ? normalizeSectionTitle(text) : null
+    const paragraphTitle = tag === 'p' && (
+      /^(第?[一二三四五六七八九十\d]+)[、\.．:：]/.test(text)
+      || (node instanceof Element && node.children.length === 1 && /^(STRONG|B)$/.test(node.firstElementChild?.tagName ?? '') && node.firstElementChild?.textContent === node.textContent)
+    )
+    const title = /^h[1-4]$/.test(tag) || paragraphTitle ? normalizeSectionTitle(text) : null
     if (title) {
       current = { label: title, bodyHtml: '' }
       result.push(current)
@@ -469,6 +487,8 @@ export function planFromDocxHtml(html: string): Partial<PlanFields> {
     const hit = sections.find((s) => s.label === sec.label)
     if (hit && hit.bodyHtml.trim()) out[sec.field] = hit.bodyHtml.trim()
   }
+  const flow = sections.find(section => section.label === '活动流程')
+  if (flow?.bodyHtml.trim()) out.flow = flow.bodyHtml.trim()
   return out
 }
 

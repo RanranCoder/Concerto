@@ -991,7 +991,7 @@ export default function SeatLayoutEditor({
 
       {/* 模板弹窗 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         title="从模板新建"
         open={templateOpen}
         onCancel={() => setTemplateOpen(false)}
@@ -1045,7 +1045,7 @@ export default function SeatLayoutEditor({
 
       {/* 配色管理弹窗 */}
       <FormSurface
-        mode="dialog"
+        mode="drawer"
         title="配色管理"
         open={colorManageOpen}
         onCancel={() => setColorManageOpen(false)}
