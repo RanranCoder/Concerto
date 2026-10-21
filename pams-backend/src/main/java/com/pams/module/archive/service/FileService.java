@@ -39,30 +39,43 @@ public class FileService {
 
     private final FileRecordRepository fileRecordRepository;
     private final UserRepository userRepository;
+    private final com.pams.module.activity.service.PlanAccessService planAccess;
 
-    public FileService(FileRecordRepository fileRecordRepository, UserRepository userRepository) {
+    public FileService(FileRecordRepository fileRecordRepository, UserRepository userRepository,
+                       com.pams.module.activity.service.PlanAccessService planAccess) {
         this.fileRecordRepository = fileRecordRepository;
         this.userRepository = userRepository;
+        this.planAccess=planAccess;
     }
 
     /**
      * 取出当前用户有权读取的文件记录；不存在或越权一律抛 4001「文件不存在」（同响应防枚举）。
      */
     public FileRecord getReadableRecord(Long id, LoginUser current) {
+        return getReadableRecord(id,com.pams.module.agent.core.ToolContext.current(null,null));
+    }
+
+    public FileRecord getReadableRecord(Long id, com.pams.module.agent.core.ToolContext ctx) {
         FileRecord rec = fileRecordRepository.findById(id).orElseThrow(FileService::notFound);
-        if (!canRead(rec, current)) {
+        if (!canRead(rec, ctx)) {
             throw notFound();
         }
         return rec;
     }
 
-    private boolean canRead(FileRecord rec, LoginUser current) {
+    private boolean canRead(FileRecord rec, com.pams.module.agent.core.ToolContext ctx) {
+        LoginUser current=ctx==null?null:ctx.getLoginUser();
         if (current == null) {
             return false;
         }
         if (!java.util.Objects.equals(rec.getOrgId(),current.getOrgId())) return false;
-        var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
         if (!ctx.hasPermission("file:view")) return false;
+        // A plan reference never relaxes existing sensitive-file restrictions.
+        if (isSensitive(rec) && !ctx.hasPermission("file:sensitive:read")) return false;
+        Boolean planVisible=planAccess.canReadAttachment(rec.getId(),rec.getPath(),ctx);
+        if (planVisible!=null) return planVisible;
+        if ("PLAN".equalsIgnoreCase(rec.getBizType()))
+            return java.util.Objects.equals(rec.getUploaderId(),current.getId());
         if (isSensitive(rec)) return ctx.hasPermission("file:sensitive:read");
         if (ctx.hasPermission("file:org:read")) return true;
         if (rec.getUploaderId() != null && rec.getUploaderId().equals(current.getId())) {

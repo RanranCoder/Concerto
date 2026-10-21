@@ -12,35 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 知识源：活动策划书（{@code activity_plan}）。
- *
- * <p><b>这是"先例型问答"的主力语料</b> —— 用户问"上次南湖纪念馆那场活动的策划书
- * 写了哪些环节""办这类活动一般怎么安排流程"，答案就在这张表里。
- * 而且它已经在库、已有版本，接入成本几乎为零（方案 §2.6 把它列为 P0 的理由）。
- *
- * <h3>为什么草稿也进索引（与 {@link ArticleSource} 相反）</h3>
- * 两个源的取舍刻意不同，理由要说清：
- * <pre>
- * 稿件是"要对外发布的作品"  → 未定稿会误导"格式/要求"类问题 → 排除
- * 策划书是"内部执行记录"    → 草稿也真实反映了"当时是怎么办的" → 收录，但把状态写进 path
- * </pre>
- * 所以本源的 {@code path} 里会带上版本与状态（如「策划书 v3（草稿）· 活动流程」），
- * <b>让出处自己说明它的可信度</b>，而不是替用户做过滤决定。这比"静默排除"诚实。
- *
- * <h3>权限口径（canAccess）</h3>
- * 策划书在活动详情页里展示，而 {@code /activities/:id} <b>无路由守卫</b>
- * （代码注释："活动管理（干事可看…）"）。所以口径是"登录即可"。
- *
- * <p>⚠️ 注意与 {@code ActivityController} 的关系：本方案同时给
- * {@code GET /api/activities} 补了 {@code activity:view} 注解。由于 7 个角色的
- * 权限种子全都包含该码，**实际门槛未变**，所以这里用"登录即可"仍与页面一致。
- * 若将来真的收紧了 {@code activity:view} 的授予范围，**必须同步改这里** ——
- * 这是方案 R20（权限缺口向索引层传导）的登记点之一。
- *
- * <h3>分级与权重</h3>
- * T1 全文级，权重 {@code 0.9} —— 与稿件同档：实践记录，低于权威规范。
- */
+/** 策划书知识源；检索时按版本校验作者、所选审核人及历史版本可见性。 */
 @Component
 public class ActivityPlanSource implements KnowledgeSource {
 
@@ -59,11 +31,13 @@ public class ActivityPlanSource implements KnowledgeSource {
         SECTION_LABELS.put("budget", "经费预算");
     }
 
+    private final com.pams.module.activity.service.PlanAccessService access;
     private final ActivityPlanRepository planRepository;
     private final ActivityRepository activityRepository;
 
     public ActivityPlanSource(ActivityPlanRepository planRepository,
-                              ActivityRepository activityRepository) {
+                              ActivityRepository activityRepository, com.pams.module.activity.service.PlanAccessService access) {
+        this.access=access;
         this.planRepository = planRepository;
         this.activityRepository = activityRepository;
     }
@@ -78,7 +52,7 @@ public class ActivityPlanSource implements KnowledgeSource {
     public String description() {
         return "活动策划书各章节正文（背景/目的/内容/流程/注意事项/预案/预算）。"
                 + "先例型问答的主力语料；草稿也收录，但版本与状态会写进出处的标题路径。"
-                + "页面入口 /activities/:id 无路由守卫，可见性口径为「登录即可」。";
+                + "当前版本仅作者与所选审核人可见，其他用户仅可检索历史版本。";
     }
 
     @Override
@@ -108,8 +82,7 @@ public class ActivityPlanSource implements KnowledgeSource {
 
     @Override
     public boolean canAccess(ToolContext ctx, Long sourceId) {
-        if (ctx == null) return false;
-        return planRepository.findById(sourceId).isPresent();
+        return access.canRead(sourceId,ctx);
     }
 
     /**
@@ -123,7 +96,7 @@ public class ActivityPlanSource implements KnowledgeSource {
         return planRepository.findById(sourceId)
                 .map(ActivityPlan::getActivityId)
                 .filter(id -> id != null)
-                .map(id -> "/activities/" + id)
+                .map(id -> "/activities/" + id + "?tab=plan&planId=" + sourceId)
                 .orElse(null);   // 拿不到活动 ID 就返回不可点，不给必然 404 的链接
     }
 
@@ -136,6 +109,7 @@ public class ActivityPlanSource implements KnowledgeSource {
                 : activityRepository.findById(p.getActivityId()).orElse(null);
         String activityName = activity != null && activity.getName() != null
                 ? activity.getName() : ("活动 " + p.getActivityId());
+        if(p.getNameOverride()!=null) activityName=p.getNameOverride();
 
         String versionLabel = "策划书 v" + (p.getVersion() == null ? 1 : p.getVersion())
                 + "（" + statusLabel(p.getStatus()) + "）";
@@ -176,6 +150,7 @@ public class ActivityPlanSource implements KnowledgeSource {
             case PENDING -> "待审";
             case APPROVED -> "已审";
             case REJECTED -> "被驳回";
+            case WITHDRAWN -> "已撤回";
         };
     }
 }

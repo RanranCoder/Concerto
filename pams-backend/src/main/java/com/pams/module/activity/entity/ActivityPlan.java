@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "activity_plan")
 public class ActivityPlan implements OrgScoped {
-    public enum PlanStatus { DRAFT, PENDING, APPROVED, REJECTED }
+    public enum PlanStatus { DRAFT, PENDING, APPROVED, REJECTED, WITHDRAWN }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,6 +46,12 @@ public class ActivityPlan implements OrgScoped {
     @Enumerated(EnumType.STRING)
     private PlanStatus status;
     private Long submitterId;
+    private Long ownerId;
+    @Version
+    private Long revision;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "activity_plan_review", joinColumns = @JoinColumn(name = "plan_id"))
+    private java.util.List<PlanReviewer> reviewers = new java.util.ArrayList<>();
     private Long reviewerId;
     @Column(columnDefinition = "TEXT")
     private String reviewComment;

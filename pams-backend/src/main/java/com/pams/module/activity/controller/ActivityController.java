@@ -46,10 +46,16 @@ public class ActivityController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) String organizer,
+            @RequestParam(required = false) String dateOrder,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return Result.ok(service.page(keyword, status, type, page, size));
+        return Result.ok(service.page(keyword, status, type, organizer, dateOrder, page, size));
     }
+
+    @PreAuthorize("hasAuthority('activity:view')")
+    @GetMapping("/organizers")
+    public Result<java.util.List<String>> organizers() { return Result.ok(service.organizers()); }
 
     /** 活动详情。注解理由同上（名单口径与列表一致，避免"列表能看详情不能看"的裂缝）。 */
     @PreAuthorize("hasAuthority('activity:view')")

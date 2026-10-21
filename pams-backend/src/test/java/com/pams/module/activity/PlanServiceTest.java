@@ -1,252 +1,151 @@
 package com.pams.module.activity;
 
-import com.pams.common.BizException;
-import com.pams.module.activity.entity.Activity;
-import com.pams.module.activity.entity.ActivityPlan;
-import com.pams.module.activity.entity.ActivityStatus;
-import com.pams.module.activity.repository.ActivityPlanRepository;
-import com.pams.module.activity.repository.ActivityRepository;
-import com.pams.module.activity.service.PlanService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.*;
+import com.pams.repository.UserRepository;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.*;
+import org.springframework.http.MediaType;
+import java.util.*;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
-
+/** Real requests, tenant filters, database locks and serialized responses. */
+@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test")
 class PlanServiceTest {
-
-    ActivityPlanRepository repo;
-    PlanService service;
-
-    @BeforeEach
-    void setup() {
-        repo = mock(ActivityPlanRepository.class);
-        service = new PlanService(repo);
+    @Autowired MockMvc mvc;
+    @Autowired UserRepository users;
+    final ObjectMapper json=new ObjectMapper();
+    String author, outsider;
+    long activity, plan, authorId;
+    List<Long> reviewers;
+    Map<Long,String> tokens=new HashMap<>();
+    JsonNode data(MvcResult r) throws Exception { return json.readTree(r.getResponse().getContentAsString()).path("data"); }
+    String login(String username) throws Exception {
+        return data(mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("username",username,"password","123456"))))
+            .andExpect(status().isOk()).andReturn()).path("token").asText();
     }
-
-    @Test
-    void review_missingPlan_throws() {
-        when(repo.findById(1L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.review(1L, true, "ok", 100L))
-                .isInstanceOf(BizException.class);
+    MvcResult write(String verb,String url,String token,Object body,int expected) throws Exception {
+        var builder=verb.equals("POST")?post(url):put(url);
+        builder.header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON);
+        if(body!=null) builder.content(json.writeValueAsString(body));
+        return mvc.perform(builder).andExpect(status().is(expected)).andReturn();
     }
-
-    @Test
-    void review_approve_setsStatus() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(2L);
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        when(repo.findById(2L)).thenReturn(Optional.of(p));
-
-        service.review(2L, true, "ok", 100L);
-
-        assertThat(p.getStatus()).isEqualTo(ActivityPlan.PlanStatus.APPROVED);
-        assertThat(p.getReviewerId()).isEqualTo(100L);
-        assertThat(p.getReviewComment()).isEqualTo("ok");
-        verify(repo).save(p);
+    JsonNode read(String url,String token) throws Exception {
+        return data(mvc.perform(get(url).header("Authorization","Bearer "+token)).andExpect(status().isOk()).andReturn());
     }
-
-    @Test
-    void review_reject_setsStatus() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(3L);
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        when(repo.findById(3L)).thenReturn(Optional.of(p));
-
-        service.review(3L, false, "no", 100L);
-
-        assertThat(p.getStatus()).isEqualTo(ActivityPlan.PlanStatus.REJECTED);
-        assertThat(p.getReviewComment()).isEqualTo("no");
-        verify(repo).save(p);
+    String reviewer(long uid) throws Exception {
+        if(!tokens.containsKey(uid)) tokens.put(uid,login(users.findById(uid).orElseThrow().getUsername()));
+        return tokens.get(uid);
     }
-
-    @Test
-    void review_nonPending_throws() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(7L);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        when(repo.findById(7L)).thenReturn(Optional.of(p));
-
-        assertThatThrownBy(() -> service.review(7L, true, "ok", 100L))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("仅待审核状态");
-        verify(repo, never()).save(any());
+    @BeforeEach void setup() throws Exception {
+        author=login("teacher"); outsider=login("staff");
+        authorId=users.findByUsername("teacher").orElseThrow().getId();
+        activity=data(write("POST","/api/activities",author,Map.of("name","版本审核测试 "+UUID.randomUUID(),"theme","原主题"),200)).asLong();
+        plan=data(write("POST","/api/plans",author,Map.of("activityId",activity,"content","<p>当前版机密正文</p>"),200)).path("id").asLong();
+        reviewers=new ArrayList<>();
+        for(var c:read("/api/plans/reviewers",author)) if(reviewers.size()<2) reviewers.add(c.path("id").asLong());
+        assertThat(reviewers).hasSize(2).doesNotContain(authorId);
     }
-
-    @Test
-    void submit_setsPending() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(4L);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        when(repo.findById(4L)).thenReturn(Optional.of(p));
-
-        service.submit(4L, null);
-
-        assertThat(p.getStatus()).isEqualTo(ActivityPlan.PlanStatus.PENDING);
-        verify(repo).save(p);
+    void submit() throws Exception { write("PUT","/api/plans/"+plan+"/submit",author,Map.of("reviewerIds",reviewers),200); }
+    void review(long uid,boolean approve,int expected) throws Exception {
+        write("PUT","/api/plans/"+plan+"/review",reviewer(uid),Map.of("approved",approve,"comment",approve?"同意":"请完善流程"),expected);
     }
-
-    @Test
-    void submit_approved_throws() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(8L);
-        p.setStatus(ActivityPlan.PlanStatus.APPROVED);
-        when(repo.findById(8L)).thenReturn(Optional.of(p));
-
-        assertThatThrownBy(() -> service.submit(8L, null))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("不可提交审核");
-        verify(repo, never()).save(any());
+    @Test void privateDraftAndSubmissionNeverLeakThroughDetailOrWorkspace() throws Exception {
+        var metadata=read("/api/plans/workspace?activityId="+activity,author).path("versions").get(0);
+        assertThat(metadata.path("ownerId").asLong()).isEqualTo(authorId);
+        assertThat(metadata.path("ownerName").asText()).isEqualTo(users.findByUsername("teacher").orElseThrow().getRealName());
+        assertThat(metadata.path("note").asText()).isEqualTo("当前工作版本");
+        for(String url:List.of("/api/plans?activityId="+activity,"/api/plans/workspace?activityId="+activity,"/api/activities/"+activity+"/detail"))
+            assertThat(read(url,outsider).toString()).doesNotContain("当前版机密正文");
+        mvc.perform(get("/api/plans/"+plan).header("Authorization","Bearer "+outsider)).andExpect(status().isForbidden());
+        submit();
+        assertThat(read("/api/plans/"+plan,reviewer(reviewers.getFirst())).path("content").asText()).contains("机密正文");
+        assertThat(read("/api/activities/"+activity+"/detail",outsider).path("plan").path("currentHidden").asBoolean()).isTrue();
     }
-
-    @Test
-    void update_approved_throws() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(5L);
-        p.setStatus(ActivityPlan.PlanStatus.APPROVED);
-        when(repo.findById(5L)).thenReturn(Optional.of(p));
-
-        assertThatThrownBy(() -> service.update(5L, new com.pams.module.activity.dto.PlanRequest()))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("不可修改");
+    @Test void allReviewersMustApproveAndDuplicateDecisionIsRejected() throws Exception {
+        submit(); review(reviewers.getFirst(),true,200);
+        assertThat(read("/api/plans/"+plan,author).path("status").asText()).isEqualTo("PENDING");
+        review(reviewers.getFirst(),true,400); review(reviewers.getLast(),true,200);
+        assertThat(read("/api/plans/"+plan,author).path("status").asText()).isEqualTo("APPROVED");
+        assertThat(read("/api/activities/"+activity,author).path("status").asText()).isEqualTo("ASSIGNED");
     }
-
-    @Test
-    void update_draft_ok() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(6L);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        when(repo.findById(6L)).thenReturn(Optional.of(p));
-
-        com.pams.module.activity.dto.PlanRequest req = new com.pams.module.activity.dto.PlanRequest();
-        req.setBackground("bg");
-        service.update(6L, req);
-
-        assertThat(p.getBackground()).isEqualTo("bg");
-        verify(repo).save(p);
+    @Test void concurrentDecisionsAreSerializedWithoutLostApprovals() throws Exception {
+        submit(); var first=reviewer(reviewers.getFirst()); var second=reviewer(reviewers.getLast());
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var tasks=List.of(first,second).stream().map(token -> pool.submit(() -> {
+                try { write("PUT","/api/plans/"+plan+"/review",token,Map.of("approved",true),200); }
+                catch(Exception e) { throw new RuntimeException(e); }
+            })).toList();
+            for(var task:tasks) task.get(20,TimeUnit.SECONDS);
+        }
+        var saved=read("/api/plans/"+plan,author);
+        assertThat(saved.path("status").asText()).isEqualTo("APPROVED");
+        for(var r:saved.path("reviewers")) assertThat(r.path("approved").asBoolean()).isTrue();
     }
-
-    @Test
-    void review_approve_planningActivity_pushesToPlanReview() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(10L);
-        p.setActivityId(20L);
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        when(repo.findById(10L)).thenReturn(Optional.of(p));
-
-        Activity a = new Activity();
-        a.setId(20L);
-        a.setStatus(ActivityStatus.PLANNING);
-        ActivityRepository activityRepo = mock(ActivityRepository.class);
-        when(activityRepo.findById(20L)).thenReturn(Optional.of(a));
-
-        PlanService linked = new PlanService(repo, activityRepo, null);
-        linked.review(10L, true, "ok", 100L);
-
-        assertThat(a.getStatus()).isEqualTo(ActivityStatus.PLAN_REVIEW);
-        verify(activityRepo).save(a);
+    @Test void rejectionLocksOriginalAndRevisionResetsAccessAndReviewers() throws Exception {
+        submit(); review(reviewers.getFirst(),false,200);
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","篡改历史"),400);
+        long draft=data(write("POST","/api/plans/"+plan+"/revision",author,null,200)).path("id").asLong();
+        assertThat(read("/api/plans/"+draft,author).path("reviewers").size()).isZero();
+        assertThat(read("/api/plans/"+plan,outsider).path("content").asText()).contains("机密正文");
+        mvc.perform(get("/api/plans/"+draft).header("Authorization","Bearer "+reviewer(reviewers.getFirst()))).andExpect(status().isForbidden());
+        write("PUT","/api/plans/"+plan+"/submit",author,Map.of("reviewerIds",reviewers),400);
     }
-
-    @Test
-    void review_approve_nonPlanningActivity_keepsStatus() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(11L);
-        p.setActivityId(21L);
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        when(repo.findById(11L)).thenReturn(Optional.of(p));
-
-        Activity a = new Activity();
-        a.setId(21L);
-        a.setStatus(ActivityStatus.EXECUTING);
-        ActivityRepository activityRepo = mock(ActivityRepository.class);
-        when(activityRepo.findById(21L)).thenReturn(Optional.of(a));
-
-        PlanService linked = new PlanService(repo, activityRepo, null);
-        linked.review(11L, true, "ok", 100L);
-
-        assertThat(a.getStatus()).isEqualTo(ActivityStatus.EXECUTING);
-        verify(activityRepo, never()).save(any());
+    @Test void invalidAndSelfAssignmentsCannotSubmit() throws Exception {
+        for(var ids:List.of(List.<Long>of(),List.of(authorId),List.of(reviewers.getFirst(),reviewers.getFirst()),List.of(99999999L)))
+            write("PUT","/api/plans/"+plan+"/submit",author,Map.of("reviewerIds",ids),ids.isEmpty()||ids.size()==2?400:403);
+        assertThat(read("/api/plans/"+plan,author).path("status").asText()).isEqualTo("DRAFT");
     }
-
-    @Test
-    void review_reject_doesNotTouchActivity() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(12L);
-        p.setActivityId(22L);
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        when(repo.findById(12L)).thenReturn(Optional.of(p));
-
-        Activity a = new Activity();
-        a.setId(22L);
-        a.setStatus(ActivityStatus.PLANNING);
-        ActivityRepository activityRepo = mock(ActivityRepository.class);
-
-        PlanService linked = new PlanService(repo, activityRepo, null);
-        linked.review(12L, false, "no", 100L);
-
-        assertThat(a.getStatus()).isEqualTo(ActivityStatus.PLANNING);
-        verify(activityRepo, never()).findById(anyLong());
-        verify(activityRepo, never()).save(any());
+    @Test void nonSelectedReviewerCannotReviewOrCreateCompetingDraft() throws Exception {
+        submit(); write("PUT","/api/plans/"+plan+"/review",author,Map.of("approved",true),403);
+        write("POST","/api/plans",reviewer(reviewers.getFirst()),Map.of("activityId",activity,"content","覆盖内容"),403);
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","覆盖内容"),400);
     }
-
-    @Test
-    void update_withSyncActivity_writesBackOverrides() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(13L);
-        p.setActivityId(23L);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        when(repo.findById(13L)).thenReturn(Optional.of(p));
-
-        Activity a = new Activity();
-        a.setId(23L);
-        a.setName("旧名");
-        a.setTheme("旧主题");
-        ActivityRepository activityRepo = mock(ActivityRepository.class);
-        when(activityRepo.findById(23L)).thenReturn(Optional.of(a));
-
-        PlanService linked = new PlanService(repo, activityRepo, null);
-        com.pams.module.activity.dto.PlanRequest req = new com.pams.module.activity.dto.PlanRequest();
-        req.setNameOverride("新活动名");
-        req.setThemeOverride("新主题");
-        req.setTimeOverride("2026-08-05|9:00-11:00");
-        req.setLocationOverride("图书馆报告厅");
-        req.setSyncActivity(true);
-        linked.update(13L, req);
-
-        assertThat(a.getName()).isEqualTo("新活动名");
-        assertThat(a.getTheme()).isEqualTo("新主题");
-        assertThat(a.getLocation()).isEqualTo("图书馆报告厅");
-        assertThat(a.getStartDate()).isEqualTo(java.time.LocalDate.parse("2026-08-05"));
-        assertThat(p.getNameOverride()).isEqualTo("新活动名");
-        verify(activityRepo).save(a);
-        verify(repo).save(p);
+    @Test void savesRoundTripAndMetadataSnapshotsRemainStable() throws Exception {
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","<p><strong>保存原地回显</strong></p>","nameOverride","冻结的文档名称","syncActivity",true),200);
+        assertThat(read("/api/activities/"+activity,author).path("name").asText()).isEqualTo("冻结的文档名称");
+        assertThat(read("/api/plans/"+plan,author).path("content").asText()).contains("<strong>保存原地回显</strong>");
+        submit(); review(reviewers.getFirst(),true,200); review(reviewers.getLast(),true,200);
+        write("POST","/api/plans/"+plan+"/revision",author,null,200);
+        write("PUT","/api/activities/"+activity,author,Map.of("name","后来修改的活动名称","organizer","后来填写的组织"),200);
+        assertThat(read("/api/plans/"+plan,outsider).path("nameOverride").asText()).isEqualTo("冻结的文档名称");
+        assertThat(read("/api/plans/"+plan,outsider).path("organizerOverride").asText()).isEmpty();
     }
-
-    @Test
-    void update_withoutSyncActivity_keepsActivityUntouched() {
-        ActivityPlan p = new ActivityPlan();
-        p.setId(14L);
-        p.setActivityId(24L);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        when(repo.findById(14L)).thenReturn(Optional.of(p));
-
-        Activity a = new Activity();
-        a.setId(24L);
-        a.setName("旧名");
-        ActivityRepository activityRepo = mock(ActivityRepository.class);
-        when(activityRepo.findById(24L)).thenReturn(Optional.of(a));
-
-        PlanService linked = new PlanService(repo, activityRepo, null);
-        com.pams.module.activity.dto.PlanRequest req = new com.pams.module.activity.dto.PlanRequest();
-        req.setNameOverride("新活动名");
-        req.setSyncActivity(false);
-        linked.update(14L, req);
-
-        assertThat(a.getName()).isEqualTo("旧名");
-        verify(activityRepo, never()).save(any());
-        assertThat(p.getNameOverride()).isEqualTo("新活动名");
+    @Test void staleDraftCannotOverwriteNewerSave() throws Exception {
+        long original=read("/api/plans/"+plan,author).path("revision").asLong();
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","新保存的内容"),200);
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","过期窗口的内容","expectedRevision",original),409);
+        assertThat(read("/api/plans/"+plan,author).path("content").asText()).isEqualTo("新保存的内容");
+    }
+    @Test void withdrawingKeepsDecisionsButCreatesUnassignedPrivateRevision() throws Exception {
+        submit(); review(reviewers.getFirst(),true,200);
+        long draft=data(write("POST","/api/plans/"+plan+"/revision",author,null,200)).path("id").asLong();
+        var original=read("/api/plans/"+plan,outsider);
+        assertThat(original.path("status").asText()).isEqualTo("WITHDRAWN");
+        assertThat(original.path("reviewers").get(0).path("approved").asBoolean()).isTrue();
+        assertThat(read("/api/plans/"+draft,author).path("reviewers").size()).isZero();
+        review(reviewers.getLast(),true,400);
+    }
+    @Test void privateImageIdsAndLegacyUrlsCannotBeUsedToStealAttachments() throws Exception {
+        var upload=data(mvc.perform(multipart("/api/files/upload")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","private.png","image/png",new byte[]{1,2,3}))
+            .param("bizType","PLAN").header("Authorization","Bearer "+author)).andExpect(status().isOk()).andReturn());
+        long file=upload.path("id").asLong();
+        String image="<p><img src=\"/api/files/"+file+"/download\"></p>";
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content",image),200);
+        String other=reviewer(reviewers.getFirst());
+        mvc.perform(get("/api/files/"+file+"/download").header("Authorization","Bearer "+other)).andExpect(status().isBadRequest());
+        mvc.perform(get("/uploads/"+upload.path("path").asText()).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
+        long otherActivity=data(write("POST","/api/activities",other,Map.of("name","图片引用测试"),200)).asLong();
+        write("POST","/api/plans",other,Map.of("activityId",otherActivity,"content",image),400);
+        submit();
+        mvc.perform(get("/api/files/"+file+"/download").header("Authorization","Bearer "+other)).andExpect(status().isOk());
     }
 }

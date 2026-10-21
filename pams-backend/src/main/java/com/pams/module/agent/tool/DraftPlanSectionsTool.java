@@ -197,7 +197,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
             req.setFlow(sanitize(exec.get("flow")));
             req.setSyncActivity(false); // 只写策划书，不回写活动基本信息
 
-            var saved = planService.create(req);
+            var saved = planService.create(req,ctx);
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "activity", "id", activityId,

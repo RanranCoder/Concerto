@@ -33,6 +33,12 @@ public class ActivityService {
     }
 
     public PageResult<Map<String, Object>> page(String keyword, String status, String type, int page, int size) {
+        return page(keyword, status, type, null, null, page, size);
+    }
+
+    public java.util.List<String> organizers() { return repository.organizers(); }
+
+    public PageResult<Map<String, Object>> page(String keyword, String status, String type, String organizer, String dateOrder, int page, int size) {
         // B3 fix: 兜底 page <= 0
         page = Math.max(page, 1);
         size = Math.min(Math.max(size, 1), 100); // EDGE-1: size 上限 100
@@ -41,7 +47,7 @@ public class ActivityService {
             var preds = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
             if (keyword != null && !keyword.isBlank()) {
                 String like = "%" + keyword.trim() + "%";
-                preds.add(cb.or(cb.like(root.get("name"), like), cb.like(root.get("theme"), like)));
+                preds.add(cb.or(cb.like(root.get("name"), like), cb.like(root.get("theme"), like), cb.like(root.get("leader"), like)));
             }
             // B1 fix: String → Enum 转换，防止 Hibernate 报错
             if (status != null && !status.isBlank()) {
@@ -52,8 +58,18 @@ public class ActivityService {
                 }
             }
             if (type != null && !type.isBlank()) preds.add(cb.equal(root.get("type"), type));
+            if (organizer != null && !organizer.isBlank()) preds.add(cb.equal(root.get("organizer"), organizer));
             return cb.and(preds.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        }, PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "id")));
+        }, PageRequest.of(page - 1, size, dateOrder == null ? Sort.by(Sort.Direction.DESC, "id")
+                : Sort.by("asc".equalsIgnoreCase(dateOrder) ? Sort.Direction.ASC : Sort.Direction.DESC, "startDate").and(Sort.by(Sort.Direction.DESC, "id"))));
+
+        var ids = p.getContent().stream().map(Activity::getId).toList();
+        Map<Long, Object[]> tasks = new java.util.HashMap<>();
+        Map<Long, Long> materials = new java.util.HashMap<>();
+        if (!ids.isEmpty()) {
+            repository.taskCounts(ids).forEach(row -> tasks.put(((Number) row[0]).longValue(), row));
+            repository.materialCounts(ids).forEach(row -> materials.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue()));
+        }
 
         PageResult<Map<String, Object>> r = new PageResult<>();
         r.setRecords(p.getContent().stream().map(a -> {
@@ -65,6 +81,10 @@ public class ActivityService {
             vo.put("startDate", a.getStartDate()); vo.put("endDate", a.getEndDate()); vo.put("location", a.getLocation() == null ? "" : a.getLocation());
             vo.put("organizer", a.getOrganizer() == null ? "" : a.getOrganizer()); vo.put("host", a.getHost() == null ? "" : a.getHost());
             vo.put("leader", a.getLeader() == null ? "" : a.getLeader()); vo.put("createdAt", a.getCreatedAt());
+            Object[] task = tasks.get(a.getId());
+            vo.put("taskCount", task == null ? 0 : ((Number) task[1]).longValue());
+            vo.put("completedTaskCount", task == null ? 0 : ((Number) task[2]).longValue());
+            vo.put("materialCount", materials.getOrDefault(a.getId(), 0L));
             return vo;
         }).toList());
         r.setTotal(p.getTotalElements()); r.setCurrent(page); r.setSize(size);

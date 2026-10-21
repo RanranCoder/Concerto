@@ -8,6 +8,9 @@ public class PlanRequest {
     @NotNull(message = "活动ID不能为空")
     private Long activityId;
     private Integer version;
+    /** Reject stale browser drafts instead of overwriting a newer save. */
+    private java.time.LocalDateTime expectedUpdatedAt;
+    private Long expectedRevision;
     private String background;
     private String purpose;
     private String content;

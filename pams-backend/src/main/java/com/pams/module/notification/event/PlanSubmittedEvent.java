@@ -1,12 +1,15 @@
 package com.pams.module.notification.event;
 
 public class PlanSubmittedEvent {
+    private final java.util.List<Long> reviewerIds;
+    public java.util.List<Long> getReviewerIds() { return reviewerIds; }
     private final Long planId;
     private final Long activityId;
     private final String planTitle;
     private final Long submitterId;
 
-    public PlanSubmittedEvent(Long planId, Long activityId, String planTitle, Long submitterId) {
+    public PlanSubmittedEvent(Long planId, Long activityId, String planTitle, Long submitterId,java.util.List<Long> reviewerIds) {
+        this.reviewerIds=java.util.List.copyOf(reviewerIds);
         this.planId = planId;
         this.activityId = activityId;
         this.planTitle = planTitle;

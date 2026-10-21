@@ -94,58 +94,24 @@ class NotificationEventListenerTest {
     }
 
     @Test
-    void handlePlanSubmitted_notifiesTeacherAndDirectorRoles() {
-        User teacher = userWithIdAndRole(10L, "TEACHER");
-        User director = userWithIdAndRole(11L, "DIRECTOR");
-        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("TEACHER")))
-                .thenReturn(List.of(teacher));
-        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("DIRECTOR")))
-                .thenReturn(List.of(director));
-        when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
-
-        listener.handlePlanSubmitted(new PlanSubmittedEvent(1L, 100L, "策划书", 5L));
-
-        // one notification for TEACHER role
-        verify(notificationService, times(1)).createAndSave(
-            eq(NotificationType.PLAN_SUBMITTED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(5L), isNull(), eq("TEACHER"), isNull()
-        );
-        // one notification for DIRECTOR role
-        verify(notificationService, times(1)).createAndSave(
-            eq(NotificationType.PLAN_SUBMITTED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(5L), isNull(), eq("DIRECTOR"), isNull()
-        );
+    void handlePlanSubmitted_notifiesOnlySelectedIndividuals() {
+        listener.handlePlanSubmitted(new PlanSubmittedEvent(1L,100L,"策划书",5L,List.of(10L,11L)));
+        for(Long uid:List.of(10L,11L)) verify(notificationService).createAndSave(
+            eq(NotificationType.PLAN_SUBMITTED),anyString(),anyString(),eq("PLAN"),eq(1L),eq(5L),eq(uid),isNull(),isNull());
+        verify(notificationService,times(2)).createAndSave(any(),anyString(),anyString(),anyString(),any(),any(),any(),any(),any());
+        verify(userRepo,never()).findByOrgIdAndRoleCode(anyLong(),anyString());
     }
-
     @Test
-    void handlePlanSubmitted_noReviewers_noNotifications() {
-        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("TEACHER")))
-                .thenReturn(List.of());
-        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.eq("DIRECTOR")))
-                .thenReturn(List.of());
-        when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
-
-        listener.handlePlanSubmitted(new PlanSubmittedEvent(1L, 100L, "策划书", 5L));
-
-        verify(notificationService, never()).createAndSave(
-            any(), anyString(), anyString(), anyString(), any(), any(), any(), any(), any());
+    void handlePlanSubmitted_noSelectedUsers_noBroadcast() {
+        listener.handlePlanSubmitted(new PlanSubmittedEvent(1L,100L,"策划书",5L,List.of()));
+        verifyNoInteractions(notificationService);
     }
-
     @Test
-    void handlePlanApproved_notifiesAllUsersExceptReviewer() {
-        User reviewer = userWithIdAndRole(1L, "TEACHER");
-        when(userRepo.findByOrgIdAndRoleCode(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString()))
-                .thenReturn(List.of(reviewer));
-        when(activityRepo.findById(100L)).thenReturn(Optional.of(activityWithName("测试活动")));
-
-        listener.handlePlanReviewed(new PlanReviewedEvent(
-            1L, 100L, "策划书", 1L, true, null, 5L));
-
-        // 改为按角色广播一行（recipientRole），不再逐用户插行；7 个角色各一行
-        verify(notificationService, times(7)).createAndSave(
-            eq(NotificationType.PLAN_APPROVED), anyString(), anyString(),
-            eq("PLAN"), eq(1L), eq(1L), isNull(), anyString(), isNull()
-        );
+    void handlePlanApproved_notifiesAuthorOnly() {
+        listener.handlePlanReviewed(new PlanReviewedEvent(1L,100L,"策划书",1L,true,null,5L));
+        verify(notificationService).createAndSave(eq(NotificationType.PLAN_APPROVED),anyString(),anyString(),
+            eq("PLAN"),eq(1L),eq(1L),eq(5L),isNull(),isNull());
+        verify(notificationService,times(1)).createAndSave(any(),anyString(),anyString(),anyString(),any(),any(),any(),any(),any());
     }
 
     @Test
@@ -175,7 +141,7 @@ class NotificationEventListenerTest {
             1L, 100L, "策划书", 11L, false, null, 5L));
 
         verify(notificationService).createAndSave(
-            eq(NotificationType.PLAN_REJECTED), anyString(), contains("已驳回"),
+            eq(NotificationType.PLAN_REJECTED), anyString(), contains("修改意见"),
             eq("PLAN"), eq(1L), eq(11L), eq(5L), isNull(), isNull()
         );
     }

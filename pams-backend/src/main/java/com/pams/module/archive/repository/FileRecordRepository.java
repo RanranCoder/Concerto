@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface FileRecordRepository extends JpaRepository<FileRecord, Long> {
+    java.util.Optional<FileRecord> findFirstByPath(String path);
 
     List<FileRecord> findAllByIdIn(Collection<Long> ids);
 }

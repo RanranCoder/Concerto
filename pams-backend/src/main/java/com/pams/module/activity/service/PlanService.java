@@ -2,160 +2,197 @@ package com.pams.module.activity.service;
 
 import com.pams.common.BizException;
 import com.pams.module.activity.dto.PlanRequest;
-import com.pams.module.activity.entity.Activity;
-import com.pams.module.activity.entity.ActivityPlan;
-import com.pams.module.activity.entity.ActivityStatus;
-import com.pams.module.activity.repository.ActivityPlanRepository;
-import com.pams.module.activity.repository.ActivityRepository;
-import com.pams.module.notification.event.PlanEditedEvent;
-import com.pams.module.notification.event.PlanReviewedEvent;
-import com.pams.module.notification.event.PlanSubmittedEvent;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.pams.module.activity.entity.*;
+import com.pams.module.activity.repository.*;
+import com.pams.module.agent.core.ToolContext;
+import com.pams.module.notification.event.*;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.format.DateTimeParseException;
-import java.util.List;
+import java.util.*;
 
 @Service
+@Transactional(readOnly = true)
 public class PlanService {
     private final ActivityPlanRepository repository;
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlanAccessService access;
+    private final PlanAttachmentService attachments;
 
-    /** 生产构造器：注入活动仓库，用于 approve 时联动活动状态（PLANNING → PLAN_REVIEW）。 */
-    @Autowired
-    public PlanService(ActivityPlanRepository repository, ActivityRepository activityRepository,
-                       ApplicationEventPublisher eventPublisher) {
-        this.repository = repository;
-        this.activityRepository = activityRepository;
-        this.eventPublisher = eventPublisher;
+    public PlanService(ActivityPlanRepository repository, ActivityRepository activities,
+                       ApplicationEventPublisher events, PlanAccessService access,PlanAttachmentService attachments) {
+        this.repository=repository; this.activityRepository=activities; this.eventPublisher=events; this.access=access;
+        this.attachments=attachments;
     }
 
-    /** 测试友好构造器：activityRepository 和 eventPublisher 为 null。 */
-    public PlanService(ActivityPlanRepository repository) {
-        this(repository, null, null);
+    private ToolContext context() { return ToolContext.current(null,null); }
+    private ActivityPlan raw(Long id) {
+        return repository.findById(id).orElseThrow(() -> new BizException(2004,"策划书不存在或不可见"));
     }
-
-    public ActivityPlan latest(Long activityId) {
-        // B5 fix: 用 Repository 查询替代全表扫描
-        return repository.findTopByActivityIdOrderByVersionDesc(activityId).orElse(null);
+    public ActivityPlan getEntity(Long id) {
+        ActivityPlan p=raw(id);
+        if (!access.canRead(p,context())) throw new BizException(403,"当前版本仅作者和所选审核人可见");
+        return p;
     }
-
     public List<ActivityPlan> listByActivity(Long activityId) {
-        // B5 fix: 用 Repository 查询替代全表扫描
-        return repository.findByActivityIdOrderByVersionDesc(activityId);
+        return repository.findByActivityIdOrderByVersionDesc(activityId).stream()
+                .filter(p -> access.canRead(p,context())).toList();
     }
+    public ActivityPlan latest(Long activityId) {
+        return listByActivity(activityId).stream().findFirst().orElse(null);
+    }
+    public record Version(Long id,Integer version,ActivityPlan.PlanStatus status,LocalDateTime updatedAt,
+                          Long ownerId,String ownerName,String note) {}
+    public Map<String,Object> workspace(Long activityId) {
+        var visible=listByActivity(activityId);
+        var current=repository.findTopByActivityIdOrderByVersionDesc(activityId).orElse(null);
+        var latest=visible.stream().findFirst().orElse(null);
+        var result=new LinkedHashMap<String,Object>();
+        result.put("latest",latest);
+        result.put("status",latest==null?null:latest.getStatus());
+        result.put("currentHidden",current!=null && !access.canRead(current,context()));
+        result.put("currentId",current!=null && access.canRead(current,context())?current.getId():null);
+        var names=access.authorNames(visible,context());
+        result.put("versions",visible.stream().map(p -> {
+            Long owner=access.owner(p);
+            String note=Objects.equals(p.getId(),current==null?null:current.getId())?"当前工作版本":switch(p.getStatus()) {
+                case APPROVED -> "审核通过的定稿。";
+                case REJECTED -> Objects.toString(p.getReviewComment(),"退回后保留的提交版本。");
+                case WITHDRAWN -> "作者撤回审核，原稿与审核记录已保留。";
+                case PENDING -> "本次提交的审核版本。";
+                case DRAFT -> "建立策划框架与活动安排。";
+            };
+            return new Version(p.getId(),p.getVersion(),p.getStatus(),p.getUpdatedAt(),owner,
+                    owner==null?"未记录作者":names.getOrDefault(owner,"已离开组织的成员"),note);
+        }).toList());
+        result.put("canEdit",current==null ? context().hasPermission("activity:edit")
+                : Objects.equals(access.owner(current),context().getUserId()) && context().hasPermission("activity:edit"));
+        return result;
+    }
+    private Activity lockActivity(Long activityId,ToolContext ctx) {
+        Activity a=activityRepository.lockById(activityId).orElseThrow(() -> new BizException(2001,"关联的活动不存在"));
+        if (ctx.getLoginUser()==null || !Objects.equals(a.getOrgId(),ctx.getLoginUser().getOrgId()))
+            throw new BizException(403,"活动不可见");
+        return a;
+    }
+    private ActivityPlan writable(Long id) {
+        ActivityPlan p=raw(id);
+        lockActivity(p.getActivityId(),context());
+        // All mutations lock the activity before reloading the plan, serializing versions and decisions.
+        entityManager.refresh(p);
+        access.requireOwner(p,context());
+        return p;
+    }
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     @Transactional
-    public ActivityPlan create(PlanRequest req) {
-        // L3 fix: 校验活动是否存在
-        if (activityRepository != null) {
-            activityRepository.findById(req.getActivityId())
-                    .orElseThrow(() -> new BizException(2001, "关联的活动不存在"));
+    public ActivityPlan create(PlanRequest req) { return create(req,context()); }
+    @Transactional
+    public ActivityPlan create(PlanRequest req,ToolContext ctx) {
+        if (ctx==null || !ctx.hasPermission("activity:edit") || ctx.getUserId()==null)
+            throw new BizException(403,"无权创建策划书");
+        Activity a=lockActivity(req.getActivityId(),ctx);
+        var previous=repository.findTopByActivityIdOrderByVersionDesc(req.getActivityId()).orElse(null);
+        if (previous!=null) {
+            access.requireOwner(previous,ctx);
+            if (previous.getStatus()==ActivityPlan.PlanStatus.PENDING)
+                throw new BizException(2003,"审核中不可新建版本，请先撤回");
+            if (previous.getStatus()==ActivityPlan.PlanStatus.DRAFT)
+                throw new BizException(2003,"已有草稿，请直接编辑保存");
         }
-        ActivityPlan p = new ActivityPlan();
-        p.setActivityId(req.getActivityId());
-        // E5 fix: version 自增，不信任前端
-        int ver = repository.findTopByActivityIdOrderByVersionDesc(req.getActivityId())
-                .map(ActivityPlan::getVersion).orElse(0) + 1;
-        p.setVersion(ver);
-        apply(p, req);
-        syncActivityIfNeeded(req.getActivityId(), req);
-        p.setStatus(ActivityPlan.PlanStatus.DRAFT);
-        p.setCreatedAt(LocalDateTime.now());
-        p.setUpdatedAt(LocalDateTime.now());
+        attachments.validate(req,ctx);
+        ActivityPlan p=new ActivityPlan();
+        p.setActivityId(req.getActivityId()); p.setOrgId(a.getOrgId());
+        p.setOwnerId(previous==null?ctx.getUserId():access.owner(previous));
+        p.setVersion(previous==null?1:previous.getVersion()+1);
+        apply(p,req); syncActivityIfNeeded(req.getActivityId(),req); freezeMetadata(p,a);
+        p.setStatus(ActivityPlan.PlanStatus.DRAFT); p.setCreatedAt(LocalDateTime.now());
         return repository.save(p);
     }
-
     @Transactional
-    public void update(Long id, PlanRequest req) {
-        update(id, req, null);
-    }
-
-    @Transactional
-    public void update(Long id, PlanRequest req, Long editorId) {
-        ActivityPlan p = getEntity(id);
-        // L4 fix: PENDING 状态也不可修改（TOCTOU），加上 APPROVED
-        if (p.getStatus() == ActivityPlan.PlanStatus.APPROVED
-                || p.getStatus() == ActivityPlan.PlanStatus.PENDING) {
-            throw new BizException(2003, "当前状态不可修改，请新建版本");
-        }
-        apply(p, req);
-        syncActivityIfNeeded(p.getActivityId(), req);
+    public void update(Long id,PlanRequest req,Long editorId) {
+        ActivityPlan p=writable(id);
+        if (req.getExpectedRevision()!=null && !Objects.equals(req.getExpectedRevision(),p.getRevision()))
+            throw new BizException(409,"此草稿已被更新，请先保留您的输入并重新载入版本");
+        if (req.getExpectedUpdatedAt()!=null && !Objects.equals(req.getExpectedUpdatedAt(),p.getUpdatedAt()))
+            throw new BizException(409,"此草稿已被更新，请先保留您的输入并重新载入版本");
+        if (!Objects.equals(p.getActivityId(),req.getActivityId())) throw new BizException(2003,"不能修改关联活动");
+        if (p.getStatus()!=ActivityPlan.PlanStatus.DRAFT)
+            throw new BizException(2003,"当前状态不可修改，请新建版本");
+        attachments.validate(req,context());
+        apply(p,req); syncActivityIfNeeded(p.getActivityId(),req);
+        freezeMetadata(p,activityRepository.findById(p.getActivityId()).orElseThrow());
         repository.save(p);
-        // 发布策划书编辑事件（链路1：通知各部门；链路2：主任修改时通知组织部）
-        if (eventPublisher != null && editorId != null) {
-            String planTitle = activityRepository != null
-                    ? activityRepository.findById(p.getActivityId())
-                        .map(Activity::getName).orElse("未知活动")
-                    : "未知活动";
-            eventPublisher.publishEvent(new PlanEditedEvent(
-                    p.getId(), p.getActivityId(), planTitle, editorId));
-        }
+        eventPublisher.publishEvent(new PlanEditedEvent(p.getId(),p.getActivityId(),p.getNameOverride(),editorId));
     }
-
     @Transactional
-    public void submit(Long id, Long submitterId) {
-        ActivityPlan p = getEntity(id);
-        if (p.getStatus() != ActivityPlan.PlanStatus.DRAFT
-                && p.getStatus() != ActivityPlan.PlanStatus.REJECTED) {
-            throw new BizException(2005, "当前状态不可提交审核");
+    public void submit(Long id,Long submitterId,List<Long> reviewerIds) {
+        ActivityPlan p=writable(id);
+        if (p.getStatus()!=ActivityPlan.PlanStatus.DRAFT) throw new BizException(2005,"当前状态不可提交审核");
+        if (reviewerIds==null || reviewerIds.isEmpty() || reviewerIds.size()>50
+                || new HashSet<>(reviewerIds).size()!=reviewerIds.size())
+            throw new BizException(2005,"请选择 1 至 50 位不重复的审核人");
+        var candidates=access.candidates(context());
+        var selected=new ArrayList<PlanReviewer>();
+        for (Long uid:reviewerIds) {
+            var candidate=candidates.stream().filter(c -> Objects.equals(c.id(),uid)).findFirst()
+                    .orElseThrow(() -> new BizException(403,"所选审核人已失效，请重新选择"));
+            var r=new PlanReviewer(); r.setUserId(uid); r.setName(candidate.name()); selected.add(r);
         }
-        p.setStatus(ActivityPlan.PlanStatus.PENDING);
-        p.setSubmitterId(submitterId);
-        p.setUpdatedAt(LocalDateTime.now());
-        repository.save(p);
-        // 发布策划书提交事件
-        if (eventPublisher != null) {
-            String planTitle = activityRepository != null
-                    ? activityRepository.findById(p.getActivityId())
-                        .map(Activity::getName).orElse("未知活动")
-                    : "未知活动";
-            eventPublisher.publishEvent(new PlanSubmittedEvent(
-                    p.getId(), p.getActivityId(), planTitle, submitterId));
-        }
+        p.getReviewers().clear(); p.getReviewers().addAll(selected);
+        p.setStatus(ActivityPlan.PlanStatus.PENDING); p.setSubmitterId(context().getUserId());
+        p.setUpdatedAt(LocalDateTime.now()); repository.save(p);
+        eventPublisher.publishEvent(new PlanSubmittedEvent(p.getId(),p.getActivityId(),p.getNameOverride(),
+                p.getSubmitterId(),reviewerIds));
     }
-
-    /**
-     * 审核策划书。仅 PENDING 可审核；approve 时联动把关联活动状态推到 PLAN_REVIEW
-     * （仅当活动当前为 PLANNING）。
-     */
     @Transactional
-    public void review(Long id, boolean approved, String comment, Long reviewerId) {
-        ActivityPlan p = getEntity(id);
-        if (p.getStatus() != ActivityPlan.PlanStatus.PENDING) {
-            throw new BizException(2006, "仅待审核状态的策划书可审核");
-        }
-        p.setStatus(approved ? ActivityPlan.PlanStatus.APPROVED : ActivityPlan.PlanStatus.REJECTED);
-        p.setReviewerId(reviewerId);
-        p.setReviewComment(comment);
-        p.setUpdatedAt(LocalDateTime.now());
+    public void review(Long id,boolean approved,String comment,Long reviewerId) {
+        var ctx=context(); ActivityPlan p=raw(id); lockActivity(p.getActivityId(),ctx); entityManager.refresh(p);
+        if (!access.canRead(p,ctx) || !ctx.hasPermission("activity:review")
+                || !Objects.equals(ctx.getUserId(),reviewerId)) throw new BizException(403,"未被选为此版本审核人");
+        if (!access.isCurrent(p) || p.getStatus()!=ActivityPlan.PlanStatus.PENDING)
+            throw new BizException(2006,"仅待审核状态的当前策划书可审核");
+        var r=p.getReviewers().stream().filter(v -> Objects.equals(v.getUserId(),reviewerId)).findFirst()
+                .orElseThrow(() -> new BizException(403,"未被选为此版本审核人"));
+        if (r.getApproved()!=null) throw new BizException(2006,"您已审核此版本");
+        if (comment!=null && comment.length()>1000) throw new BizException(2006,"审核意见最多 1000 字");
+        if (!approved && (comment==null || comment.isBlank())) throw new BizException(2006,"退回时请填写修改意见");
+        r.setApproved(approved); r.setComment(comment); r.setReviewedAt(LocalDateTime.now());
+        p.setReviewerId(reviewerId); p.setReviewComment(comment); p.setUpdatedAt(LocalDateTime.now());
+        boolean complete=approved && p.getReviewers().stream().allMatch(v -> Boolean.TRUE.equals(v.getApproved()));
+        if (!approved) p.setStatus(ActivityPlan.PlanStatus.REJECTED);
+        else if (complete) p.setStatus(ActivityPlan.PlanStatus.APPROVED);
         repository.save(p);
-        if (approved && activityRepository != null) {
-            activityRepository.findById(p.getActivityId()).ifPresent(a -> {
-                if (a.getStatus() == ActivityStatus.PLANNING) {
-                    a.setStatus(ActivityStatus.PLAN_REVIEW);
-                    activityRepository.save(a);
-                }
-            });
-        }
-        // 发布策划书审核事件
-        if (eventPublisher != null) {
-            String planTitle = activityRepository != null
-                    ? activityRepository.findById(p.getActivityId())
-                        .map(Activity::getName).orElse("未知活动")
-                    : "未知活动";
-            Long submitterId = p.getSubmitterId();
-            eventPublisher.publishEvent(new PlanReviewedEvent(
-                    p.getId(), p.getActivityId(), planTitle,
-                    reviewerId, approved, comment, submitterId));
-        }
+        if (complete || !approved) eventPublisher.publishEvent(new PlanReviewedEvent(p.getId(),p.getActivityId(),
+                p.getNameOverride(),reviewerId,approved,comment,p.getSubmitterId()));
     }
-
+    @Transactional
+    public ActivityPlan revise(Long id) {
+        var p=writable(id);
+        if (p.getStatus()==ActivityPlan.PlanStatus.DRAFT) throw new BizException(2003,"已有草稿，请直接编辑");
+        // Withdrawal preserves the original submission and decisions as a read-only snapshot.
+        if (p.getStatus()==ActivityPlan.PlanStatus.PENDING) {
+            p.setStatus(ActivityPlan.PlanStatus.WITHDRAWN); p.setReviewComment("作者已撤回");
+            p.setUpdatedAt(LocalDateTime.now()); repository.saveAndFlush(p);
+        }
+        PlanRequest req=new PlanRequest();
+        org.springframework.beans.BeanUtils.copyProperties(p,req);
+        req.setActivityId(p.getActivityId()); req.setSyncActivity(false);
+        return create(req,context());
+    }
+    private void freezeMetadata(ActivityPlan p,Activity a) {
+        if(p.getNameOverride()==null) p.setNameOverride(Objects.toString(a.getName(),""));
+        if(p.getThemeOverride()==null) p.setThemeOverride(Objects.toString(a.getTheme(),""));
+        if(p.getLocationOverride()==null) p.setLocationOverride(Objects.toString(a.getLocation(),""));
+        if(p.getOrganizerOverride()==null) p.setOrganizerOverride(Objects.toString(a.getOrganizer(),""));
+        if(p.getTargetOverride()==null) p.setTargetOverride(Objects.toString(a.getTargetAudience(),""));
+        if(p.getTimeOverride()==null) p.setTimeOverride(a.getStartDate()==null?"":a.getStartDate().toString()
+                +(a.getEndDate()==null || a.getEndDate().equals(a.getStartDate())?"":" ~ "+a.getEndDate()));
+    }
     private void apply(ActivityPlan p, PlanRequest req) {
         p.setBackground(req.getBackground());
         p.setPurpose(req.getPurpose());
@@ -233,7 +270,4 @@ public class PlanService {
         }
     }
 
-    public ActivityPlan getEntity(Long id) {
-        return repository.findById(id).orElseThrow(() -> new BizException(2004, "策划书不存在"));
-    }
 }

@@ -95,108 +95,24 @@ public class NotificationEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePlanSubmitted(PlanSubmittedEvent event) {
-        String activityName = getActivityName(event.getActivityId());
-        List<User> teachers = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "TEACHER");
-        List<User> directors = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "DIRECTOR");
-
-        Set<String> roles = new java.util.LinkedHashSet<>();
-        for (User u : teachers) {
-            roles.add(u.getRole().getCode());
+        for (Long uid:event.getReviewerIds()) {
+            notificationService.createAndSave(NotificationType.PLAN_SUBMITTED,"策划书待审核",
+                "您被选为《"+event.getPlanTitle()+"》的审核人，请查看本次提交版本",
+                "PLAN",event.getPlanId(),event.getSubmitterId(),uid,null,null);
+            userRepo.findById(uid).ifPresent(this::pushToUser);
         }
-        for (User u : directors) {
-            roles.add(u.getRole().getCode());
-        }
-
-        for (String role : roles) {
-            notificationService.createAndSave(
-                NotificationType.PLAN_SUBMITTED,
-                "策划书待审核",
-                "提交了活动「" + activityName + "」的策划书，请审核",
-                "PLAN", event.getPlanId(), event.getSubmitterId(),
-                null, role, null
-            );
-        }
-
-        // 向每个教师/主任发送 WebSocket 信号（去重，排除提交人自己）
-        Set<Long> alreadyPushed = new java.util.LinkedHashSet<>();
-        alreadyPushed.add(event.getSubmitterId()); // 排除提交人
-        for (User u : teachers) {
-            if (!alreadyPushed.contains(u.getId())) {
-                pushToUser(u);
-                alreadyPushed.add(u.getId());
-            }
-        }
-        for (User u : directors) {
-            if (!alreadyPushed.contains(u.getId())) {
-                pushToUser(u);
-                alreadyPushed.add(u.getId());
-            }
-        }
-
-        log.info("PlanSubmitted 通知已发送给 {} 个角色", roles.size());
     }
-
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePlanReviewed(PlanReviewedEvent event) {
-        String activityName = getActivityName(event.getActivityId());
-        if (event.isApproved()) {
-            // 按角色广播一行通知（recipientRole），不再逐用户插行；WS 推送复用 broadcastToRoles（排除审核人本人）
-            Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
-            roles.add("STAFF");
-            broadcastToRoles(
-                NotificationType.PLAN_APPROVED,
-                "策划书审核通过",
-                "活动「" + activityName + "」的策划书已审核通过",
-                "PLAN", event.getPlanId(), event.getReviewerId(), roles);
-            log.info("PlanApproved 通知已广播给 {} 个角色", roles.size());
-        } else {
-            notificationService.createAndSave(
-                NotificationType.PLAN_REJECTED,
-                "策划书已驳回",
-                "活动「" + activityName + "」的策划书已驳回" +
-                    (event.getComment() != null ? "，原因：" + event.getComment() : ""),
-                "PLAN", event.getPlanId(), event.getReviewerId(),
-                event.getSubmitterId(), null, null
-            );
-            // 向提交人推送 WebSocket
-            userRepo.findById(event.getSubmitterId()).ifPresent(this::pushToUser);
-            log.info("PlanRejected 通知已发送给提交人 {}", event.getSubmitterId());
-        }
+        notificationService.createAndSave(event.isApproved()?NotificationType.PLAN_APPROVED:NotificationType.PLAN_REJECTED,
+            event.isApproved()?"策划书审核通过":"策划书已退回",
+            event.isApproved()?"所选审核人已全部通过《"+event.getPlanTitle()+"》":"修改意见："+event.getComment(),
+            "PLAN",event.getPlanId(),event.getReviewerId(),event.getSubmitterId(),null,null);
+        userRepo.findById(event.getSubmitterId()).ifPresent(this::pushToUser);
     }
-
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePlanEdited(PlanEditedEvent event) {
-        String activityName = getActivityName(event.getActivityId());
-        java.util.Optional<User> editor = userRepo.findById(event.getEditorId());
-        String editorName = editor.map(User::getRealName).orElse("某用户");
-        boolean isDirector = editor.map(u -> "DIRECTOR".equals(u.getRole().getCode())).orElse(false);
-        if (isDirector) {
-            // 链路2：主任修改策划书 → 通知组织部全员
-            List<User> orgLeaders = userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), "ORG_LEADER");
-            for (User u : orgLeaders) {
-                if (!u.getId().equals(event.getEditorId())) {
-                    notificationService.createAndSave(
-                        NotificationType.PLAN_MODIFIED,
-                        "策划书已修改",
-                        "主任修改了《" + activityName + "》策划书",
-                        "PLAN", event.getPlanId(), event.getEditorId(),
-                        u.getId(), null, null
-                    );
-                    pushToUser(u);
-                }
-            }
-            log.info("PlanEdited(主任) 通知已发送给组织部 {} 名成员", orgLeaders.size());
-        } else {
-            // 链路1：策划书编辑完成 → 通知所有部门（部长+主任），排除编辑者本人
-            Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
-            editor.ifPresent(u -> roles.remove(u.getRole().getCode()));
-            broadcastToRoles(
-                NotificationType.PLAN_MODIFIED,
-                "策划书待审核",
-                editorName + " 已完成《" + activityName + "》策划书编辑，请审核",
-                "PLAN", event.getPlanId(), event.getEditorId(), roles);
-            log.info("PlanEdited 通知已发送给 {} 个角色", roles.size());
-        }
+        // Draft saves do not broadcast private versions. KnowledgeIndexListener still receives this event.
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

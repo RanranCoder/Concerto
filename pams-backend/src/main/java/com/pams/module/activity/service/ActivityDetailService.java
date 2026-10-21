@@ -49,11 +49,7 @@ public class ActivityDetailService {
     }
 
     public Map<String, Object> aggregate(Long activityId) {
-        // plan：latest + status
-        ActivityPlan latest = planService.latest(activityId);
-        Map<String, Object> planVo = new LinkedHashMap<>();
-        planVo.put("latest", latest);
-        planVo.put("status", latest == null ? null : latest.getStatus().name());
+        Map<String,Object> planVo=planService.workspace(activityId);
 
         // score：rules + records
         Map<String, Object> scoreVo = new LinkedHashMap<>();

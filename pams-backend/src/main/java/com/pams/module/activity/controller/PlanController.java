@@ -3,6 +3,9 @@ package com.pams.module.activity.controller;
 import com.pams.common.BizException;
 import com.pams.common.Result;
 import com.pams.module.activity.dto.PlanRequest;
+import com.pams.module.activity.dto.PlanSubmitRequest;
+import com.pams.module.activity.service.PlanAccessService;
+import com.pams.module.agent.core.ToolContext;
 import com.pams.module.activity.dto.PlanReviewRequest;
 import com.pams.module.activity.entity.ActivityPlan;
 import com.pams.module.activity.service.PlanService;
@@ -17,7 +20,17 @@ import org.springframework.web.bind.annotation.*;
 public class PlanController {
     private final PlanService service;
 
-    public PlanController(PlanService service) { this.service = service; }
+    private final PlanAccessService access;
+    public PlanController(PlanService service,PlanAccessService access) { this.service=service; this.access=access; }
+    @GetMapping("/reviewers")
+    @PreAuthorize("hasAuthority('activity:edit')")
+    public Result<?> reviewers() { return Result.ok(access.candidates(ToolContext.current(null,null))); }
+    @GetMapping("/workspace")
+    public Result<?> workspace(@RequestParam Long activityId) { return Result.ok(service.workspace(activityId)); }
+    @PostMapping("/{id}/revision")
+    @PreAuthorize("hasAuthority('activity:edit')")
+    public Result<ActivityPlan> revision(@PathVariable Long id) { return Result.ok(service.revise(id)); }
+
 
     @GetMapping
     public Result<ActivityPlan> latest(@RequestParam Long activityId) {
@@ -45,9 +58,9 @@ public class PlanController {
 
     @PreAuthorize("hasAuthority('activity:edit')")
     @PutMapping("/{id}/submit")
-    public Result<Void> submit(@PathVariable Long id,
+    public Result<Void> submit(@PathVariable Long id, @Valid @RequestBody PlanSubmitRequest req,
                                @AuthenticationPrincipal LoginUser user) {
-        service.submit(id, user.getId());
+        service.submit(id, user.getId(),req.getReviewerIds());
         return Result.ok();
     }
 
