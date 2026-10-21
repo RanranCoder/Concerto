@@ -149,15 +149,16 @@ public class KnowledgeAdminService {
         var snapshots = visibleMetadata("kb_snapshot", "id,spec_code,as_of", visibleIds("kb_snapshot", "snapshot"));
         out.put("documentCount", docs.isEmpty() ? 0 : docRepository.count((root,q,cb) -> cb.and(root.get("id").in(docs), cb.equal(root.get("status"), KbDocument.STATUS_PUBLISHED))));
         out.put("chunkCount", chunks.size());
+        out.put("entryCount", chunks.stream().map(r -> r.get("source_type") + ":" + r.get("source_id")).distinct().count());
 
         // 事实快照（D12 的 B 形态）：单独报出来，因为它是"数据类问题能不能答"的开关
         out.put("snapshotCount", snapshots.size());
         out.put("snapshotSpecCount", snapshots.stream().map(r -> r.get("spec_code")).distinct().count());
-        out.put("snapshotLatestAsOf", snapshots.stream().map(r -> (java.sql.Timestamp)r.get("as_of")).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).map(java.sql.Timestamp::toLocalDateTime).orElse(null));
+        out.put("snapshotLatestAsOf", snapshots.stream().map(r -> localDateTime(r.get("as_of"))).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).orElse(null));
 
         // 台账/记录的"知识库更新于…"用这个值 —— 取最近一次成功索引时间，
         // 而不是"任务运行时间"，否则任务失败时会显示假的新鲜度（方案 R19）
-        LocalDateTime last = chunks.stream().map(r -> (java.sql.Timestamp)r.get("indexed_at")).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).map(java.sql.Timestamp::toLocalDateTime).orElse(null);
+        LocalDateTime last = chunks.stream().map(r -> localDateTime(r.get("indexed_at"))).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).orElse(null);
         out.put("lastIndexedAt", last);
         out.put("staleMinutes", last == null ? null
                 : java.time.Duration.between(last, LocalDateTime.now()).toMinutes());
@@ -172,9 +173,18 @@ public class KnowledgeAdminService {
         out.put("retrievalTotal", total);
         out.put("retrievalNoHit", noHit);
         out.put("retrievalNoCitation", noCitation);
+        out.put("retrievalUnanswered", logRepository.count(own.and((root,q,cb) -> cb.isNotNull(root.get("skipReason")))));
         // filtered > 0 是"索引期可见性字段偏松"的体检信号
         out.put("retrievalFiltered", filtered);
         return out;
+    }
+
+    /** MySQL DATETIME 返回 LocalDateTime，H2 等驱动仍返回 Timestamp。 */
+    private static LocalDateTime localDateTime(Object value) {
+        if (value == null) return null;
+        if (value instanceof LocalDateTime time) return time;
+        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toLocalDateTime();
+        throw new IllegalArgumentException("Unsupported database datetime type: " + value.getClass().getName());
     }
 
     /* ==================================================================== 事实快照 */
@@ -186,12 +196,17 @@ public class KnowledgeAdminService {
      * 而且它存在的意义就是让人核对"这个数字对不对"，藏起来反而没用。
      */
     public PageResult<Map<String, Object>> pageSnapshots(String specCode, int page, int size) {
+        return pageSnapshots(specCode, null, page, size);
+    }
+
+    public PageResult<Map<String, Object>> pageSnapshots(String specCode, String keyword, int page, int size) {
         var allowed=visibleIds("kb_snapshot","snapshot");
         PageRequest pr = PageRequest.of(Math.max(page, 1) - 1, Math.min(Math.max(size, 1), 200),
                 Sort.by(Sort.Direction.DESC, "asOf"));
         Page<KbSnapshot> p = snapshotRepository.findAll((root,query,cb) -> cb.and(
                 allowed.isEmpty()?cb.disjunction():root.get("id").in(allowed),
-                specCode==null||specCode.isBlank()?cb.conjunction():cb.equal(root.get("specCode"),specCode.trim())),pr);
+                specCode==null||specCode.isBlank()?cb.conjunction():cb.equal(root.get("specCode"),specCode.trim()),
+                keyword==null||keyword.isBlank()?cb.conjunction():cb.like(root.get("title"), "%"+keyword.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")+"%", '\\')),pr);
 
         PageResult<Map<String, Object>> r = new PageResult<>();
         r.setRecords(p.getContent().stream().map(this::snapshotVo).toList());
@@ -249,6 +264,47 @@ public class KnowledgeAdminService {
     }
 
     /* ==================================================================== 内容台账 */
+
+    /** One row per accessible source record. Filter/count before pagination, retaining full chunk counts. */
+    public PageResult<Map<String, Object>> pageEntries(String sourceType, String keyword, String tier, String sort, int page, int size) {
+        if (tier != null && !java.util.Set.of("T1", "T2").contains(tier)) throw new BizException(400, "不支持的检索方式");
+        if (sort != null && !java.util.Set.of("updated", "title").contains(sort)) throw new BizException(400, "不支持的排序");
+        var allowed = visibleIds("kb_chunk", null);
+        List<KbChunk> chunks = allowed.isEmpty() ? List.of() : chunkRepository.findAll((root,q,cb) -> cb.and(
+                root.get("id").in(allowed), cb.equal(root.get("orgId"), com.pams.common.OrgContext.get()),
+                sourceType == null || sourceType.isBlank() ? cb.conjunction() : cb.equal(root.get("sourceType"), sourceType),
+                tier == null ? cb.conjunction() : cb.equal(root.get("tier"), tier)), Sort.by("sourceType", "sourceId", "seq"));
+        var grouped = new LinkedHashMap<String, List<KbChunk>>();
+        chunks.forEach(c -> grouped.computeIfAbsent(KbChunk.key(c.getSourceType(), c.getSourceId()), key -> new ArrayList<>()).add(c));
+        String query = keyword == null ? "" : keyword.trim().toLowerCase(java.util.Locale.ROOT);
+        var entries = new ArrayList<Map<String, Object>>();
+        for (var group : grouped.values()) {
+            if (!query.isEmpty() && group.stream().noneMatch(c -> (String.valueOf(c.getTitle()) + " " + c.getPath() + " " + c.getContent()).toLowerCase(java.util.Locale.ROOT).contains(query))) continue;
+            KbChunk first = group.getFirst();
+            var row = chunkVo(first);
+            row.put("chunkCount", group.size());
+            row.put("visibility", first.getVisibility());
+            row.put("requiredPermission", first.getRequiredPermission());
+            row.put("indexedAt", group.stream().map(KbChunk::getIndexedAt).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).orElse(null));
+            entries.add(row);
+        }
+        java.util.Comparator<Map<String, Object>> comparator = "title".equals(sort)
+                ? java.util.Comparator.comparing(m -> java.util.Objects.toString(m.get("title"), ""), java.text.Collator.getInstance(java.util.Locale.CHINA))
+                : java.util.Comparator.comparing(m -> (LocalDateTime)m.get("indexedAt"), java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+        entries.sort(comparator.thenComparing(m -> m.get("sourceKey").toString()));
+        int limit = Math.clamp(size, 1, 100), current = Math.max(page, 1);
+        int start = (int)Math.min((long)(current - 1) * limit, entries.size());
+        var slice = entries.subList(start, Math.min(start + limit, entries.size()));
+        // Links belong to adapters (plan IDs need not equal activity IDs).
+        for (var row : slice) {
+            var adapter = indexer.sources().stream().filter(s -> s.sourceType().equals(row.get("sourceType"))).findFirst().orElse(null);
+            row.put("sourceLabel", adapter == null ? row.get("sourceType") : adapter.label());
+            row.put("link", adapter == null ? null : adapter.link(((Number)row.get("sourceId")).longValue()));
+        }
+        var result = new PageResult<Map<String, Object>>();
+        result.setRecords(slice); result.setTotal((long)entries.size()); result.setCurrent(current); result.setSize(limit);
+        return result;
+    }
 
     /**
      * 分块台账（知识库页面第一个 Tab）。
@@ -466,11 +522,16 @@ public class KnowledgeAdminService {
      * 大量 NO_CITATION 则是模型没标编号（prompt 或映射逻辑问题）。
      */
     public PageResult<Map<String, Object>> pageRetrievals(String skipReason, int page, int size) {
+        return pageRetrievals(skipReason, null, page, size);
+    }
+
+    public PageResult<Map<String, Object>> pageRetrievals(String skipReason, String keyword, int page, int size) {
         PageRequest pr = PageRequest.of(Math.max(page, 1) - 1, Math.min(Math.max(size, 1), 100));
         Long requester = com.pams.module.agent.core.ToolContext.current(null,null).getUserId();
         Page<KbRetrievalLog> p = logRepository.findAll((root,query,cb) -> cb.and(
                 requester==null?cb.disjunction():cb.equal(root.get("userId"),requester),
-                skipReason==null||skipReason.isBlank()?cb.conjunction():cb.equal(root.get("skipReason"),skipReason)),
+                skipReason==null||skipReason.isBlank()?cb.conjunction():"SUCCESS".equals(skipReason)?cb.isNull(root.get("skipReason")):cb.equal(root.get("skipReason"),skipReason),
+                keyword==null||keyword.isBlank()?cb.conjunction():cb.like(root.get("queryText"), "%"+keyword.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")+"%", '\\')),
                 PageRequest.of(pr.getPageNumber(),pr.getPageSize(),Sort.by(Sort.Direction.DESC,"id")));
 
         PageResult<Map<String, Object>> r = new PageResult<>();

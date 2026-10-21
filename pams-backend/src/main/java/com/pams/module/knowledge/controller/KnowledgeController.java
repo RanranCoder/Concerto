@@ -71,6 +71,18 @@ public class KnowledgeController {
 
     /* ==================================================================== 内容台账 */
 
+    @GetMapping("/entries")
+    @PreAuthorize("hasAuthority('kb:read')")
+    public Result<PageResult<Map<String, Object>>> entries(
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tier,
+            @RequestParam(defaultValue = "updated") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.ok(service.pageEntries(sourceType, keyword, tier, sort, page, size));
+    }
+
     /** 分块台账（第一个 Tab）：全部分块，可按来源类型与关键词筛选 */
     @GetMapping("/chunks")
     @PreAuthorize("hasAuthority('kb:read')")
@@ -144,9 +156,10 @@ public class KnowledgeController {
     @PreAuthorize("hasAuthority('kb:read')")
     public Result<PageResult<Map<String, Object>>> retrievals(
             @RequestParam(required = false) String skipReason,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return Result.ok(service.pageRetrievals(skipReason, page, size));
+        return Result.ok(service.pageRetrievals(skipReason, keyword, page, size));
     }
 
     /* ==================================================================== 事实快照 */
@@ -168,9 +181,10 @@ public class KnowledgeController {
     @PreAuthorize("hasAuthority('kb:read')")
     public Result<PageResult<Map<String, Object>>> snapshots(
             @RequestParam(required = false) String specCode,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return Result.ok(service.pageSnapshots(specCode, page, size));
+        return Result.ok(service.pageSnapshots(specCode, keyword, page, size));
     }
 
     /**
