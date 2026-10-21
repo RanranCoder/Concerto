@@ -83,6 +83,12 @@ public class OrgController {
     }
 
     /** 架构树。 */
+    @GetMapping("/current/structure")
+    @PreAuthorize("hasAuthority('org:manage') or hasAuthority('org:structure:manage')")
+    public Result<com.pams.module.org.dto.OrgStructureVO> structure() {
+        return Result.ok(orgService.structure());
+    }
+
     @GetMapping("/current/units")
     public Result<List<OrgUnitVO>> units() {
         return Result.ok(orgService.listUnits());

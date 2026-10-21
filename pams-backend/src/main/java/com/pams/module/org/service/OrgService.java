@@ -39,6 +39,10 @@ import java.util.UUID;
 @Service
 public class OrgService {
     @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.org.repository.OrgStructureReferences structureReferences;
+
+    private static final Set<String> UNIT_TYPES = Set.of("部门", "中心", "小组", "分队");
+    @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
     private final OrganizationRepository organizationRepository;
@@ -81,6 +85,10 @@ public class OrgService {
             throw new BizException(2002, "管理员账号与密码不能为空");
         }
         String orgName = req.getOrg().getName().trim();
+        validateOrgFields(orgName, req.getOrg().getShortName(), req.getOrg().getThemeColor());
+        if (req.getUnits() == null || req.getUnits().isEmpty())
+            throw new BizException(2007, "请至少添加一个部门或小组");
+        validateRegistrationUnits(req.getUnits(), new LinkedHashSet<>());
         if (organizationRepository.findByName(orgName).isPresent()) {
             throw new BizException(2003, "组织名称已存在");
         }
@@ -219,6 +227,10 @@ public class OrgService {
     public void updateCurrent(String name, String shortName, String logoUrl, String themeColor,
                               List<String> enabledPacks) {
         Organization org = currentOrg();
+        validateOrgFields(name == null ? org.getName() : name.trim(), shortName, themeColor);
+        if (name != null && organizationRepository.findByName(name.trim())
+                .filter(existing -> !existing.getId().equals(org.getId())).isPresent())
+            throw new BizException(2003, "组织名称已存在");
         if (!isBlank(name)) {
             org.setName(name.trim());
         }
@@ -243,6 +255,17 @@ public class OrgService {
         return buildTree(all);
     }
 
+    @Transactional(readOnly = true)
+    public com.pams.module.org.dto.OrgStructureVO structure() {
+        Long orgId = OrgContext.getOrDefault();
+        var accounts = userRepository.findByOrgIdOrderByIdAsc(orgId).stream().map(u -> {
+            Long deptId = u.getDept() != null && orgId.equals(u.getDept().getOrgId()) ? u.getDept().getId() : null;
+            String roleName = u.getRole() != null && orgId.equals(u.getRole().getOrgId()) ? u.getRole().getName() : null;
+            return new com.pams.module.org.dto.OrgAccountVO(u.getId(), u.getUsername(), u.getRealName(), deptId, roleName, u.getStatus());
+        }).toList();
+        return new com.pams.module.org.dto.OrgStructureVO(listUnits(), accounts);
+    }
+
     @Transactional
     public Long createUnit(UnitSaveRequest req) {
         if (req == null || isBlank(req.getName())) {
@@ -250,6 +273,8 @@ public class OrgService {
         }
         Long orgId = OrgContext.getOrDefault();
         String name = req.getName().trim();
+        validateUnitFields(name, req.getUnitType(), req.getSortOrder());
+        validateLeader(orgId, req.getLeaderUserId());
         if (departmentRepository.existsByOrgIdAndName(orgId, name)) {
             throw new BizException(2008, "同组织下已存在同名节点");
         }
@@ -284,10 +309,17 @@ public class OrgService {
         if (!orgId.equals(d.getOrgId())) {
             throw new BizException(2010, "节点不属于当前组织");
         }
+        if (req == null) throw new BizException(400, "请填写节点信息");
+        validateUnitFields(req.getName() == null ? d.getName() : req.getName().trim(), req.getUnitType(), req.getSortOrder());
+        if (req.getParentId() != null && !req.getParentId().equals(d.getParentId()))
+            throw new BizException(400, "编辑节点时不能更换上级节点");
+        if (!java.util.Objects.equals(req.getLeaderUserId(), d.getLeaderUserId()))
+            validateLeader(orgId, req.getLeaderUserId());
         if (!isBlank(req.getName()) && !req.getName().trim().equals(d.getName())) {
             if (departmentRepository.existsByOrgIdAndName(orgId, req.getName().trim())) {
                 throw new BizException(2008, "同组织下已存在同名节点");
             }
+            structureReferences.renameDepartmentLabels(orgId, id, d.getName(), req.getName().trim());
             d.setName(req.getName().trim());
         }
         if (!isBlank(req.getUnitType())) {
@@ -312,10 +344,43 @@ public class OrgService {
         if (departmentRepository.existsByParentId(id)) {
             throw new BizException(2011, "请先删除下级节点");
         }
-        if (!userRepository.findByDeptId(id).isEmpty()) {
-            throw new BizException(2012, "该节点下还有成员，无法删除");
+        if (structureReferences.hasAccounts(id)) {
+            throw new BizException(2012, "该节点下还有成员或历史账号，无法删除；请先处理账号归属");
         }
+        if (structureReferences.hasHistory(orgId, id, d.getName()))
+            throw new BizException(2013, "该节点有关联花名册或历史工作资料，请保留节点或先处理关联记录");
         departmentRepository.delete(d);
+    }
+
+    private void validateLeader(Long orgId, Long userId) {
+        if (userId == null) return;
+        User leader = userRepository.findById(userId).filter(u -> orgId.equals(u.getOrgId()))
+                .orElseThrow(() -> new BizException(400, "负责人必须是当前组织的账号"));
+        if (!Integer.valueOf(1).equals(leader.getStatus()))
+            throw new BizException(400, "请选择正常启用的账号作为负责人");
+    }
+
+    private void validateUnitFields(String name, String type, Integer sort) {
+        if (isBlank(name) || name.length() > 50) throw new BizException(2007, "节点名称须为 1—50 个字");
+        if (type != null && !UNIT_TYPES.contains(type)) throw new BizException(400, "节点类型请选择部门、中心、小组或分队");
+        if (sort != null && (sort < 0 || sort > 9999)) throw new BizException(400, "显示排序须为 0—9999 的整数");
+    }
+
+    private void validateRegistrationUnits(List<OrgRegisterRequest.UnitNode> nodes, Set<String> names) {
+        for (var node : nodes) {
+            if (node == null) throw new BizException(2007, "请填写每个部门或小组的名称");
+            String name = node.getName() == null ? "" : node.getName().trim();
+            validateUnitFields(name, node.getUnitType(), null);
+            if (!names.add(name)) throw new BizException(2008, "「" + name + "」名称重复，请使用不同的名称");
+            if (node.getLeaderUserId() != null) throw new BizException(400, "请在组织创建后选择负责人");
+            if (node.getChildren() != null) validateRegistrationUnits(node.getChildren(), names);
+        }
+    }
+
+    private void validateOrgFields(String name, String shortName, String color) {
+        if (isBlank(name) || name.length() > 100) throw new BizException(2001, "组织名称须为 1—100 个字");
+        if (shortName != null && shortName.length() > 50) throw new BizException(400, "组织简称请控制在 50 字以内");
+        if (color != null && !color.matches("(?i)^#[0-9a-f]{6}$")) throw new BizException(400, "主题色请使用 #RRGGBB 格式");
     }
 
     // ==================== 岗位（架构 → 角色映射） ====================

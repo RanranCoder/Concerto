@@ -23,8 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 组织注册与架构（阶段 1）集成测试。
  *
- * <p>注意：{@code sys_department.name} 目前仍是**全局唯一**（复合唯一键留阶段 2），
- * 故测试节点名使用不与 DataSeeder 种子部门（文秘部/组织部/新媒体中心/青年科技部）冲突的名称。
+ * <p>V39 统一为组织内节点名唯一；跨组织同名、负责人归属与历史引用见 OrgStructureManagementTest。
  * 每个用例 {@code @Transactional} 回滚，互不影响。
  */
 @SpringBootTest
