@@ -51,7 +51,8 @@ public class PlanAccessService {
         return canReadAttachment(fileId,null,ctx);
     }
     public Boolean canReadAttachment(Long fileId,String storedPath,ToolContext ctx) {
-        var references=new ArrayList<>(plans.referencingFile("%/api/files/"+fileId+"/%"));
+        var references=new ArrayList<>(plans.findByDocumentFileId(fileId));
+        references.addAll(plans.referencingFile("%/api/files/"+fileId+"/%"));
         if(storedPath!=null) references.addAll(plans.referencingFile("%/uploads/"+storedPath+"%"));
         return references.isEmpty()?null:references.stream().anyMatch(p -> canRead(p,ctx));
     }

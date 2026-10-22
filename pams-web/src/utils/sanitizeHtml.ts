@@ -1,4 +1,4 @@
-// XSS 防护：进入 contenteditable / innerHTML 解析边界前把富文本净化（策划书 WordEditor/PlanRichEditor 共享）。
+// XSS 防护：净化历史富文本和其他 HTML 展示内容。
 // 允许基本排版标签（p/div/br/b/strong/table/tr/td/th/ul/ol/li/span…），
 // 但禁止脚本类标签与一切事件属性，避免落库的恶意 HTML（img onerror 外带 token 等）在他人打开时执行。
 // 注意：事件属性（onerror 等）本就不在 DOMPurify 默认 ALLOWED_ATTR 内，会被直接剥离；

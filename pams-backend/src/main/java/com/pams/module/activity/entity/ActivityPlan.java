@@ -15,6 +15,10 @@ public class ActivityPlan implements OrgScoped {
     private Long id;
     private Long activityId;
     private Integer version;
+    /** Immutable DOCX upload; rich text columns are derived indexes for legacy tools/search. */
+    private Long documentFileId;
+    @Column(columnDefinition = "LONGTEXT")
+    private String documentText;
     @Column(columnDefinition = "TEXT")
     private String background;
     @Column(columnDefinition = "TEXT")

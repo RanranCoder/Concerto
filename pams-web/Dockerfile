@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
+ARG VITE_SUPERDOC_LICENSE_KEY=""
+ENV VITE_SUPERDOC_LICENSE_KEY=$VITE_SUPERDOC_LICENSE_KEY
 RUN npm run build
 
 # ---- 运行阶段：nginx 托管 + 反代后端 ----

@@ -92,6 +92,12 @@ function sections(plan: ActivityPlanVO): Section[] {
   return rows
 }
 export function comparePlans(before: ActivityPlanVO, after: ActivityPlanVO) {
+  if (before.documentFileId || after.documentFileId) {
+    const text = (p: ActivityPlanVO) => p.documentText ?? sections(p).map(s => comparisonText(s.html)).filter(Boolean).join('\n')
+    const from = text(before), to = text(after)
+    if (from === to && before.documentFileId === after.documentFileId) return []
+    return [{ key: 'document', label: '文档正文', before: from, after: to, formatOnly: from === to }]
+  }
   const old = new Map(sections(before).map((r) => [r.key, r]))
   const next = new Map(sections(after).map((r) => [r.key, r]))
   return [...new Set([...old.keys(), ...next.keys()])].flatMap((key) => {

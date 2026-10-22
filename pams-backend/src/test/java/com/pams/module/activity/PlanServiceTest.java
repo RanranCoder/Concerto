@@ -57,6 +57,62 @@ class PlanServiceTest {
     void review(long uid,boolean approve,int expected) throws Exception {
         write("PUT","/api/plans/"+plan+"/review",reviewer(uid),Map.of("approved",approve,"comment",approve?"同意":"请完善流程"),expected);
     }
+    long document(String token,String text) throws Exception {
+        byte[] bytes;
+        try(var doc=new org.apache.poi.xwpf.usermodel.XWPFDocument(); var out=new java.io.ByteArrayOutputStream()) {
+            doc.createParagraph().createRun().setText(text); doc.write(out); bytes=out.toByteArray();
+        }
+        return data(mvc.perform(multipart("/api/files/upload")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","策划书.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",bytes))
+            .param("bizType","PLAN").header("Authorization","Bearer "+token))
+            .andExpect(status().isOk()).andReturn()).path("id").asLong();
+    }
+    @Test void nativeDocxPersistsBytesAndSelectedReviewersGetVersionScopedAccess() throws Exception {
+        long file=document(author,"原生文档 <script>仅为文字</script>");
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",file),200);
+        var saved=read("/api/plans/"+plan,author);
+        assertThat(saved.path("documentFileId").asLong()).isEqualTo(file);
+        assertThat(saved.path("documentText").asText()).contains("原生文档 <script>");
+        assertThat(saved.path("content").asText()).doesNotContain("<script>").contains("&lt;script&gt;");
+        mvc.perform(get("/api/files/"+file+"/download").header("Authorization","Bearer "+outsider)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/plans/"+plan+"/document").header("Authorization","Bearer "+outsider)).andExpect(status().isForbidden());
+        submit();
+        var binary=mvc.perform(get("/api/plans/"+plan+"/document").header("Authorization","Bearer "+reviewer(reviewers.getFirst())))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var doc=new org.apache.poi.xwpf.usermodel.XWPFDocument(new java.io.ByteArrayInputStream(binary))) {
+            assertThat(doc.getParagraphs().getFirst().getText()).contains("原生文档");
+        }
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",file),400);
+        long draft=data(write("POST","/api/plans/"+plan+"/revision",author,null,200)).path("id").asLong();
+        assertThat(read("/api/plans/"+draft,author).path("documentFileId").asLong()).isEqualTo(file);
+        long fresh=document(author,"新版本私密正文");
+        write("PUT","/api/plans/"+draft,author,Map.of("activityId",activity,"documentFileId",fresh),200);
+        mvc.perform(get("/api/files/"+fresh+"/download").header("Authorization","Bearer "+outsider)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/files/"+file+"/download").header("Authorization","Bearer "+outsider)).andExpect(status().isOk());
+    }
+    @Test void nativeDocumentRejectsLegacyOverwriteInvalidDocxAndForeignPrivateFile() throws Exception {
+        long file=document(author,"正式保存的原文");
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",file),200);
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"content","旧字段覆盖"),400);
+        long foreign=document(reviewer(reviewers.getFirst()),"其他用户的私密原文");
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",foreign),400);
+        long invalid=data(mvc.perform(multipart("/api/files/upload")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","broken.docx","application/octet-stream",new byte[]{1,2,3}))
+            .param("bizType","PLAN").header("Authorization","Bearer "+author)).andExpect(status().isOk()).andReturn()).path("id").asLong();
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",invalid),400);
+        var saved=read("/api/plans/"+plan,author);
+        assertThat(saved.path("documentFileId").asLong()).isEqualTo(file);
+        assertThat(saved.path("documentText").asText()).isEqualTo("正式保存的原文");
+    }
+    @Test void nativeDocxUpdateStillRejectsStaleBrowserSaves() throws Exception {
+        long revision=read("/api/plans/"+plan,author).path("revision").asLong();
+        long file=document(author,"先保存的版本");
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",file,"expectedRevision",revision),200);
+        long stale=document(author,"过期窗口内容");
+        write("PUT","/api/plans/"+plan,author,Map.of("activityId",activity,"documentFileId",stale,"expectedRevision",revision),409);
+        assertThat(read("/api/plans/"+plan,author).path("documentFileId").asLong()).isEqualTo(file);
+    }
     @Test void privateDraftAndSubmissionNeverLeakThroughDetailOrWorkspace() throws Exception {
         var metadata=read("/api/plans/workspace?activityId="+activity,author).path("versions").get(0);
         assertThat(metadata.path("ownerId").asLong()).isEqualTo(authorId);

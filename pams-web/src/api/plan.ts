@@ -1,7 +1,9 @@
-import { get, post, put } from './http'
+import { get, post, put, http } from './http'
 import type { ActivityDetail, ActivityPlanVO } from './activity'
 
 export interface PlanSave {
+  /** Canonical native DOCX; server derives text indexes from this file. */
+  documentFileId?: number
   activityId: number
   version?: number | null
   expectedUpdatedAt?: string | null
@@ -31,6 +33,11 @@ export interface PlanSave {
 export const latestPlan = (activityId: number) =>
   get<ActivityPlanVO | null>('/plans', { activityId })
 export const getPlan = (id: number) => get<ActivityPlanVO>(`/plans/${id}`)
+/** Version policy is sufficient; unrelated archive download permissions are not required. */
+export const fetchPlanDocument = async (id: number): Promise<Blob> => {
+  const response = await http.get(`/plans/${id}/document`, { responseType: 'blob' }) as unknown as { data: Blob }
+  return response.data
+}
 export const createPlan = (data: PlanSave) =>
   post<ActivityPlanVO>('/plans', data)
 export const updatePlan = (id: number, data: PlanSave) =>

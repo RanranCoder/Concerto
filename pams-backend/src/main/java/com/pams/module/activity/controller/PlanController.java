@@ -42,6 +42,14 @@ public class PlanController {
         return Result.ok(service.getEntity(id));
     }
 
+    @GetMapping("/{id}/document")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> document(@PathVariable Long id) {
+        return org.springframework.http.ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=plan.docx")
+            .body(service.document(id));
+    }
+
     @PreAuthorize("hasAuthority('activity:edit')")
     @PostMapping
     public Result<ActivityPlan> create(@Valid @RequestBody PlanRequest req) {

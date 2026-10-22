@@ -63,4 +63,18 @@ class PlanAccessServiceTest {
         assertThatThrownBy(() -> access.requireOwner(history,ctx(10,1))).isInstanceOf(BizException.class);
         assertThatThrownBy(() -> access.requireOwner(current,ctx(20,1))).isInstanceOf(BizException.class);
     }
+    @Test void nativeDocxAttachmentUsesTheSameVisibilityAsItsPlanVersion() {
+        when(plans.findByDocumentFileId(50L)).thenReturn(List.of(current));
+        assertThat(access.canReadAttachment(50L,ctx(30,1))).isFalse();
+        assertThat(access.canReadAttachment(50L,ctx(20,1))).isTrue();
+        when(plans.findByDocumentFileId(50L)).thenReturn(List.of(history));
+        assertThat(access.canReadAttachment(50L,ctx(30,1))).isTrue();
+    }
+    @Test void nativeDocumentSearchUsesTheFullDerivedTextInsteadOfTheLegacyIndex() {
+        current.setDocumentFileId(50L);
+        current.setDocumentText("完整正文".repeat(3000)+"文末校验");
+        current.setContent("截断的兼容索引");
+        var source=new ActivityPlanSource(plans,activities,access);
+        assertThat(source.extractOne(2L).toString()).contains("文末校验").doesNotContain("截断的兼容索引");
+    }
 }

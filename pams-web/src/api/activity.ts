@@ -58,6 +58,8 @@ export interface ActivityDetail {
 }
 
 export interface ActivityPlanVO {
+  documentFileId?: number | null
+  documentText?: string | null
   id: number
   activityId: number
   version: number | null

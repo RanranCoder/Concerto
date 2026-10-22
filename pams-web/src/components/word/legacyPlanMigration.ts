@@ -1,8 +1,7 @@
-// 策划书 Word 模板：12 章章节骨架 + 导出 docx + 导入 docx
-// 数据模型不变：仍存 PlanFields 7 字段；wangEditor 富文本 HTML 直接落库，导出 docx 时逐元素保真
+// Only for one-time migration of legacy section data and initial document creation.
 import { sanitizeEditableHtml } from '../../utils/sanitizeHtml'
 
-// XSS 净化已抽到共享 util（WordEditor 解析边界复用）；此处再导出保持既有 import 路径不变
+// Legacy HTML is sanitized before its one-time conversion into DOCX.
 export { sanitizeEditableHtml }
 
 export interface PlanFields {
@@ -251,40 +250,8 @@ export function parseBudgetArray(s: string | null | undefined): Array<Record<str
   }
 }
 
-/** 规范标题：将 "三、活动背景" / "三." / "3." 等形式的章节标题统一为 PLAN_TEMPLATE_SECTIONS 的 label */
-export function normalizeSectionTitle(raw: string): string | null {
-  const t = (raw || '').replace(/[ \t ]+/g, '').trim()
-  if (!t) return null
-  const noC = t.replace(/^(第?[一二三四五六七八九十\d]+)([、\.．:：])\s*/, '').trim()
-  if (noC === '活动流程') return '活动流程'
-  for (const s of PLAN_TEMPLATE_SECTIONS) {
-    if (noC === s.label.replace(/^(第?[一二三四五六七八九十\d]+[、\.．:：])/, '') && noC.length >= 2) return s.label
-  }
-  // 宽松匹配：长度 >4 的正文段落不回退（避免把正文内容误当章节）
-  return null
-}
-
-/** 把段落按章节标题切分，返回各章节归集的文本（用于 Word 导入的字段映射） */
-function splitSections(lines: string[]): { label: string; body: string }[] {
-  const result: { label: string; body: string }[] = []
-  let current: { label: string; body: string } | null = null
-
-  for (const line of lines) {
-    const title = normalizeSectionTitle(line)
-    if (title) {
-      current = { label: title, body: '' }
-      result.push(current)
-    } else if (current) {
-      const t = (line || '').trim()
-      if (t) current.body = current.body ? `${current.body}\n${t}` : t
-    }
-    // 章节标题之前的内容（抬头/标题）忽略
-  }
-  return result
-}
-
 /** 导出：把 7 字段 + 覆盖值组装成标准策划书 docx（docx 库动态 import）。
- * 正文为 wangEditor 富文本 HTML → htmlToDocx 逐元素保真（加粗/列表/表格/图片/颜色）。
+ * 正文为 旧富文本 富文本 HTML → htmlToDocx 逐元素保真（加粗/列表/表格/图片/颜色）。
  * 只读章节用 override || meta。章节顺序取自 sectionOrder（缺省默认模板）。 */
 export async function planToDocx(
   plan: PlanFields,
@@ -294,7 +261,7 @@ export async function planToDocx(
 ): Promise<Blob> {
   const mod = await import('docx')
   const { Document, Packer, Paragraph, Table, TextRun, AlignmentType } = mod
-  const { htmlToDocx } = await import('./htmlToDocx')
+  const { htmlToDocx } = await import('./legacyHtmlToDocx')
 
   const orgName = meta?.orgName || '信息工程学院党建办公室'
   const title = meta?.name || '活动策划书'
@@ -361,6 +328,7 @@ export async function planToDocx(
         const border = { style: mod.BorderStyle.SINGLE, size: 4, color: '000000' }
         const table = new mod.Table({
           width: { size: 100, type: mod.WidthType.PERCENTAGE },
+          columnWidths: [2250, 2250, 2250, 2250],
           rows: budgetRows.map((cells, ri) =>
             new mod.TableRow({
               tableHeader: ri === 0,
@@ -428,97 +396,4 @@ function escapeHtml(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-}
-
-/** 把 mammoth 提取出的纯文本按章节标题切分，粗粒度填充字段 */
-export function planFromDocxText(text: string): Partial<PlanFields> {
-  const sections = splitSections((text || '').split('\n'))
-  const out: Partial<PlanFields> = {}
-  for (const sec of PLAN_TEMPLATE_SECTIONS) {
-    if (!sec.field) continue
-    const hit = sections.find((s) => s.label === sec.label)
-    if (hit && hit.body.trim()) out[sec.field] = hit.body.trim()
-  }
-  const flow = sections.find(section => section.label === '活动流程')
-  if (flow?.body.trim()) out.flow = flow.body.trim()
-  return out
-}
-
-/** 把 mammoth HTML 按章节标题切分，返回 {label, bodyHtml}[]（正文保留 HTML 结构） */
-export function splitSectionsHtml(html: string): { label: string; bodyHtml: string }[] {
-  const result: { label: string; bodyHtml: string }[] = []
-  let current: { label: string; bodyHtml: string } | null = null
-
-  // node（vitest）环境无 document：退化为纯文本切分
-  if (typeof document === 'undefined') {
-    return splitSections((stripHtml(html) || '').split('\n')).map((s) => ({ label: s.label, bodyHtml: escapeHtml(s.body) }))
-  }
-
-  const fragment = document.createElement('div')
-  fragment.innerHTML = html || ''
-  const children = Array.from(fragment.childNodes)
-
-  for (const node of children) {
-    const text = (node.textContent ?? '').replace(/[ \t ]+/g, '').trim()
-    if (!text) continue
-    const tag = (node as Element).tagName?.toLowerCase() ?? ''
-    const paragraphTitle = tag === 'p' && (
-      /^(第?[一二三四五六七八九十\d]+)[、\.．:：]/.test(text)
-      || (node instanceof Element && node.children.length === 1 && /^(STRONG|B)$/.test(node.firstElementChild?.tagName ?? '') && node.firstElementChild?.textContent === node.textContent)
-    )
-    const title = /^h[1-4]$/.test(tag) || paragraphTitle ? normalizeSectionTitle(text) : null
-    if (title) {
-      current = { label: title, bodyHtml: '' }
-      result.push(current)
-    } else if (current) {
-      const h = node instanceof Element ? node.outerHTML : escapeHtml(node.textContent ?? '')
-      current.bodyHtml = current.bodyHtml ? `${current.bodyHtml}${h}` : h
-    }
-  }
-  return result
-}
-
-/** 把 mammoth 提取的 HTML 按章节标题粗粒度填充字段（正文保留 HTML，budget 表格也保留） */
-export function planFromDocxHtml(html: string): Partial<PlanFields> {
-  const sections = splitSectionsHtml(html || '')
-  const out: Partial<PlanFields> = {}
-  for (const sec of PLAN_TEMPLATE_SECTIONS) {
-    if (!sec.field) continue
-    const hit = sections.find((s) => s.label === sec.label)
-    if (hit && hit.bodyHtml.trim()) out[sec.field] = hit.bodyHtml.trim()
-  }
-  const flow = sections.find(section => section.label === '活动流程')
-  if (flow?.bodyHtml.trim()) out.flow = flow.bodyHtml.trim()
-  return out
-}
-
-/** 导入：mammoth convertToHtml 保留富文本结构，按章节标题切分回填各字段 */
-export async function docxToPlan(file: File): Promise<Partial<PlanFields>> {
-  const mammoth = await import('mammoth')
-  const arrayBuffer = await file.arrayBuffer()
-  const result = await mammoth.convertToHtml({ arrayBuffer })
-  return planFromDocxHtml(result.value || '')
-}
-
-/** 导出议程表：docx 编号列表（标题「活动议程表」居中 + 每步编号项，docx 库动态 import 分包） */
-export async function agendaToDocx(
-  agendas: Array<{ stepNo: number; title: string; remark?: string | null }>,
-): Promise<Blob> {
-  const { Document, Packer, Paragraph, TextRun, AlignmentType } = await import('docx')
-  const children = [
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      children: [new TextRun({ text: '活动议程表', font: '宋体', bold: true, size: 28 })],
-    }),
-    ...agendas.map(
-      (a) =>
-        new Paragraph({
-          spacing: { after: 60 },
-          children: [new TextRun({ text: `${a.stepNo}. ${a.title}${a.remark ? '　' + a.remark : ''}`, font: '宋体', size: 24 })],
-        }),
-    ),
-  ]
-  const doc = new Document({ sections: [{ children }] })
-  return Packer.toBlob(doc)
 }

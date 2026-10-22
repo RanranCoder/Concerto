@@ -1,6 +1,6 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
-import { DOMParser } from '@xmldom/xmldom'
-import { htmlToDocx } from './htmlToDocx'
+import { htmlToDocx } from './legacyHtmlToDocx'
 
 // node 环境注入 DOMParser，验证浏览器 htmlToDocx 路径（块级/行内/表格/图片）
 ;(globalThis as unknown as { DOMParser: typeof DOMParser }).DOMParser = DOMParser

@@ -114,13 +114,13 @@ export default function PlanInspector({
       {changes && current && shown ? (
         <section className="plan-version-comparison" aria-label="版本章节对比">
           <h3>与当前 v{current.version} 对比</h3>
-          <p>{changes.length} 个章节有变化</p>
+          <p>{changes.length} {shown.documentFileId || current.documentFileId ? '处文档有变化' : '个章节有变化'}</p>
           {editing && <p>对比已保存的正文，保存后更新。</p>}
           {changes.length ? (
             changes.map((change) => (
               <section key={change.key} className="plan-section-diff">
                 <h4>{change.label}</h4>
-                {change.formatOnly && <small>正文文字一致，格式有调整</small>}
+                {change.formatOnly && <small>{change.key === 'document' ? '文档文件已更新，正文文字一致；排版请查看原文。' : '正文文字一致，格式有调整'}</small>}
                 <div className="plan-diff-before">
                   <small>v{shown.version}</small>
                   <p>{change.before || '尚未填写'}</p>
@@ -158,8 +158,8 @@ export default function PlanInspector({
       </header>
       <ul className="plan-inspector-checks">
         <li>
-          <span>策划章节</span>
-          <strong>{filled} / 7</strong>
+          <span>{shown?.documentFileId ? '文档正文' : '策划章节'}</span>
+          <strong>{shown?.documentFileId ? '已保存' : `${filled} / 7`}</strong>
         </li>
         <li>
           <span>本轮审核人</span>

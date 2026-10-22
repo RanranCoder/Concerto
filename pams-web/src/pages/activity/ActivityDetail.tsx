@@ -49,7 +49,7 @@ import {
   updateAgenda,
 } from '@/api/agenda'
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/api/seat'
-import { agendaToDocx } from '@/components/word/planTemplate'
+import { agendaToDocx } from '@/components/word/agendaExport'
 import SeatMapView from '@/components/seat/SeatMapView'
 import SeatExcelEditor from '@/components/seat/SeatExcelEditor'
 import SeatLayoutEditor from '@/components/seat/SeatLayoutEditor'

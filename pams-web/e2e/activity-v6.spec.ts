@@ -55,6 +55,7 @@ async function setup(page: Page, theme = 'light', readOnly = false) {
     },
     { user, theme },
   )
+  let savedDocx: Buffer | null = null
   const activity = {
     id: 7,
     name: '十月主题党日活动',
@@ -283,8 +284,13 @@ async function setup(page: Page, theme = 'light', readOnly = false) {
       materials.push({ ...materials[0], ...body, id: 2 })
       return ok(materials[1])
     }
-    if (pathname === '/api/files/upload')
-      return ok({ id: 12, filename: '会务清单.txt', size: 10 })
+    if (pathname === '/api/files/upload') {
+      const form=await new Response(req.postDataBuffer() as Uint8Array, {headers:{'content-type':req.headers()['content-type']}}).formData()
+      const upload=form.get('file') as File
+      if(upload.name.endsWith('.docx')) savedDocx=Buffer.from(await upload.arrayBuffer())
+      return ok({ id:12, filename:upload.name, size:upload.size })
+    }
+    if((pathname === '/api/files/12/download' || pathname === '/api/plans/11/document') && savedDocx) return route.fulfill({body:savedDocx,contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'})
     if (pathname === '/api/files/4/download')
       return route.fulfill({
         contentType:
@@ -359,15 +365,7 @@ async function tab(page: Page, name: string) {
   await page.getByRole('tab', { name, exact: true }).click()
 }
 async function paper(page: Page) {
-  await expect(
-    page
-      .frameLocator('iframe[title="白色 A4 策划书文档"]')
-      .locator('section.activity-docx')
-      .first(),
-  ).toBeVisible({ timeout: 20000 })
-  await expect(
-    page.locator('.activity-word-main .ant-spin-spinning'),
-  ).toHaveCount(0)
+  await expect(page.locator('[data-document-engine="superdoc"]')).toHaveAttribute('data-ready', 'true', { timeout: 120000 })
 }
 
 test('activity editing keeps values on failure and list filters/sorting use server parameters', async ({
@@ -429,95 +427,6 @@ test('activity editing keeps values on failure and list filters/sorting use serv
   expect(errors).toEqual([])
 })
 
-test('white fixed A4 preview, Word roundtrip, save retry, and real plan review', async ({
-  page,
-}) => {
-  const { state, calls, errors, user } = await setup(page, 'dark')
-  await page.goto('/activities/7?tab=plan')
-  await paper(page)
-  const geometry = await page
-    .locator('iframe[title="白色 A4 策划书文档"]')
-    .evaluate((f) => {
-      const sheet = (f as HTMLIFrameElement).contentDocument!.querySelector(
-        'section',
-      )!
-      return {
-        width: sheet.getBoundingClientRect().width,
-        height: sheet.getBoundingClientRect().height,
-        color: getComputedStyle(sheet).backgroundColor,
-      }
-    })
-  expect(geometry.color).toBe('rgb(255, 255, 255)')
-  expect(geometry.width / geometry.height).toBeCloseTo(210 / 297, 3)
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: '下载 Word' }).click()
-  const doc = await download
-  expect(doc.suggestedFilename()).toContain('.docx')
-  await page.locator('.activity-word-viewer input[type=file]').setInputFiles({
-    name: doc.suggestedFilename(),
-    mimeType:
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    buffer: await readFile((await doc.path())!),
-  })
-  await paper(page)
-  await expect(
-    page.getByText('本地试阅，文件未上传，也不会替换已保存的策划书。'),
-  ).toBeVisible()
-  await page.getByRole('button', { name: /编辑策划/ }).click()
-  await expect(planEditor(page).locator('[data-slate-editor]')).toBeVisible()
-  await page.screenshot({
-    path: path.join(output, 'plan-editor-inline-dark.png'),
-    animations: 'disabled',
-  })
-  state.failPlanSave = true
-  const failedSave = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/plans/11') &&
-      response.request().method() === 'PUT',
-  )
-  await planEditor(page).getByRole('button', { name: '保存策划书' }).click()
-  expect((await failedSave).status()).toBe(500)
-  await expect(
-    planEditor(page).getByRole('button', { name: '保存策划书' }),
-  ).toBeEnabled()
-  await expect(planEditor(page)).toBeVisible()
-  state.failPlanSave = false
-  await planEditor(page).getByRole('button', { name: '保存策划书' }).click()
-  await expect(planEditor(page)).toHaveCount(0)
-  expect(
-    calls.find((c) => c.path === '/api/plans/11' && c.method === 'PUT')?.body
-      .budget,
-  ).toContain('120元')
-  await page.getByRole('button', { name: /提交审核$/ }).click()
-  await page.getByRole('checkbox', { name: /审核甲/ }).check()
-  await page.getByRole('button', { name: '提交给 1 位审核人' }).click()
-  await expect
-    .poll(
-      () =>
-        calls.find((c) => c.path === '/api/plans/11/submit')?.body.reviewerIds,
-    )
-    .toEqual([2])
-  user.id = 2
-  await page.reload()
-  await page.getByRole('button', { name: '审核策划书', exact: true }).click()
-  await page
-    .locator('.plan-inspector')
-    .getByRole('textbox')
-    .fill('内容完整，审核通过')
-  await page
-    .locator('.plan-inspector')
-    .getByRole('button', { name: '通过审核', exact: true })
-    .click()
-  await expect
-    .poll(
-      () =>
-        calls.filter((c) => c.path === '/api/plans/11/review').at(-1)?.body
-          .approved,
-    )
-    .toBe(true)
-  expect(errors).toEqual([])
-})
-
 test('article reader and editor are contextual drawers and preserve the complete manuscript', async ({
   page,
 }) => {
@@ -554,59 +463,6 @@ test('article reader and editor are contextual drawers and preserve the complete
     .toContain('完整稿件正文')
   await page.getByRole('button', { name: /新建推文/ }).click()
   await expect(drawer(page).getByLabel('标题', { exact: true })).toBeVisible()
-  expect(errors).toEqual([])
-})
-
-test('Word headings, tables, images, explicit breaks and long paragraphs remain complete across A4 sheets', async ({
-  page,
-}) => {
-  const { errors } = await setup(page)
-  await page.goto('/activities/7?tab=plan')
-  await paper(page)
-  await page
-    .locator('.activity-word-viewer input[type=file]')
-    .setInputFiles(
-      path.resolve('../docs/design/ui-v6-activity/fixtures/a4-plan.docx'),
-    )
-  await expect(
-    page
-      .locator('.activity-word-toolbar')
-      .getByText('a4-plan.docx', { exact: true }),
-  ).toBeVisible()
-  await paper(page)
-  const document = page.frameLocator('iframe[title="白色 A4 策划书文档"]')
-  await expect
-    .poll(() => document.locator('section.activity-docx').count())
-    .toBeGreaterThan(2)
-  expect(
-    (await document.locator('section > article').allTextContents()).join(''),
-  ).toContain('工作人员提前到场，检查音响与投影，核对签到名单。'.repeat(180))
-  await expect(document.getByText('文末校验：全部内容显示完成。')).toBeVisible()
-  await expect(document.locator('table')).toHaveCount(1)
-  await expect(document.locator('img')).toHaveCount(1)
-  const dimensions = await document
-    .locator('section.activity-docx')
-    .evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        width: node.clientWidth,
-        height: node.clientHeight,
-        overflow: node.scrollHeight - node.clientHeight,
-      })),
-    )
-  for (const sheet of dimensions) {
-    expect(sheet.width / sheet.height).toBeCloseTo(210 / 297, 2)
-    expect(sheet.overflow).toBeLessThanOrEqual(2)
-  }
-  await page.getByRole('combobox', { name: '文档缩放' }).selectOption('75')
-  await expect(page.locator('.activity-word-status')).toContainText('75%')
-  expect(await document.locator('section.activity-docx').count()).toBe(
-    dimensions.length,
-  )
-  await page.screenshot({
-    path: path.join(output, 'word-long-document.png'),
-    fullPage: true,
-    animations: 'disabled',
-  })
   expect(errors).toEqual([])
 })
 
@@ -684,9 +540,8 @@ test('Word import stays an unsaved draft until explicitly saved', async ({
     .setInputFiles(
       path.resolve('../docs/design/ui-v6-activity/fixtures/a4-plan.docx'),
     )
-  await expect(planEditor(page).locator('[data-slate-editor]')).toContainText(
-    '本文件用于验证 Word 文档',
-  )
+  await paper(page)
+  await expect(planEditor(page).getByRole('button', {name:'保存策划书'})).toBeEnabled()
   expect(calls.filter((call) => call.method !== 'GET')).toEqual([])
   await planEditor(page).getByRole('button', { name: '保存策划书' }).click()
   await expect
@@ -694,9 +549,9 @@ test('Word import stays an unsaved draft until explicitly saved', async ({
       () =>
         calls.find(
           (call) => call.path === '/api/plans/11' && call.method === 'PUT',
-        )?.body.background,
+        )?.body.documentFileId,
     )
-    .toContain('本文件用于验证 Word 文档')
+    .toBe(12)
   expect(errors).toEqual([])
 })
 

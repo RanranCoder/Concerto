@@ -1,0 +1,15 @@
+.pams-superdoc { position:relative; min-width:0; background:var(--soft); color-scheme:light; }
+.pams-superdoc-toolbar { position:sticky; top:0; z-index:12; max-width:100%; overflow-x:auto; background:#fff; color:#222; border-bottom:1px solid var(--border); }
+.pams-superdoc-toolbar[hidden] { display:none; }
+.pams-superdoc-canvas { height:clamp(440px, calc(100dvh - 270px), 880px); width:100%; min-width:0; overflow:auto; color:#222; }
+.pams-superdoc .superdoc { width:100%; min-width:0; }
+.pams-superdoc .superdoc__layers { flex:1 1 0%; min-width:0; max-width:100%; }
+.pams-superdoc.is-editing .pams-superdoc-canvas { height:clamp(400px, calc(100dvh - 350px), 800px); }
+.pams-superdoc-loading { position:absolute; inset:80px 0 auto; z-index:2; text-align:center; color:var(--text-secondary); }
+.pams-superdoc-error { padding:20px; color:var(--status-danger); background:var(--surface); }
+.pams-superdoc-error button { font:inherit; padding:8px 12px; cursor:pointer; }
+.pams-superdoc [inert] { opacity:.75; }
+@media(max-width:800px) {
+  .pams-superdoc-toolbar { overflow-x:auto; }
+  .pams-superdoc-canvas { height:70dvh; }
+}

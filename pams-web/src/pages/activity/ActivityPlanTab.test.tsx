@@ -12,10 +12,13 @@ import { App } from 'antd'
 import type { ActivityDetail, ActivityPlanVO } from '@/api/activity'
 import ActivityPlanTab from './ActivityPlanTab'
 import * as api from '@/api/plan'
-import { planToDocx } from '@/components/word/planTemplate'
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer'
+import { planToDocx } from '@/components/word/legacyPlanMigration'
+import { uploadFile, fetchFileBlob } from '@/api/file'
 
 vi.mock('@/api/plan', () => ({
   createPlan: vi.fn(),
+  fetchPlanDocument: vi.fn(),
   updatePlan: vi.fn(),
   getPlan: vi.fn(),
   planWorkspace: vi.fn(),
@@ -31,27 +34,20 @@ vi.mock('@/stores/auth', () => ({
 vi.mock('@/components/glass/RequireRole', () => ({
   useHasPerm: () => () => true,
 }))
-vi.mock('@/components/word/WordEditor', () => ({
-  default: ({
-    value,
-    onChange,
-  }: {
-    value: { content: string }
-    onChange: (v: unknown) => void
-  }) => (
-    <textarea
-      aria-label="文档正文"
-      value={value.content}
-      onChange={(e) => onChange({ ...value, content: e.target.value })}
-    />
-  ),
-}))
-vi.mock('@/components/word/A4DocumentPreview', () => ({
-  default: () => <div>已保存的文档预览</div>,
-}))
-vi.mock('@/components/word/planTemplate', () => ({
-  planToDocx: vi.fn(async () => new Blob(['docx'])),
-  docxToPlan: vi.fn(),
+vi.mock('@/components/word/SuperDocDocument', async () => {
+  const React = await import('react')
+  return { default: React.forwardRef(function MockDocument(
+    { document, editing, onChange, onReady }: { document: Blob; editing: boolean; onChange?: () => void; onReady?: (v: boolean) => void }, ref,
+  ) {
+    const [text, setText] = React.useState('')
+    React.useEffect(() => { void document.text().then(v => { setText(v); onReady?.(true) }) }, [document])
+    React.useImperativeHandle(ref, () => ({ exportDocx: async () => new Blob([text]) }), [text])
+    return editing ? <textarea aria-label="文档正文" value={text} onChange={e => { setText(e.target.value); onChange?.() }} /> : <div>已保存的文档预览</div>
+  }) }
+})
+vi.mock('@/api/file', () => ({ uploadFile: vi.fn(), fetchFileBlob: vi.fn() }))
+vi.mock('@/components/word/legacyPlanMigration', () => ({
+  planToDocx: vi.fn(async (fields: { content?: string }) => new Blob([fields.content || '新建文档'])),
   parseSectionOrder: () => [],
 }))
 vi.mock('@/components/form/FormSurface', () => ({
@@ -113,6 +109,11 @@ function mount(plan = workspace()) {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubGlobal('Blob', NodeBlob)
+  vi.stubGlobal('File', NodeFile)
+  vi.mocked(uploadFile).mockResolvedValue({ id: 99 } as Awaited<ReturnType<typeof uploadFile>>)
+  vi.mocked(fetchFileBlob).mockResolvedValue(new Blob(['已保存的原生文档']))
+  vi.mocked(api.fetchPlanDocument).mockResolvedValue(new Blob(['已保存的原生文档']))
   vi.stubGlobal('matchMedia', () => ({
     matches: false,
     addListener: () => {},
@@ -124,7 +125,22 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
+async function edit() {
+  const button = screen.getByRole('button', { name: /编辑策划/ })
+  await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(button)
+  await screen.findByRole('textbox', { name: '文档正文' })
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存策划书' }).hasAttribute('disabled')).toBe(false))
+}
+
 describe('策划书文档工作区', () => {
+  it('原生版本直接获取 DOCX，不再走 HTML 重建', async () => {
+    mount(workspace({ ...saved, documentFileId: 88, documentText: '原生正文' }))
+    await waitFor(() => expect(api.fetchPlanDocument).toHaveBeenCalledWith(11))
+    expect(planToDocx).not.toHaveBeenCalled()
+    await edit()
+    expect((screen.getByRole('textbox', { name: '文档正文' }) as HTMLTextAreaElement).value).toBe('已保存的原生文档')
+  })
   it('常驻侧栏展示时间线，选择历史版后对比已保存的章节', async () => {
     const old = {
       ...saved,
@@ -195,7 +211,7 @@ describe('策划书文档工作区', () => {
   })
   it('在文档内编辑，取消后丢弃输入并隐藏编辑栏', async () => {
     mount()
-    fireEvent.click(screen.getByRole('button', { name: /编辑策划/ }))
+    await edit()
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.change(screen.getByRole('textbox', { name: '文档正文' }), {
       target: { value: '未保存正文' },
@@ -203,7 +219,7 @@ describe('策划书文档工作区', () => {
     fireEvent.click(screen.getByRole('button', { name: '取消编辑' }))
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }))
     await waitFor(() => expect(screen.queryByText('正在编辑策划书')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: /编辑策划/ }))
+    await edit()
     expect(
       (screen.getByRole('textbox', { name: '文档正文' }) as HTMLTextAreaElement)
         .value,
@@ -215,7 +231,7 @@ describe('策划书文档工作区', () => {
       workspace({ ...saved, content: '保存后的内容' }),
     )
     mount()
-    fireEvent.click(screen.getByRole('button', { name: /编辑策划/ }))
+    await edit()
     fireEvent.change(screen.getByRole('textbox', { name: '文档正文' }), {
       target: { value: '保存后的内容' },
     })
@@ -223,11 +239,11 @@ describe('策划书文档工作区', () => {
     await waitFor(() =>
       expect(api.updatePlan).toHaveBeenCalledWith(
         11,
-        expect.objectContaining({ activityId: 7, content: '保存后的内容' }),
+        expect.objectContaining({ activityId: 7, documentFileId: 99 }),
       ),
     )
     await waitFor(() => expect(screen.queryByText('正在编辑策划书')).toBeNull())
-    fireEvent.click(screen.getByRole('button', { name: /编辑策划/ }))
+    await edit()
     expect(
       (screen.getByRole('textbox', { name: '文档正文' }) as HTMLTextAreaElement)
         .value,
@@ -236,7 +252,7 @@ describe('策划书文档工作区', () => {
   it('保存失败保留未保存内容和编辑栏', async () => {
     vi.mocked(api.updatePlan).mockRejectedValueOnce(new Error('save failed'))
     mount()
-    fireEvent.click(screen.getByRole('button', { name: /编辑策划/ }))
+    await edit()
     fireEvent.change(screen.getByRole('textbox', { name: '文档正文' }), {
       target: { value: '保留输入' },
     })

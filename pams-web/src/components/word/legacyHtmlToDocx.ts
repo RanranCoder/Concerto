@@ -1,7 +1,7 @@
-// 轻量 HTML → docx 保真转换器：把 wangEditor 富文本（块级 + 行内 + 图片 + 表格）逐元素转为 docx 节点。
+// 轻量 HTML → docx 保真转换器：把 旧富文本 富文本（块级 + 行内 + 图片 + 表格）逐元素转为 docx 节点。
 // 浏览器用 DOMParser 解析；node（vitest）环境无 DOMParser 时退化为最小处理（文本抽取）。
 // 图片 <img> 需 fetch 二进制（/api/files/... 带 JWT），失败则跳过图片保留文字。
-import { stripHtml } from './planTemplate'
+import { stripHtml } from './legacyPlanMigration'
 
 type DocxMod = typeof import('docx')
 
@@ -35,7 +35,7 @@ function styleColor(style: string | null | undefined): string | undefined {
   return c.replace('#', '')
 }
 
-/** 提取 <img> 的 URL（wangEditor 图片为 <img src=... data-href=...>） */
+/** 提取 <img> 的 URL（旧富文本 图片为 <img src=... data-href=...>） */
 function imageSrc(node: Element): string {
   return node.getAttribute('data-href') || node.getAttribute('src') || ''
 }
@@ -206,11 +206,13 @@ async function appendTable(el: Element, ctx: HtmlToDocxContext, paragraphs: Docx
   const border = { style: mod.BorderStyle.SINGLE, size: 4, color: '000000' }
   const table = new mod.Table({
     width: { size: 100, type: mod.WidthType.PERCENTAGE },
+    columnWidths: Array(Math.max(...rows.map(row => row.cells.length))).fill(Math.floor(9000 / Math.max(...rows.map(row => row.cells.length)))),
     rows: rows.map((row, ri) =>
       new mod.TableRow({
         tableHeader: row.isHeader || ri === 0,
         children: row.cells.map((c) =>
           new mod.TableCell({
+            width: { size: Math.floor(9000 / row.cells.length), type: mod.WidthType.DXA },
             borders: { top: border, bottom: border, left: border, right: border },
             verticalAlign: 'center',
             children: [

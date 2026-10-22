@@ -37,6 +37,9 @@ public class PlanService {
         if (!access.canRead(p,context())) throw new BizException(403,"当前版本仅作者和所选审核人可见");
         return p;
     }
+    public org.springframework.core.io.Resource document(Long id) {
+        return attachments.documentResource(getEntity(id));
+    }
     public List<ActivityPlan> listByActivity(Long activityId) {
         return repository.findByActivityIdOrderByVersionDesc(activityId).stream()
                 .filter(p -> access.canRead(p,context())).toList();
@@ -109,7 +112,9 @@ public class PlanService {
         p.setActivityId(req.getActivityId()); p.setOrgId(a.getOrgId());
         p.setOwnerId(previous==null?ctx.getUserId():access.owner(previous));
         p.setVersion(previous==null?1:previous.getVersion()+1);
-        apply(p,req); syncActivityIfNeeded(req.getActivityId(),req); freezeMetadata(p,a);
+        apply(p,req);
+        if(req.getDocumentFileId()!=null) attachments.indexDocument(p,req.getDocumentFileId(),ctx);
+        syncActivityIfNeeded(req.getActivityId(),req); freezeMetadata(p,a);
         p.setStatus(ActivityPlan.PlanStatus.DRAFT); p.setCreatedAt(LocalDateTime.now());
         return repository.save(p);
     }
@@ -123,8 +128,12 @@ public class PlanService {
         if (!Objects.equals(p.getActivityId(),req.getActivityId())) throw new BizException(2003,"不能修改关联活动");
         if (p.getStatus()!=ActivityPlan.PlanStatus.DRAFT)
             throw new BizException(2003,"当前状态不可修改，请新建版本");
+        if(p.getDocumentFileId()!=null && req.getDocumentFileId()==null)
+            throw new BizException(2003,"请使用文档编辑器保存 DOCX，不能用旧字段覆盖正文");
         attachments.validate(req,context());
-        apply(p,req); syncActivityIfNeeded(p.getActivityId(),req);
+        apply(p,req);
+        if(req.getDocumentFileId()!=null) attachments.indexDocument(p,req.getDocumentFileId(),context());
+        syncActivityIfNeeded(p.getActivityId(),req);
         freezeMetadata(p,activityRepository.findById(p.getActivityId()).orElseThrow());
         repository.save(p);
         eventPublisher.publishEvent(new PlanEditedEvent(p.getId(),p.getActivityId(),p.getNameOverride(),editorId));

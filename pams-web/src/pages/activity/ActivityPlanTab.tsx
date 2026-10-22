@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Empty, Input, Space, Spin, Checkbox, Select } from 'antd'
 import {
   DownloadOutlined,
@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons'
 import {
   createPlan,
+  fetchPlanDocument,
   getPlan,
   planWorkspace,
   planReviewers,
@@ -17,23 +18,22 @@ import {
   updatePlan,
   type PlanSave,
 } from '@/api/plan'
-import { fetchFileBlob } from '@/api/file'
+import { fetchFileBlob, uploadFile } from '@/api/file'
 import { listTemplates, type TemplateVO } from '@/api/template'
 import type { ActivityDetail, ActivityPlanVO } from '@/api/activity'
 import { useAuthStore } from '@/stores/auth'
 import { useHasPerm } from '@/components/glass/RequireRole'
 import FormSurface from '@/components/form/FormSurface'
-import WordEditor from '@/components/word/WordEditor'
-import A4DocumentPreview from '@/components/word/A4DocumentPreview'
+import type { SuperDocDocumentHandle } from '@/components/word/SuperDocDocument'
 import PlanInspector from './PlanInspector'
 import {
-  docxToPlan,
   parseSectionOrder,
   planToDocx,
   type PlanFields,
   type PlanOverrides,
-  type PlanSectionOrderItem,
-} from '@/components/word/planTemplate'
+} from '@/components/word/legacyPlanMigration'
+
+const SuperDocDocument = lazy(() => import('@/components/word/SuperDocDocument'))
 
 const labels = {
   DRAFT: '草稿',
@@ -41,15 +41,6 @@ const labels = {
   APPROVED: '已通过',
   REJECTED: '已驳回',
   WITHDRAWN: '已撤回',
-}
-const blank: PlanFields = {
-  background: '',
-  purpose: '',
-  content: '',
-  flow: '',
-  notice: '',
-  emergency: '',
-  budget: '',
 }
 const fromPlan = (plan: ActivityPlanVO | null): PlanFields => ({
   background: plan?.background ?? '',
@@ -83,6 +74,7 @@ export default function ActivityPlanTab({
   const { message, modal } = App.useApp(),
     hasPerm = useHasPerm()
   const userId = useAuthStore((s) => s.user?.id)
+  const authorName = useAuthStore((s) => s.user?.realName || '策划书作者')
   const [workspace, setWorkspace] = useState(plan)
   const [selected, setSelected] = useState<ActivityPlanVO | null>(null)
   const [versionBusy, setVersionBusy] = useState(false)
@@ -165,9 +157,9 @@ export default function ActivityPlanTab({
   const [editor, setEditor] = useState(false),
     [dirty, setDirty] = useState(false),
     [saving, setSaving] = useState(false)
-  const [fields, setFields] = useState<PlanFields>(blank),
-    [overrides, setOverrides] = useState<PlanOverrides>({}),
-    [order, setOrder] = useState<PlanSectionOrderItem[]>([])
+  const [editBlob, setEditBlob] = useState<Blob | null>(null)
+  const [documentReady, setDocumentReady] = useState(false)
+  const documentEditor = useRef<SuperDocDocumentHandle>(null)
   const [blob, setBlob] = useState<Blob | null>(null),
     [previewBusy, setPreviewBusy] = useState(false),
     [previewError, setPreviewError] = useState(false)
@@ -182,7 +174,6 @@ export default function ActivityPlanTab({
     [templateOpen, setTemplateOpen] = useState(false),
     [importing, setImporting] = useState(false)
   const file = useRef<HTMLInputElement>(null)
-  const userEdited = useRef(false)
   const inlineEditor = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (editor) inlineEditor.current?.scrollIntoView?.({ block: 'start' })
@@ -211,20 +202,13 @@ export default function ActivityPlanTab({
   )
   useEffect(() => {
     let cancelled = false
-    if (!latest) {
-      setBlob(null)
-      setPreviewBusy(false)
-      return
-    }
     setBlob(null)
     setPreviewBusy(true)
     setPreviewError(false)
-    planToDocx(
-      fromPlan(latest),
-      meta,
-      fromOverrides(latest),
-      parseSectionOrder(latest.sectionOrder),
-    )
+    const prepare = latest?.documentFileId
+      ? fetchPlanDocument(latest.id)
+      : planToDocx(fromPlan(latest), meta, fromOverrides(latest), parseSectionOrder(latest?.sectionOrder))
+    prepare
       .then((data) => {
         if (!cancelled) setBlob(data)
       })
@@ -239,10 +223,9 @@ export default function ActivityPlanTab({
     }
   }, [latest, meta])
   const openEditor = () => {
-    userEdited.current = false
-    setFields(fromPlan(latest))
-    setOverrides(fromOverrides(latest))
-    setOrder(parseSectionOrder(latest?.sectionOrder))
+    if (!blob || previewBusy || versionBusy) return
+    setEditBlob(blob)
+    setDocumentReady(false)
     setDirty(false)
     setEditor(true)
   }
@@ -257,70 +240,40 @@ export default function ActivityPlanTab({
       })
     else setEditor(false)
   }
-  const save = async (syncActivity = false) => {
+  const save = async () => {
+    if (!documentReady || !documentEditor.current || saving) return
     setSaving(true)
     try {
+      const nativeDocx = await documentEditor.current.exportDocx()
+      const uploaded = await uploadFile(new File([nativeDocx], '策划书.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }), 'PLAN')
       const data: PlanSave = {
         activityId,
         expectedUpdatedAt: latest?.updatedAt,
         expectedRevision: latest?.revision,
-        ...fields,
-        ...overrides,
-        sectionOrder: order.length ? JSON.stringify(order) : null,
-        syncActivity,
+        documentFileId: uploaded.id,
+        ...fromOverrides(latest),
       }
       if (!latest) await createPlan(data)
       else await updatePlan(latest.id, data)
       await refresh()
-      message.success('策划书已保存')
       setEditor(false)
+      setEditBlob(null)
       setDirty(false)
+      message.success('策划书已保存')
     } catch {
-      /* Retain edits after a rejected or failed save. */
-    } finally {
-      setSaving(false)
-    }
-  }
-  const saveClick = () => {
-    const baseline: PlanOverrides = {
-      nameOverride: meta.name,
-      themeOverride: meta.theme,
-      timeOverride: meta.time,
-      locationOverride: meta.location,
-      organizerOverride: meta.organizer,
-      targetOverride: meta.target,
-    }
-    const stored = fromOverrides(latest)
-    const changed = Object.entries(overrides).some(
-      ([key, value]) =>
-        value?.trim() &&
-        value.trim() !==
-          (
-            stored[key as keyof PlanOverrides] ??
-            baseline[key as keyof PlanOverrides] ??
-            ''
-          ).trim(),
-    )
-    if (changed)
-      modal.confirm({
-        title: '同步修改活动基本信息？',
-        content: '策划书中的名称、主题、时间、地点、组织单位或面向对象已调整。',
-        keyboard: false,
-        maskClosable: false,
-        okText: '同步并保存',
-        cancelText: '仅保存策划书',
-        onOk: () => save(true),
-        onCancel: () => save(false),
-      })
-    else void save()
+      message.error('保存未完成，您的修改仍保留在编辑器中，请重试')
+    } finally { setSaving(false) }
   }
   const importContent = async (selected: File) => {
     setImporting(true)
     try {
-      const parsed = await docxToPlan(selected)
-      setFields({ ...fromPlan(latest), ...parsed })
-      setOverrides(fromOverrides(latest))
-      setOrder(parseSectionOrder(latest?.sectionOrder))
+      if (!selected.name.toLowerCase().endsWith('.docx')) throw new Error('invalid docx')
+      const { validateDocx } = await import('@/components/word/nativeDocx')
+      await validateDocx(selected)
+      setEditBlob(selected)
+      setDocumentReady(false)
       setDirty(true)
       setEditor(true)
       setTemplateOpen(false)
@@ -452,7 +405,7 @@ export default function ActivityPlanTab({
             </Button>
           )}
           {canEdit && !editor && (
-            <Button type="primary" icon={<EditOutlined />} onClick={openEditor}>
+            <Button type="primary" icon={<EditOutlined />} onClick={openEditor} disabled={previewBusy || !blob || versionBusy}>
               {latest ? '编辑策划' : '创建策划书'}
             </Button>
           )}
@@ -535,45 +488,17 @@ export default function ActivityPlanTab({
                   <Button onClick={closeEditor} disabled={saving}>
                     取消编辑
                   </Button>
-                  <Button loading={saving} type="primary" onClick={saveClick}>
+                  <Button loading={saving} disabled={!documentReady} type="primary" onClick={() => void save()}>
                     保存策划书
                   </Button>
                 </Space>
               </div>
-              <fieldset
-                disabled={saving}
-                className="activity-plan-edit-fields"
-                onPointerDownCapture={() => {
-                  userEdited.current = true
-                }}
-                onKeyDownCapture={() => {
-                  userEdited.current = true
-                }}
-                onChangeCapture={() => {
-                  userEdited.current = true
-                  setDirty(true)
-                }}
-              >
-                <WordEditor
-                  fixedA4
-                  value={fields}
-                  onChange={(v) => {
-                    setFields(v)
-                    if (userEdited.current) setDirty(true)
-                  }}
-                  meta={meta}
-                  overrides={overrides}
-                  onOverridesChange={(v) => {
-                    setOverrides(v)
-                    if (userEdited.current) setDirty(true)
-                  }}
-                  sectionOrder={order.length ? order : undefined}
-                  onSectionOrderChange={(v) => {
-                    setOrder(v)
-                    if (userEdited.current) setDirty(true)
-                  }}
-                />
-              </fieldset>
+              {editBlob && <Suspense fallback={<div className="activity-plan-loading">正在加载文档编辑器…</div>}>
+                <SuperDocDocument ref={documentEditor} document={editBlob} editing disabled={saving}
+                  author={authorName}
+                  onReady={setDocumentReady} onChange={() => setDirty(true)} />
+              </Suspense>}
+
             </div>
           ) : versionBusy ? (
             <div className="activity-plan-loading">
@@ -581,15 +506,14 @@ export default function ActivityPlanTab({
             </div>
           ) : previewError ? (
             <p role="alert" className="activity-inline-note error">
-              策划书生成预览失败，请重新载入活动后重试。
+              策划书加载失败，请重新载入活动后重试。
             </p>
           ) : latest ? (
-            <A4DocumentPreview
-              key={`${latest.id}-${latest.updatedAt}`}
-              blob={blob}
-              loading={previewBusy}
-              name={`${activity.name}-策划书.docx`}
-            />
+            previewBusy || !blob ? <div className="activity-plan-loading"><Spin /></div> :
+              <Suspense fallback={<div className="activity-plan-loading">正在加载文档预览…</div>}>
+                <SuperDocDocument key={`${latest.id}-${latest.updatedAt}`} document={blob} editing={false}
+                  author="策划书读者" />
+              </Suspense>
           ) : (
             <Empty
               description={

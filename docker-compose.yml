@@ -52,6 +52,8 @@ services:
   web:
     build:
       context: ./pams-web
+      args:
+        VITE_SUPERDOC_LICENSE_KEY: ${VITE_SUPERDOC_LICENSE_KEY:-}
     image: ${PAMS_IMAGE_PREFIX:-pams}-web:${PAMS_IMAGE_TAG:-latest}
     container_name: pams-web
     restart: unless-stopped
