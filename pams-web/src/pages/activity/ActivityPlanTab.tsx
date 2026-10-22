@@ -231,6 +231,10 @@ export default function ActivityPlanTab({
   }
   const closeEditor = () => {
     if (saving) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().then(closeEditor).catch(() => message.warning('请先退出全屏，再取消编辑。'))
+      return
+    }
     if (dirty)
       modal.confirm({
         title: '放弃未保存的策划内容？',

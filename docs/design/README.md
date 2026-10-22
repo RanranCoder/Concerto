@@ -36,3 +36,5 @@ node docs/design/ui-v6-activity/serve.cjs
 内嵌文档编辑器的方案、授权与接入设计见 [策划书内嵌 Word 编辑器选型调研](PAMS-策划书内嵌Word编辑器选型调研.md)。
 
 当前正式项目已切换到 [SuperDoc 接入与验收](PAMS-SuperDoc-接入与验收.md)，含旧方案清理范围与实际页面截图。
+
+开始、插入、布局、审阅、视图五组编辑工具及实际页面截图见 [SuperDoc 工具页签落地](PAMS-SuperDoc-工具页签落地.md)。
