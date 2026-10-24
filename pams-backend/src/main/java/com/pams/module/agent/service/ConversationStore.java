@@ -436,6 +436,7 @@ public class ConversationStore {
             if (!(raw instanceof List<?> list) || list.isEmpty()) continue;
 
             List<Map<String, Object>> kept = new ArrayList<>(list.size());
+            boolean unavailable = false;
             for (Object o : list) {
                 if (!(o instanceof Map<?, ?> cit)) {
                     continue;
@@ -462,11 +463,22 @@ public class ConversationStore {
                     c.put("path", null);
                     c.put("link", null);
                     c.put("revoked", true);
+                    c.put("sourceTitle", "已不可见的依据");
                     kept.add(c);
+                    unavailable = true;
                     revoked++;
                 }
             }
             vo.put("citations", kept);
+            // The answer and reasoning may quote the revoked source verbatim.
+            // Without sentence-level provenance, hide the complete derived answer.
+            if (unavailable) {
+                vo.put("content", "该回答引用的资料已不可见，请基于当前可访问资料重新提问。");
+                vo.put("thinking", List.of());
+                vo.put("thinkingNotes", List.of());
+                vo.put("toolCalls", List.of());
+                vo.put("references", List.of());
+            }
         }
 
         if (revoked > 0) {
@@ -566,6 +578,13 @@ public class ConversationStore {
             return ordered.subList(ordered.size() - keep, ordered.size());
         }
         return ordered;
+    }
+
+    /** Recheck source visibility before historical answers go back to the model. */
+    public String contextText(AgentMessage message, ToolContext ctx) {
+        Map<String, Object> view = toVo(message);
+        revokeUnauthorizedCitations(List.of(view), ctx);
+        return (String) view.get("content");
     }
 
     /** 摘要：截断到 N 字（sensitive 消息只存这个） */

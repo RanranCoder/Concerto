@@ -118,9 +118,7 @@ public class TaskGate {
             List<AgentTask> olds = repository.findByConversationIdAndStatusOrderByIdAsc(
                     ctx.getConversationId(), AgentTask.PENDING_CONFIRM);
             for (AgentTask old : olds) {
-                old.setStatus(AgentTask.CANCELLED);
-                old.setFinishedAt(LocalDateTime.now());
-                repository.save(old);
+                repository.cancelPending(old.getId(), ctx.getUserId(), LocalDateTime.now());
             }
             if (!olds.isEmpty()) {
                 log.info("多轮接续：作废会话 {} 内 {} 条旧待确认清单", ctx.getConversationId(), olds.size());
@@ -305,7 +303,7 @@ public class TaskGate {
             }
             repository.save(task);
             AgentActionPlan persisted = new AgentActionPlan(task.getId(), raw.summary(), raw.total(),
-                    raw.items(), raw.skipped(), raw.detailLines(), raw.reversible(), task.getConfirmToken());
+                    raw.items(), raw.skipped(), raw.detailLines(), raw.reversible(), task.getConfirmToken(), raw.preview());
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("status", "PLAN");
             out.put("plan", persisted.toJson());
@@ -379,6 +377,15 @@ public class TaskGate {
         if (confirmToken == null || !confirmToken.equals(task.getConfirmToken())) {
             throw new BizException(4403, "确认令牌无效或已过期");
         }
+        if (isExpired(task)) {
+            throw new BizException(4403, "确认清单已过期，请重新生成");
+        }
+        AgentTool tool = registry.find(task.getToolName())
+                .orElseThrow(() -> new BizException(4404, "工具已下线：" + task.getToolName()));
+        // Changing modes must not consume a pending confirmation or leave RUNNING behind.
+        if (tool.writeOperation() && (ctx.isReadonly() || ctx.isKb())) {
+            throw new BizException(4403, "当前模式不允许写操作，请切换标准模式后确认");
+        }
 
         // 【乐观锁抢占】—— 影响行数 0 = 重复提交
         int claimed = repository.claimForRun(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
@@ -387,9 +394,6 @@ public class TaskGate {
             AgentTask fresh = repository.findById(taskId).orElseThrow();
             return toResultVo(fresh, true);
         }
-
-        AgentTool tool = registry.find(task.getToolName())
-                .orElseThrow(() -> new BizException(4404, "工具已下线：" + task.getToolName()));
 
         // 二次断言：确认时再校验一次权限（任务可能是很久之前创建的，期间用户角色可能已变）
         if (!registry.visibleTo(tool, ctx)) {
@@ -475,9 +479,9 @@ public class TaskGate {
         if (!cancellable) {
             throw new BizException(4400, "仅待确认或待填写的任务可以取消");
         }
-        task.setStatus(AgentTask.CANCELLED);
-        task.setFinishedAt(LocalDateTime.now());
-        repository.save(task);
+        if (repository.cancelPending(taskId, userId, LocalDateTime.now()) == 0) {
+            throw new BizException(4400, "任务状态已变化，请刷新后查看执行结果");
+        }
     }
 
     private AgentActionPlan readPlan(AgentTask task) {
@@ -512,7 +516,7 @@ public class TaskGate {
             return new AgentActionPlan(task.getId(), str(m.get("summary")),
                     m.get("total") == null ? 0 : Integer.parseInt(String.valueOf(m.get("total"))),
                     items, skipped, detailLines,
-                    Boolean.TRUE.equals(m.get("reversible")), task.getConfirmToken());
+                    Boolean.TRUE.equals(m.get("reversible")), task.getConfirmToken(), str(m.get("preview")));
         } catch (Exception e) {
             log.warn("plan_json 反序列化失败，退回空清单", e);
             return AgentActionPlan.empty();

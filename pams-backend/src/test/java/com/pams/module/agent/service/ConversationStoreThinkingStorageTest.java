@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import com.pams.module.knowledge.service.PermissionResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -41,6 +44,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Transactional
 class ConversationStoreThinkingStorageTest {
+    @MockitoSpyBean
+    PermissionResolver permissions;
+
+    @BeforeEach
+    void allowTheSyntheticCitationUsedByJsonRoundtripFixtures() {
+        // These tests exercise JSON persistence, with an explicitly readable fixture.
+        // Revoked-source handling has its own regression tests.
+        org.mockito.Mockito.doReturn(true).when(permissions).canAccess(
+                org.mockito.ArgumentMatchers.eq("material"), org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.any());
+    }
 
     private static final long CONV = 4242L;
     /** 与 {@code ConversationStore.THINKING_SENSITIVE_MAX} 同值的契约上限（写死在测试里，防止它被悄悄调大） */

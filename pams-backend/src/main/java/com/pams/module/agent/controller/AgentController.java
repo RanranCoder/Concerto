@@ -95,11 +95,12 @@ public class AgentController {
     /** 中止一次进行中的回答（编排器在下一个阶段边界退出） */
     @PostMapping("/chat/{streamId}/abort")
     @PreAuthorize("isAuthenticated()")
-    public Result<Map<String, Object>> abort(@PathVariable String streamId) {
-        publisher.markAborted(streamId);
+    public Result<Map<String, Object>> abort(@PathVariable String streamId,
+                                            @AuthenticationPrincipal LoginUser user) {
+        boolean aborted = publisher.abortOwned(streamId, user == null ? null : user.getId());
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("streamId", streamId);
-        r.put("aborted", true);
+        r.put("aborted", aborted);
         return Result.ok(r);
     }
 

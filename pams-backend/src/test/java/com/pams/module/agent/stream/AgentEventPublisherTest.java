@@ -36,6 +36,17 @@ import static org.mockito.Mockito.when;
  */
 class AgentEventPublisherTest {
 
+    @Test
+    void onlyTheOwnerMayAbortAndUnknownIdsDoNotBecomeAborted() {
+        String id = streamOwnedBy(1L);
+        assertThat(publisher.abortOwned(id, 2L)).isFalse();
+        assertThat(publisher.isAborted(id)).isFalse();
+        assertThat(publisher.abortOwned("unknown", 1L)).isFalse();
+        assertThat(publisher.isAborted("unknown")).isFalse();
+        assertThat(publisher.abortOwned(id, 1L)).isTrue();
+        assertThat(publisher.isAborted(id)).isTrue();
+    }
+
     private SimpMessagingTemplate messaging;
     private AgentToolCallRepository toolCallRepository;
     private AgentConversationRepository conversationRepository;

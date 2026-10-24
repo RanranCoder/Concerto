@@ -226,6 +226,13 @@ public class AgentEventPublisher {
         aborted.put(streamId, Boolean.TRUE);
     }
 
+    /** Only a stream's owner may interrupt it; unknown IDs never allocate state. */
+    public boolean abortOwned(String streamId, Long requesterUserId) {
+        if (!ownedBy(streamId, requesterUserId)) return false;
+        markAborted(streamId);
+        return true;
+    }
+
     public boolean isAborted(String streamId) {
         return Boolean.TRUE.equals(aborted.get(streamId));
     }

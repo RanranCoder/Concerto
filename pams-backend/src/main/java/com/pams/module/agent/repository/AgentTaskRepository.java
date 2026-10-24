@@ -43,6 +43,12 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
 
     long countByUserIdAndStatus(Long userId, String status);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("update AgentTask t set t.status = 'CANCELLED', t.finishedAt = :ts "
+            + "where t.id = :id and t.userId = :userId and t.status in ('PENDING_CONFIRM', 'WAITING_INPUT')")
+    int cancelPending(@Param("id") Long id, @Param("userId") Long userId, @Param("ts") LocalDateTime ts);
+
     List<AgentTask> findByUserIdAndConversationIdInOrderByIdDesc(Long userId, List<Long> conversationIds);
 
     /**

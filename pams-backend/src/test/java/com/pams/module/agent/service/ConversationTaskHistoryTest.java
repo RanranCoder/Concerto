@@ -20,6 +20,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest @ActiveProfiles("test") @Transactional
 class ConversationTaskHistoryTest {
+    @Test void cancellationCannotOverwriteRunningOrSuccessfulTasks() {
+        var conversation = conversations.create(1L,"原子状态迁移");
+        var row = task(conversation.getId(), AgentTask.PENDING_CONFIRM);
+        long id = row.getId();
+        em.clear();
+        assertThat(tasks.claimForRun(id, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING, LocalDateTime.now())).isEqualTo(1);
+        assertThat(tasks.cancelPending(id,1L,LocalDateTime.now())).isZero();
+        em.clear();
+        assertThat(tasks.findById(id).orElseThrow().getStatus()).isEqualTo(AgentTask.RUNNING);
+        tasks.finish(id,AgentTask.SUCCESS,"{}",LocalDateTime.now());
+        assertThat(tasks.cancelPending(id,1L,LocalDateTime.now())).isZero();
+        em.clear();
+        assertThat(tasks.findById(id).orElseThrow().getStatus()).isEqualTo(AgentTask.SUCCESS);
+    }
     @Autowired ConversationStore conversations;
     @Autowired AgentTaskRepository tasks;
     @PersistenceContext EntityManager em;

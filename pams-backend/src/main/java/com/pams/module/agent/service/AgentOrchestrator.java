@@ -523,7 +523,7 @@ public class AgentOrchestrator {
             if (AgentMessage.ROLE_TOOL.equals(m.getRole())) continue;
 
             String role = AgentMessage.ROLE_ASSISTANT.equals(m.getRole()) ? "assistant" : "user";
-            String content = m.getContent();
+            String content = conversations.contextText(m, ctx);
             if (content == null || content.isBlank()) continue;
             out.add(LlmProvider.ChatMessage.text(role, content));
         }
