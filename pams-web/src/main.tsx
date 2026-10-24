@@ -14,6 +14,7 @@ import '@/styles/lingsi-v6.css'
 import '@/styles/records-v6.css'
 import '@/styles/forms.css'
 import '@/styles/admin-v6.css'
+import '@/styles/refinement.css'
 
 // 全局 dayjs 中文 locale：format('ddd') 等输出中文星期（Task 28 minor）
 dayjs.locale('zh-cn')

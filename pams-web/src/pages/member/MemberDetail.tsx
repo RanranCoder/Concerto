@@ -93,7 +93,7 @@ export default function MemberDetail() {
         {/* 卡片内的小节标题用 14/600，不再复用 PageHeader：h2/20px 的页级标题缩进在卡内，
             会和页头标题形成两条不在同一竖线、层级又相同的标题。 */}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-text)' }}>素拓记录</div>
+          <div style={{ fontSize: 14, fontWeight: 'calc(600 - var(--font-weight-compensation))', color: 'var(--brand-text)' }}>素拓记录</div>
           <div style={{ marginTop: 2, fontSize: 'var(--fs-caption)', color: 'var(--text-secondary)' }}>查看参与工作获得的素拓加分与依据</div>
         </div>
         <Table

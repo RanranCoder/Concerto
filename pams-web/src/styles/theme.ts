@@ -50,6 +50,7 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
 
       fontSize: 14,
       fontFamily: FONT_FAMILY,
+      fontWeightStrong: isDark ? 560 : 600,
 
       boxShadow: t.shadow1,
       boxShadowSecondary: t.shadow2,
@@ -107,7 +108,7 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
         colorPrimaryHover: t.brandHover,
         colorPrimaryActive: t.brandActive,
         primaryColor: t.onBrand,
-        fontWeight: 500,
+        fontWeight: isDark ? 460 : 500,
         primaryShadow: 'none',
         defaultShadow: 'none',
         dangerShadow: 'none',
@@ -124,8 +125,8 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
         colorBgElevated: t.canvas,
       },
       Input: {
-        activeShadow: `0 0 0 3px ${t.brandSoft}`,
-        activeBorderColor: t.focus,
+        activeShadow: `inset 0 0 0 1px ${t.focus}, 0 0 0 3px ${t.brandSoft}`,
+        activeBorderColor: 'transparent',
         hoverBorderColor: t.brandHover,
         // 凹陷面：输入框比卡片更深，视觉上「可填入」（参考站搜索框即比导航栏深）
         colorBgContainer: t.sunken,
@@ -136,7 +137,7 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
       Select: {
         optionSelectedBg: t.brandSoft,
         optionSelectedColor: t.brandText,
-        optionSelectedFontWeight: 600,
+        optionSelectedFontWeight: isDark ? 560 : 600,
         optionActiveBg: t.softStrong,
         selectorBg: t.sunken,
       },

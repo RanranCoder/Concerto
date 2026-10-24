@@ -461,7 +461,7 @@ export default function ActivityCreditModal({
           <div
             style={{
               fontSize: 'var(--fs-statXl)',
-              fontWeight: 600,
+              fontWeight: 'calc(600 - var(--font-weight-compensation))',
               color: 'var(--brand-text)',
             }}
           >

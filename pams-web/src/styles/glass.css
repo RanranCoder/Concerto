@@ -42,7 +42,7 @@
 .page-header-title {
   margin: 0;
   font-size: var(--fs-h2);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height: 1.3;
   color: var(--text-primary);
 }
@@ -60,7 +60,7 @@
   padding: 0 8px;
   border-radius: var(--r-sm);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   line-height: 1;
   white-space: nowrap;
 }
@@ -98,8 +98,8 @@
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
-    radial-gradient(120% 120% at 50% 42%, transparent 52%, rgba(0, 0, 0, 0.18) 100%);
+    linear-gradient(rgba(11, 11, 10, 0.28), rgba(11, 11, 10, 0.28)),
+    radial-gradient(120% 120% at 50% 42%, transparent 52%, rgba(11, 11, 10, 0.18) 100%);
   pointer-events: none;
 }
 
@@ -156,13 +156,13 @@
    ============================================================ */
 .auth-page {
   --auth-brand: #0034A2;
-  --auth-brand-strong: color-mix(in srgb, var(--auth-brand) 88%, #000);
+  --auth-brand-strong: color-mix(in srgb, var(--auth-brand) 88%, #0b0b0a);
   --auth-g1: color-mix(in srgb, var(--auth-brand) 8%, #fff);
   --auth-g2: color-mix(in srgb, var(--auth-brand) 34%, #fff);
   --auth-g3: color-mix(in srgb, var(--auth-brand) 62%, #fff);
   /* 晕染背景色阶：全部由组织主色派生，换组织即整片换色 */
   --auth-flow-base: color-mix(in srgb, var(--auth-brand) 48%, #fff);
-  --auth-flow-deep: color-mix(in srgb, var(--auth-brand) 88%, #000);
+  --auth-flow-deep: color-mix(in srgb, var(--auth-brand) 88%, #0b0b0a);
   --auth-flow-mid: color-mix(in srgb, var(--auth-brand) 70%, #fff);
   --auth-flow-pale: color-mix(in srgb, var(--auth-brand) 12%, #fff);
   position: relative;
@@ -256,12 +256,12 @@
   overflow: hidden;
   border-radius: var(--r-lg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: calc(700 - var(--font-weight-compensation));
   color: #fff;
   background: var(--auth-brand);
 }
 .auth-mark img { width: 100%; height: 100%; object-fit: cover; }
-.auth-word { font-size: var(--fs-body-lg); font-weight: 700; letter-spacing: 0.3px; }
+.auth-word { font-size: var(--fs-body-lg); font-weight: calc(700 - var(--font-weight-compensation)); letter-spacing: 0.3px; }
 .auth-env { font-size: var(--fs-body); color: rgba(255, 255, 255, 0.58); }
 
 .auth-form {
@@ -275,7 +275,7 @@
 }
 /* 标题与副标题跟随表单列的左边缘：设计稿里此处没有右对齐，
    右对齐会让「登录 / 继续你的工作」与下方左对齐的标签、输入框参差不齐。 */
-.auth-form h1 { margin: 0 0 6px; font-size: var(--fs-h2); font-weight: 600; text-align: left; }
+.auth-form h1 { margin: 0 0 6px; font-size: var(--fs-h2); font-weight: calc(600 - var(--font-weight-compensation)); text-align: left; }
 .auth-sub { margin: 0 0 24px; font-size: var(--fs-body-lg); color: rgba(255, 255, 255, 0.58); text-align: left; }
 .auth-lbl { display: block; margin: 0 0 7px; font-size: var(--fs-caption); color: rgba(255, 255, 255, 0.58); }
 
@@ -301,7 +301,7 @@
   overflow: hidden;
   border-radius: var(--r-sm);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: calc(700 - var(--font-weight-compensation));
   color: #fff;
   background: var(--auth-brand);
 }
@@ -344,7 +344,7 @@
   margin-top: 4px;
   border-radius: var(--r-lg);
   font-size: var(--fs-body-lg);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   background: var(--auth-brand) !important;
   border: 1px solid var(--auth-brand) !important;
   color: #fff !important;
@@ -376,7 +376,7 @@
   white-space: nowrap;
   user-select: none;
   font-size: clamp(56px, 9vw, 92px);
-  font-weight: 700;
+  font-weight: calc(700 - var(--font-weight-compensation));
   letter-spacing: -2px;
   line-height: 1;
   color: transparent;
@@ -397,7 +397,7 @@
   line-height: 1.55;
   text-shadow: 0 2px 16px rgba(20, 40, 90, 0.18);
 }
-.auth-quote b { font-weight: 700; }
+.auth-quote b { font-weight: calc(700 - var(--font-weight-compensation)); }
 
 /* 窄屏：只保留深色表单面板（表单是唯一任务路径） */
 @media (max-width: 920px) {

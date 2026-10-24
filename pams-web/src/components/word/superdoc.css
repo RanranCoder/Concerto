@@ -11,7 +11,7 @@
 .pams-superdoc [inert] { opacity:.75; }
 .pams-ribbon-tabs { display:flex; align-items:center; gap:4px; padding:0 12px; border-bottom:1px solid #e4eaf2; min-height:38px; }
 .pams-ribbon-tabs [role=tab] { appearance:none; border:0; border-bottom:2px solid transparent; padding:10px 16px 8px; background:transparent; color:#52647d; font:inherit; cursor:pointer; }
-.pams-ribbon-tabs [role=tab][aria-selected=true] { color:#1677ff; border-bottom-color:#1677ff; font-weight:600; }
+.pams-ribbon-tabs [role=tab][aria-selected=true] { color:#1677ff; border-bottom-color:#1677ff; font-weight:calc(600 - var(--font-weight-compensation)); }
 .pams-ribbon-mode { margin-left:auto; color:#7b889b; font-size:12px; white-space:nowrap; }
 .pams-ribbon-mode.is-suggesting { color:#a06310; }
 .pams-ribbon-panel { display:flex; align-items:stretch; min-height:106px; padding:8px 8px 4px; overflow-x:auto; scrollbar-width:thin; }
@@ -47,7 +47,7 @@
 .pams-ribbon-controls select { max-width:140px; height:30px; padding:3px 22px 3px 7px; border:1px solid #dce4ee; border-radius:4px; background:#fff; color:inherit; font:inherit; }
 .pams-ribbon-controls select:disabled { opacity:.5; }
 .pams-ribbon-controls .pams-ribbon-size { max-width:98px; }
-.pams-ribbon-color { display:flex; align-items:center; gap:2px; padding:3px; border-bottom:3px solid #d34842; font-weight:600; }
+.pams-ribbon-color { display:flex; align-items:center; gap:2px; padding:3px; border-bottom:3px solid #d34842; font-weight:calc(600 - var(--font-weight-compensation)); }
 .pams-ribbon-color.is-highlight { border-color:#ffe15a; }
 .pams-ribbon-color input { width:16px; height:20px; border:0; padding:0; background:transparent; cursor:pointer; }
 .pams-ribbon-help { color:#7b889b; font-size:12px; max-width:220px; align-self:center; margin:0 10px; }

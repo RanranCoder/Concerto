@@ -835,7 +835,7 @@ export default function SeatLayoutEditor({
                     color: isAisle
                       ? 'var(--brand-text)'
                       : 'var(--text-secondary)',
-                    fontWeight: isAisle ? 600 : 400,
+                    fontWeight: isAisle ? 'calc(600 - var(--font-weight-compensation))' : 'calc(400 - var(--font-weight-compensation))',
                     cursor: readOnly ? 'default' : 'pointer',
                   }}
                   title={readOnly ? undefined : `点击设为过道`}
@@ -1027,7 +1027,7 @@ export default function SeatLayoutEditor({
                   transition: 'all .15s',
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                <div style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))', fontSize: 14 }}>{t.name}</div>
                 <div
                   style={{
                     fontSize: 13,

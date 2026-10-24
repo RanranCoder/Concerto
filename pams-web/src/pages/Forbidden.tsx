@@ -31,7 +31,7 @@ export default function Forbidden() {
         >
           <LockOutlined />
         </div>
-        <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+        <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 'calc(700 - var(--font-weight-compensation))', color: 'var(--text-primary)', lineHeight: 1.2 }}>
           403
         </div>
         <div style={{ fontSize: 16, color: 'var(--text-primary)', margin: '8px 0 4px' }}>无权访问</div>

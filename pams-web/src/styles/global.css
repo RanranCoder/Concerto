@@ -93,7 +93,7 @@ body {
 }
 .app-brand-name {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height: 1.25;
   letter-spacing: 0.2px;
   color: var(--sider-text);
@@ -181,7 +181,7 @@ body {
 .app-sider .ant-menu-item-selected {
   background: var(--sider-selected) !important;
   color: var(--sider-text) !important;
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 /* 蓝色只出现在这一处 3px 竖条。
    不把选中底做成主色实填：深色下低透蓝会把整行染蓝，正是「不要蓝色遮罩」要避免的观感。 */
@@ -198,7 +198,7 @@ body {
 /* 展开的父级：与选中项同样权重 */
 .app-sider .ant-menu-submenu-selected > .ant-menu-submenu-title {
   color: var(--sider-text) !important;
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 /* 悬停 */
 .app-sider .ant-menu-item:hover,
@@ -245,7 +245,7 @@ body {
   background: var(--soft) !important;
   color: var(--text-secondary) !important;
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   border-bottom: 1px solid var(--border) !important;
 }
 /* 表头不做单元格竖分隔线：密集表格里竖线是噪声 */
@@ -266,8 +266,8 @@ body {
 /* ============ 弹窗 / 抽屉 ============ */
 .ant-modal-content { border-radius: var(--r-xl); box-shadow: var(--shadow-2); }
 .ant-modal-header { border-bottom: 1px solid var(--border); }
-.ant-modal-title { font-size: var(--fs-title); font-weight: 600; }
-.ant-modal-mask { background: rgba(0, 0, 0, 0.45) !important; }
+.ant-modal-title { font-size: var(--fs-title); font-weight: calc(600 - var(--font-weight-compensation)); }
+.ant-modal-mask { background: rgba(11, 11, 10, 0.45) !important; }
 .ant-drawer-header { border-bottom: 1px solid var(--border); }
 
 /* 浮层（下拉/气泡）与内容面同色，靠阴影区分 */
@@ -374,7 +374,7 @@ body {
 }
 .dashboard-task-item:last-child { border-bottom: 0; }
 .dashboard-task-copy, .dashboard-activity-copy { flex: 1; min-width: 0; }
-.dashboard-item-title { display: block; overflow: hidden; color: var(--text-primary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-item-title { display: block; overflow: hidden; color: var(--text-primary); font-weight: calc(500 - var(--font-weight-compensation)); text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-item-meta { display: block; overflow: hidden; margin-top: 2px; color: var(--text-secondary); font-size: var(--fs-caption); text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-activity-item {
   display: flex;
@@ -422,7 +422,7 @@ body {
   transition: background-color var(--dur) var(--ease);
 }
 .dash-side-link:hover { background: var(--soft); }
-.dash-side-title { font-weight: 500; color: var(--text-primary); }
+.dash-side-title { font-weight: calc(500 - var(--font-weight-compensation)); color: var(--text-primary); }
 
 /* ============ 文字省略 ============ */
 .ellipsis {

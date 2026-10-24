@@ -18,7 +18,7 @@
 .routine-module-nav a.active {
   border-color: var(--brand);
   color: var(--brand-text);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 .routine-v6 .business-summary {
   margin-bottom: 20px;
@@ -40,7 +40,7 @@
   margin-left: 10px;
   color: var(--text-secondary);
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: calc(400 - var(--font-weight-compensation));
 }
 .routine-workspace {
   display: grid;
@@ -183,7 +183,7 @@
   background: var(--soft);
   padding: 13px 14px;
   color: var(--text-secondary);
-  font-weight: 400;
+  font-weight: calc(400 - var(--font-weight-compensation));
 }
 .routine-week-table th:first-child {
   width: 95px;
@@ -192,7 +192,7 @@
   display: block;
   font-size: var(--fs-h2);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   margin-top: 5px;
   font-variant-numeric: tabular-nums;
 }
@@ -201,7 +201,7 @@
   vertical-align: top;
   background: var(--soft);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .routine-week-table tbody th small {
   display: block;
@@ -248,7 +248,7 @@
 .routine-shift strong {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 .routine-shift small {
   display: block;
@@ -311,7 +311,7 @@
 .routine-data-table .ant-table-cell strong {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .routine-data-table .ant-table-cell small {
   display: block;
@@ -358,11 +358,11 @@
   flex-shrink: 0;
   font-size: var(--fs-caption);
   color: var(--category-schedule-text);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 .routine-agenda strong {
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   display: block;
 }
 .routine-agenda small {
@@ -385,7 +385,7 @@
 .routine-side-link strong {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .routine-side-link small {
   display: block;
@@ -411,12 +411,12 @@
 .routine-next-date {
   font-size: var(--fs-statXl);
   color: var(--category-schedule-text);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
 }
 .routine-next-date small {
   display: block;
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: calc(400 - var(--font-weight-compensation));
 }
 .routine-next-shift h3 {
   font-size: var(--fs-h2);
@@ -602,11 +602,11 @@
 }
 .routine-course-cell strong {
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .routine-heat-cell strong {
   font-size: var(--fs-stat);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .routine-heat-cell.all-free {
   background: var(--category-schedule-bg);

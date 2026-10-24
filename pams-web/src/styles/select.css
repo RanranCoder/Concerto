@@ -58,7 +58,7 @@
   cursor: pointer;
 }
 .glass-select-option[data-active='true'] { background: var(--soft); }
-.glass-select-option[aria-selected='true'] { background: var(--brand-soft); color: var(--brand-text); font-weight: 500; }
+.glass-select-option[aria-selected='true'] { background: var(--brand-soft); color: var(--brand-text); font-weight: calc(500 - var(--font-weight-compensation)); }
 .glass-select-option[aria-disabled='true'] { color: var(--text-disabled); cursor: not-allowed; }
 
 @keyframes glass-select-in {

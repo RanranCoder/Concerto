@@ -6,9 +6,9 @@
 .product-brand-copy { min-width: 0; }
 .product-brand-wordmark { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .product-brand .product-brand-name,
-.product-brand-english { font-size: 28px; font-weight: 750; line-height: 1.2; letter-spacing: -.6px; }
+.product-brand-english { font-size: 28px; font-weight: calc(750 - var(--font-weight-compensation)); line-height: 1.2; letter-spacing: -.6px; }
 .product-brand .product-brand-name { letter-spacing: 1px; }
-.product-brand-separator { font-size: 24px; font-weight: 700; }
+.product-brand-separator { font-size: 24px; font-weight: calc(700 - var(--font-weight-compensation)); }
 .product-brand-description { display: block; margin-top: 5px; font-size: 13px; letter-spacing: 2px; line-height: 1.4; white-space: nowrap; }
 /* 窄侧栏另排无描述语组合，维持可读字号和方形图标比例。 */
 .product-brand-compact { gap: 4px; }

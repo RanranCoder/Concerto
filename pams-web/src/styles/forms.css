@@ -8,13 +8,13 @@
   flex-direction: column;
   gap: 8px;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
 }
 .form-surface-heading > span {
   display: block;
   padding-right: 16px;
   font-size: var(--fs-h2);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height: 1.5;
 }
 .form-surface-heading p,
@@ -22,7 +22,7 @@
   margin: 6px 0 0;
   color: var(--text-secondary);
   font-size: var(--fs-body);
-  font-weight: 400;
+  font-weight: calc(400 - var(--font-weight-compensation));
   line-height: 1.7;
 }
 .form-surface.ant-modal {
@@ -99,7 +99,7 @@
   height: auto;
   color: var(--text-primary);
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   white-space: normal;
 }
 .form-surface .ant-form-item-extra {
@@ -182,7 +182,7 @@
 .form-workspace-header h1 {
   margin: 0;
   font-size: var(--fs-stat);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height: 1.5;
   outline: none;
   scroll-margin-top: 24px;
@@ -231,7 +231,7 @@
 .form-section-heading h2 {
   margin: 0;
   font-size: var(--fs-title);
-  font-weight: 600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height: 1.5;
 }
 .form-section-heading p {

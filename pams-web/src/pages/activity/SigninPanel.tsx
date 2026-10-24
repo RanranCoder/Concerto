@@ -326,7 +326,7 @@ export default function SigninPanel({
               <span
                 style={{
                   fontSize: 14,
-                  fontWeight: 600,
+                  fontWeight: 'calc(600 - var(--font-weight-compensation))',
                   color: 'var(--brand-text)',
                 }}
               >
@@ -363,7 +363,7 @@ export default function SigninPanel({
             marginBottom: 12,
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 600 }}>扫码签到</span>
+          <span style={{ fontSize: 14, fontWeight: 'calc(600 - var(--font-weight-compensation))' }}>扫码签到</span>
           <SigninFieldConfig activityId={activityId} onChanged={refreshAll} />
         </Space>
         <SigninQR

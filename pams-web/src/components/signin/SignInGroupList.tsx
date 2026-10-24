@@ -182,7 +182,7 @@ export default function SignInGroupList({
         ) : (
           <FolderOutlined style={{ color: 'var(--brand-text)' }} />
         )}
-        <span style={{ fontWeight: 600 }}>{g.groupName}</span>
+        <span style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))' }}>{g.groupName}</span>
         <Tag color="blue">{g.count} 人</Tag>
         <Tag color="green">已签 {g.signedCount}</Tag>
         <Tag color="orange">未签 {g.unsignedCount}</Tag>

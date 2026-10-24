@@ -49,9 +49,9 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
       {groups.map(({ zone, seats: zoneSeats, maxCol, maxRow }) => (
         <div key={zone} style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))', color: 'var(--text-primary)' }}>
               {zone}
-              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 400, color: 'var(--text-secondary)' }}>
+              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 'calc(400 - var(--font-weight-compensation))', color: 'var(--text-secondary)' }}>
                 共 {zoneSeats.length} 座
               </span>
             </div>
@@ -122,7 +122,7 @@ export default function SeatMapView({ seats, legend, onSelect }: SeatMapViewProp
                         color: '#fff',
                         cursor: 'pointer',
                         fontSize: 13,
-                        fontWeight: 600,
+                        fontWeight: 'calc(600 - var(--font-weight-compensation))',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

@@ -138,7 +138,7 @@ export default function NotificationList() {
         <Space size={4}>
           {!r.read && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--brand)' }} />}
           {r.priority === 'URGENT' && <Tag color="red">紧急</Tag>}
-          <span style={{ fontWeight: r.read ? 400 : 600 }}>{v}</span>
+          <span style={{ fontWeight: r.read ? 'calc(400 - var(--font-weight-compensation))' : 'calc(600 - var(--font-weight-compensation))' }}>{v}</span>
         </Space>
       ),
     },
@@ -217,7 +217,7 @@ export default function NotificationList() {
       />
 
       <GlassCard style={{ padding: 16, marginTop: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>通知偏好设置</div>
+        <div style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))', marginBottom: 12 }}>通知偏好设置</div>
         <Spin spinning={prefLoading}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
             {prefs.map((p) => (

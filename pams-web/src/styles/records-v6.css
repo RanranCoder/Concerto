@@ -17,7 +17,7 @@
 .records-nav a.active {
   border-color:var(--brand-text);
   color:var(--brand-text);
-  font-weight:600}
+  font-weight: calc(600 - var(--font-weight-compensation))}
 .records-nav a:focus-visible,.records-directory button:focus-visible,.records-stage-filters button:focus-visible {
   outline:2px solid var(--focus);
   outline-offset:-2px}
@@ -53,7 +53,7 @@
   gap:10px}
 .records-summary strong {
   font-size:var(--fs-pageTitle);
-  font-weight:600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   font-variant-numeric:tabular-nums;
   line-height:1.4}
 .records-summary small {
@@ -98,7 +98,7 @@
 .records-directory button[aria-pressed=true] {
   background:var(--brand-soft);
   color:var(--brand-text);
-  font-weight:600}
+  font-weight: calc(600 - var(--font-weight-compensation))}
 .records-directory small {
   font-size:var(--fs-micro);
   font-variant-numeric:tabular-nums}
@@ -133,7 +133,7 @@
 .records-name strong {
   display:block;
   font-size:var(--fs-body-lg);
-  font-weight:500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   overflow-wrap:anywhere;
   line-height:1.6}
 .records-name small {
@@ -162,7 +162,7 @@
   background:var(--category-document-bg);
   color:var(--category-document-text);
   font-size:var(--fs-micro);
-  font-weight:600}
+  font-weight: calc(600 - var(--font-weight-compensation))}
 .records-note {
   color:var(--text-secondary);
   font-size:var(--fs-caption);
@@ -189,7 +189,7 @@
   flex-shrink:0}
 .records-flow strong {
   font-size:var(--fs-body);
-  font-weight:500}
+  font-weight: calc(500 - var(--font-weight-compensation))}
 .records-flow p {
   font-size:var(--fs-caption);
   color:var(--text-secondary);
@@ -204,7 +204,7 @@
   min-width:0}
 .records-panel h3 {
   font-size:var(--fs-title);
-  font-weight:600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   margin:0 0 20px}
 .records-panel .ant-descriptions-item-label {
   font-size:var(--fs-caption);
@@ -245,7 +245,7 @@
   display:block;
   margin-top:6px;
   font-size:var(--fs-stat);
-  font-weight:600}
+  font-weight: calc(600 - var(--font-weight-compensation))}
 .records-stage-filters .complete {
   color:var(--ok)}
 .records-stage-filters .current {

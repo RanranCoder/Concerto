@@ -140,7 +140,7 @@ export default function PartyMemberDetail() {
         color: 'var(--brand-text)',
         children: (
           <div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))', color: 'var(--text-primary)' }}>
               {STAGE_LABEL_MAP[s.stage] ?? s.stage}
               {s.issueNo ? (
                 <Tag style={{ marginLeft: 8 }}>第 {s.issueNo} 期</Tag>
@@ -306,7 +306,7 @@ export default function PartyMemberDetail() {
                 <div
                   style={{
                     fontSize: 14,
-                    fontWeight: 600,
+                    fontWeight: 'calc(600 - var(--font-weight-compensation))',
                     color: 'var(--brand-text)',
                     marginBottom: 8,
                   }}

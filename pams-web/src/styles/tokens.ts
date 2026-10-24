@@ -10,6 +10,7 @@
  * v6 主色由用户指定为 rgb(22,104,220)，明暗配色见 docs/design/PAMS-UI-设计方案-v6-行业规范修订.md。
  */
 
+import { SPRINGS, springEasing } from './motion'
 import { deriveBrandScale, lighten, parseColor, readableOn, toHex, withAlpha } from './color'
 
 export type ThemeMode = 'light' | 'dark'
@@ -42,6 +43,7 @@ export interface SurfaceTokens {
   siderSelected: string
   /** 悬停底色 */
   siderHover: string
+  /** 通用容器边界透明，保留边框几何尺寸以避免布局跳动。 */
   border: string
   /** 输入框等控件边，比 border 深一档 */
   borderStrong: string
@@ -50,6 +52,8 @@ export interface SurfaceTokens {
 }
 
 export interface BaseTokens extends SurfaceTokens {
+  /** 用户指定的蓝色聊天气泡，独立于组织品牌色。 */
+  userBubbleBg: string
   /** 主按钮实底、选中竖条、Tab 下划线 */
   brand: string
   brandHover: string
@@ -110,18 +114,19 @@ export interface BaseTokens extends SurfaceTokens {
 }
 
 export const lightTokens: BaseTokens = {
-  page: '#F4F6F9',
-  canvas: '#FFFFFF',
-  soft: '#F6F7F9',
-  softStrong: '#EEF0F3',
-  sunken: '#FFFFFF',
-  siderBg: '#FCFDFE',
+  userBubbleBg: '#1668DC',
+  page: '#F5F5F3',
+  canvas: '#FCFCFB',
+  soft: '#F8F8F6',
+  softStrong: '#F0F0EE',
+  sunken: '#F5F5F3',
+  siderBg: '#F8F8F6',
   siderText: '#263243',
   siderTextDim: '#5B6777',
-  siderBorder: '#DFE5ED',
+  siderBorder: 'transparent',
   siderSelected: '#E6F4FF',
-  siderHover: '#F0F3F8',
-  border: '#DFE5ED',
+  siderHover: '#F0F0EE',
+  border: 'transparent',
   borderStrong: '#7C899B',
   shadow1: '0 2px 8px rgba(38,50,67,.06)',
   shadow2: '0 12px 36px rgba(38,50,67,.12)',
@@ -159,10 +164,10 @@ export const lightTokens: BaseTokens = {
   radius2xl: '24px',
   radiusPill: '999px',
 
-  easing: 'cubic-bezier(.22,1,.36,1)',
+  easing: 'cubic-bezier(.215,.61,.355,1)',
   dur: '140ms',
 
-  canvasElevated: '#FFFFFF',
+  canvasElevated: '#FCFCFB',
   focus: '#1668DC',
   onBrand: '#FFFFFF',
   categoryActivity: '#1668DC',
@@ -179,33 +184,27 @@ export const lightTokens: BaseTokens = {
 }
 
 /**
- * 深色主题 —— 中性灰阶，无蓝调。
- *
- * 依据（2026-09 调研）：
- *  ① 底色不用纯黑、也不带色相：参考站（bilibili 深色）实测为 #17181A / #242628，
- *     是纯中性灰；带蓝调的底会把整屏染成「蓝色遮罩」，长时间阅读发闷。
- *  ② 层级靠逐级提亮而非阴影：Material/Uxcel 的深色建议是每级提亮 4–6%。
- *     本主题：page #17181A → canvas #1E2024 → soft #24262A → softStrong #2C2F34。
- *  ③ 凹陷控件比容器更深：输入框/搜索框用 softStrong 反向压暗到 #121315，
- *     与参考站搜索框（#0D0E0F）同思路。
- *  ④ 正文不用纯白 #FFF：用 #E6E8EA，降低眩光（参考站正文 #E7E9EB）。
+ * 深色主题：按用户指定的中性灰阶以微明度分层。
+ * 页面 #0B0B0A → 内容 #151515 → 次级面 #1A1A19 → 悬停面 #20201E。
+ * 输入面回落到页面灰阶，容器描边透明；正文使用柔白降低眩光。
  */
 export const darkTokens: BaseTokens = {
-  page: '#15171B',
-  canvas: '#1E2127',
-  soft: '#252932',
-  softStrong: '#2A2F37',
-  sunken: '#171A1F',
-  siderBg: '#191C21',
+  userBubbleBg: '#1A3F75',
+  page: '#0B0B0A',
+  canvas: '#151515',
+  soft: '#1A1A19',
+  softStrong: '#20201E',
+  sunken: '#0B0B0A',
+  siderBg: '#151515',
   siderText: '#E6EAF0',
   siderTextDim: '#AAB3C2',
-  siderBorder: '#363C46',
+  siderBorder: 'transparent',
   siderSelected: '#172C49',
-  siderHover: '#272D36',
-  border: '#363C46',
+  siderHover: '#20201E',
+  border: 'transparent',
   borderStrong: '#707C8E',
-  shadow1: '0 2px 8px rgba(0,0,0,.30)',
-  shadow2: '0 12px 36px rgba(0,0,0,.40)',
+  shadow1: '0 2px 8px rgba(11,11,10,.30)',
+  shadow2: '0 12px 36px rgba(11,11,10,.40)',
 
   brand: '#1668DC',
   brandHover: '#1B70E5',
@@ -240,10 +239,10 @@ export const darkTokens: BaseTokens = {
   radius2xl: '24px',
   radiusPill: '999px',
 
-  easing: 'cubic-bezier(.22,1,.36,1)',
+  easing: 'cubic-bezier(.215,.61,.355,1)',
   dur: '140ms',
 
-  canvasElevated: '#262B33',
+  canvasElevated: '#1A1A19',
   focus: '#86B9FF',
   onBrand: '#FFFFFF',
   categoryActivity: '#82B5FF',
@@ -338,6 +337,7 @@ export const FONT_FAMILY =
    CSS 变量名映射 —— 这里的 key 决定生成的变量名，测试会校验无遗漏
    ============================================================ */
 export const CSS_VAR_MAP: Record<keyof BaseTokens, string> = {
+  userBubbleBg: '--user-bubble-bg',
   page: '--page',
   canvas: '--canvas',
   soft: '--soft',
@@ -408,6 +408,8 @@ const declarations = (t: BaseTokens): string =>
 const fontDeclarations = (): string =>
   [
     `  --font-family: ${FONT_FAMILY};`,
+    `  --ease-drag: ${springEasing(SPRINGS.drag)};`,
+    `  --ease-feedback: ${springEasing(SPRINGS.feedback)};`,
     ...Object.entries(FONT_SCALE).map(([k, v]) => `  --fs-${k === 'bodyLg' ? 'body-lg' : k}: ${v};`),
     ...Object.entries(DISPLAY_SCALE).map(([k, v]) => `  --fs-${k}: ${v};`),
     ...SPACE_SCALE.map((v, i) => `  --sp-${i}: ${v};`),
@@ -428,7 +430,7 @@ ${fontDeclarations()}
 ${declarations(resolveTokens('light', primary))}
 }
 
-/* 深色主题：中性灰阶、无蓝调；层级逐级提亮约 4–6%；凹陷控件（输入框）比容器更深 */
+/* 深色主题：中性灰阶、无蓝调；微明度分层，无容器描边；凹陷控件（输入框）比容器更深 */
 :root[data-theme='dark'] {
 ${declarations(resolveTokens('dark', primary))}
 }

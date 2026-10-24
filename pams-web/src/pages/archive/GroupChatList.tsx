@@ -283,7 +283,7 @@ export default function GroupChatList() {
         style={{ height: '100%' }}
         title={
           <Space>
-            <span style={{ fontWeight: 600 }}>{c.name}</span>
+            <span style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))' }}>{c.name}</span>
             <Tag color={st.color}>{st.label}</Tag>
           </Space>
         }

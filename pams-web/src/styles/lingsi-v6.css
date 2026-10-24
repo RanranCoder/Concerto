@@ -17,11 +17,11 @@
 .lingsi-task-filters button{flex:1;min-height:30px;border:1px solid transparent;background:none;color:var(--text-secondary);font-size:var(--fs-caption);border-radius:var(--r-sm);padding:3px 5px;white-space:nowrap}
 .lingsi-task-filters button[aria-pressed=true]{border-color:var(--border);background:var(--canvas);color:var(--brand-text)}
 .lingsi-v6 .lingsi-sider-list{margin-top:0}
-.lingsi-v6 .lingsi-conv-group,.lingsi-v6-task-drawer .lingsi-conv-group{font-size:var(--fs-caption);font-weight:400;letter-spacing:0;padding:0 9px;margin:8px 0 7px}
+.lingsi-v6 .lingsi-conv-group,.lingsi-v6-task-drawer .lingsi-conv-group{font-size:var(--fs-caption);font-weight: calc(400 - var(--font-weight-compensation));letter-spacing:0;padding:0 9px;margin:8px 0 7px}
 .lingsi-v6 .lingsi-conv,.lingsi-v6-task-drawer .lingsi-conv{padding:0;margin-bottom:3px;border-radius:var(--r-md);box-shadow:none}
 .lingsi-v6 .lingsi-conv-active,.lingsi-v6-task-drawer .lingsi-conv-active{background:var(--brand-soft)}
 .lingsi-conv-select{border:0;background:none;text-align:left;width:100%;padding:11px 10px;color:inherit;cursor:pointer;border-radius:var(--r-md)}
-.lingsi-v6 .lingsi-conv-title,.lingsi-v6-task-drawer .lingsi-conv-title{display:block;font-size:var(--fs-caption);font-weight:500;padding-right:13px}
+.lingsi-v6 .lingsi-conv-title,.lingsi-v6-task-drawer .lingsi-conv-title{display:block;font-size:var(--fs-caption);font-weight: calc(500 - var(--font-weight-compensation));padding-right:13px}
 .lingsi-v6 .lingsi-conv-sub,.lingsi-v6-task-drawer .lingsi-conv-sub{display:flex;align-items:center;gap:6px;font-size:var(--fs-caption);margin-top:5px}
 .lingsi-conv-sub time{margin-left:auto;font-variant-numeric:tabular-nums}
 .lingsi-v6 .lingsi-conv-active:before{width:3px;top:12px;bottom:12px;background:var(--brand-text)}
@@ -40,7 +40,7 @@
 .lingsi-v6 .lingsi-main{border:0;border-radius:0;box-shadow:none;background:var(--canvas);min-width:0}
 .lingsi-v6 .lingsi-main-head{min-height:66px;flex-shrink:0;padding:12px 26px;border-bottom:1px solid var(--border);background:var(--canvas)}
 .lingsi-v6 .lingsi-main-title{display:block;min-width:0;flex:1}
-.lingsi-main-title h1{font-size:var(--fs-body-lg);font-weight:600;line-height:1.5;letter-spacing:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lingsi-main-title h1{font-size:var(--fs-body-lg);font-weight: calc(600 - var(--font-weight-compensation));line-height:1.5;letter-spacing:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lingsi-main-title small{font-size:var(--fs-caption);color:var(--text-secondary);display:block;margin-top:3px}
 .lingsi-v6 .lingsi-main-head-actions{display:flex;align-items:center;gap:10px}
 .lingsi-v6 .lingsi-main-head-actions .lingsi-icon-btn:has(span){width:auto;gap:6px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-md);font-size:var(--fs-caption);min-height:30px}
@@ -54,18 +54,18 @@
 .lingsi-v6 .lingsi-hero{max-width:780px;margin:clamp(10px,4vh,54px) auto 0;padding:0;text-align:left}
 .lingsi-welcome-greeting{display:flex;align-items:center;gap:17px;margin-bottom:26px}
 .lingsi-welcome-avatar{width:66px;height:66px;object-fit:contain;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--soft)}
-.lingsi-welcome-greeting h2{font-size:var(--fs-pageTitle);line-height:1.4;letter-spacing:-.5px;font-weight:600;margin:0}
+.lingsi-welcome-greeting h2{font-size:var(--fs-pageTitle);line-height:1.4;letter-spacing:-.5px;font-weight: calc(600 - var(--font-weight-compensation));margin:0}
 .lingsi-welcome-greeting p{font-size:var(--fs-body);color:var(--text-secondary);margin:7px 0 0}
 .lingsi-welcome-note{border-left:3px solid var(--brand-text);background:var(--soft);padding:12px 16px;font-size:var(--fs-caption);color:var(--text-secondary);margin-bottom:26px}
-.lingsi-welcome-note strong{font-weight:500;color:var(--text-primary)}
+.lingsi-welcome-note strong{font-weight: calc(500 - var(--font-weight-compensation));color:var(--text-primary)}
 .lingsi-welcome-note p{margin:4px 0 0}
 .lingsi-starter-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
-.lingsi-starter-heading h3{font-size:var(--fs-body);margin:0;font-weight:600}
+.lingsi-starter-heading h3{font-size:var(--fs-body);margin:0;font-weight: calc(600 - var(--font-weight-compensation))}
 .lingsi-starter-heading>span{font-size:var(--fs-caption);color:var(--text-secondary)}
 .lingsi-starters{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;border-top:1px solid var(--border)}
 .lingsi-starter{display:flex;gap:12px;align-items:flex-start;background:none;border:0;border-bottom:1px solid var(--border);padding:19px 5px;text-align:left;min-width:0;color:var(--text-primary);cursor:pointer}
 .lingsi-starter:hover{background:var(--soft)}
-.lingsi-starter strong{font-size:var(--fs-body);font-weight:500;display:block}
+.lingsi-starter strong{font-size:var(--fs-body);font-weight: calc(500 - var(--font-weight-compensation));display:block}
 .lingsi-starter small{font-size:var(--fs-caption);color:var(--text-secondary);line-height:1.7;margin-top:4px;display:block}
 .lingsi-starter>svg{margin-left:auto;flex-shrink:0;margin-top:7px;color:var(--text-secondary)}
 .lingsi-category{display:grid;place-items:center;width:33px;height:33px;border-radius:var(--r-lg);flex-shrink:0;color:var(--category-activity);background:var(--category-activity-bg)}
@@ -79,8 +79,8 @@
 .lingsi-v6 .lingsi-user-quote-text{font-size:var(--fs-body);line-height:1.8;padding-right:28px}
 .lingsi-v6 .lingsi-user-quote-actions{opacity:1}
 .lingsi-v6 .lingsi-turn{display:block}
-.lingsi-answer-heading{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:var(--fs-caption);font-weight:500}
-.lingsi-answer-heading small{margin-left:auto;font-size:var(--fs-caption);color:var(--text-secondary);font-weight:400}
+.lingsi-answer-heading{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-size:var(--fs-caption);font-weight: calc(500 - var(--font-weight-compensation))}
+.lingsi-answer-heading small{margin-left:auto;font-size:var(--fs-caption);color:var(--text-secondary);font-weight: calc(400 - var(--font-weight-compensation))}
 .lingsi-v6 .lingsi-reply{font-size:var(--fs-body);line-height:1.85}
 .lingsi-v6 .lingsi-plan{border:1px solid var(--category-document);border-radius:var(--r-lg);overflow:hidden;margin-top:18px;box-shadow:none;background:var(--canvas)}
 .lingsi-v6 .lingsi-plan-head{padding:11px 14px;background:var(--warn-soft);border-bottom:1px solid var(--border);font-size:var(--fs-caption)}
@@ -109,7 +109,7 @@
 .lingsi-v6 .lingsi-panel.lingsi-v6-panel{width:350px;flex:0 0 350px;min-width:0;border:0;border-left:1px solid var(--border);border-radius:0;box-shadow:none;background:var(--soft);padding:0;display:flex}
 .lingsi-v6-panel-content{display:flex;flex-direction:column;min-height:0;height:100%;width:100%;color:var(--text-primary);background:var(--soft)}
 .lingsi-preview-header{height:66px;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--canvas);display:flex;align-items:center;justify-content:space-between;padding:12px 17px}
-.lingsi-preview-header h2{font-size:var(--fs-caption);margin:0;font-weight:600}
+.lingsi-preview-header h2{font-size:var(--fs-caption);margin:0;font-weight: calc(600 - var(--font-weight-compensation))}
 .lingsi-preview-header small{font-size:var(--fs-caption);color:var(--text-secondary)}
 .lingsi-preview-tabs{display:flex;gap:17px;padding:0 16px;background:var(--canvas);border-bottom:1px solid var(--border);flex-shrink:0}
 .lingsi-preview-tabs button{background:none;border:0;border-bottom:2px solid transparent;font-size:var(--fs-caption);color:var(--text-secondary);padding:0 0 7px;min-height:39px;cursor:pointer}

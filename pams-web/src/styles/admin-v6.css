@@ -4,7 +4,7 @@
 }
 .admin-v6 h3,.admin-v6 h4 {
   margin:0;
-  font-weight:600
+  font-weight: calc(600 - var(--font-weight-compensation))
 }
 .admin-v6 h3 {
   font-size:var(--fs-body-lg)
@@ -69,7 +69,7 @@
 .admin-stats strong {
   display:block;
   font-size:var(--fs-pageTitle);
-  font-weight:600;
+  font-weight: calc(600 - var(--font-weight-compensation));
   line-height:1.5;
   font-variant-numeric:tabular-nums
 }
@@ -101,7 +101,7 @@
 }
 .admin-rail h3 {
   font-size:var(--fs-caption);
-  font-weight:500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   color:var(--text-secondary);
   padding:3px 10px 12px
 }
@@ -131,7 +131,7 @@
 .admin-rail>button[aria-pressed=true]:not(.ant-btn) {
   background:var(--brand-soft);
   color:var(--brand-text);
-  font-weight:600
+  font-weight: calc(600 - var(--font-weight-compensation))
 }
 .admin-rail>button:not(.ant-btn):hover {
   background:var(--soft)
@@ -239,7 +239,7 @@
 }
 .admin-table .ant-table-thead>tr>th {
   font-size:var(--fs-caption);
-  font-weight:500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   color:var(--text-secondary);
   background:var(--soft);
   padding-block:12px;
@@ -263,7 +263,7 @@
 }
 .admin-table strong {
   font-size:var(--fs-body-lg);
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-table .admin-cell-note {
   display:block;
@@ -286,7 +286,7 @@
 .admin-record-title strong {
   display:block;
   font-size:var(--fs-body-lg);
-  font-weight:500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   line-height:1.7
 }
 .admin-record-title small {
@@ -451,7 +451,7 @@
   flex-wrap:wrap
 }
 .admin-batch strong {
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-data.compact .ant-table-tbody>tr>td {
   padding-block:8px
@@ -532,12 +532,12 @@
 .admin-section-title {
   font-size:var(--fs-body-lg);
   margin:24px 0 14px!important;
-  font-weight:600
+  font-weight: calc(600 - var(--font-weight-compensation))
 }
 .admin-section-title small {
   font-size:var(--fs-caption);
   color:var(--text-secondary);
-  font-weight:400
+  font-weight: calc(400 - var(--font-weight-compensation))
 }
 .admin-chunk {
   padding:0 0 0 15px;
@@ -612,7 +612,7 @@
 .admin-hit strong {
   font-size:var(--fs-body);
   display:block;
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-hit small {
   display:block;
@@ -635,7 +635,7 @@
 .admin-log-flow strong {
   display:block;
   font-size:var(--fs-stat);
-  font-weight:600
+  font-weight: calc(600 - var(--font-weight-compensation))
 }
 .admin-form-error {
   margin-bottom:18px
@@ -784,7 +784,7 @@
 .admin-service-grid strong {
   display:block;
   margin:9px 0 7px;
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-related {
   display:flex;
@@ -814,7 +814,7 @@
 }
 .admin-related strong {
   font-size:var(--fs-body);
-  font-weight:500;
+  font-weight: calc(500 - var(--font-weight-compensation));
   display:block
 }
 .admin-related small {
@@ -861,7 +861,7 @@
 .admin-preference-row strong {
   display:block;
   font-size:var(--fs-body);
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-preference-row p {
   font-size:var(--fs-caption);
@@ -915,7 +915,7 @@
   padding-top:0
 }
 .admin-diagnostic-row strong {
-  font-weight:500
+  font-weight: calc(500 - var(--font-weight-compensation))
 }
 .admin-diagnostic-row small {
   display:block;
