@@ -1,11 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { TimelineItem } from '@/stores/agent'
 import {
-  formatDuration,
   groupTimeline,
   hasTeamPanel,
   summarizeTimeline,
-  totalDurationMs,
 } from '@/utils/thinking'
 import { Caret, Thinking } from './LingsiIcons'
 import LingsiTimelineRow from './LingsiTimelineRow'
@@ -14,6 +12,7 @@ interface Props {
   items: TimelineItem[]
   /** 该轮仍在进行（未收到 MESSAGE_DONE / ERROR / ABORTED） */
   active?: boolean
+  resultStarted?: boolean
 }
 
 /** 结束后延迟自动收起的时长：一轮刚结束时正是用户最想看步骤的时刻 */
@@ -47,7 +46,7 @@ function groupTitles(groups: ReturnType<typeof groupTimeline>): string[] {
  * 7. **去重**：团队面板同时渲染时，把 agent/collab 行让给面板（见 hasTeamPanel）——
  *    同一屏里"检索专家"出现两遍、协作理由出现两遍，是纯噪声
  */
-export default function LingsiProcessZone({ items, active }: Props) {
+export default function LingsiProcessZone({ items, active, resultStarted = false }: Props) {
   // 用户手动干预过就不再自动折叠（尊重用户操作），新一轮开始时复位
   const [manual, setManual] = useState<boolean | null>(null)
   const [autoOpen, setAutoOpen] = useState(Boolean(active))
@@ -82,7 +81,7 @@ export default function LingsiProcessZone({ items, active }: Props) {
             <Thinking size={13} />
           </span>
           <span className="lingsi-process-slot" aria-hidden="true" />
-          <span>正在理解你的问题…</span>
+          <span>{resultStarted ? '正在生成结果…' : '正在理解你的问题…'}</span>
         </span>
       </div>
     )
@@ -92,8 +91,7 @@ export default function LingsiProcessZone({ items, active }: Props) {
   const visible = teamPanel ? items.filter((i) => i.kind !== 'agent' && i.kind !== 'collab') : items
   const groups = groupTimeline(visible)
   const titles = groupTitles(groups)
-  const summary = summarizeTimeline(visible, active)
-  const total = totalDurationMs(visible)
+  const summary = active && resultStarted ? '正在生成结果…' : summarizeTimeline(visible, active)
 
   return (
     <div className="lingsi-process">
@@ -110,22 +108,24 @@ export default function LingsiProcessZone({ items, active }: Props) {
         </span>
         <Caret size={13} open={open} />
         <span>{summary}</span>
-        {!active && total > 0 && <span className="lingsi-process-time">{formatDuration(total)}</span>}
       </button>
 
-      {open && (
+      <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>
+        <div className="pams-collapse-inner">
         <div className="lingsi-process-body" id={bodyId} role="group" aria-label="思维链与执行步骤">
           {teamPanel && <div className="lingsi-tl-hint">专家与审查明细见上方面板</div>}
           {groups.map((group, index) => (
             <div className="lingsi-tl-group" key={group.key}>
               {groups.length > 1 && <div className="lingsi-tl-group-head">{titles[index]}</div>}
               {group.items.map((item) => (
-                <LingsiTimelineRow key={item.key} item={item} />
+                <LingsiTimelineRow key={item.key} item={item} visible={open}
+                  settled={!active || resultStarted || item !== items.at(-1)} />
               ))}
             </div>
           ))}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

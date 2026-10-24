@@ -118,7 +118,9 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
           <button type="button" className="lingsi-plan-more" onClick={() => setDetailOpen((v) => !v)} aria-expanded={detailOpen}>
             {detailOpen ? '收起明细 ▲' : `查看明细 ${detailLines.length} 行 ▼`}
           </button>
-          {detailOpen && <div className="lingsi-plan-detail">{detailLines.join('\n')}</div>}
+          <div className="pams-collapse" data-open={detailOpen} aria-hidden={!detailOpen} {...(!detailOpen ? { inert: '' } : {})}>
+            <div className="pams-collapse-inner"><div className="lingsi-plan-detail">{detailLines.join('\n')}</div></div>
+          </div>
         </>
       )}
 

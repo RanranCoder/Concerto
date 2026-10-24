@@ -69,8 +69,9 @@ export default function LingsiTeamPanel({ items, active }: Props) {
         onClick={() => setManual(!open)}
         role="button"
         tabIndex={0}
+        aria-expanded={open}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') setManual(!open)
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setManual(!open) }
         }}
       >
         <Sparkles size={13} />
@@ -78,7 +79,8 @@ export default function LingsiTeamPanel({ items, active }: Props) {
         <span>{summary}</span>
       </span>
 
-      {open && (
+      <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>
+        <div className="pams-collapse-inner">
         <div className="lingsi-team-body">
           {reason && <div className="lingsi-team-reason">判定为协作：{reason}</div>}
           <div className="lingsi-team-list">
@@ -102,7 +104,8 @@ export default function LingsiTeamPanel({ items, active }: Props) {
             })}
           </div>
         </div>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

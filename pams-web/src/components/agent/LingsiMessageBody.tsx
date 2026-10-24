@@ -1,6 +1,7 @@
 import type { AgentActionPlan, TaskInputResult } from '@/api/agent'
 import type { OutcomeMessage, TimelineItem } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
+import { citationSnippet } from '@/utils/citationSnippet'
 import LingsiAvatar from './LingsiAvatar'
 import LingsiMarkdown from './LingsiMarkdown'
 import LingsiProcessZone from './LingsiProcessZone'
@@ -63,10 +64,13 @@ export default function LingsiMessageBody({
     const c = citations.find((x) => x.index === index)
     if (!c || c.revoked) return   // 已不可见的引用不展示内容
     openText(`cite-${c.sourceType}-${c.sourceId}-${index}`,
-      `${c.sourceTitle}${c.path ? ` · ${c.path}` : ''}`, c.snippet, { source:c, citations })
+      `${c.sourceTitle}${c.path ? ` · ${c.path}` : ''}`, citationSnippet(c), { source:c, citations })
   }
   // 产物：优先取消息级（历史水合与确认回写都写在这里），仅在没有时回退到结果块上挂的
   const artifacts = msg.artifacts?.length ? msg.artifacts : (msg.notice?.artifacts ?? [])
+  // An earlier round may already have emitted text. A new live reasoning round
+  // owns the process label until its own first answer chunk seals it.
+  const hasLiveReasoning = timeline.some(item => item.kind === 'thinking' && item.detail && !item.completed)
   const hasBody =
     Boolean(msg.reply) ||
     msg.references?.length > 0 ||
@@ -88,14 +92,15 @@ export default function LingsiMessageBody({
         <LingsiTeamPanel items={timeline} active={active} />
 
         {/* ---------- 过程区（§7.1 上半段） ---------- */}
-        {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active} />}
+        {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active}
+          resultStarted={!hasLiveReasoning && Boolean(msg.reply || hasPlan || msg.form || msg.notice || artifacts.length)} />}
 
         {/* ---------- 结果区（§7.1 下半段）：文档流，无容器 ---------- */}
         {msg.reply ? (
           <LingsiMarkdown
             text={msg.reply}
             streaming={msg.streaming}
-            citeMax={citations.length}
+            citationIndices={citations.filter(c => !c.revoked).map(c => c.index)}
             onCite={onCite}
           />
         ) : msg.streaming ? (

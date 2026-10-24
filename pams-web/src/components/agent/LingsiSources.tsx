@@ -1,3 +1,4 @@
+import { citationSnippet } from '@/utils/citationSnippet'
 import type { AgentCitation } from '@/api/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
 import { ArrowRight, OpenExternal, Warn } from './LingsiIcons'
@@ -95,7 +96,7 @@ export default function LingsiSources({ citations }: Props) {
                   )}
                 </div>
 
-                {c.snippet && <p className="lingsi-source-snippet">{c.snippet}</p>}
+                {c.snippet && <p className="lingsi-source-snippet">{citationSnippet(c)}</p>}
 
                 <div className="lingsi-source-actions">
                   {c.snippet && (
@@ -106,7 +107,7 @@ export default function LingsiSources({ citations }: Props) {
                         openText(
                           `cite-${key}`,
                           `${sourceLabel(c.sourceType)} · ${c.sourceTitle}`,
-                          c.snippet,
+                          citationSnippet(c),
                           { source:c, citations },
                         )
                       }

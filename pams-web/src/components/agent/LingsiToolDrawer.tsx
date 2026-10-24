@@ -58,7 +58,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
   const renderGroup = (title: string, items: AgentToolVO[]) =>
     items.length > 0 && (
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+        <div style={{ fontSize: 14, fontWeight: 'calc(600 - var(--font-weight-compensation))', marginBottom: 6, color: 'var(--text-primary)' }}>
           {title}（{items.length}）
         </div>
         {items.map((t) => {
@@ -68,7 +68,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="lingsi-tool-name">
                   {t.label}
-                  <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 13 }}>{t.name}</span>
+                  <span style={{ fontWeight: 'calc(400 - var(--font-weight-compensation))', opacity: 0.5, marginLeft: 6, fontSize: 13 }}>{t.name}</span>
                 </div>
                 <div className="lingsi-tool-desc">{t.description}</div>
               </div>
@@ -100,7 +100,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
             <Empty description="知识库暂时没有可检索的内容" />
           ) : (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+              <div style={{ fontSize: 14, fontWeight: 'calc(600 - var(--font-weight-compensation))', marginBottom: 6, color: 'var(--text-primary)' }}>
                 可检索的资料（{sources.length} 类）
               </div>
               {sources.map((s) => (
@@ -108,7 +108,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="lingsi-tool-name">
                       {s.label}
-                      <span style={{ fontWeight: 400, opacity: 0.5, marginLeft: 6, fontSize: 13 }}>
+                      <span style={{ fontWeight: 'calc(400 - var(--font-weight-compensation))', opacity: 0.5, marginLeft: 6, fontSize: 13 }}>
                         {s.chunkCount} 条
                       </span>
                     </div>

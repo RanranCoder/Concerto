@@ -571,7 +571,7 @@ export function timelineFromToolCalls(toolCalls: AgentToolCallEntry[]): Timeline
  * <p>跨 round 必须先落地：round 变化表示"重新生成一段"（重试 +1000 / 降级 +2000），
  * 若把两个 round 的片段并进同一个缓冲，重置语义就丢了 —— 会拼出半截旧文 + 半截新文。
  */
-let deltaBuffer: { round: number; text: string } | null = null
+let deltaBuffer: { streamId: string; round: number; text: string } | null = null
 let deltaFrame = 0
 
 const scheduleFrame = (cb: () => void): number =>
@@ -602,7 +602,7 @@ export function flushStreamDeltas(): void {
     const list = [...s.outcomes]
     const idx = list.length - 1
     // REST 返回已用权威全文覆盖过（streaming=false）→ 这段缓冲作废，别追加到终稿后面
-    if (idx < 0 || !list[idx].streaming) return {}
+    if (idx < 0 || !list[idx].streaming || s.activeStreamId !== buffered.streamId) return {}
     list[idx] = { ...list[idx], reply: list[idx].reply + buffered.text }
     return { outcomes: list }
   })
@@ -620,10 +620,14 @@ function acceptStreamDelta(e: AgentStreamEvent): void {
       const list = [...s.outcomes]
       const idx = list.length - 1
       if (idx >= 0) list[idx] = { ...list[idx], reply: '' }
-      return { outcomes: list, deltaRound: round, activeStreamId: e.streamId, thinking: true }
+      return { outcomes: list, timeline: sealThinking(s.timeline), deltaRound: round, activeStreamId: e.streamId, thinking: true }
     })
+  } else if (state.timeline.some(item => item.kind === 'thinking' && !item.completed)) {
+    // MESSAGE_DELTA bypasses the ordinary event reducer. Seal the preceding
+    // reasoning on its first text chunk as well, before the answer is painted.
+    useAgentStore.setState(s => ({timeline:sealThinking(s.timeline)}))
   }
-  deltaBuffer = { round, text: (deltaBuffer?.round === round ? deltaBuffer.text : '') + text }
+  deltaBuffer = { streamId: e.streamId, round, text: (deltaBuffer?.round === round ? deltaBuffer.text : '') + text }
   if (!deltaFrame) {
     deltaFrame = scheduleFrame(() => {
       deltaFrame = 0
@@ -677,9 +681,11 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     })),
 
   fetchConversations: async () => {
+    const version = requestVersion
     set({ conversationsLoading: true })
     try {
       const res = await api.listConversations(1, 50)
+      if (version !== requestVersion) return
       set({
         conversations: res?.records ?? [],
         pendingTaskCount: res?.pendingTaskCount ?? 0,
@@ -687,14 +693,19 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     } catch {
       // http 拦截器已提示
     } finally {
-      set({ conversationsLoading: false })
+      if (version === requestVersion) set({ conversationsLoading: false })
     }
   },
 
   selectConversation: async (id) => {
-    requestVersion++
+    const version = ++requestVersion
+    if (get().activeStreamId) stoppedStreams.add(get().activeStreamId!)
+    flushStreamDeltas()
     set({
       currentConversationId: id,
+      conversationsLoading: false,
+      thinking: false,
+      activeStreamId: null,
       outcomes: [],
       timeline: [],
       pendingPlan: null,
@@ -709,7 +720,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set({ messagesLoading: true })
     try {
       const res = await api.listMessages(id, 1, 100)
-      if (get().currentConversationId !== id) return
+      if (version !== requestVersion || get().currentConversationId !== id) return
       const outcomes: OutcomeMessage[] = []
       const users: string[] = []
       const userRefs: AgentChatRef[][] = []
@@ -757,7 +768,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     } catch {
       // http 拦截器已提示
     } finally {
-      if (get().currentConversationId === id) set({ messagesLoading: false })
+      if (version === requestVersion && get().currentConversationId === id) set({ messagesLoading: false })
     }
   },
 
@@ -832,7 +843,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         // 用真实结果替换最后那条占位
         const list = [...s.outcomes]
         const placeholderIdx = list.length - 1
-        if (placeholderIdx >= 0 && list[placeholderIdx].streaming) {
+        if (placeholderIdx >= 0 && list[placeholderIdx].status !== 'stopped') {
           list[placeholderIdx] = {
             messageId: res.messageId,
             streamId: res.streamId,
@@ -911,19 +922,20 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (!streamId) {
       return
     }
-    try {
-      await api.agentAbort(streamId)
-    } catch {
-      // 中止失败也让前端恢复可交互状态
-    }
+    flushStreamDeltas()
     requestVersion++
     stoppedStreams.add(streamId)
     if (stoppedStreams.size > 256) stoppedStreams.delete(stoppedStreams.values().next().value!)
     set(s => ({ thinking:false, activeStreamId:null, outcomes:s.outcomes.map((o,i) => i===s.outcomes.length-1 ? {...o,streaming:false,status:'stopped',reply:o.reply || '任务已停止，未继续生成内容。'}:o) }))
+    try { await api.agentAbort(streamId) } catch { /* local stop remains effective */ }
   },
 
   applyStreamEvent: (e) => {
     if (stoppedStreams.has(e.streamId)) return
+    const current = get()
+    if (!current.outcomes.at(-1)?.streaming) return
+    if (current.outcomes.some(o => o.streamId === e.streamId && !o.streaming)) return
+    if (current.activeStreamId && current.activeStreamId !== e.streamId) return
     // 收官/中止类事件：先把字符流缓冲同步落地，否则最后一段正文会丢
     if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') flushStreamDeltas()
     // 字符流走按帧合并的旁路（不进入下面的 set，避免一个 token 一次全列表重渲染）
@@ -987,11 +999,15 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       // V27：依据随收官事件一起下发，用户不必等 REST 返回就能看到出处
       if (e.type === 'MESSAGE_DONE') {
         const cits = e.payload?.['citations']
-        if (Array.isArray(cits) && cits.length > 0) {
+        {
           const list = [...(next.outcomes ?? s.outcomes)]
           const idx = list.length - 1
           if (idx >= 0) {
-            list[idx] = { ...list[idx], citations: cits as AgentCitation[] }
+            list[idx] = { ...list[idx],
+              reply: typeof e.payload?.reply === 'string' ? e.payload.reply : list[idx].reply,
+              streaming: false,
+              citations: Array.isArray(cits) ? cits as AgentCitation[] : [],
+            }
             next.outcomes = list
           }
         }
@@ -1139,9 +1155,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     return res
   },
 
-  reset: () =>
+  reset: () => {
+    requestVersion++
+    flushStreamDeltas()
+    stoppedStreams.clear()
     set({
       conversations: [],
+      conversationsLoading: false,
       currentConversationId: null,
       outcomes: [],
       messagesLoading: false,
@@ -1155,5 +1175,6 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       userRefs: [],
       pendingPlan: null,
       pendingTaskCount: 0,
-    }),
+    })
+  },
 }))

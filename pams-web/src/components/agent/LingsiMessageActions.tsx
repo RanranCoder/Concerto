@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { App, Tooltip } from 'antd'
-import { Copy, Reload, ThumbUp } from './LingsiIcons'
+import { Tooltip } from 'antd'
+import { Reload, ThumbUp } from './LingsiIcons'
+
+import LingsiCopyButton from './LingsiCopyButton'
 
 interface Props {
   /** 本条回复的正文（复制用；不含卡片内容） */
@@ -27,46 +29,20 @@ interface Props {
  * `由灵思生成` **不参与 hover 显隐**：它是合规声明，必须恒可见。
  */
 export default function LingsiMessageActions({ text, onRegenerate, hidden }: Props) {
-  const { message } = App.useApp()
   const [voted, setVoted] = useState<'up' | 'down' | null>(null)
 
   if (hidden) return null
 
-  const copy = async () => {
-    const body = (text ?? '').trim()
-    if (!body) return
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(body)
-      } else {
-        // 非安全上下文（局域网 http 访问）没有 clipboard API —— 退回旧方案，
-        // 否则用户会看到"复制没反应"而且不知道为什么
-        const ta = document.createElement('textarea')
-        ta.value = body
-        ta.style.position = 'fixed'
-        ta.style.opacity = '0'
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand('copy')
-        document.body.removeChild(ta)
-      }
-      message.success('已复制')
-    } catch {
-      message.warning('复制失败，请手动选择文本')
-    }
-  }
 
   return (
     <div className="lingsi-msg-actions">
-      <Tooltip title="复制">
-        <button type="button" className="lingsi-icon-btn" onClick={() => void copy()}>
-          <Copy size={13.5} />
-        </button>
-      </Tooltip>
+      <LingsiCopyButton text={text.trim()} size={13.5} />
       <Tooltip title={voted === 'up' ? '已记录：有帮助' : '有帮助'}>
         <button
           type="button"
           className={`lingsi-icon-btn${voted === 'up' ? ' lingsi-icon-btn-on' : ''}`}
+          aria-label="有帮助"
+          aria-pressed={voted === 'up'}
           onClick={() => setVoted((v) => (v === 'up' ? null : 'up'))}
         >
           <ThumbUp size={13.5} />

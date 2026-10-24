@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useStreamReveal } from '@/hooks/useStreamReveal'
 import { renderMarkdown } from '@/utils/markdown'
 
 interface Props {
@@ -13,13 +14,14 @@ interface Props {
    * 也会让 markdown 这个纯渲染组件依赖上业务数据结构。
    */
   citeMax?: number
+  citationIndices?: number[]
   /** 点击 `[n]` 角标（n 从 1 起）。不传则角标不可点，仍保留视觉强调 */
   onCite?: (index: number) => void
 }
 
 /** 把 `[n]` 包成可点角标；`<code>` / `<pre>` 内的内容跳过（代码里的 [1] 不是引用） */
-function markCitations(html: string, maxIndex: number): string {
-  if (!html || maxIndex <= 0) return html
+function markCitations(html: string, allowed: Set<number>): string {
+  if (!html || !allowed.size) return html
   return html
     .split(/(<code[\s\S]*?<\/code>|<pre[\s\S]*?<\/pre>)/g)
     .map((seg) => {
@@ -27,7 +29,7 @@ function markCitations(html: string, maxIndex: number): string {
       return seg.replace(/\[(\d{1,3})\]/g, (whole, d: string) => {
         const n = Number(d)
         // 越界编号原样保留：后端已把它当作"模型编造"丢弃，这里不必伪装成有效引用
-        return n >= 1 && n <= maxIndex
+        return allowed.has(n)
           ? `<span class="lingsi-cite" data-idx="${n}" role="button" tabindex="0">${n}</span>`
           : whole
       })
@@ -43,8 +45,11 @@ function markCitations(html: string, maxIndex: number): string {
  * 让"引用可核验"从"卡里有列表"变成"读到哪里就能点哪里"。
  * 注意这里必须用**事件委托**：内容是 innerHTML，挂不了 React 事件。
  */
-export default function LingsiMarkdown({ text, streaming, citeMax = 0, onCite }: Props) {
-  const html = useMemo(() => markCitations(renderMarkdown(text), citeMax), [text, citeMax])
+export default function LingsiMarkdown({ text, streaming, citeMax = 0, citationIndices, onCite }: Props) {
+  const citationKey = citationIndices?.join(',') ?? Array.from({ length: citeMax }, (_, i) => i + 1).join(',')
+  const html = useMemo(() => markCitations(renderMarkdown(text), new Set(citationKey ?
+    citationKey.split(',').map(Number) : [])), [text, citationKey])
+  const contentRef = useStreamReveal(html, streaming, { sourceText: text })
   if (!text && !streaming) return null
   return (
     <div
@@ -63,7 +68,7 @@ export default function LingsiMarkdown({ text, streaming, citeMax = 0, onCite }:
         }
       }}
     >
-      <span dangerouslySetInnerHTML={{ __html: html }} />
+      <span ref={contentRef} />
       {streaming && <span className="lingsi-cursor" />}
     </div>
   )

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Drawer, Spin, Tooltip } from 'antd'
 import { useAgentStore } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
@@ -9,6 +9,7 @@ import LingsiComposer from '@/components/agent/LingsiComposer'
 import LingsiEmptyState from '@/components/agent/LingsiEmptyState'
 import LingsiMessageBody from '@/components/agent/LingsiMessageBody'
 import LingsiUserBubble from '@/components/agent/LingsiUserBubble'
+import LingsiScrollToBottom from '@/components/agent/LingsiScrollToBottom'
 import LingsiToolDrawer from '@/components/agent/LingsiToolDrawer'
 import LingsiEntityPanel from '@/components/agent/LingsiEntityPanel'
 import { Menu, PanelRight, Toolbox } from '@/components/agent/LingsiIcons'
@@ -75,6 +76,23 @@ export default function AgentHome() {
   const [seed, setSeed] = useState<{ text: string; nonce: number } | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [anchoredTurn, setAnchoredTurn] = useState<number | null>(null)
+  const alignedTurn = useRef<number | null>(null)
+
+  // A short new turn still needs enough room below it to reach the top of the
+  // viewport. Measure the scroll container only when its size changes.
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const measure = () => {
+      const style = getComputedStyle(el)
+      el.style.setProperty('--lingsi-turn-min-height', `${Math.max(0, el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom))}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     void fetchConversations()
@@ -116,13 +134,37 @@ export default function AgentHome() {
   // 字符流会高频触发本 effect，无条件置底会把"往上翻看过程"的用户一次次拽回来。
   useEffect(() => {
     const el = scrollRef.current
-    if (!el) return
+    // Once a send is anchored, new process/reply chunks must not pull the
+    // question back down or interrupt the user's manual reading position.
+    if (!el || anchoredTurn !== null) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     if (nearBottom) el.scrollTop = el.scrollHeight
-  }, [rows.length, outcomes, timeline.length])
+  }, [rows.length, outcomes, timeline.length, anchoredTurn])
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (anchoredTurn === null) { alignedTurn.current = null; return }
+    if (!el || alignedTurn.current === anchoredTurn) return
+    const turn = el.querySelector<HTMLElement>('[data-scroll-anchor="true"]')
+    if (!turn) return
+    const align = () => {
+      const style = getComputedStyle(el)
+      el.style.setProperty('--lingsi-turn-min-height', `${Math.max(0, el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom))}px`)
+      const top = el.scrollTop + turn.getBoundingClientRect().top - el.getBoundingClientRect().top - parseFloat(style.paddingTop)
+      el.scrollTo({top, behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'})
+    }
+    align()
+    // The composer resets its textarea height after sending. Recheck once in
+    // the next frame so the enlarged phone viewport cannot clamp the target.
+    const frame = requestAnimationFrame(() => { align(); alignedTurn.current = anchoredTurn })
+    return () => cancelAnimationFrame(frame)
+  }, [anchoredTurn, rows.length])
 
   const handleSend = useCallback(
     (text: string) => {
+      const state = useAgentStore.getState()
+      if (state.thinking || !text.trim()) return
+      setAnchoredTurn(state.outcomes.length)
       void sendMessage(text)
     },
     [sendMessage],
@@ -130,6 +172,7 @@ export default function AgentHome() {
 
   const handleSelect = useCallback(
     (id: number) => {
+      setAnchoredTurn(null)
       useAgentPanel.getState().closeAll()
       setSeed({ text:'', nonce:Date.now() })
       void selectConversation(id)
@@ -138,6 +181,7 @@ export default function AgentHome() {
   )
 
   const handleNew = useCallback(() => {
+    setAnchoredTurn(null)
     useAgentPanel.getState().closeAll()
     setSeed({ text:'', nonce:Date.now() })
     void selectConversation(null)
@@ -302,7 +346,7 @@ export default function AgentHome() {
                 const msg = r.outcomeIdx >= 0 ? outcomes[r.outcomeIdx] : undefined
                 const isLast = i === rows.length - 1
                 return (
-                  <div key={`turn-${i}`} className="lingsi-turn-wrap">
+                  <div key={`turn-${i}`} className="lingsi-turn-wrap" data-scroll-anchor={i === anchoredTurn ? 'true' : undefined}>
                     {r.user && (
                       <LingsiUserBubble text={r.user} attachedRefs={userRefs[i]} onEdit={handleEdit} />
                     )}
@@ -329,6 +373,8 @@ export default function AgentHome() {
           </div>
         </div>
 
+        <div className="lingsi-composer-dock">
+        <LingsiScrollToBottom scrollRef={scrollRef} generating={thinking || Boolean(lastOutcome?.streaming)} />
         <LingsiComposer
           busy={thinking}
           canStop={Boolean(activeStreamId)}
@@ -347,6 +393,7 @@ export default function AgentHome() {
           onStop={() => void stop()}
           onOpenTools={() => setToolsOpen(true)}
         />
+        </div>
       </div>
 
       <LingsiEntityPanel />

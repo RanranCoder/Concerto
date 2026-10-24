@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { App, Drawer } from 'antd'
+import { Drawer } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useAgentPanel, type PanelItem } from '@/stores/agentPanel'
 import { useAgentStore } from '@/stores/agent'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { stripArgsMarker } from '@/utils/markdown'
+import { citationSnippet } from '@/utils/citationSnippet'
 import LingsiMarkdown from './LingsiMarkdown'
 import LingsiSources from './LingsiSources'
-import { Close, Copy } from './LingsiIcons'
+import { Close } from './LingsiIcons'
+
+import LingsiCopyButton from './LingsiCopyButton'
 
 export default function LingsiEntityPanel() {
   const {items, activeId, collapsed, activate, close, setCollapsed} = useAgentPanel()
@@ -16,7 +19,6 @@ export default function LingsiEntityPanel() {
   const active = items.find(it => it.id === activeId) ?? items.at(-1)
   const outcomes = useAgentStore(s => s.outcomes)
   const result = outcomes.find(o => o.notice?.taskId === active?.plan?.planId)?.notice
-  const { message } = App.useApp()
   const navigate = useNavigate()
   useEffect(() => setTab('content'), [activeId])
   if (!active || collapsed) return null
@@ -32,9 +34,9 @@ export default function LingsiEntityPanel() {
     }}>{title}</button>)}</div>
     <div className="lingsi-preview-scroll" id="lingsi-preview-content" role="tabpanel" aria-labelledby={`lingsi-preview-tab-${tab}`} tabIndex={0}>
       {tab==='sources' ? active.source || active.citations?.length ? <LingsiSources citations={active.citations?.length?active.citations:[active.source!]}/> : <div className="lingsi-preview-empty">本次结果没有返回资料出处。请根据业务资料核对内容。</div> : tab==='changes' ? active.plan ? <><h3>{active.plan.summary}</h3><p>{result?.text || `待确认 / ${active.plan.total} 项`}</p><ul className="lingsi-preview-change-list">{active.plan.items.map((it,i) => <li key={i}><strong>{it.label}</strong><span>{it.sub}</span></li>)}</ul><p>{stripArgsMarker(active.plan.detailLines).join('\n')}</p>{active.plan.skipped.length>0 && <div className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{active.plan.skipped.map((s,i) => <p key={i}>{s.label}：{s.reason}</p>)}</div>}<p className="lingsi-preview-empty">确认入口保留在对话中。</p></> : <div className="lingsi-preview-empty">{active.kind==='artifact'?'已产生业务变更，完整详情请打开业务页面查看。':'这是一份资料片段，没有待执行变更。'}</div> : active.kind==='text' ? <>
-        <div className="lingsi-preview-document-meta"><span>{active.source ? '资料片段' : result ? '已处理' : '待核对内容'}</span><button type="button" className="lingsi-icon-btn" aria-label="复制预览全文" onClick={() => navigator.clipboard.writeText(active.text||'').then(() => message.success('已复制全文'),() => message.warning('复制失败，请选择文字复制'))}><Copy size={14}/></button></div>
+        <div className="lingsi-preview-document-meta"><span>{active.source ? '资料片段' : result ? '已处理' : '待核对内容'}</span><LingsiCopyButton key={active.id} text={active.text || ''} label="复制预览全文" /></div>
         {active.source && <div className="lingsi-preview-empty">{active.source.sourceTitle}{active.source.path?` / ${active.source.path}`:''}{active.source.asOf?` / 数据截至 ${active.source.asOf}`:''}</div>}
-        <article className="lingsi-preview-document"><LingsiMarkdown text={active.text || ''}/></article>
+        <article className="lingsi-preview-document"><LingsiMarkdown text={active.source ? citationSnippet({ ...active.source, snippet: active.text || '' }) : active.text || ''}/></article>
         {active.source?.link && <a href={active.source.link}>打开资料原文</a>}
       </> : <div className="lingsi-preview-artifact"><h2>{active.name}</h2><p>该成果已写入业务系统。请在对应页面查看完整内容与状态。</p>{active.path ? <button type="button" className="lingsi-business-link" onClick={() => showBusinessPage(active)}>打开完整页面</button> : <p>没有可跳转的业务页面。</p>}</div>}
     </div>

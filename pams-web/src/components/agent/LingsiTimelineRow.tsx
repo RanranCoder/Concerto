@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { EditOutlined } from '@ant-design/icons'
 import type { TimelineItem } from '@/stores/agent'
 import { agentColorOf, agentShortOf } from '@/styles/categoryColors'
 import { formatDuration } from '@/utils/thinking'
+import { useStreamReveal } from '@/hooks/useStreamReveal'
 import { Thinking, Tool, Check, Cross, Plan, Aborted, Sparkles } from './LingsiIcons'
 
 interface Props {
   item: TimelineItem
+  visible?: boolean
+  settled?: boolean
 }
 
-/** 推理正文超过这个长度（或超过两行）才需要"展开" —— 短推理直接一行读完，不必多一次点击 */
+/** 长推理、换行或已被标题裁剪的推理需要展开；完整短句直接展示。 */
 const EXPAND_THRESHOLD = 120
 
 /** 进行中的三点脉冲（共用同一套动画；不放 spinner，避免每行都在转） */
@@ -71,41 +74,54 @@ function AgentAvatar({ name, label }: { name: string; label: string }) {
  *
  * <p>两种行共用这一个组件，靠**有没有 `detail`** 区分（与 {@code groupTimeline} 同一判据）：
  * <ul>
- *   <li>模型推理（V35）：detail 是 reasoning 原文，默认两行截断，可展开</li>
+ *   <li>模型推理（V35）：折叠只显示摘要，展开后用中性标题与完整原文替换摘要</li>
  *   <li>编排旁白（V36）：「正在理解你的问题…」这类后端自述，只有一句标题，没有可展开的内容</li>
  * </ul>
  * 不分成两个组件是刻意的：它们的折叠态是同一行结构（图标 + 标题 + 耗时），
  * 拆开就会出现"旁白与推理的行高/缩进不一致"这种只有肉眼能发现的差异。
  */
-function ThinkingRow({ item }: { item: TimelineItem }) {
+function ThinkingRow({ item, visible = true, settled = false }: Props) {
   const [open, setOpen] = useState(false)
+  const bodyId = useId()
   const text = (item.detail ?? '').trim()
-  const long = text.length > EXPAND_THRESHOLD || text.split('\n').length > 2
+  const expandable = Boolean(text) && (
+    text.length > EXPAND_THRESHOLD || text.includes('\n') || text !== item.label.trim()
+  )
+  const expanded = expandable && open
   const duration = formatDuration(item.durationMs)
+  const streaming = Boolean(text) && !item.completed
+  const headline = expandable ? item.label : text || item.label
+  const finished = settled || item.completed
+  const headlineRef = useStreamReveal(headline, streaming, { plainText: true, visible: visible && !expanded, settled: finished })
+  const contentRef = useStreamReveal(text, streaming, { plainText: true, visible: visible && expanded, settled: finished })
 
   return (
     <div className="lingsi-tl-row lingsi-tl-row-think">
       <span className="lingsi-tl-icon">{icon(item)}</span>
       <div className="lingsi-tl-think">
-        <div className="lingsi-tl-think-head">
-          <span className="lingsi-tl-label" title={text || item.label}>
-            {item.label}
-          </span>
-          {!item.completed && <PendingDots />}
-          {long && (
+        <div className="lingsi-tl-think-head" data-expandable={expandable}>
+          <span className="lingsi-tl-label" ref={headlineRef} hidden={expanded} />
+          {expanded && <span className="lingsi-tl-label">推理内容</span>}
+          {!finished && <PendingDots />}
+          {expandable && (
             <button
               type="button"
               className="lingsi-tl-think-toggle"
               onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
+              aria-expanded={expanded}
+              aria-controls={bodyId}
             >
-              {open ? '收起' : '展开推理'}
+              {expanded ? '收起推理' : '展开推理'}
             </button>
           )}
           {duration && <span className="lingsi-tl-meta">{duration}</span>}
         </div>
-        {long && text && (
-          <div className={`lingsi-tl-think-body${open ? ' lingsi-tl-think-body-open' : ''}`}>{text}</div>
+        {expandable && (
+          <div className="pams-collapse" data-open={expanded} aria-hidden={!expanded} {...(!expanded ? { inert: '' } : {})}>
+            <div className="pams-collapse-inner">
+              <div className="lingsi-tl-think-body" id={bodyId} role="region" aria-label="推理全文"><span ref={contentRef} /></div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -130,7 +146,7 @@ function ThinkingRow({ item }: { item: TimelineItem }) {
  * 这三类只在标准模式被后端判定升级为协作时出现，单 Agent 轮次不会有。
  * （其中 agent/collab 行在团队面板同时渲染时由 LingsiProcessZone 让位，避免同一屏出现两遍）
  */
-export default function LingsiTimelineRow({ item }: Props) {
+export default function LingsiTimelineRow({ item, visible = true, settled }: Props) {
   // 入参下钻的展开态：必须在所有 return 之前声明（hooks 不能放在条件分支后）
   const [argsOpen, setArgsOpen] = useState(false)
 
@@ -140,7 +156,7 @@ export default function LingsiTimelineRow({ item }: Props) {
 
   // 思维链行单独渲染：它是唯一"内容比标题长"的行类型（可展开读原文）
   if (item.kind === 'thinking' && (item.detail || item.label)) {
-    return <ThinkingRow item={item} />
+    return <ThinkingRow item={item} visible={visible} settled={settled} />
   }
 
   // 审查结论单独特化：它承载的是「能不能过」，值得一块可读的结论区

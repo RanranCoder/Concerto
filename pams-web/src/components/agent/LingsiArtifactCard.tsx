@@ -64,6 +64,7 @@ export default function LingsiArtifactCard({ artifacts, deltas, openThreshold = 
         className="lingsi-artifact-head"
         role="button"
         tabIndex={0}
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') setOpen((v) => !v)
@@ -85,7 +86,8 @@ export default function LingsiArtifactCard({ artifacts, deltas, openThreshold = 
         <Caret size={13} open={open} />
       </div>
 
-      {open && (
+      <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>
+        <div className="pams-collapse-inner">
         <div className="lingsi-artifact-rows">
           {artifacts.map((a, i) => {
             const g = glyph(a)
@@ -115,7 +117,8 @@ export default function LingsiArtifactCard({ artifacts, deltas, openThreshold = 
             )
           })}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -19,7 +19,7 @@ const base = (size: number) => ({
   strokeWidth: 1.3,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
-  style: { display: 'block' as const },
+  style: { display: 'inline-block' as const, verticalAlign: '-0.125em' },
 })
 
 /** 星火（品牌标识） */
