@@ -123,7 +123,7 @@ public class ActivityPlanSource implements KnowledgeSource {
         }
         for (Map.Entry<String, String> e : SECTION_LABELS.entrySet()) {
             if(p.getDocumentFileId()!=null) break;
-            String text = field(p, e.getKey());
+            String text = PlanSectionText.readable(field(p, e.getKey()));
             if (text == null || text.isBlank()) continue;
             // path 带上版本与状态：让出处自己说明可信度（见类注释）
             sections.add(Section.of(versionLabel + " · " + e.getValue(), text));

@@ -167,7 +167,9 @@ public class KbPipeline {
     private List<ScoredChunk> egressFragments(List<ScoredChunk> allowed) {
         List<ScoredChunk> out = new ArrayList<>(allowed.size());
         for (ScoredChunk c : allowed) {
-            String text = policyGuard.egressText(Sensitivity.of(c.sensitivity()), c.content());
+            String content = "activity_plan".equals(c.sourceType())
+                    ? com.pams.module.knowledge.source.PlanSectionText.readable(c.content()) : c.content();
+            String text = policyGuard.egressText(Sensitivity.of(c.sensitivity()), content);
             if (text == null) {
                 log.warn("知识库片段被出网闸口拦下（restricted）：{}:{} seq={}",
                         c.sourceType(), c.sourceId(), c.seq());
