@@ -23,13 +23,24 @@ Thumbs.db
 database/materials.csv
 # 工具工作区
 .superpowers/
-.claude/worktrees/
-.claude/tmp/
+.claude/
+.commandcode/
+.deploy-helper/
+.trae/
+.vite/
+.workbuddy/
+.workbuddy-ai/
 # 部署密钥（docker compose 用，勿提交）
 .env
 .env.local
+
+# 本地数据库备份与临时构建（含真实数据，勿提交）
+.backups/
+.build/
 
 # 数据抽取临时产物
 extract_stdout.txt
 field_extract_result.txt
 *_extract_result.txt
+# 本地工具探针
+pams-backend/.dsh-write-probe.txt
