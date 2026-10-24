@@ -1,0 +1,122 @@
+[
+  {
+    "tool": "createActivity",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "createMember",
+    "prefix": "/member?id=",
+    "probe": "/member?id=1",
+    "registered": false
+  },
+  {
+    "tool": "createSeatLayout",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "draftArticleFromActivity",
+    "prefix": "/content/article?id=",
+    "probe": "/content/article?id=1",
+    "registered": false
+  },
+  {
+    "tool": "draftPlanSections",
+    "prefix": "/activities/",
+    "probe": "/activities/1",
+    "registered": true
+  },
+  {
+    "tool": "generateActivitySchedule",
+    "prefix": "/routine/activity-schedules?activityId=",
+    "probe": "/routine/activity-schedules?activityId=1",
+    "registered": true
+  },
+  {
+    "tool": "generateActivityTasks",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "previewCreditBatch",
+    "prefix": "/archive/credit?activityId=",
+    "probe": "/archive/credit?activityId=1",
+    "registered": false
+  },
+  {
+    "tool": "publishAnnouncement",
+    "prefix": "/archive/announcement?id=",
+    "probe": "/archive/announcement?id=1",
+    "registered": false
+  },
+  {
+    "tool": "queryActivityOverview",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "queryActivityTasks",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "queryCreditRecords",
+    "prefix": "/archive/credit",
+    "probe": "/archive/credit",
+    "registered": false
+  },
+  {
+    "tool": "queryMyPendingWork",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "queryMyPendingWork",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "queryNotifications",
+    "prefix": "/notification",
+    "probe": "/notification",
+    "registered": false
+  },
+  {
+    "tool": "queryPartyMemberProgress",
+    "prefix": "/party/member?id=",
+    "probe": "/party/member?id=1",
+    "registered": false
+  },
+  {
+    "tool": "queryRosterSigninStats",
+    "prefix": "/activity/",
+    "probe": "/activity/1",
+    "registered": false
+  },
+  {
+    "tool": "searchArticles",
+    "prefix": "/content/article?id=",
+    "probe": "/content/article?id=1",
+    "registered": false
+  },
+  {
+    "tool": "searchMaterials",
+    "prefix": "/archive/material?id=",
+    "probe": "/archive/material?id=1",
+    "registered": false
+  },
+  {
+    "tool": "sendNotification",
+    "prefix": "/notification",
+    "probe": "/notification",
+    "registered": false
+  }
+]

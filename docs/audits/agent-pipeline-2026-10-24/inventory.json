@@ -1,0 +1,277 @@
+{
+  "total": 21,
+  "reads": 11,
+  "writes": 10,
+  "catalog_missing_implementations": [
+    "draftAnnouncement",
+    "draftNewsFromActivity",
+    "generateAgendaFromPlan"
+  ],
+  "tools": [
+    {
+      "name": "createActivity",
+      "label": "创建活动",
+      "write": true,
+      "form": true,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/core/ToolContextKbModeTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/core/ToolRegistryReadonlyModeTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/llm/DeepSeekStreamTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/orchestration/MultiAgentBaseTest.java"
+      ]
+    },
+    {
+      "name": "createMember",
+      "label": "新增成员",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/member?id="
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "createSeatLayout",
+      "label": "创建座位表",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java"
+      ]
+    },
+    {
+      "name": "draftArticleFromActivity",
+      "label": "起草推文",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/content/article?id="
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/orchestration/MultiAgentBaseTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java"
+      ]
+    },
+    {
+      "name": "draftPlanSections",
+      "label": "策划书草稿",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activities/"
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "generateActivitySchedule",
+      "label": "生成排班",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/routine/activity-schedules?activityId="
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/service/ConversationTaskHistoryTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/tool/GenerateActivitySchedulePreviewTest.java"
+      ]
+    },
+    {
+      "name": "generateActivityTasks",
+      "label": "生成任务清单",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java"
+      ]
+    },
+    {
+      "name": "previewCreditBatch",
+      "label": "批量加分",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/archive/credit?activityId="
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java"
+      ]
+    },
+    {
+      "name": "publishAnnouncement",
+      "label": "发布公告",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/archive/announcement?id="
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "queryActivityOverview",
+      "label": "活动概览",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/core/ToolContextKbModeTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/core/ToolRegistryReadonlyModeTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/orchestration/MultiAgentBaseTest.java"
+      ]
+    },
+    {
+      "name": "queryActivityTasks",
+      "label": "任务进度",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "queryAttendance",
+      "label": "考勤查询",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/service/AgentOrchestratorTurnSensitivityTest.java"
+      ]
+    },
+    {
+      "name": "queryCommonFreeTime",
+      "label": "共同空闲",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [],
+      "test_mentions": []
+    },
+    {
+      "name": "queryCreditRecords",
+      "label": "素拓台账",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/archive/credit"
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "queryMyPendingWork",
+      "label": "待我处理",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/",
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/llm/DeepSeekStreamTest.java"
+      ]
+    },
+    {
+      "name": "queryNotifications",
+      "label": "通知查询",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/notification"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/service/AgentOrchestratorTurnSensitivityTest.java",
+        "pams-backend/src/test/java/com/pams/module/agent/service/ConversationStoreThinkingStorageTest.java"
+      ]
+    },
+    {
+      "name": "queryPartyMemberProgress",
+      "label": "党员发展进度",
+      "write": false,
+      "form": false,
+      "in_catalog": false,
+      "links": [
+        "/party/member?id="
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/core/PolicyGuardEgressTest.java"
+      ]
+    },
+    {
+      "name": "queryRosterSigninStats",
+      "label": "签到统计",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/activity/"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/tool/AgentToolActivityNameSchemaTest.java"
+      ]
+    },
+    {
+      "name": "searchArticles",
+      "label": "稿件检索",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/content/article?id="
+      ],
+      "test_mentions": []
+    },
+    {
+      "name": "searchMaterials",
+      "label": "材料检索",
+      "write": false,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/archive/material?id="
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/orchestration/MultiAgentBaseTest.java"
+      ]
+    },
+    {
+      "name": "sendNotification",
+      "label": "发送通知",
+      "write": true,
+      "form": false,
+      "in_catalog": true,
+      "links": [
+        "/notification"
+      ],
+      "test_mentions": [
+        "pams-backend/src/test/java/com/pams/module/agent/llm/DeepSeekStreamTest.java"
+      ]
+    }
+  ]
+}
