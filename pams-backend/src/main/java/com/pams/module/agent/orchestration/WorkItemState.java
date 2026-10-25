@@ -232,13 +232,31 @@ public class WorkItemState {
             }
         }
         for(var n:selected) {
-            if(n.getActionTaskId()!=null) tasks.cancelPending(n.getActionTaskId(),userId,LocalDateTime.now());
+            if(n.getActionTaskId()!=null && tasks.cancelPending(n.getActionTaskId(),userId,LocalDateTime.now())==0) {
+                var fresh=tasks.findById(n.getActionTaskId()).orElseThrow();
+                if(!AgentTask.CANCELLED.equals(fresh.getStatus())) throw new BizException(409,"该分支已有业务提交，请刷新核对结果");
+            }
             n.setRevision(n.getRevision()+1); n.setStatus("QUEUED"); n.setOutputText(null); n.setActionTaskId(null);
             n.setReviewStatus("NOT_REVIEWED");
             if(n.getId().equals(nodeId)) n.setInstruction(instruction);
             items.save(n);
         }
         items.flush(); update(run,true);
+    }
+    @Transactional
+    public void lockForEdit(AgentTask task,Long uid) {
+        owned(task.getRunId(),uid);var run=lock(task.getRunId());requireActive(run);
+        var node=items.findById(task.getWorkItemId()).orElseThrow();
+        if(run.getDispatchToken()!=null || !Objects.equals(node.getActionTaskId(),task.getId()) || node.getRevision()!=task.getWorkItemRevision()) throw new BizException(409,"任务正在执行或版本已变化，请稍后重试");
+    }
+    @Transactional
+    public ToolContext prepareEditedPreview(AgentTask task,ToolContext current) {
+        lockForEdit(task,current.getUserId());var old=items.findById(task.getWorkItemId()).orElseThrow();
+        revise(task.getRunId(),old.getId(),current.getUserId(),old.getRevision(),old.getInstruction());
+        var node=items.findById(old.getId()).orElseThrow();node.setStatus("RUNNING");node.setAttempt(node.getAttempt()+1);items.saveAndFlush(node);
+        var step=new AgentStep();step.setRunId(task.getRunId());step.setWorkItemId(node.getId());step.setRevision(node.getRevision());step.setAttempt(node.getAttempt());
+        step.setAgentName(node.getAgentName());step.setStatus("SUCCESS");step.setSeq((int)steps.countByRunId(task.getRunId())+1);step.setCreatedAt(LocalDateTime.now());step.setInputJson(encode(Map.of("origin","USER_EDIT")));steps.save(step);
+        return current.derive(task.getConversationId(),task.getStreamId()).withRunId(task.getRunId()).withWorkItem(node.getId(),node.getRevision()).withAttempt(node.getAttempt());
     }
     public record Review(String status, List<Map<String,Object>> issues) {}
     public Map<String,Object> reviews(Long runId) {

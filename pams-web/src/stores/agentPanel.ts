@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { AgentActionPlan, AgentArtifact, AgentCitation } from '@/api/agent'
+import { useAuthStore } from './auth'
+import { listAgentArtifacts } from '@/api/agent'
+import type { AgentActionPlan, AgentArtifact, AgentCitation, AgentArtifactSummary } from '@/api/agent'
 
 /**
  * 灵思右侧实体面板（UI v2 §A「产物分屏」）。
@@ -13,11 +15,13 @@ import type { AgentActionPlan, AgentArtifact, AgentCitation } from '@/api/agent'
  * 用户看完只能关掉，没法一边看清单一边看正文。分屏让"对照阅读"成立。
  */
 
-export type PanelItemKind = 'artifact' | 'text'
+export type PanelItemKind = 'artifact' | 'text' | 'version'
 
 export interface PanelItem {
   /** 稳定去重键：同类型同 id 的产物重复打开不产生新 tab */
   id: string
+  artifact?: AgentArtifactSummary
+  selectedVersion?: number
   kind: PanelItemKind
   /** tab 标题（短） */
   title: string
@@ -34,6 +38,13 @@ export interface PanelItem {
 }
 
 interface PanelState {
+  drafts: Record<number,{version:number;fields:Record<string,string>}>
+  rememberDraft: (id:number,version:number,fields:Record<string,string>) => void
+  discardDraft: (id:number) => void
+  conversationId: number | null
+  catalog: AgentArtifactSummary[]
+  syncConversation: (id: number) => Promise<void>
+  openVersion: (artifact: AgentArtifactSummary, version?: number) => void
   items: PanelItem[]
   activeId: string | null
   /** 收起态：窄屏默认收起，宽屏默认展开 */
@@ -82,7 +93,33 @@ function artifactKey(a: AgentArtifact): string {
   return `a:${a.entityType}:${tail}`
 }
 
-export const useAgentPanel = create<PanelState>()((set) => ({
+let catalogRequest=0
+export const useAgentPanel = create<PanelState>()((set,get) => ({
+  drafts:{},
+  rememberDraft:(id,version,fields)=>set(s=>({drafts:{...s.drafts,[id]:{version,fields}}})),
+  discardDraft:id=>set(s=>({drafts:Object.fromEntries(Object.entries(s.drafts).filter(([key])=>Number(key)!==id))})),
+  conversationId:null,
+  catalog:[],
+  syncConversation: async (id) => {
+    const request=++catalogRequest
+    if(get().conversationId!==id) set({conversationId:id,catalog:[],items:[],activeId:null,collapsed:true})
+    try {
+      let catalog=await listAgentArtifacts(id)
+      if(request!==catalogRequest || get().conversationId!==id || !Array.isArray(catalog)) return
+      catalog=catalog.map(candidate=>{
+        const known=get().catalog.find(a=>a.id===candidate.id)
+        return known && (candidate.currentVersion<known.currentVersion || candidate.currentVersion===known.currentVersion && (candidate.taskVersion ?? 0)<(known.taskVersion ?? 0))?known:candidate
+      })
+      const first=get().catalog.length===0 && catalog.length>0
+      set(s=>({catalog,items:s.items.map(it=>it.artifact?{...it,artifact:catalog.find(a=>a.id===it.artifact!.id) ?? it.artifact}:it)}))
+      if(first && !get().activeId) get().openVersion(catalog.at(-1)!)
+    } catch { /* Existing previews remain available; reconnect or the next state change retries the index. */ }
+  },
+  openVersion: (artifact,version) => set(s=>{
+    const id=`v:${artifact.id}`
+    const item:PanelItem={id,kind:'version',title:shortTitle(artifact.title),artifact,selectedVersion:version ?? artifact.currentVersion}
+    return {items:s.items.some(it=>it.id===id)?s.items.map(it=>it.id===id?item:it):[...s.items,item],activeId:id,collapsed:false}
+  }),
   items: [],
   activeId: null,
   collapsed: true,
@@ -130,9 +167,12 @@ export const useAgentPanel = create<PanelState>()((set) => ({
       return { items, activeId }
     }),
 
-  closeAll: () => set({ items: [], activeId: null, collapsed:true }),
+  closeAll: () => {catalogRequest++;set({ conversationId:null,catalog:[],items: [], activeId: null, collapsed:true })},
 
-  toggle: () => set((s) => ({ collapsed: !s.collapsed })),
+  toggle: () => {
+    const s=get();if(!s.items.length && s.catalog.length) {get().openVersion(s.catalog.at(-1)!);return}
+    set({collapsed:!s.collapsed})
+  },
 
   setCollapsed: (v) => set({ collapsed: v }),
 
@@ -150,3 +190,9 @@ function shortTitle(name: string): string {
   if (!t) return '详情'
   return t.length > 10 ? `${t.slice(0, 10)}…` : t
 }
+
+useAuthStore.subscribe((next,previous)=>{
+  if(next.user?.id!==previous.user?.id || next.user?.orgId!==previous.user?.orgId || !next.token && previous.token) {
+    useAgentPanel.getState().closeAll();useAgentPanel.setState({drafts:{}})
+  }
+})

@@ -87,7 +87,7 @@ export default function LingsiFormCard({
    * 用户必须手动点「打开表单」，而那一路径又拿不到预填值。
    * 改用 formKey + 预填值指纹：首次下发、重新下发、补全后重发都能正确触发一次。
    */
-  const formKey = `${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`
+  const formKey = `${form.taskId}#${JSON.stringify(form.fields)}#${form.formKey ?? form.toolName ?? 'form'}#${JSON.stringify(form.values ?? {})}`
   useEffect(() => {
     if (openedFor.current !== formKey) {
       openedFor.current = formKey
@@ -110,7 +110,7 @@ export default function LingsiFormCard({
    */
   useEffect(() => {
     antdForm.setFieldsValue(toInitialValues(form))
-  }, [formKey, antdForm, form])
+  }, [formKey, antdForm])
 
   const prefilled = form.fields.filter((f) => {
     const v = form.values?.[f.name]

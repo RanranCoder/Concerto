@@ -3,7 +3,8 @@ import type { AgentActionPlan, AgentRunView, TaskInputResult } from '@/api/agent
 import { retryAgentNode, reviseAgentNode, resumeAgentRun, cancelAgentRun } from '@/api/agent'
 import { useAgentStore } from '@/stores/agent'
 import LingsiActionCard from './LingsiActionCard'
-import LingsiFormCard from './LingsiFormCard'
+import LingsiPendingForms from './LingsiPendingForms'
+import { useAgentPanel } from '@/stores/agentPanel'
 import LingsiArtifactCard from './LingsiArtifactCard'
 
 const labels: Record<string, string> = {
@@ -33,18 +34,22 @@ export default function LingsiWorkItems({ run, readonly, busy, onConfirm, onCanc
     catch { setError('操作未完成，请核对当前任务状态后重试。') }
     finally { setPending(false) }
   }
+  const waiting=run.actions.filter(a=>['PENDING_CONFIRM','WAITING_INPUT','REVIEW_REQUIRED'].includes(a.status))
+  const failures=run.nodes.filter(n=>['FAILED','PARTIAL'].includes(n.status) && !run.actions.some(a=>a.workItemId===n.workItemId))
   return <section className="lingsi-work-items" aria-label="协作任务">
+    <header className="lingsi-task-summary"><strong>{labels[run.status] ?? run.status}</strong><span>{run.nodes.filter(n=>n.status==='SUCCESS').length}/{run.nodes.length} 步完成</span>{waiting.length>0 && <span>待我处理 {waiting.length} 项</span>}</header>
+    {!!run.artifacts?.length && <nav className="lingsi-run-artifacts" aria-label="本次工作成果">{run.artifacts.map(a=><button type="button" key={a.id} onClick={()=>useAgentPanel.getState().openVersion(a)}>{a.title} <small>第 {a.currentVersion} 版</small></button>)}</nav>}
+    {failures.map(n=><div className="lingsi-task-failure" key={n.workItemId}><strong>{n.task.split('\n')[0]}</strong><span>{labels[n.status]}</span><p>仅重试此步骤及尚未完成的后续步骤，已经提交的业务动作不会重复执行。</p><button type="button" disabled={readonly || pending || busy || run.cancelRequested} onClick={()=>void perform(()=>retryAgentNode(run.id,n.workItemId))}>重试此步骤</button></div>)}
     <details ref={stepsRef}>
-      <summary>协作任务， {labels[run.status] ?? run.status} · {run.nodes.filter(n => n.status === 'SUCCESS').length}/{run.nodes.length} 步完成</summary>
+      <summary>协作任务， {labels[run.status] ?? run.status}， {run.nodes.filter(n => n.status === 'SUCCESS').length}/{run.nodes.length} 步完成</summary>
       <ol>
         {run.nodes.map(n => {
           const action = run.actions.find(a => a.workItemId === n.workItemId && a.revision === n.revision)
-          const retryable = ['FAILED', 'PARTIAL'].includes(n.status) && !action
           const revisable = !['RUNNING','STOPPING','NEEDS_RECONCILE'].includes(run.status) && !run.cancelRequested && (!action || ['PENDING_CONFIRM', 'WAITING_INPUT', 'CANCELLED', 'REVIEW_REQUIRED'].includes(action.status))
           return <li key={n.workItemId}>
-            <div><strong>步骤 {n.id}， {names[n.agent] ?? n.agent}</strong><span>{labels[n.status] ?? n.status}</span></div>
-            <small>{n.dependsOn.length ? `依赖步骤 ${n.dependsOn.join('、')}` : '可独立执行'}，第 {n.revision} 版，已尝试 {n.attempt} 次</small>
-            {retryable && <button type="button" disabled={readonly || pending || busy} onClick={() => void perform(() => retryAgentNode(run.id, n.workItemId))}>重试此步骤</button>}
+            <div><strong>{n.task.split('\n')[0].slice(0,80)}</strong><span>{labels[n.status] ?? n.status}</span></div>
+            <small>{names[n.agent] ?? n.agent}，{n.dependsOn.length ? `依赖步骤 ${n.dependsOn.join('、')}（${n.dependsOn.every(id=>run.nodes.find(node=>node.id===id)?.status==='SUCCESS')?'已完成':'等待完成'}）` : '可独立执行'}，第 {n.revision} 版，已尝试 {n.attempt} 次</small>
+
             {revisable && <details ref={element=>{revisionsRef.current[n.workItemId]=element}}><summary>修订此步骤</summary><form onSubmit={e => {
               e.preventDefault()
               const instruction = String(new FormData(e.currentTarget).get('instruction') ?? '').trim()
@@ -75,14 +80,18 @@ export default function LingsiWorkItems({ run, readonly, busy, onConfirm, onCanc
       </div>)}
     </section>)}
     {error && <p role="alert">{error}</p>}
+    <section className="lingsi-pending-actions" aria-label="待我处理">
+      {waiting.length>0 && <h3>待我处理 {waiting.length} 项</h3>}
+      <LingsiPendingForms actions={run.actions} readonly={readonly} busy={busy || pending} onSubmit={onSubmit}/>
     {run.actions.map(action => <div key={action.id}>
-      {action.status === 'PENDING_CONFIRM' && action.plan && <LingsiActionCard plan={action.plan} readonly={readonly} busy={busy || pending} onConfirm={() => onConfirm(action.plan!)} onCancel={() => onCancel(action.plan!)} />}
+      {action.status === 'PENDING_CONFIRM' && action.plan && <LingsiActionCard toolName={action.toolName} plan={action.plan} readonly={readonly} busy={busy || pending} onConfirm={() => onConfirm(action.plan!)} onCancel={() => onCancel(action.plan!)} />}
       {action.status === 'REVIEW_REQUIRED' && action.plan?.preview && <details><summary>查看待修订正文</summary><div className="lingsi-review-preview">{action.plan.preview}</div></details>}
-      {action.status === 'WAITING_INPUT' && action.form && <LingsiFormCard form={action.form} inline readonly={readonly} busy={busy || pending} onSubmit={values => onSubmit(action.id, values)} />}
+
       {!['PENDING_CONFIRM', 'WAITING_INPUT'].includes(action.status) && <div className={`lingsi-notice lingsi-notice-${action.status === 'SUCCESS' ? 'success' : action.status === 'FAILED' ? 'failed' : 'info'}`}>
         {action.summary}， {labels[action.status] ?? action.status}{action.result?.message ? `：${String(action.result.message)}` : ''}
       </div>}
       {!!action.artifacts?.length && <LingsiArtifactCard artifacts={action.artifacts} />}
     </div>)}
+    </section>
   </section>
 }

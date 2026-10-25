@@ -19,6 +19,10 @@ public class PlanReviewService {
     }
     public String review(ToolContext ctx,AgentTool tool,String preview) {
         if(ctx.getWorkItemId()==null || preview==null || preview.isBlank()) return "NOT_REVIEWED";
+        var result=evaluate(ctx,tool,preview);state.review(ctx,result);return result.status();
+    }
+    public WorkItemState.Review evaluate(ToolContext ctx,AgentTool tool,String preview) {
+        if(ctx.getWorkItemId()==null) return new WorkItemState.Review("UNVERIFIED",List.of());
         String text=policy.egressText(tool.sensitivity(),preview);
         WorkItemState.Review result=new WorkItemState.Review("UNVERIFIED",List.of());
         // Never persist sensitive excerpts in the review ledger.
@@ -37,8 +41,7 @@ public class PlanReviewService {
                 catch(Exception ignored) { /* Invalid/unavailable review stays explicitly unverified. */ }
             }
         }
-        state.review(ctx,result);
-        return result.status();
+        return result;
     }
     WorkItemState.Review parse(String content,String preview,String instruction,String sources) throws Exception {
         var root=json.readTree(content);

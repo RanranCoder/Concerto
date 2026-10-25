@@ -1,0 +1,67 @@
+{
+  "stage": "S4",
+  "date": "2026-10-25",
+  "status": "implemented-and-verified-locally",
+  "previousChangesCommit": "282b0a5",
+  "currentStageCommitted": false,
+  "pushed": false,
+  "deployed": false,
+  "scope": [
+    "Task summaries and persistent pending actions",
+    "Compatible shared forms with partial-failure retry",
+    "Persistent artifact versions, comparison and actual parent-version sources",
+    "Article and plan editing with renewed preview, review and confirmation",
+    "Desktop resizing and mobile artifact preview"
+  ],
+  "verification": {
+    "backend": {
+      "total": 633,
+      "passed": 632,
+      "skipped": 1,
+      "failures": 0,
+      "errors": 0,
+      "log": "s4-backend.log",
+      "skip": "EnvFileImportConfigTest.environmentVariableStillWinsOverTheImportedEnvFile"
+    },
+    "frontend": {
+      "files": 26,
+      "passed": 191,
+      "failed": 0,
+      "log": "s4-frontend.log"
+    },
+    "browser": {
+      "passed": 21,
+      "failed": 0,
+      "log": "s4-browser.log",
+      "finalS4RecheckPassed": 3,
+      "finalS4RecheckLog": "s4-browser-final.log",
+      "screenshots": "docs/ui-v6-lingsi-implementation/s4-acceptance/",
+      "api": "mocked"
+    },
+    "typescriptAndProductionBuild": {
+      "passed": true,
+      "log": "s4-build.log",
+      "existingWarning": "Large SuperDoc engine bundle"
+    },
+    "antd": {
+      "errors": 0,
+      "warnings": 1,
+      "warning": "CLI flags Drawer.width; the installed Ant Design 5.29.3 types support it",
+      "reports": ["s4-antd-action.json", "s4-antd-form.json", "s4-antd-panel.json"]
+    }
+  },
+  "migration": {
+    "file": "V45__agent_artifact_versions.sql",
+    "testedWith": "H2 MySQL mode",
+    "productionMySqlApplied": false
+  },
+  "limitations": [
+    "Backend business writes use real services with H2 and scripted model responses",
+    "Paid-model quality, actual MySQL, real process restart and rollout remain S5 work",
+    "Editable content is limited to article drafts and plan chapters",
+    "Artifact snapshots do not follow later edits on business pages",
+    "Unsaved editor content is memory-only and is lost on page refresh",
+    "Source labels contain only actual task requirements and upstream artifact versions"
+  ],
+  "implementationRecord": "docs/design/PAMS-灵思Agent升级落地记录.md"
+}

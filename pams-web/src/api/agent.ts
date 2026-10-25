@@ -381,6 +381,8 @@ export interface AgentMessagesPage {
 }
 
 export interface AgentTaskVO {
+  artifactId?: number | null
+  artifactVersion?: number | null
   runId?: number | null
   workItemId?: number | null
   revision?: number
@@ -459,6 +461,7 @@ export interface AgentWorkItem {
   attempt: number
 }
 export interface AgentRunView {
+  artifacts?: AgentArtifactSummary[]
   stateVersion?: number
   eventSeq?: number
   requestId?: string
@@ -530,3 +533,37 @@ export const abortAgentRequest = (id: string) => post<{ status: string; runId?: 
 export const getAgentRequest = (id: string) => get<AgentRequestSnapshot>(`/agent/requests/${id}`)
 export const cancelAgentRun = (id: number) => post<AgentRunView>(`/agent/team/runs/${id}/cancel`)
 export const getAgentRunEvents = (id: number, since = 0) => get<{ requiresSnapshot: boolean; lastSeq: number; hasMore: boolean; events: { eventSeq: number }[] }>(`/agent/team/runs/${id}/events`, { since })
+
+export interface AgentArtifactSummary {
+  taskVersion?: number
+  id: number
+  title: string
+  kind: 'TEXT' | 'TABLE' | 'ENTITY'
+  currentVersion: number
+  taskId: number
+  runId?: number | null
+  workItemId?: number | null
+  status: string
+  toolName: string
+}
+export interface AgentArtifactDetail {
+  artifact: AgentArtifactSummary
+  versions: { version: number; origin: string; createdAt: string; taskId: number }[]
+  version: number
+  origin: string
+  preview: string | null
+  fields: Record<string,string>
+  plan: Partial<AgentActionPlan>
+  reviewStatus: string
+  editable: boolean
+  status: string
+  taskId: number
+  artifacts: AgentArtifact[]
+  sources: { label: string; text?: string; artifactId?: number; version?: number; title?: string }[]
+  sourceNotice: string
+  issues: {id:number;severity:string;location:string;quote:string;reason:string}[]
+}
+export const listAgentArtifacts = (conversationId: number) => get<AgentArtifactSummary[]>('/agent/artifacts',{conversationId})
+export const getAgentArtifact = (id: number, version?: number) => get<AgentArtifactDetail>(`/agent/artifacts/${id}`,version == null ? {} : {version})
+export const editAgentArtifact = (id: number, expectedVersion: number, fields: Record<string,string>, mode: AgentMode) =>
+  post<{ detail: AgentArtifactDetail; task: AgentTaskVO; run?: AgentRunView }>(`/agent/artifacts/${id}/versions`,{expectedVersion,fields,mode})

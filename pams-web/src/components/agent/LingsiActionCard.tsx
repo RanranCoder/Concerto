@@ -7,6 +7,7 @@ import { Lock, Warn } from './LingsiIcons'
 
 interface Props {
   plan: AgentActionPlan
+  toolName?: string
   busy?: boolean
   /** 只读模式：清单仍展示（它是真实存在的待办），但不可确认 */
   readonly?: boolean
@@ -38,9 +39,12 @@ const ITEM_LIMIT = 12
  *       藏起来又冒出来会让人以为任务丢了。</li>
  * </ul>
  */
-export default function LingsiActionCard({ plan, busy, readonly, citations, onConfirm, onCancel }: Props) {
+export default function LingsiActionCard({ plan, toolName, busy, readonly, citations, onConfirm, onCancel }: Props) {
+  const confirmation=toolName==='publishAnnouncement'?'发布公告':toolName==='sendNotification'?'发送通知':toolName && ['draftPlanSections','draftArticleFromActivity'].includes(toolName)?'保存业务草稿':toolName?'确认写入':'确认执行'
   const [detailOpen, setDetailOpen] = useState(false)
   const openText = useAgentPanel((s) => s.openText)
+  const versioned=useAgentPanel(s=>s.catalog.find(a=>a.taskId===plan.planId))
+  const openVersion=useAgentPanel(s=>s.openVersion)
 
   const detailLines = stripArgsMarker(plan.detailLines)
   const shown = plan.items.slice(0, ITEM_LIMIT)
@@ -50,6 +54,7 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
 
   const viewFullText = () => {
     // 分屏：对话不被遮挡，用户可以对照清单核正文
+    if(versioned){openVersion(versioned);return}
     openText(`plan-${plan.planId}`, plan.summary || '内容预览', preview, { plan, citations })
   }
 
@@ -60,12 +65,12 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
         <span className="lingsi-plan-title">执行前请核对变更</span>
         <span className="lingsi-plan-summary">
           {plan.summary}
-          {plan.total > 0 && ` · 共 ${plan.total} 项`}
+          {plan.total > 0 && `，共 ${plan.total} 项`}
         </span>
       </div>
 
       {/* ---- 内容预览入口（§3.9.1）：策划书/推文这类长文，确认前先通读 ---- */}
-      {preview.length > 0 && (
+      {(preview.length > 0 || versioned) && (
         <div className="lingsi-plan-sec">
           <Button size="small" type="link" style={{ padding: 0 }} onClick={viewFullText}>
             预览工作成果
@@ -87,7 +92,7 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
               <span className="lingsi-skip-dot">•</span>
               <span>
                 <span className="lingsi-skip-label">{s.label}</span>
-                {s.sub && <span className="lingsi-skip-reason"> · {s.sub}</span>}
+                {s.sub && <span className="lingsi-skip-reason">，{s.sub}</span>}
                 {s.reason && <span className="lingsi-skip-reason"> —— {s.reason}</span>}
               </span>
             </div>
@@ -104,7 +109,7 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
               <span className="lingsi-plan-item-no">{i + 1}.</span>
               <span>
                 <span className="lingsi-plan-item-label">{it.label}</span>
-                {it.sub && <span className="lingsi-plan-item-sub"> · {it.sub}</span>}
+                {it.sub && <span className="lingsi-plan-item-sub">，{it.sub}</span>}
               </span>
             </div>
           ))}
@@ -139,7 +144,7 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
           <span className="lingsi-plan-summary">确认后立即执行，可随时在会话中查看执行结果</span>
         )}
         <span className="lingsi-plan-acts">
-          {preview.length > 0 && (
+          {(preview.length > 0 || versioned) && (
             <Button size="small" onClick={viewFullText} disabled={busy}>
               查看全文
             </Button>
@@ -157,7 +162,7 @@ export default function LingsiActionCard({ plan, busy, readonly, citations, onCo
             }
           >
             <Button size="small" type="primary" loading={busy} disabled={readonly} onClick={onConfirm}>
-              确认执行
+              {confirmation}
             </Button>
           </Tooltip>
         </span>

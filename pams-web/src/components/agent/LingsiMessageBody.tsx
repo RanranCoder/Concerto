@@ -65,7 +65,7 @@ export default function LingsiMessageBody({
     const c = citations.find((x) => x.index === index)
     if (!c || c.revoked) return   // 已不可见的引用不展示内容
     openText(`cite-${c.sourceType}-${c.sourceId}-${index}`,
-      `${c.sourceTitle}${c.path ? ` · ${c.path}` : ''}`, citationSnippet(c), { source:c, citations })
+      `${c.sourceTitle}${c.path ? ` / ${c.path}` : ''}`, citationSnippet(c), { source:c, citations })
   }
   // 产物：优先取消息级（历史水合与确认回写都写在这里），仅在没有时回退到结果块上挂的
   const artifacts = msg.artifacts?.length ? msg.artifacts : (msg.notice?.artifacts ?? [])
@@ -124,6 +124,7 @@ export default function LingsiMessageBody({
         {!msg.run && hasPlan && msg.plan && (
           <LingsiActionCard
             plan={msg.plan}
+            toolName={msg.toolCalls?.filter(t=>t.write).at(-1)?.tool}
             busy={planBusy}
             readonly={readonly}
             citations={citations}

@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 test.use({channel:process.platform==='win32'?'msedge':undefined,viewport:{width:1600,height:1000},timezoneId:'Asia/Shanghai'})
-const output=resolve('..','docs','ui-v6-lingsi-implementation')
+const output=resolve('..','docs','ui-v6-lingsi-implementation',process.env.PAMS_E2E_ARTIFACT_SUBDIR ?? '')
 const user={id:1,username:'teacher',realName:'林老师',roleCode:'TEACHER',roleLevel:5,deptId:1,deptName:'文秘部',orgId:1,permissions:['activity:view','activity:edit','schedule:view','schedule:generate','material:view','member:view','kb:read','quality:activity_add']}
 const skipped=[{label:'10月16日 16:00–17:40',sub:'未分配',reason:'空闲人员不足，尚缺 2 人'}]
 const plan={planId:10,summary:'培训班 · 保存策划草稿',total:2,items:[{id:null,label:'活动目的',sub:'专题学习与交流'},{id:null,label:'准备事项',sub:'场地、名单与会务'}],skipped,detailLines:['关联活动：第四十期培训班','__args__:{"internal":"hidden"}'],reversible:true,confirmToken:'test-one-time-token',needsConfirm:true,preview:'## 第四十期培训班策划初稿\n\n### 活动目的\n专题学习与交流。\n\n### 准备事项\n核对场地、名单与会务。'}
@@ -85,7 +85,7 @@ for(const compact of [false,true])test(`协作清单独立确认、续跑及刷�
   })
   await task(page,'准备培训班策划初稿').click()
   await expect(page.locator('.lingsi-plan')).toHaveCount(2)
-  await page.locator('.lingsi-plan').first().getByRole('button',{name:/确认执行/}).click()
+  await page.locator('.lingsi-plan').first().getByRole('button',{name:/保存业务草稿/}).click()
   await expect(page.locator('.lingsi-plan')).toHaveCount(1)
   await expect(page.locator('.lingsi-plan')).toContainText('独立任务11')
   await page.reload()
@@ -95,7 +95,7 @@ for(const compact of [false,true])test(`协作清单独立确认、续跑及刷�
   }
   await task(page,'准备培训班策划初稿').click()
   await expect(page.locator('.lingsi-plan')).toHaveCount(1)
-  await page.locator('.lingsi-plan').getByRole('button',{name:/确认执行/}).click()
+  await page.locator('.lingsi-plan').getByRole('button',{name:/保存业务草稿/}).click()
   await expect(page.locator('.lingsi-plan')).toHaveCount(0)
   await expect(page.locator('.lingsi-work-items>details>summary')).toContainText('2/2 步完成')
   if(compact)await expect(page.locator('html')).toHaveAttribute('data-theme','dark')
@@ -426,16 +426,16 @@ test('业务入口填入草稿、真实任务筛选、预览与确认门禁',asy
   await expect(page.locator('.lingsi-preview-document')).toContainText('活动目的')
   await page.getByRole('tab',{name:'本次变更',exact:true}).click()
   await expect(page.locator('.lingsi-preview-scroll')).not.toContainText('__args__')
-  await expect(page.locator('.lingsi-preview-scroll').getByRole('button',{name:'确认执行'})).toHaveCount(0)
+  await expect(page.locator('.lingsi-preview-scroll').getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/})).toHaveCount(0)
   await page.getByRole('tab',{name:'内容预览',exact:true}).click()
   await page.screenshot({path:resolve(output,'plan-preview-light.png'),animations:'disabled'})
   await pickMode(page,'只读模式')
-  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toBeDisabled()
+  await expect(page.getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/,exact:true})).toBeDisabled()
   await expect(page.getByRole('checkbox',{name:'自动协作'})).toBeDisabled()
   await pickMode(page,'资料问答')
-  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toBeDisabled()
+  await expect(page.getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/,exact:true})).toBeDisabled()
   await pickMode(page,'标准模式')
-  await page.getByRole('button',{name:'确认执行',exact:true}).click()
+  await page.getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/,exact:true}).click()
   await expect(page.locator('.lingsi-notice')).toContainText('策划草稿已保存')
   await expect(page.locator('.lingsi-preserved-skips').first()).toContainText('尚缺 2 人')
   expect(requests.find(r=>r.path.endsWith('/confirm'))?.body).toEqual({confirmToken:'test-one-time-token',mode:'standard'})
@@ -519,7 +519,7 @@ test('S3 审查问题显示原文位置，修订后才出现可确认的新清�
   },{source:agentModule(),run})
   await expect(page.getByRole('region',{name:'内容审查'})).toContainText('正文第 1 行')
   await expect(page.getByRole('region',{name:'内容审查'})).toContainText('日期与任务不一致')
-  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/,exact:true})).toHaveCount(0)
   await page.getByText('查看待修订正文',{exact:true}).click()
   await expect(page.locator('.lingsi-review-preview')).toContainText('活动在2025-11-20举行。')
   await page.screenshot({path:resolve(output,'s3-review-blocked-light.png'),animations:'disabled'})
@@ -530,7 +530,7 @@ test('S3 审查问题显示原文位置，修订后才出现可确认的新清�
   await page.getByRole('button',{name:'修改任务说明',exact:true}).click()
   await page.getByRole('textbox',{name:'任务说明'}).fill('请将日期修订为2026-11-20')
   await page.getByRole('button',{name:'保存修订并继续'}).click()
-  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:/^(确认执行|确认写入|保存业务草稿)$/,exact:true})).toBeVisible()
   expect(revisionBody).toEqual({revision:1,instruction:'请将日期修订为2026-11-20'})
   await expect(page.getByRole('region',{name:'内容审查'})).toContainText('已完成自动审查')
   expect(errors).toEqual([])
@@ -564,4 +564,100 @@ test('S3 首帧前停止可点击，停止确认前保持等待状态',async({pa
   await expect(page.locator('.lingsi-reply')).not.toContainText('迟到的生成内容')
   expect(requestId).toMatch(/^[a-zA-Z0-9-]{8,64}$/)
   expect(errors).toEqual([])
+})
+
+
+for(const phone of [false,true]) test(`S4 成果版本编辑、对比与确认恢复（${phone?'手机深色':'桌面浅色'}）`,async({page})=>{
+  if(phone)await page.setViewportSize({width:390,height:844})
+  const {agentModule,errors}=await setup(page)
+  let current=1,status='PENDING_CONFIRM',rejectSave=false
+  const versions:Record<number,{title:string,content:string}>={1:{title:'培训班报道',content:'活动日期为2025-11-20。'}}
+  const descriptor=()=>({id:42,title:'培训班推文草稿',kind:'TEXT',currentVersion:current,taskId:80+current,runId:80,workItemId:801,status,toolName:'draftArticleFromActivity'})
+  const currentPlan=()=>({...plan,planId:80+current,summary:'培训班推文草稿',confirmToken:`version-${current}-token`,preview:`# ${versions[current].title}\n\n${versions[current].content}`,skipped:[]})
+  const action=()=>({id:80+current,artifactId:42,artifactVersion:current,runId:80,workItemId:801,revision:current,toolName:'draftArticleFromActivity',status,summary:'培训班推文草稿',conversationId:1,createdAt:'2026-10-25',confirmedAt:null,finishedAt:null,expired:false,reversible:true,plan:status==='PENDING_CONFIRM'?currentPlan():null,artifacts:status==='SUCCESS'?[{entityType:'article',entityId:9,name:versions[current].title,path:'/content/article?id=9'}]:[]})
+  const run=()=>({id:80,streamId:'artifact-stream',conversationId:1,status:status==='PENDING_CONFIRM'?'WAITING_CONFIRM':'SUCCESS',stateVersion:10+current+(status==='SUCCESS'?10:0),
+    nodes:[{id:1,workItemId:801,agent:'writing',task:'准备培训班推文草稿',status:status==='PENDING_CONFIRM'?'WAITING_CONFIRM':'SUCCESS',dependsOn:[],revision:current,attempt:current}],actions:[action()],artifacts:[descriptor()],reviews:{}})
+  const detail=(v:number)=>({artifact:descriptor(),versions:Object.keys(versions).map(Number).sort((a,b)=>b-a).map(version=>({version,origin:version===1?'AGENT':'USER',createdAt:'2026-10-25',taskId:80+version})),version:v,origin:v===1?'AGENT':'USER',preview:`# ${versions[v].title}\n\n${versions[v].content}`,fields:versions[v],plan:{items:[{label:'正文',sub:versions[v].content}],skipped:[]},status:v===current?status:'CANCELLED',taskId:80+v,reviewStatus:'CHECKED',editable:v===current && status==='PENDING_CONFIRM',artifacts:status==='SUCCESS'?action().artifacts:[],sources:[{label:'任务要求',text:'请准备培训班报道。'}],sourceNotice:'本次任务与业务资料',issues:[]})
+  await page.route('**/api/agent/artifacts**',async route=>{
+    const path=new URL(route.request().url()).pathname
+    if(path.endsWith('/artifacts'))return route.fulfill({json:{code:200,message:'成功',data:[descriptor()]}})
+    if(route.request().method()==='POST') {
+      const body=route.request().postDataJSON()
+      if(rejectSave)return route.fulfill({json:{code:409,message:'已有新版本，请刷新核对',data:null}})
+      expect(body.expectedVersion).toBe(current);expect(body.mode).toBe('standard')
+      current++;versions[current]=body.fields
+      return route.fulfill({json:{code:200,message:'成功',data:{detail:detail(current),task:action(),run:run()}}})
+    }
+    const v=Number(new URL(route.request().url()).searchParams.get('version') || current)
+    return route.fulfill({json:{code:200,message:'成功',data:detail(v)}})
+  })
+  await page.route('**/api/agent/team/runs/80',route=>route.fulfill({json:{code:200,message:'成功',data:run()}}))
+  await page.route('**/api/agent/tasks/*/confirm',async route=>{expect(route.request().postDataJSON().confirmToken).toBe(`version-${current}-token`);status='SUCCESS';await route.fulfill({json:{code:200,message:'成功',data:action()}})})
+  await page.route('**/api/agent/conversations/1/messages**',route=>route.fulfill({json:{code:200,message:'成功',data:{records:[{id:1,role:'USER',content:'请准备培训班报道。',references:[]},{id:2,role:'ASSISTANT',content:'请核对成果后确认保存。',streamId:'artifact-stream',run:run(),references:[],toolCalls:[],artifacts:[],plan:null,form:null}],total:2}}}))
+  if(phone){await page.getByRole('button',{name:'切换深色'}).click();await page.getByRole('button',{name:'打开任务列表',exact:true}).click()}
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.getByRole('combobox',{name:'成果版本'})).toBeVisible()
+  await expect(page.locator('.lingsi-preview-document')).toContainText('2025-11-20')
+  await page.getByRole('button',{name:'修改正文',exact:true}).click()
+  await page.getByRole('textbox',{name:'正文',exact:true}).fill('活动日期为2026-11-20。用户已核对。')
+  // A rejected save must preserve the editor content.
+  rejectSave=true
+  await page.getByRole('button',{name:'保存新版本并复核'}).click()
+  await expect(page.getByRole('alert').filter({hasText:'保存未完成'})).toBeVisible()
+  await expect(page.getByRole('textbox',{name:'正文',exact:true})).toHaveValue('活动日期为2026-11-20。用户已核对。')
+  rejectSave=false
+  await page.getByRole('button',{name:'保存新版本并复核'}).click()
+  await expect(page.getByRole('combobox',{name:'成果版本'})).toHaveValue('2')
+  await expect(page.locator('.lingsi-unsaved-prompt')).toHaveCount(0)
+  await page.getByRole('tab',{name:'本次变更',exact:true}).click()
+  await expect(page.locator('.lingsi-version-diff-removed')).toContainText('2025-11-20')
+  await expect(page.locator('.lingsi-version-diff-added')).toContainText('2026-11-20')
+  await page.screenshot({path:resolve(output,phone?'s4-workbench-dark-mobile.png':'s4-workbench-light-desktop.png'),animations:'disabled'})
+  await page.getByRole('combobox',{name:'成果版本'}).selectOption('1')
+  await page.getByRole('tab',{name:'内容预览',exact:true}).click()
+  await expect(page.locator('.lingsi-preview-document')).toContainText('2025-11-20')
+  await expect(page.getByRole('button',{name:'修改正文',exact:true})).toHaveCount(0)
+  await page.getByRole('button',{name:'查看第 2 版更新'}).click()
+  await expect(page.locator('.lingsi-preview-document')).toContainText('用户已核对')
+  if(phone)await page.getByRole('button',{name:'关闭工作成果预览'}).click()
+  await page.getByRole('button',{name:'保存业务草稿',exact:true}).click()
+  await page.reload()
+  if(phone)await page.getByRole('button',{name:'打开任务列表',exact:true}).click()
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.getByRole('combobox',{name:'成果版本'})).toHaveValue('2')
+  await expect(page.locator('.lingsi-artifact-version-bar')).toContainText('已保存业务草稿')
+  await expect(page.locator('.lingsi-preview-document')).toContainText('2026-11-20')
+  await expect(page.getByRole('button',{name:'修改正文',exact:true})).toHaveCount(0)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy()
+  expect(errors).toEqual([])
+})
+
+
+test('S4 相同补充信息合并填写，部分校验失败保留输入并独立继续',async({page})=>{
+  const {errors}=await setup(page)
+  const actions=[101,102].map(id=>({id,runId:90,workItemId:id,revision:1,toolName:'generateActivitySchedule',status:'WAITING_INPUT',summary:`排班任务${id}`,createdAt:'2026-10-25',confirmedAt:null,finishedAt:null,expired:false,reversible:true,conversationId:1,
+    form:{taskId:id,formKey:'department',title:'补充参与部门',fields:[{name:'department',label:'参与部门',type:'text' as const,required:true}],values:{department:''}},plan:null as typeof plan | null}))
+  const submissions:number[]=[];let failSecond=true
+  const run=()=>({id:90,streamId:'forms',conversationId:1,status:actions.some(a=>a.status==='WAITING_INPUT')?'WAITING_INPUT':'WAITING_CONFIRM',stateVersion:10+submissions.length,
+    nodes:actions.map((a,i)=>({id:i+1,workItemId:a.id,agent:'scheduling',task:a.summary,status:a.status==='PENDING_CONFIRM'?'WAITING_CONFIRM':a.status,dependsOn:[],revision:1,attempt:1})),actions})
+  await page.route('**/api/agent/conversations/1/messages**',route=>route.fulfill({json:{code:200,data:{records:[{id:1,role:'USER',content:'请准备两个排班。',references:[]},{id:2,role:'ASSISTANT',content:'请补充参与部门。',streamId:'forms',run:run(),references:[],toolCalls:[],artifacts:[],plan:null,form:null}],total:2}}}))
+  await page.route('**/api/agent/team/runs/90',route=>route.fulfill({json:{code:200,data:run()}}))
+  await page.route('**/api/agent/tasks/*/input',async route=>{
+    const id=Number(new URL(route.request().url()).pathname.split('/')[4]);submissions.push(id)
+    expect(route.request().postDataJSON().values).toEqual({department:'文秘部'})
+    if(id===102 && failSecond){failSecond=false;return route.fulfill({json:{code:200,data:{status:'ERROR',error:'请核对排班日期'}}})}
+    const action=actions.find(a=>a.id===id)!;action.status='PENDING_CONFIRM';action.plan={...plan,planId:id}
+    await route.fulfill({json:{code:200,data:{status:'PLAN',plan:action.plan}}})
+  })
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.getByRole('textbox',{name:'参与部门'})).toHaveCount(1)
+  await page.getByRole('textbox',{name:'参与部门'}).fill('文秘部')
+  await page.getByRole('button',{name:'补充并继续'}).click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(1)
+  await expect(page.getByRole('textbox',{name:'参与部门'})).toHaveValue('文秘部')
+  await expect(page.getByRole('alert').filter({hasText:'排班任务102'}).first()).toContainText('请核对排班日期')
+  await page.getByRole('button',{name:'补充并继续'}).click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(2)
+  await expect(page.getByRole('textbox',{name:'参与部门'})).toHaveCount(0)
+  expect(submissions).toEqual([101,102,102]);expect(errors).toEqual([])
 })

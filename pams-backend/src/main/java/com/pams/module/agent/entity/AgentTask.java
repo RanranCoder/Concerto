@@ -41,6 +41,8 @@ public class AgentTask implements OrgScoped {
     @Column(name = "conversation_id")
     private Long conversationId;
     private Long runId;
+    private Long artifactId;
+    private Integer artifactVersion;
     private Long workItemId;
     private Integer workItemRevision;
     @Version

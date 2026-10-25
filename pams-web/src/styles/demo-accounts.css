@@ -1,3 +1,4 @@
+:root { --demo-brand: var(--brand); }
 /* 登录页演示账号：固定悬浮在右侧，不参与登录卡片布局。 */
 .demo-accounts-panel {
   position: fixed;
@@ -39,10 +40,10 @@
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--demo-brand) 12%, var(--canvas));
   color: var(--demo-brand);
-  font-size: 15px;
+  font-size: var(--fs-body-lg);
 }
 
 .demo-accounts-heading { flex: 1; min-width: 0; }
@@ -56,7 +57,7 @@
   display: block;
   margin-top: 2px;
   color: var(--text-secondary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   line-height: 1.5;
 }
 
@@ -66,7 +67,7 @@
   border-radius: var(--r-pill);
   background: var(--soft-strong);
   color: var(--text-secondary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -91,7 +92,7 @@
   gap: 8px;
   padding: 2px 16px 10px;
   color: var(--text-secondary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
 }
 .demo-accounts-meta code {
   padding: 1px 5px;
@@ -99,7 +100,7 @@
   background: var(--soft-strong);
   color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
 }
 .demo-accounts-meta > span { margin-left: auto; }
 
@@ -140,7 +141,7 @@
   background: var(--canvas);
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   letter-spacing: .02em;
   text-align: left;
   cursor: pointer;
@@ -148,12 +149,12 @@
 .demo-accounts-group-head > span { font-weight: calc(600 - var(--font-weight-compensation)); }
 .demo-accounts-group-head small {
   color: var(--text-tertiary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 .demo-accounts-group-head .anticon {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   transition: transform var(--dur) var(--ease);
 }
 .demo-accounts-group-head .anticon.collapsed { transform: rotate(-90deg); }
@@ -194,10 +195,10 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 9px;
+  border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--demo-brand) 10%, var(--canvas));
   color: var(--demo-brand);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-weight: calc(600 - var(--font-weight-compensation));
 }
 
@@ -218,7 +219,7 @@
   border-radius: var(--r-sm);
   background: var(--soft-strong);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: calc(400 - var(--font-weight-compensation));
   line-height: 16px;
 }
@@ -228,7 +229,7 @@
   margin-top: 1px;
   color: var(--text-tertiary);
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -236,11 +237,11 @@
 
 .demo-account-fill {
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   opacity: .55;
 }
 .demo-account-row:hover .demo-account-fill { color: var(--demo-brand); opacity: 1; }
-.demo-account-check { color: var(--demo-brand); font-size: 12px; }
+.demo-account-check { color: var(--demo-brand); font-size: var(--fs-caption); }
 
 .demo-accounts-empty {
   padding: 28px 8px;
@@ -255,7 +256,7 @@
   padding: 9px 16px;
   border-top: 1px solid var(--soft-strong);
   color: var(--text-tertiary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -274,7 +275,9 @@
   padding: 11px 6px;
   border: 1px solid var(--soft-strong);
   border-right: 0;
-  border-radius: var(--r-xl) 0 0 var(--r-xl);
+  border-radius: var(--r-xl);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
   background: var(--canvas);
   box-shadow: var(--shadow-1);
   color: var(--text-primary);
@@ -289,14 +292,14 @@
   transform: translateY(-50%) translateX(-2px);
   box-shadow: var(--shadow-2);
 }
-.demo-accounts-launcher .anticon { color: var(--demo-brand, var(--brand)); font-size: 14px; }
+.demo-accounts-launcher .anticon { color: var(--demo-brand, var(--brand)); font-size: var(--fs-body); }
 .demo-accounts-launcher > span { writing-mode: vertical-rl; letter-spacing: .12em; line-height: 1; }
 .demo-accounts-launcher b {
   padding: 1px 4px;
   border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--demo-brand, var(--brand)) 12%, var(--canvas));
   color: var(--demo-brand, var(--brand));
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
   writing-mode: horizontal-tb;
 }

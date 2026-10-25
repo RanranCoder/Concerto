@@ -44,6 +44,8 @@ public class TaskGate {
     private final ObjectMapper mapper = new ObjectMapper();
     @org.springframework.beans.factory.annotation.Autowired private PlanReviewService review;
     @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired private ArtifactLedger artifacts;
+    @org.springframework.beans.factory.annotation.Autowired private DraftContent drafts;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.orchestration.AgentRunService runService;
     @org.springframework.beans.factory.annotation.Autowired
@@ -80,39 +82,43 @@ public class TaskGate {
                                       int total, List<AgentActionPlan.PlanItem> items,
                                       List<AgentActionPlan.SkippedItem> skipped,
                                       List<String> detailLines, boolean reversible, String preview) {
-        // 单 Agent 延续会话级替换；协作清单由 WorkItem/revision 管理，不作废兄弟分支。
+        var raw=new AgentActionPlan(null,summary,total,items,skipped,detailLines,reversible,null,preview);
+        String actual=drafts==null?preview:drafts.preview(tool.name(),raw);
+        var prepared=new AgentActionPlan(null,summary,total,items,skipped,detailLines,reversible,null,actual);
+        String reviewStatus=review==null?"NOT_REVIEWED":review.review(ctx,tool,actual);
+        return persistPlan(ctx,tool,prepared,reviewStatus,null,"AGENT");
+    }
+    private AgentActionPlan persistPlan(ToolContext ctx,AgentTool tool,AgentActionPlan raw,String reviewStatus,Long lineage,String origin) {
         if(requests!=null && ctx.getWorkItemId()==null) requests.requireActive(ctx.getStreamId());
         supersedePending(ctx);
-
-        AgentTask t = new AgentTask();
-        t.setUserId(ctx.getUserId());
-        t.setRunId(ctx.getRunId());
-        t.setWorkItemId(ctx.getWorkItemId());
-        t.setWorkItemRevision(ctx.getWorkItemRevision());
-        t.setConversationId(ctx.getConversationId());
-        // V26 历史恢复：任务与产生它的流绑定，前端据此把确认卡挂回对应消息
-        t.setStreamId(ctx.getStreamId());
-        t.setToolName(tool.name());
-        t.setDataSensitivity(tool.sensitivity().name());
-        t.setTaskType("SYNC");
-        t.setStatus(review!=null && "BLOCKED".equals(review.review(ctx,tool,preview)) ? "REVIEW_REQUIRED" : AgentTask.PENDING_CONFIRM);
-        t.setSummary(summary);
-        t.setConfirmToken("ct_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
-        if("REVIEW_REQUIRED".equals(t.getStatus())) t.setConfirmToken("");
-        t.setCreatedAt(LocalDateTime.now());
-
-        AgentActionPlan plan = new AgentActionPlan(null, summary, total, items, skipped,
-                detailLines, reversible, t.getConfirmToken(), preview);
-        try {
-            t.setPlanJson(mapper.writeValueAsString(plan.toJson()));
-        } catch (Exception e) {
-            log.warn("plan_json 序列化失败", e);
-        }
-        AgentTask saved = repository.save(t);
-        if (saved.getWorkItemId()!=null) workItems.attach(saved);
-
-        return new AgentActionPlan(saved.getId(), summary, total, items, skipped,
-                detailLines, reversible, saved.getConfirmToken(), preview);
+        AgentTask t=new AgentTask();t.setUserId(ctx.getUserId());t.setRunId(ctx.getRunId());t.setWorkItemId(ctx.getWorkItemId());t.setWorkItemRevision(ctx.getWorkItemRevision());
+        t.setConversationId(ctx.getConversationId());t.setStreamId(ctx.getStreamId());t.setToolName(tool.name());t.setDataSensitivity(tool.sensitivity().name());t.setTaskType("SYNC");
+        t.setStatus("BLOCKED".equals(reviewStatus)?"REVIEW_REQUIRED":AgentTask.PENDING_CONFIRM);t.setSummary(raw.summary());
+        t.setConfirmToken("BLOCKED".equals(reviewStatus)?"":"ct_"+UUID.randomUUID().toString().replace("-","").substring(0,24));t.setCreatedAt(LocalDateTime.now());
+        var plan=new AgentActionPlan(null,raw.summary(),raw.total(),raw.items(),raw.skipped(),raw.detailLines(),raw.reversible(),t.getConfirmToken(),raw.preview());
+        try {t.setPlanJson(mapper.writeValueAsString(plan.toJson()));} catch(Exception e) {throw new IllegalStateException(e);}
+        var saved=repository.save(t);if(saved.getWorkItemId()!=null) workItems.attach(saved);
+        if(artifacts!=null) artifacts.capture(saved,plan,lineage,origin);
+        return new AgentActionPlan(saved.getId(),plan.summary(),plan.total(),plan.items(),plan.skipped(),plan.detailLines(),plan.reversible(),saved.getConfirmToken(),plan.preview());
+    }
+    /** The review/model call occurs before this transaction. All invalidation and replacement are atomic. */
+    @Transactional
+    public Long replaceDraft(Long artifactId,int expected,AgentActionPlan raw,com.pams.module.agent.orchestration.WorkItemState.Review checked,ToolContext current) {
+        var candidate=artifacts.require(artifactId,current);
+        var originalVersion=artifacts.version(artifactId,expected);
+        var old=repository.findByIdAndUserId(originalVersion.getTaskId(),current.getUserId()).orElseThrow();
+        if(old.getWorkItemId()!=null) workItems.lockForEdit(old,current.getUserId());
+        else if(requests!=null) requests.requireActive(old.getStreamId());
+        artifacts.assertCurrent(artifactId,expected,current);
+        if(!java.util.Set.of(AgentTask.PENDING_CONFIRM,"REVIEW_REQUIRED").contains(old.getStatus())) throw new BizException(409,"业务动作已提交或旧清单已失效，请刷新后核对");
+        var tool=registry.find(old.getToolName()).orElseThrow();
+        if(!registry.visibleTo(tool,current)) throw new BizException(403,"当前模式或权限不允许修改草稿");
+        ToolContext ctx=current.derive(old.getConversationId(),old.getStreamId()).withRunId(old.getRunId());
+        if(old.getWorkItemId()!=null) ctx=workItems.prepareEditedPreview(old,current);
+        else if(repository.cancelPending(old.getId(),current.getUserId(),LocalDateTime.now())==0) throw new BizException(409,"清单已变化，请刷新");
+        if(ctx.getWorkItemId()!=null) workItems.review(ctx,checked);
+        var replacement=persistPlan(ctx,tool,raw,checked.status(),candidate.getId(),"USER");
+        return replacement.planId();
     }
 
     /* ====================================================== 多轮「接续」支持 */
@@ -252,8 +258,9 @@ public class TaskGate {
         if (payload == null || !"form".equals(payload.get("type"))) {
             throw new BizException(4400, "任务数据异常，请重新发起");
         }
-        AgentTool tool = registry.find(task.getToolName())
-                .orElseThrow(() -> new BizException(4404, "工具已下线：" + task.getToolName()));
+        String toolName=task.getToolName();
+        AgentTool tool = registry.find(toolName)
+                .orElseThrow(() -> new BizException(4404, "工具已下线：" + toolName));
         if (!registry.visibleTo(tool, ctx)) {
             throw new BizException(4403, "无权限执行该操作");
         }
@@ -303,7 +310,7 @@ public class TaskGate {
             } catch (Exception ignored) {
                 // 序列化失败保留旧 payload：用户可重试
             }
-            repository.save(task);
+            task=repository.save(task);
             if (task.getWorkItemId()!=null) workItems.settle(task);
             next.put("taskId", taskId);
             next.put("status", AgentTask.WAITING_INPUT);
@@ -316,6 +323,7 @@ public class TaskGate {
         // 分支 B：参数齐全 —— 同一任务转入确认门禁（换发一次性令牌，plan_json 整体替换为清单）
         if (result.plan() != null) {
             AgentActionPlan raw = result.plan();
+            if(drafts!=null) raw=new AgentActionPlan(null,raw.summary(),raw.total(),raw.items(),raw.skipped(),raw.detailLines(),raw.reversible(),null,drafts.preview(tool.name(),raw));
             task.setStatus(review!=null && "BLOCKED".equals(review.review(ctx,tool,raw.preview())) ? "REVIEW_REQUIRED" : AgentTask.PENDING_CONFIRM);
             task.setSummary(raw.summary());
             task.setConfirmToken("ct_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
@@ -325,8 +333,9 @@ public class TaskGate {
             } catch (Exception e) {
                 log.warn("表单转清单序列化失败", e);
             }
-            repository.save(task);
+            task=repository.save(task);
             if (task.getWorkItemId()!=null) workItems.settle(task);
+            if(artifacts!=null) artifacts.capture(task,raw,null,"AGENT");
             AgentActionPlan persisted = new AgentActionPlan(task.getId(), raw.summary(), raw.total(),
                     raw.items(), raw.skipped(), raw.detailLines(), raw.reversible(), task.getConfirmToken(), raw.preview());
             Map<String, Object> out = new LinkedHashMap<>();
@@ -347,7 +356,7 @@ public class TaskGate {
             } catch (Exception ignored) {
                 // 结果 JSON 非关键数据
             }
-            repository.save(task);
+            task=repository.save(task);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("status", "CANCELLED");
             if (task.getRunId()!=null) runService.actionSettled(task,"CANCELLED");
@@ -527,7 +536,7 @@ public class TaskGate {
         if (task.getRunId()!=null) runService.actionSettled(task,"CANCELLED");
     }
 
-    private AgentActionPlan readPlan(AgentTask task) {
+    AgentActionPlan readPlan(AgentTask task) {
         if (task.getPlanJson() == null) return AgentActionPlan.empty();
         try {
             Map<String, Object> m = AgentJson.readObject(mapper, task.getPlanJson());
@@ -612,6 +621,7 @@ public class TaskGate {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", t.getId());
         vo.put("runId",t.getRunId());
+        vo.put("artifactId",t.getArtifactId());vo.put("artifactVersion",t.getArtifactVersion());
         vo.put("workItemId",t.getWorkItemId());
         vo.put("revision",t.getWorkItemRevision());
         vo.put("toolName", t.getToolName());

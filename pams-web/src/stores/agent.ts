@@ -344,6 +344,7 @@ interface AgentState {
   applyStreamEvent: (e: AgentStreamEvent) => void
   /** 任务完成事件（/user/queue/agent，AGENT_TASK_DONE） */
   applyTaskDone: (payload: Record<string, unknown>) => void
+  applyArtifactEdit: (oldTaskId:number,result:{task:api.AgentTaskVO;run?:api.AgentRunView}) => void
   refreshRun: (runId: number) => Promise<void>
   reconcileConnection: () => Promise<void>
 
@@ -1101,6 +1102,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
    * - 卡片不在（异步完成 / 历史轮次）→ 追加一条结果消息
    * taskId 去重：确认按钮的 REST 返回也会写同一条结果，避免重复出现两块。
    */
+  applyArtifactEdit: (oldTaskId,result) => {
+    set(s=>({outcomes:s.outcomes.map(o=>result.run && o.run?.id===result.run.id
+      ? (result.run.stateVersion ?? 0)>=(o.run?.stateVersion ?? 0)?{...o,run:result.run,executionState:result.run.status,plan:null,form:null}:o
+      : o.plan?.planId===oldTaskId ? {...o,plan:result.task.plan ?? null,notice:undefined,executionState:result.task.status==='REVIEW_REQUIRED'?'REVIEW_REQUIRED':'WAITING_CONFIRM'} :o),
+      pendingPlan:s.pendingPlan?.planId===oldTaskId?result.task.plan ?? null:s.pendingPlan}))
+    void get().fetchConversations()
+  },
+
   refreshRun: async (runId) => {
     const current = get()
     if (!current.outcomes.some(o => o.run?.id === runId)) return

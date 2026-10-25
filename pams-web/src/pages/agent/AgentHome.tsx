@@ -62,6 +62,7 @@ export default function AgentHome() {
   const cancelPlan = useAgentStore((s) => s.cancelPlan)
   const submitForm = useAgentStore((s) => s.submitForm)
 
+  const panelCatalog = useAgentPanel((s) => s.catalog)
   const panelItems = useAgentPanel((s) => s.items)
   const panelCollapsed = useAgentPanel((s) => s.collapsed)
   const togglePanel = useAgentPanel((s) => s.toggle)
@@ -306,7 +307,9 @@ export default function AgentHome() {
     return null
   }, [outcomes])
 
-  const showPanelToggle = panelItems.length > 0
+  const showPanelToggle = panelItems.length > 0 || panelCatalog.length > 0
+  const catalogSignature=outcomes.map(o=>`${o.messageId}:${o.plan?.planId}:${o.run?.stateVersion}:${o.run?.status}:${o.notice?.taskId}`).join('|')
+  useEffect(()=>{if(currentConversationId!=null && !messagesLoading) void useAgentPanel.getState().syncConversation(currentConversationId)},[currentConversationId,messagesLoading,catalogSignature])
 
   /**
    * 任务栏节点：宽屏做常驻栏，窄屏（<900px）装进抽屉。

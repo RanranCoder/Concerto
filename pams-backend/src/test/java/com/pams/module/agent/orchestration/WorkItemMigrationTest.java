@@ -41,4 +41,14 @@ class WorkItemMigrationTest {
             sql.execute(insert);assertThatThrownBy(()->sql.execute(insert)).isInstanceOf(java.sql.SQLException.class);
         }
     }
+    @Test void artifactMigrationKeepsOldTasksUnversionedAndRejectsDuplicateVersions() throws Exception {
+        try(var c=DriverManager.getConnection("jdbc:h2:mem:s4_migration;MODE=MySQL","sa","");var sql=c.createStatement()) {
+            sql.execute("create table agent_task(id bigint primary key)");sql.execute("insert into agent_task values(1)");
+            ScriptUtils.executeSqlScript(c,new ClassPathResource("db/migration/V45__agent_artifact_versions.sql"));
+            try(var row=sql.executeQuery("select artifact_id,artifact_version from agent_task where id=1")) {assertThat(row.next()).isTrue();assertThat(row.getObject(1)).isNull();assertThat(row.getObject(2)).isNull();}
+            sql.execute("insert into agent_artifact(user_id,org_id,tool_name,kind,created_at) values(1,1,'tool','TEXT',current_timestamp)");
+            String insert="insert into agent_artifact_version(artifact_id,version,task_id,origin,review_status,created_at) values(1,1,1,'AGENT','UNVERIFIED',current_timestamp)";
+            sql.execute(insert);assertThatThrownBy(()->sql.execute(insert)).isInstanceOf(java.sql.SQLException.class);
+        }
+    }
 }

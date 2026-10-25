@@ -34,6 +34,7 @@ public class DagScheduler {
     private com.pams.module.agent.repository.AgentTaskRepository tasks;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.config.AgentProperties properties;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.ArtifactLedger artifacts;
     public DagScheduler(WorkItemState state,SpecialistAgent specialist,AgentRunRepository runs,
                         TenantAuthorizationService authorization,AgentEventPublisher publisher,
                         @Qualifier("agentExecutor") Executor executor) {
@@ -183,6 +184,7 @@ public class DagScheduler {
         out.put("conversationId",run.getConversationId()); out.put("status",run.getStatus()); out.put("nodes",bb.getPlan());
         out.put("stateVersion",run.getEventSeq());out.put("eventSeq",run.getEventSeq());out.put("requestId",run.getRequestId());out.put("cancelRequested",run.isCancelRequested());
         out.put("reviews",state.reviews(id));
+        out.put("artifacts",artifacts.listRun(id));
         out.put("actions",tasks.findByRunIdOrderByIdAsc(id).stream().map(t->gate.detail(t.getId(),ctx.getUserId())).toList());
         return out;
     }

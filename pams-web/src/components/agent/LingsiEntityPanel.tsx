@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Drawer } from 'antd'
 import { agentBusinessLink } from '@/utils/agentLinks'
 import { useNavigate } from 'react-router-dom'
@@ -11,18 +11,32 @@ import LingsiMarkdown from './LingsiMarkdown'
 import LingsiSources from './LingsiSources'
 import { Close } from './LingsiIcons'
 
+import LingsiArtifactPreview from './LingsiArtifactPreview'
 import LingsiCopyButton from './LingsiCopyButton'
 
 export default function LingsiEntityPanel() {
-  const {items, activeId, collapsed, activate, close, setCollapsed} = useAgentPanel()
+  const {items, activeId, collapsed, activate, close, setCollapsed, width, setWidth} = useAgentPanel()
   const narrow = useMediaQuery('(max-width: 1250px)')
+  const panelRef=useRef<HTMLElement>(null)
+  const [maxWidth,setMaxWidth]=useState(720)
   const [tab, setTab] = useState('content')
   const active = items.find(it => it.id === activeId) ?? items.at(-1)
   const outcomes = useAgentStore(s => s.outcomes)
   const result = outcomes.find(o => o.notice?.taskId === active?.plan?.planId)?.notice
   const navigate = useNavigate()
   useEffect(() => setTab('content'), [activeId])
+  useEffect(()=>{
+    const parent=panelRef.current?.parentElement;if(!parent)return
+    const measure=()=>setMaxWidth(Math.min(720,Math.max(320,parent.clientWidth-(parent.querySelector('.lingsi-sider')?.clientWidth ?? 252)-420)))
+    measure();const observer=new ResizeObserver(measure);observer.observe(parent);return()=>observer.disconnect()
+  },[collapsed,narrow,active?.id])
   if (!active || collapsed) return null
+  const frame=(body:React.ReactNode)=>narrow
+    ? <Drawer className="lingsi-v6-preview-drawer" open={!collapsed} onClose={()=>setCollapsed(true)} placement="right" width="min(560px, 100vw)" closable={false} styles={{body:{padding:0}}}>{body}</Drawer>
+    : <aside ref={panelRef} className="lingsi-panel lingsi-v6-panel" style={{width:Math.min(width,maxWidth),flexBasis:Math.min(width,maxWidth)}} aria-label="工作成果预览"><div className="lingsi-resizable-panel">
+      <label className="lingsi-panel-width">成果栏宽度<input type="range" aria-label="成果栏宽度" min={320} max={maxWidth} step={10} value={Math.min(width,maxWidth)} onChange={e=>setWidth(Number(e.target.value))}/></label>{body}
+    </div></aside>
+  if(active.kind==='version' && active.artifact) return frame(<LingsiArtifactPreview key={active.id} artifact={active.artifact} initialVersion={active.selectedVersion} onClose={()=>setCollapsed(true)}/>)
   const tabs = [['content','内容预览'],['changes','本次变更'],['sources','参考资料']]
   const showBusinessPage = (item: PanelItem) => { if (item.path) { setCollapsed(true); navigate(agentBusinessLink(item.path)!) } }
   const content = <div className="lingsi-v6-panel-content">
@@ -43,5 +57,5 @@ export default function LingsiEntityPanel() {
     </div>
     <footer className="lingsi-preview-footer"><span>{active.source?'引用资料请核对适用范围':result?.text || (active.kind==='artifact'?'已产生业务成果':'尚未执行 / 请在对话中确认')}</span><button type="button" onClick={() => setCollapsed(true)}>回到对话</button></footer>
   </div>
-  return narrow ? <Drawer className="lingsi-v6-preview-drawer" open={!collapsed} onClose={() => setCollapsed(true)} placement="right" width="min(450px, 100vw)" closable={false} styles={{body:{padding:0}}}>{content}</Drawer> : <aside className="lingsi-panel lingsi-v6-panel" aria-label="工作成果预览">{content}</aside>
+  return frame(content)
 }

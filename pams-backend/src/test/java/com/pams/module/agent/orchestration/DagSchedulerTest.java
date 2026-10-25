@@ -51,6 +51,9 @@ class DagSchedulerTest {
     @Autowired ToolRegistry toolRegistry;
     @Autowired AgentOrchestrator orchestrator;
     @Autowired AgentMessageRepository messageRows;
+    @Autowired ArtifactLedger artifactLedger;
+    @Autowired ArtifactEditor artifactEditor;
+    @Autowired AgentArtifactRepository artifactRows;
 
     @MockitoBean AgentLlmCaller caller;
     @MockitoBean(name="agentExecutor") Executor executor;
@@ -371,5 +374,66 @@ class DagSchedulerTest {
         assertThat(state.nodes(run.getId()).getLast().getAttempt()).isZero();
         gate.confirm(action.getId(),action.getConfirmToken(),ctx);
         assertThat(activities.count()).isEqualTo(before+1);
+    }
+
+    long draftActivity() {
+        var tool=(WriteAgentTool)toolRegistry.find("createActivity").orElseThrow();
+        var committed=tool.commit(ctx,tool.execute(ctx,Map.of("name",prefix+"-artifact","startDate","2026-11-20")).plan());
+        return ((Number)committed.references().getFirst().get("id")).longValue();
+    }
+    AgentRun pendingArticle(long activityId) {
+        var run=initialize(node(1,"起草推文"));
+        when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->{
+            List<LlmProvider.ChatMessage> messages=i.getArgument(0);
+            if(messages.getFirst().content().contains("独立内容审查员")) return LlmProvider.ChatResponse.text("{\"issues\":[]}","test");
+            return LlmProvider.ChatResponse.calling(List.of(new LlmProvider.ToolCallRequest("article","draftArticleFromActivity",Map.of("activityId",activityId))));
+        });
+        scheduler.drive(run.getId(),1L);return run;
+    }
+    @Test void editedArtifactCreatesAnImmutableVersionAndOnlyTheNewBodyCanCommit() {
+        long activityId=draftActivity();var run=pendingArticle(activityId);
+        var action=tasks.findByRunIdOrderByIdAsc(run.getId()).getFirst();
+        assertThat(action.getArtifactVersion()).isEqualTo(1);Long artifactId=action.getArtifactId();
+        var initial=artifactLedger.detail(artifactId,1,ctx);
+        assertThat(initial.get("editable")).isEqualTo(true);
+        @SuppressWarnings("unchecked") var fields=new LinkedHashMap<>((Map<String,String>)initial.get("fields"));
+        fields.put("title","用户核对后的标题");fields.put("content","用户核对后的正文\n\n保留活动事实，补充现场信息。");
+        long count=db.queryForObject("select count(*) from article",Long.class);
+        Long replacement=artifactEditor.edit(artifactId,1,fields,ctx);
+        assertThat(db.queryForObject("select count(*) from article",Long.class)).isEqualTo(count);
+        assertThat(tasks.findById(action.getId()).orElseThrow().getStatus()).isEqualTo("CANCELLED");
+        var newer=tasks.findById(replacement).orElseThrow();assertThat(newer.getArtifactId()).isEqualTo(artifactId);assertThat(newer.getArtifactVersion()).isEqualTo(2);
+        assertThat(newer.getConfirmToken()).isNotEqualTo(action.getConfirmToken());
+        assertThat(artifactLedger.detail(artifactId,1,ctx).get("preview").toString()).doesNotContain("用户核对后的正文");
+        assertThat(artifactLedger.detail(artifactId,1,ctx).get("editable")).isEqualTo(false);
+        assertThat(artifactLedger.detail(artifactId,2,ctx).get("preview").toString()).contains("用户核对后的正文");
+        assertThatThrownBy(()->artifactEditor.edit(artifactId,1,fields,ctx)).isInstanceOf(BizException.class);
+        gate.confirm(action.getId(),action.getConfirmToken(),ctx);assertThat(db.queryForObject("select count(*) from article",Long.class)).isEqualTo(count);
+        gate.confirm(newer.getId(),newer.getConfirmToken(),ctx);drain();
+        assertThat(db.queryForObject("select title from article where activity_id=?",String.class,activityId)).isEqualTo("用户核对后的标题");
+        assertThat(db.queryForObject("select content from article where activity_id=?",String.class,activityId)).contains("用户核对后的正文");
+        assertThat(artifactLedger.detail(artifactId,2,ctx)).containsEntry("editable",false).containsEntry("status","SUCCESS");
+        assertThat(artifactLedger.detail(artifactId,2,ctx).get("artifacts")).asList().hasSize(1);
+    }
+    @Test void artifactEditsRejectIdentityInjectionReadonlyAndRunningCommits() {
+        long activityId=draftActivity();var run=pendingArticle(activityId);
+        var task=tasks.findByRunIdOrderByIdAsc(run.getId()).getFirst();Long id=task.getArtifactId();
+        @SuppressWarnings("unchecked") var fields=new LinkedHashMap<>((Map<String,String>)artifactLedger.detail(id,null,ctx).get("fields"));
+        assertThatThrownBy(()->artifactEditor.edit(id,1,fields,ctx.withMode("readonly"))).isInstanceOf(BizException.class);
+        fields.put("activityId","999999");assertThatThrownBy(()->artifactEditor.edit(id,1,fields,ctx)).isInstanceOf(BizException.class);fields.remove("activityId");
+        assertThat(state.claimAction(task,ctx)).isEqualTo(1);
+        assertThatThrownBy(()->artifactEditor.edit(id,1,fields,ctx)).isInstanceOf(BizException.class);
+        assertThat(artifactRows.findById(id).orElseThrow().getCurrentVersion()).isEqualTo(1);
+        assertThat(state.nodes(run.getId()).getFirst().getRevision()).isEqualTo(1);
+        OrgContext.set(2L);assertThatThrownBy(()->artifactLedger.detail(id,null,ctx)).isInstanceOf(BizException.class);OrgContext.set(1L);
+    }
+    @Test void revisedArtifactReviewBlocksTheNewTokenAndRetainsItsOwnIssueLocations() {
+        long activityId=draftActivity();var run=pendingArticle(activityId);var task=tasks.findByRunIdOrderByIdAsc(run.getId()).getFirst();Long id=task.getArtifactId();
+        @SuppressWarnings("unchecked") var fields=new LinkedHashMap<>((Map<String,String>)artifactLedger.detail(id,null,ctx).get("fields"));fields.put("content","错误日期需要修订");
+        doReturn(LlmProvider.ChatResponse.text("{\"issues\":[{\"severity\":\"BLOCKING\",\"quote\":\"错误日期\",\"reason\":\"日期与任务不符\",\"sourceRef\":\"task\"}]}","test")).when(caller).callIsolated(anyList(),anyList(),any());
+        Long replacement=artifactEditor.edit(id,1,fields,ctx);
+        assertThat(tasks.findById(replacement).orElseThrow().getStatus()).isEqualTo("REVIEW_REQUIRED");assertThat(tasks.findById(replacement).orElseThrow().getConfirmToken()).isEmpty();
+        assertThat(artifactLedger.detail(id,2,ctx).get("issues")).asList().hasSize(1);
+        assertThat(artifactLedger.detail(id,1,ctx).get("issues")).asList().isEmpty();
     }
 }
