@@ -14,17 +14,23 @@ export interface BenchRow {
   artifacts: number
   reviewPass: number | null
   durationMs: number | null
+  metricsJson?: string | null
   createdAt: string | null
 }
 
 export interface ArmSummary {
   samples: number
-  completionRate: number
+  completionRate: number | null
+  runSuccessRate: number
+  waiting: number
+  p50DurationMs: number | null
+  p95DurationMs: number | null
+  qualityVerdict: string
   avgSteps: number
   avgAgents: number
   avgToolCalls: number
   avgArtifacts: number
-  avgDurationMs: number
+  avgDurationMs: number | null
   reviewPassRate?: number | null
 }
 
@@ -38,5 +44,6 @@ export interface BenchResult {
 export interface BenchTask { code: string; text: string }
 
 export const listBenchTasks = () => get<BenchTask[]>('/agent/bench/tasks')
-export const runBench = (modes?: string[]) => post<BenchResult>('/agent/bench/run', { modes })
+// Opt-in evaluation runs several bounded samples sequentially; ordinary API requests retain their timeout.
+export const runBench = (modes?: string[]) => post<BenchResult>('/agent/bench/run', { modes }, { timeout: 30 * 60_000 })
 export const listBenchResults = () => get<BenchRow[]>('/agent/bench/results')

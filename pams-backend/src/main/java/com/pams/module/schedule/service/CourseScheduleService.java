@@ -112,16 +112,16 @@ public class CourseScheduleService {
         }
         List<Map<String, Object>> users = new ArrayList<>();
         List<Long> ids = (userIds == null || userIds.isEmpty())
-                ? userRepo.findAll().stream().map(u -> u.getId()).toList()
-                : userIds;
+                ? userRepo.findAll().stream().map(u -> u.getId()).distinct().toList()
+                : userIds.stream().distinct().toList();
+        Long org=com.pams.common.OrgContext.get();
         for (Long uid : ids) {
-            userRepo.findById(uid).ifPresent(u -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("id", u.getId());
-                m.put("realName", u.getRealName());
-                m.put("deptName", u.getDept() == null ? "" : u.getDept().getName());
-                users.add(m);
-            });
+            if(uid==null || org==null)throw new BizException(403,"人员不属于当前可见组织");
+            var u=userRepo.findById(uid).filter(candidate->Objects.equals(candidate.getOrgId(),org))
+                .orElseThrow(()->new BizException(403,"人员不属于当前可见组织"));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", u.getId());m.put("realName", u.getRealName());
+            m.put("deptName", u.getDept() == null ? "" : u.getDept().getName());users.add(m);
         }
         int total = Math.max(users.size(), 1);
 

@@ -436,4 +436,24 @@ class DagSchedulerTest {
         assertThat(artifactLedger.detail(id,2,ctx).get("issues")).asList().hasSize(1);
         assertThat(artifactLedger.detail(id,1,ctx).get("issues")).asList().isEmpty();
     }
+    @Test void p1IsSequentialWhileP2RunsIndependentReadyBranchesTogether() throws Exception {
+        var active=new AtomicInteger();var maximum=new AtomicInteger();
+        var barrier=new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CountDownLatch>();
+        when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->{
+            int current=active.incrementAndGet();maximum.accumulateAndGet(current,Math::max);
+            try {
+                var latch=barrier.get();
+                if(latch!=null) {latch.countDown();assertThat(latch.await(3,java.util.concurrent.TimeUnit.SECONDS)).isTrue();}
+                else Thread.sleep(30);
+                return LlmProvider.ChatResponse.text("只读步骤完成","test");
+            } finally {active.decrementAndGet();}
+        });
+        var sequential=initialize(node(1,"independent-one"),node(2,"independent-two"));
+        db.update("update agent_run set mode='P1' where id=?",sequential.getId());
+        scheduler.drive(sequential.getId(),1L);assertThat(maximum.get()).isEqualTo(1);
+        maximum.set(0);barrier.set(new java.util.concurrent.CountDownLatch(2));
+        var parallel=initialize(node(1,"parallel-one"),node(2,"parallel-two"));
+        scheduler.drive(parallel.getId(),1L);assertThat(maximum.get()).isEqualTo(2);
+    }
+
 }

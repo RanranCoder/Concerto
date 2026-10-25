@@ -94,11 +94,18 @@ public class AgentEventPublisher {
      *                    传 {@code null} 表示"无归属信息"（此时补拉会走数据库回查，
      *                    回查也拿不到就拒绝 —— 宁可少给，也不要放行一条无法确认归属的流）
      */
+    private final Map<String,Long> creationOrder=new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong streamOrder=new java.util.concurrent.atomic.AtomicLong();
+    private String oldestStream() {
+        return touched.entrySet().stream().min(java.util.Comparator.<Map.Entry<String,Long>>comparingLong(Map.Entry::getValue).thenComparingLong(e->creationOrder.getOrDefault(e.getKey(),0L))).orElseThrow().getKey();
+    }
+
     public synchronized String newStream(String prefix, Long ownerUserId) {
         prune();
-        if(touched.size()>=Math.max(1,props.getStreamCacheMaxEntries())) evict(touched.entrySet().stream().min(Map.Entry.comparingByValue()).orElseThrow().getKey());
+        if(touched.size()>=Math.max(1,props.getStreamCacheMaxEntries())) evict(oldestStream());
         String id = (prefix == null ? "s" : prefix) + "_" + java.util.UUID.randomUUID();
         touched.put(id,System.currentTimeMillis());
+        creationOrder.put(id,streamOrder.incrementAndGet());
         counters.put(id, new AtomicInteger(0));
         buffers.put(id, new ArrayList<>());
         if (ownerUserId != null) {
@@ -318,13 +325,13 @@ public class AgentEventPublisher {
         long now=System.currentTimeMillis();
         for(var entry:List.copyOf(touched.entrySet())) if(now-entry.getValue()>(finished.contains(entry.getKey())?props.getStreamCacheTtlMs():props.getStreamActiveTtlMs())) evict(entry.getKey());
         while(touched.size()>Math.max(1,props.getStreamCacheMaxEntries())) {
-            var oldest=touched.entrySet().stream().min(Map.Entry.comparingByValue()).orElseThrow(); evict(oldest.getKey());
+            evict(oldestStream());
         }
     }
     private void evict(String stream) {
         if(trace!=null) trace.clear(stream);
         buffers.remove(stream); counters.remove(stream); owners.remove(stream); authorizationVersions.remove(stream);
-        aborted.remove(stream); identities.remove(stream); touched.remove(stream); finished.remove(stream);
+        aborted.remove(stream); identities.remove(stream); touched.remove(stream); finished.remove(stream); creationOrder.remove(stream);
     }
     public int cachedStreamCount() { return touched.size(); }
 }

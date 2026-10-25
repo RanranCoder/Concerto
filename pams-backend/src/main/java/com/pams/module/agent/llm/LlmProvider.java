@@ -168,7 +168,11 @@ public interface LlmProvider {
      *                 所以返回值里必须有一份完整的，而不是让调用方自己再攒一遍。
      */
     record ChatResponse(String content, List<ToolCallRequest> toolCalls, String provider,
-                        boolean degraded, String reasoningContent) {
+                        boolean degraded, String reasoningContent, Usage usage, String model, String finishReason) {
+
+        public ChatResponse(String content, List<ToolCallRequest> toolCalls, String provider, boolean degraded, String reasoningContent) {
+            this(content,toolCalls,provider,degraded,reasoningContent,null,null,null);
+        }
 
         /**
          * 4 参重载：既有的构造点（{@code StubProvider}、{@code AgentLlmCaller.safeStub}、
@@ -190,6 +194,8 @@ public interface LlmProvider {
             return new ChatResponse("", calls, "deepseek", false);
         }
     }
+
+    record Usage(long inputTokens, long outputTokens, Long cacheHitTokens, Long cacheMissTokens) {}
 
     /** LLM 请求调用某个工具 */
     record ToolCallRequest(String id, String name, Map<String, Object> arguments) {}

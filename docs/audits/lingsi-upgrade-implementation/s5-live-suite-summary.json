@@ -1,0 +1,18 @@
+[
+  {
+    "name": "com.pams.module.agent.orchestration.S5AcceptanceTest",
+    "tests": "24",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "511.155"
+  },
+  {
+    "name": "com.pams.module.agent.service.S5BrowserIntegrationTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "50.617"
+  }
+]

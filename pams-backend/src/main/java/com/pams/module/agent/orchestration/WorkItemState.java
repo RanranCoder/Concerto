@@ -159,11 +159,35 @@ public class WorkItemState {
         n.setUpdatedAt(LocalDateTime.now()); items.saveAndFlush(n);
         AgentStep s=steps.findByWorkItemIdAndRevisionAndAttempt(n.getId(),n.getRevision(),n.getAttempt()).orElseThrow();
         if(!"RUNNING".equals(s.getStatus())) throw new BizException(4400,"执行尝试已结算");
-        s.setOutputJson(encode(Map.of("text",Objects.toString(stored,""),"state",result.state())));
+        var facts=new ArrayList<String>();int factChars=0;
+        if(result.sensitivity()==Sensitivity.NORMAL)for(var invocation:result.invocations()) {
+            String fact=invocation.summary();
+            if(!"OK".equals(invocation.status()) || fact==null || !fact.startsWith("以下是工具返回的数据"))continue;
+            int jsonStart=fact.indexOf('{');if(jsonStart<0)continue;
+            fact=fact.substring(jsonStart);
+            try {if(!AgentJson.readTree(json,fact).isObject())continue;}catch(Exception invalid){continue;}
+            if(factChars+fact.length()>10000)continue;
+            facts.add(fact);factChars+=fact.length();
+        }
+        s.setOutputJson(encode(Map.of("text",Objects.toString(stored,""),"state",result.state(),"toolFacts",facts,"invocations",result.invocations().stream().map(i->Map.of("name",i.name(),"status",i.status(),"durationMs",i.durationMs())).toList())));
         s.setStatus(n.getStatus()); s.setDurationMs((int)duration); steps.save(s);
         update(run);
     }
     private String nodeStatus(String status) { return AgentTask.PENDING_CONFIRM.equals(status)?"WAITING_CONFIRM":status; }
+    /** Only actual normal tool data or a committed business receipt is authoritative review evidence. */
+    public String sourceFacts(AgentWorkItem node) {
+        if(node.getActionTaskId()!=null) {
+            var action=tasks.findById(node.getActionTaskId()).orElseThrow();
+            if(Set.of(AgentTask.SUCCESS,AgentTask.PARTIAL).contains(action.getStatus()) && sensitivity(action)==Sensitivity.NORMAL && action.getResultJson()!=null)return storedAction(action);
+        }
+        return steps.findByWorkItemIdAndRevisionAndAttempt(node.getId(),node.getRevision(),node.getAttempt()).map(step->{
+            try {
+                var facts=AgentJson.readTree(json,step.getOutputJson()).path("toolFacts");
+                if(!facts.isArray())return "";var text=new StringBuilder();for(var fact:facts)text.append(fact.asText()).append('\n');return text.toString();
+            }catch(Exception ignored){return "";}
+        }).orElse("");
+    }
+
     /** Explicit recovery only. A potentially committed RUNNING business action is never replayed. */
     @Transactional
     public void recover(Long runId,Long userId) {

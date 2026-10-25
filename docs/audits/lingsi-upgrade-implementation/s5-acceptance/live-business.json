@@ -1,0 +1,58 @@
+{
+  "status" : "PASS",
+  "receiptStatus" : "SUCCESS",
+  "usage" : {
+    "attempts" : 3,
+    "failures" : 0,
+    "degradedResponses" : 0,
+    "reportedCalls" : 3,
+    "usageComplete" : true,
+    "reportedInputTokens" : 9265,
+    "reportedOutputTokens" : 158,
+    "cost" : null,
+    "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+    "models" : [ "deepseek-flash" ],
+    "calls" : [ {
+      "durationMs" : 1629,
+      "failed" : false,
+      "provider" : "deepseek",
+      "model" : "deepseek-flash",
+      "finishReason" : "tool_calls",
+      "usage" : {
+        "inputTokens" : 4359,
+        "outputTokens" : 64,
+        "cacheHitTokens" : 4224,
+        "cacheMissTokens" : 135
+      }
+    }, {
+      "durationMs" : 871,
+      "failed" : false,
+      "provider" : "deepseek",
+      "model" : "deepseek-flash",
+      "finishReason" : "tool_calls",
+      "usage" : {
+        "inputTokens" : 4601,
+        "outputTokens" : 89,
+        "cacheHitTokens" : 4352,
+        "cacheMissTokens" : 249
+      }
+    }, {
+      "durationMs" : 593,
+      "failed" : false,
+      "provider" : "deepseek",
+      "model" : "deepseek-flash",
+      "finishReason" : "stop",
+      "usage" : {
+        "inputTokens" : 305,
+        "outputTokens" : 5,
+        "cacheHitTokens" : 0,
+        "cacheMissTokens" : 305
+      }
+    } ],
+    "maxCalls" : 8,
+    "perCallOutputTokenCap" : 2048,
+    "maximumOutputTokens" : 16384
+  },
+  "runId" : 29,
+  "newArticleRows" : 1
+}

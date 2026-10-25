@@ -1,0 +1,17 @@
+{
+  "status" : "PASS",
+  "cases" : [ {
+    "runId" : 39,
+    "rowsAfter" : 1,
+    "uncertain" : false,
+    "recoveryStatus" : "SUCCESS",
+    "rowsBefore" : 0
+  }, {
+    "runId" : 40,
+    "rowsAfter" : 1,
+    "uncertain" : true,
+    "recoveryStatus" : "NEEDS_RECONCILE",
+    "rowsBefore" : 1
+  } ],
+  "actualJvmKilled" : true
+}

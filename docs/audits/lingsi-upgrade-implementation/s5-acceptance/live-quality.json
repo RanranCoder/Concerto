@@ -1,0 +1,43 @@
+[ {
+  "arm" : "SINGLE",
+  "task" : "S5_QUERY",
+  "runId" : 31,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "SINGLE"
+}, {
+  "arm" : "MULTI",
+  "task" : "S5_QUERY",
+  "runId" : 32,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "P1"
+}, {
+  "arm" : "MULTI",
+  "task" : "S5_QUERY",
+  "runId" : 33,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "P2"
+}, {
+  "arm" : "MULTI",
+  "task" : "S5_DRAFT",
+  "runId" : 34,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "P1"
+}, {
+  "arm" : "MULTI",
+  "task" : "S5_DRAFT",
+  "runId" : 35,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "P2"
+}, {
+  "arm" : "SINGLE",
+  "task" : "S5_DRAFT",
+  "runId" : 36,
+  "accepted" : true,
+  "scope" : "READ_OR_PREVIEW_QUALITY_NOT_BUSINESS_COMMIT",
+  "mode" : "SINGLE"
+} ]

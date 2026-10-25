@@ -420,7 +420,7 @@ public class AgentOrchestrator {
                     }
 
                     // ===== 结果过 PolicyGuard 闸口才进上下文 =====
-                    // 两步分工：① tool.toLlmText 只做"裁剪"（默认 = result.llmText()，即 summary）
+                    // 两步分工：① tool.toLlmText 只做裁剪（普通读结果带有界事实，敏感/写结果只带摘要）
                     //          ② PolicyGuard 做唯一"净化"（SENSITIVE 遮罩 / RESTRICTED 拦截）
                     // ⚠️ 修复（审计 A2）：此前直接用了 ① 的结果，把 ② 的返回值丢掉，
                     //    导致 SENSITIVE 的 mask() 从未生效（restricted 因 null 判断反而正常）。

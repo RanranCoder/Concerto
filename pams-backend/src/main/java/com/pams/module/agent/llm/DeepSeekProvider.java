@@ -110,6 +110,7 @@ public class DeepSeekProvider implements LlmProvider {
 
         ObjectNode body = buildBody(request);
         body.put("stream", true);
+        body.putObject("stream_options").put("include_usage",true);
 
         java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
                 .uri(java.net.URI.create(props.getBaseUrl() + "/chat/completions"))
@@ -122,6 +123,9 @@ public class DeepSeekProvider implements LlmProvider {
 
         StringBuilder content = new StringBuilder();
         StringBuilder reasoning = new StringBuilder();
+        Usage[] usage = new Usage[1];
+        String[] actualModel = new String[]{null};
+        String[] finishReason = new String[]{null};
         Map<Integer, StringBuilder> callIds = new LinkedHashMap<>();
         Map<Integer, StringBuilder> callNames = new LinkedHashMap<>();
         Map<Integer, StringBuilder> callArgs = new LinkedHashMap<>();
@@ -143,6 +147,9 @@ public class DeepSeekProvider implements LlmProvider {
                 if (data.isEmpty() || "[DONE]".equals(data)) return;
                 try {
                     JsonNode node = mapper.readTree(data);
+                    if(node.hasNonNull("usage"))usage[0]=parseUsage(node.path("usage"));
+                    if(node.hasNonNull("model"))actualModel[0]=node.path("model").asText();
+                    if(node.path("choices").path(0).hasNonNull("finish_reason"))finishReason[0]=node.path("choices").path(0).path("finish_reason").asText();
                     JsonNode delta = node.path("choices").path(0).path("delta");
 
                     String piece = delta.path("content").isNull() ? "" : delta.path("content").asText("");
@@ -204,7 +211,7 @@ public class DeepSeekProvider implements LlmProvider {
         // 工具循环的下一轮要把本轮 assistant 的推理原文回灌（思考模式 + tools 的硬约束），
         // 而回调是"边到边展示"、调用方并不保证留存完整文本。
         return new ChatResponse(content.toString(), calls, name(), false,
-                reasoning.length() == 0 ? null : reasoning.toString());
+                reasoning.length() == 0 ? null : reasoning.toString(),usage[0],actualModel[0],finishReason[0]);
     }
 
     /** 组装请求体（流式与非流式共用，避免两条路径的字段漂移） */
@@ -295,6 +302,13 @@ public class DeepSeekProvider implements LlmProvider {
         }
     }
 
+    private Usage parseUsage(JsonNode usage) {
+        if(!usage.path("prompt_tokens").isIntegralNumber() || !usage.path("completion_tokens").isIntegralNumber())return null;
+        long input=usage.path("prompt_tokens").asLong(), output=usage.path("completion_tokens").asLong();
+        if(input<0 || output<0)return null;
+        return new Usage(input,output,usage.hasNonNull("prompt_cache_hit_tokens")?usage.path("prompt_cache_hit_tokens").asLong():null,usage.hasNonNull("prompt_cache_miss_tokens")?usage.path("prompt_cache_miss_tokens").asLong():null);
+    }
+
     private ChatResponse parse(String raw) {
         try {
             JsonNode root = mapper.readTree(raw);
@@ -325,7 +339,7 @@ public class DeepSeekProvider implements LlmProvider {
                 calls.add(new ToolCallRequest(id, fname, args));
             }
             return new ChatResponse(content, calls, name(), false,
-                    reasoningContent.isBlank() ? null : reasoningContent);
+                    reasoningContent.isBlank() ? null : reasoningContent,parseUsage(root.path("usage")),root.path("model").asText(null),choice.path("finish_reason").asText(null));
         } catch (Exception e) {
             log.warn("DeepSeek 响应解析失败", e);
             throw new IllegalStateException("LLM 响应解析失败：" + e.getMessage(), e);

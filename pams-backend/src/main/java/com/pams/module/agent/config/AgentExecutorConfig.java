@@ -52,7 +52,14 @@ public class AgentExecutorConfig {
         pool.setAwaitTerminationSeconds(20);
         pool.initialize();
         // 关键：包装 SecurityContext，否则异步工具里 currentUserId() 静默为 null
-        return new DelegatingSecurityContextAsyncTaskExecutor(pool);
+        return new ManagedAgentExecutor(pool);
+    }
+
+    /** Spring must own the wrapped pool lifecycle as well as its security context wrapper. */
+    public static final class ManagedAgentExecutor extends DelegatingSecurityContextAsyncTaskExecutor implements org.springframework.beans.factory.DisposableBean {
+        private final ThreadPoolTaskExecutor pool;
+        ManagedAgentExecutor(ThreadPoolTaskExecutor pool) {super(pool);this.pool=pool;}
+        @Override public void destroy() {pool.shutdown();}
     }
 
     /** 供不希望依赖 Spring 类型场景使用的包装工具 */

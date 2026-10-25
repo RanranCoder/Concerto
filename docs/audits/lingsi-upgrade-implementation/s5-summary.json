@@ -1,0 +1,129 @@
+{
+  "status": "PASS_ISOLATED_FIRST_ACCEPTANCE",
+  "date": "2026-10-25",
+  "productionChanged": false,
+  "gitCommitted": false,
+  "productionRelease": "f779a2e",
+  "backend": {
+    "tests": 658,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 8,
+    "passed": 650,
+    "suites": 116,
+    "command": "mvn -q -pl pams-backend -am -Dsurefire.reportNameSuffix=s5-unit test",
+    "status": "PASS",
+    "suitesWithSkips": [
+      {
+        "name": "com.pams.module.agent.config.EnvFileImportConfigTest(s5-unit)",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "name": "com.pams.module.agent.orchestration.S5AcceptanceTest(s5-unit)",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 5
+      },
+      {
+        "name": "com.pams.module.agent.service.S5BrowserIntegrationTest(s5-unit)",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "name": "com.pams.module.agent.service.S5ProcessRecoveryTest(s5-unit)",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      }
+    ],
+    "verifiedAt": "2026-10-25T13:55:47.051816+00:00"
+  },
+  "frontend": {
+    "testFiles": 27,
+    "passed": 193,
+    "typecheck": "PASS",
+    "build": "PASS",
+    "antdIssues": 0
+  },
+  "browserRegression": {
+    "passed": 21,
+    "apiMocked": true
+  },
+  "isolatedMysql": {
+    "version": "8.0.46",
+    "tools": 21,
+    "readTools": 11,
+    "writeTools": 10,
+    "allPassed": true
+  },
+  "liveModel": {
+    "model": "deepseek-flash",
+    "comparisonSamples": 6,
+    "qualityPredicatesPassed": 6,
+    "usageComplete": true,
+    "inputTokens": 49212,
+    "outputTokens": 3180,
+    "cost": null,
+    "costStatus": "UNKNOWN",
+    "automaticBusinessConfirmation": false,
+    "qualityScope": "READ_OR_PREVIEW_ONLY",
+    "actualBusinessCommit": "SEPARATE_LIVE_BUSINESS_TEST",
+    "comparisonMetricsLimitations": [
+      "artifact counts were sampled before the final switch to the persisted artifact ledger; not used for quality or performance conclusions"
+    ]
+  },
+  "realBrowser": {
+    "passed": 2,
+    "apiMocked": false
+  },
+  "processRecovery": {
+    "status": "PASS",
+    "cases": [
+      {
+        "runId": 39,
+        "rowsAfter": 1,
+        "uncertain": false,
+        "recoveryStatus": "SUCCESS",
+        "rowsBefore": 0
+      },
+      {
+        "runId": 40,
+        "rowsAfter": 1,
+        "uncertain": true,
+        "recoveryStatus": "NEEDS_RECONCILE",
+        "rowsBefore": 1
+      }
+    ],
+    "actualJvmKilled": true
+  },
+  "courseScopeAndOccupiedSlot": "PASS",
+  "sandboxCleanup": {
+    "database": "pams_s5_20261025_20ae2b15",
+    "user": "pams_s5_20ae2b15",
+    "databaseRemoved": true,
+    "userRemoved": true,
+    "productionDatabaseTouched": false,
+    "finishedAt": "2026-10-25T13:48:14.279Z"
+  },
+  "ciWorkflowRun": false,
+  "unverified": [
+    "production_canary",
+    "multi_instance_failover",
+    "large_sample_quality",
+    "versioned_price_and_bill_reconciliation"
+  ],
+  "releaseConfig": {
+    "nginxConfigTest": "PASS",
+    "configurationReloaded": false,
+    "productionApplicationChanged": false,
+    "checkedAt": "2026-10-25T13:51:57.020Z"
+  },
+  "verifiedAt": "2026-10-25T13:55:47.051816+00:00"
+}

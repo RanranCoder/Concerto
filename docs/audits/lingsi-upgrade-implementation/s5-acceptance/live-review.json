@@ -1,0 +1,48 @@
+{
+  "review" : {
+    "status" : "BLOCKED",
+    "issues" : [ {
+      "reason" : "日期与任务指定的2026-11-20不符，应改为2026-11-20。",
+      "code" : "CONTENT",
+      "quote" : "2026-11-21",
+      "severity" : "BLOCKING",
+      "location" : "正文第 1 行，字符 4",
+      "sourceRef" : "task"
+    }, {
+      "reason" : "地点与任务指定的S5 测试礼堂不符，应改为S5 测试礼堂。",
+      "code" : "CONTENT",
+      "quote" : "S5 测试体育馆",
+      "severity" : "BLOCKING",
+      "location" : "正文第 1 行，字符 15",
+      "sourceRef" : "task"
+    } ]
+  },
+  "usage" : {
+    "attempts" : 1,
+    "failures" : 0,
+    "degradedResponses" : 0,
+    "reportedCalls" : 1,
+    "usageComplete" : true,
+    "reportedInputTokens" : 231,
+    "reportedOutputTokens" : 94,
+    "cost" : null,
+    "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+    "models" : [ "deepseek-flash" ],
+    "calls" : [ {
+      "durationMs" : 746,
+      "failed" : false,
+      "provider" : "deepseek",
+      "model" : "deepseek-flash",
+      "finishReason" : "stop",
+      "usage" : {
+        "inputTokens" : 231,
+        "outputTokens" : 94,
+        "cacheHitTokens" : 0,
+        "cacheMissTokens" : 231
+      }
+    } ],
+    "maxCalls" : 3,
+    "perCallOutputTokenCap" : 2048,
+    "maximumOutputTokens" : 6144
+  }
+}

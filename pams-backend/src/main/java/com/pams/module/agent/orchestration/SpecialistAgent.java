@@ -51,6 +51,8 @@ public class SpecialistAgent {
         String provider="", text="", state="SUCCESS";
         boolean degraded=false;
         Sensitivity sensitivity=Sensitivity.NORMAL;
+        boolean actionRequired=!ctx.isReadonly() && !ctx.isKb() && scoped.stream().anyMatch(AgentTool::writeOperation)
+            && task!=null && List.of("待确认","等待确认","拟执行清单","保存草稿","生成推文草稿").stream().anyMatch(task::contains);
         int max=Math.max(1,props.getMaxToolIterations());
         for(int round=0;round<=max;round++) {
             if(aborted(streamId)) { state="CANCELLED"; break; }
@@ -63,6 +65,16 @@ public class SpecialistAgent {
                 calls=response.toolCalls();
             }
             if(calls==null || calls.isEmpty()) {
+                if(actionRequired && predecided==null) {
+                    if(round<max && !degraded) {
+                        messages.add(new LlmProvider.ChatMessage("assistant",text,null,null,response==null?null:response.reasoningContent()));
+                        messages.add(LlmProvider.ChatMessage.text("user","本任务要求可确认预览，目前没有对应清单。请使用可见工具准备待确认清单；缺必要参数时明确说明。没有工具回执不得宣称已保存、已发布或已完成。"));
+                        continue;
+                    }
+                    if(!"FAILED".equals(state))state="PARTIAL";
+                    text="尚未生成可确认清单。"+text;break;
+                }
+                if(response!=null && "length".equals(response.finishReason()) && !"FAILED".equals(state))state="PARTIAL";
                 if(!"FAILED".equals(state) && (text.isBlank() || (invocations.isEmpty() && degraded))) state="PARTIAL";
                 break;
             }

@@ -49,6 +49,9 @@ public class AgentBenchmark implements OrgScoped {
     @Column(name = "duration_ms")
     private Integer durationMs;
 
+    @Column(name="metrics_json",columnDefinition="json")
+    private String metricsJson;
+
     private Long orgId;
 
     @Column(name = "created_at")

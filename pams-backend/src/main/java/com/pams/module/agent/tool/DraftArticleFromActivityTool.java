@@ -169,24 +169,24 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
 
     private String buildTitle(Activity a) {
         String theme = a.getTheme() == null || a.getTheme().isBlank() ? a.getName() : a.getTheme();
-        return theme + "顺利开展";
+        return theme + "活动文稿草稿";
     }
 
     private String buildContent(Activity a) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<p>").append(esc(a.getName())).append("于");
+        sb.append("<p>活动名称：").append(esc(a.getName())).append("</p><p>活动时间：");
         if (a.getStartDate() != null) {
             sb.append(a.getStartDate());
             if (a.getEndDate() != null && !a.getEndDate().equals(a.getStartDate())) {
                 sb.append("至").append(a.getEndDate());
             }
         } else {
-            sb.append("近期");
+            sb.append("待核对");
         }
         if (a.getLocation() != null && !a.getLocation().isBlank()) {
-            sb.append("在").append(esc(a.getLocation()));
+            sb.append("</p><p>活动地点：").append(esc(a.getLocation()));
         }
-        sb.append("开展。</p>");
+        sb.append("。</p>");
 
         if (a.getHost() != null && !a.getHost().isBlank()) {
             sb.append("<p>本次活动由").append(esc(a.getHost())).append("主办");
@@ -201,7 +201,6 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
         if (a.getDescription() != null && !a.getDescription().isBlank()) {
             sb.append("<p>").append(esc(htmlSanitizer.toPlainText(a.getDescription()))).append("</p>");
         }
-        sb.append("<p>（本稿由灵思根据活动信息自动生成初稿，请补充现场情况与图片后再提交审核。）</p>");
         return sb.toString();
     }
 

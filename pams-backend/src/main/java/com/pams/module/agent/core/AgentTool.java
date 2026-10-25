@@ -58,9 +58,9 @@ public interface AgentTool {
 
     /**
      * 结果裁剪与脱敏钩子（D4：PolicyGuard 是唯一出网闸口）。
-     * 返回参与 LLM 上下文的文本；默认用 {@link ToolResult#llmText()}。
+     * 普通读结果保留有界结构化事实；写结果和敏感结果只给摘要，之后仍须过 PolicyGuard。
      */
     default String toLlmText(ToolContext ctx, ToolResult result) {
-        return result.llmText();
+        return ToolResultText.render(this,result);
     }
 }

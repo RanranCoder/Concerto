@@ -1,0 +1,18 @@
+[
+  {
+    "name": "com.pams.module.agent.orchestration.S5AcceptanceTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "42.043"
+  },
+  {
+    "name": "com.pams.module.agent.service.S5ProcessRecoveryTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "87.516"
+  }
+]

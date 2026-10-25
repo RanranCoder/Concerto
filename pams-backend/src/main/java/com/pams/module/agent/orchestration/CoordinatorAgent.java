@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * 协作入口：生成带显式依赖的计划，交给持久化 DAG 调度器执行。
- * 业务写入始终由 TaskGate 确认；旧 SpecialistExecutor 保留给独立的模式契约与单 Agent 基准。
+ * 业务写入始终由 TaskGate 确认；旧 SpecialistExecutor 保留给历史模式契约测试。
  */
 @Slf4j
 @Service
@@ -197,9 +197,9 @@ public class CoordinatorAgent {
 
     private String taskFor(String agent, String goal) {
         return "用户目标：" + safe(goal) + "\n本步骤：" + switch (agent) {
-            case AgentCatalog.RETRIEVAL -> "检索与「" + safe(goal) + "」相关的数据与知识";
+            case AgentCatalog.RETRIEVAL -> "只检索与「" + safe(goal) + "」相关的数据与知识。保留工具实际返回的实体 ID、日期、地点和来源；不要在本步骤代写正文或要求用户批准下游文稿，不把未完成的准备事项推断成已登记事实不可信。";
             case AgentCatalog.PLANNING -> "产出活动方案 / 策划书章节草稿";
-            case AgentCatalog.WRITING -> "撰写推文 / 新闻稿 / 公告草稿";
+            case AgentCatalog.WRITING -> "根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿";
             case AgentCatalog.SCHEDULING -> "生成排班 / 筹备任务";
             case AgentCatalog.DATA -> "批量事务（先出拟执行清单）";
             case AgentCatalog.REVIEWER -> "对产物做完整性 / 事实 / 合规审查";

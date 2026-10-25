@@ -74,7 +74,7 @@ public class DagScheduler {
         String token=UUID.randomUUID().toString();
         if(!state.acquire(runId,token)) return state.blackboard(run,state.nodes(runId));
         List<SpecialistAgent.Result> live=new ArrayList<>();
-        int parallel=Math.clamp(properties.getMaxParallelNodes(),1,4);
+        int parallel="P1".equals(run.getMode()) || "SINGLE".equals(run.getMode()) ? 1 : Math.clamp(properties.getMaxParallelNodes(),1,4);
         // Never fork an uncommitted caller's transaction (e.g. a transactional benchmark fixture).
         boolean inline=org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
         try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
@@ -142,6 +142,8 @@ public class DagScheduler {
         StringBuilder text=new StringBuilder("\n已完成的上游事实（仅使用明确返回的实体 ID，不要猜测）：\n");
         for(var n:all) if(dependencies.contains(n.getNodeKey()) && "SUCCESS".equals(n.getStatus()) && n.getOutputText()!=null) {
             String output=n.getOutputText();
+            String facts=state.sourceFacts(n);
+            if(!facts.isBlank())output="【实际工具事实】\n"+facts+"\n【专家说明，仅供参考，不得新增任务要求】\n"+output;
             if(n.getActionTaskId()!=null) {
                 AgentTask action=tasks.findById(n.getActionTaskId()).orElseThrow();
                 if(action.getResultJson()!=null) {

@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { isSameOriginDevRequest } from './dev/proxyOrigin'
 
-const apiTarget = 'http://localhost:8080'
+const apiTarget = process.env.PAMS_E2E_API_TARGET ?? 'http://localhost:8080'
+if (!/^http:\/\/(localhost|127\.0\.0\.1):[0-9]+$/.test(apiTarget)) throw new Error('Development API target must be local')
 
 export default defineConfig({
   plugins: [react()],
@@ -29,8 +30,8 @@ export default defineConfig({
           })
         },
       },
-      '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
-      '/ws': { target: 'http://localhost:8080', ws: true },
+      '/uploads': { target: apiTarget, changeOrigin: true },
+      '/ws': { target: apiTarget, ws: true },
     },
   },
   test: {

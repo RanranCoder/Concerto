@@ -114,6 +114,12 @@ public class AgentProperties {
     private long streamCacheTtlMs = 600000;
     private long streamActiveTtlMs = 3600000;
     private boolean runtimeRecoveryEnabled = true;
+    private boolean benchmarkEnabled = false;
+    private java.util.Set<Long> benchmarkOrgIds = new java.util.HashSet<>();
+    private int benchmarkMaxCalls = 12;
+    private int benchmarkMaxTokens = 2048;
+    private boolean collaborationEnabled = true;
+    private java.util.Set<Long> collaborationOrgIds = new java.util.HashSet<>();
 
     /**
      * 解析 API Key：优先环境变量 {@code PAMS_AGENT_API_KEY}，其次 {@code pams.agent.api-key}

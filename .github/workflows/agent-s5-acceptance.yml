@@ -1,0 +1,72 @@
+name: Agent S5 isolated acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run bounded real-model acceptance using DEEPSEEK_API_KEY
+        type: boolean
+        default: false
+      browser:
+        description: Run real browser flow (requires live)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: s5-ci-ephemeral-only
+          MYSQL_DATABASE: pams_s5_ci
+          MYSQL_USER: s5_ci
+          MYSQL_PASSWORD: s5-ci-ephemeral-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -ps5-ci-ephemeral-only"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      PAMS_S5_ACCEPTANCE: 'true'
+      PAMS_S5_DB_URL: jdbc:mysql://127.0.0.1:3306/pams_s5_ci?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      PAMS_S5_DB_USER: s5_ci
+      PAMS_S5_DB_PASSWORD: s5-ci-ephemeral-only
+      PAMS_S5_LIVE: ${{ inputs.live && 'true' || 'false' }}
+      PAMS_S5_BROWSER: ${{ inputs.browser && 'true' || 'false' }}
+      PAMS_TEST_AGENT_PROVIDER: ${{ inputs.live && 'deepseek' || 'stub' }}
+      PAMS_AGENT_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pams-web/package-lock.json
+      - name: Check explicit model opt-in
+        run: |
+          if [ "$PAMS_S5_BROWSER" = true ] && [ "$PAMS_S5_LIVE" != true ]; then exit 1; fi
+          if [ "$PAMS_S5_LIVE" = true ] && [ -z "$PAMS_AGENT_API_KEY" ]; then echo 'DEEPSEEK_API_KEY is required'; exit 1; fi
+      - run: npm ci --no-audit --no-fund
+        working-directory: pams-web
+      - if: inputs.browser
+        run: npx playwright install --with-deps chromium
+        working-directory: pams-web
+      - name: Run isolated acceptance
+        run: mvn -B -pl pams-backend -am -Dtest=S5AcceptanceTest,S5ProcessRecoveryTest,S5BrowserIntegrationTest -Dsurefire.runOrder=alphabetical -Dsurefire.failIfNoSpecifiedTests=false test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-s5-evidence
+          path: |
+            pams-backend/target/surefire-reports/
+            docs/audits/lingsi-upgrade-implementation/s5-acceptance/
+            docs/audits/lingsi-upgrade-implementation/s5-process/
+            docs/audits/lingsi-upgrade-implementation/s5-browser/
+            docs/ui-v6-lingsi-implementation/s5-acceptance/

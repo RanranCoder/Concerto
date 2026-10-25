@@ -391,4 +391,19 @@ class DeepSeekStreamTest {
         assertThat(lastRequestBody).doesNotContain("\"tools\"");
         assertThat(lastRequestBody).doesNotContain("tool_choice");
     }
+    @Test void capturesStreamingUsageEvenWhenTheFinalChunkHasNoChoices() {
+        serve("data: {\"model\":\"actual-model\",\"choices\":[{\"delta\":{\"content\":\"完成\"},\"finish_reason\":\"stop\"}]}\n\n"
+            + "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20,\"prompt_cache_hit_tokens\":40,\"prompt_cache_miss_tokens\":60}}\n\n"
+            + "data: [DONE]\n\n");
+        var response=provider.chatStream(new LlmProvider.ChatRequest(List.of(),List.of(),0.2,256),deltas::add);
+        assertThat(response.content()).isEqualTo("完成");assertThat(response.model()).isEqualTo("actual-model");
+        assertThat(response.finishReason()).isEqualTo("stop");assertThat(response.usage().inputTokens()).isEqualTo(100);
+        assertThat(response.usage().cacheHitTokens()).isEqualTo(40L);assertThat(lastRequestBody).contains("include_usage");
+    }
+    @Test void capturesActualNonStreamingModelAndDoesNotInventMissingUsage() {
+        serveJson("{\"model\":\"actual-model\",\"choices\":[{\"message\":{\"content\":\"完成\"},\"finish_reason\":\"length\"}]}");
+        var response=provider.chat(new LlmProvider.ChatRequest(List.of(),List.of(),0.2,256));
+        assertThat(response.model()).isEqualTo("actual-model");assertThat(response.finishReason()).isEqualTo("length");assertThat(response.usage()).isNull();
+    }
+
 }

@@ -1,0 +1,41 @@
+{
+  "tests": 658,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 8,
+  "passed": 650,
+  "suites": 116,
+  "command": "mvn -q -pl pams-backend -am -Dsurefire.reportNameSuffix=s5-unit test",
+  "status": "PASS",
+  "suitesWithSkips": [
+    {
+      "name": "com.pams.module.agent.config.EnvFileImportConfigTest(s5-unit)",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "name": "com.pams.module.agent.orchestration.S5AcceptanceTest(s5-unit)",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 5
+    },
+    {
+      "name": "com.pams.module.agent.service.S5BrowserIntegrationTest(s5-unit)",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "name": "com.pams.module.agent.service.S5ProcessRecoveryTest(s5-unit)",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    }
+  ],
+  "verifiedAt": "2026-10-25T13:55:47.051816+00:00"
+}

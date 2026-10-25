@@ -149,6 +149,18 @@ class CollaborationRouterTest {
         CollaborationRouter.Decision d = router.route("查材料并写推文", "standard", true);
         assertThat(d.experts()).containsExactly(AgentCatalog.RETRIEVAL, AgentCatalog.WRITING);
     }
+    @Test void organizationRolloutAndRollbackChangeOnlyNewRouting() {
+        planReturns(AgentCatalog.RETRIEVAL,AgentCatalog.WRITING,AgentCatalog.REVIEWER);
+        var props=new com.pams.module.agent.config.AgentProperties();props.setCollaborationOrgIds(java.util.Set.of(10L));
+        org.springframework.test.util.ReflectionTestUtils.setField(router,"properties",props);
+        try {
+            com.pams.common.OrgContext.set(9L);assertThat(router.route("查资料并写推文","standard",true).upgrade()).isFalse();
+            com.pams.common.OrgContext.set(10L);assertThat(router.route("查资料并写推文","standard",true).upgrade()).isTrue();
+            props.setCollaborationEnabled(false);assertThat(router.route("查资料并写推文","standard",true).upgrade()).isFalse();
+            org.mockito.Mockito.verify(coordinator,org.mockito.Mockito.times(1)).plan(anyString());
+        } finally {com.pams.common.OrgContext.clear();}
+    }
+
 }
 
 // 需要 import List 之外的类型提示：Decision 是 record，用访问器断言

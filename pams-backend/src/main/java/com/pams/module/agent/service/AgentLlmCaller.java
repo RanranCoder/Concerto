@@ -38,6 +38,7 @@ public class AgentLlmCaller {
     private final AgentProperties props;
     private final AgentEventPublisher publisher;
     private final ThinkingTrace thinkingTrace;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentEvaluationMeter evaluation;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.llm.LlmCancellation cancellation = new com.pams.module.agent.llm.LlmCancellation();
 
@@ -69,7 +70,7 @@ public class AgentLlmCaller {
 
         // 已经是 stub（未配 Key 或显式配置）→ 直连规则模式
         if ("stub".equals(primaryProvider.name())) {
-            return emitWhole(safeStub(req), ctx, streamId, round + 2000);
+            return emitWhole(observed(streamId,req,this::safeStub), ctx, streamId, round + 2000);
         }
 
         DeltaBatch batch = new DeltaBatch(ctx, streamId, round);
@@ -84,10 +85,11 @@ public class AgentLlmCaller {
                 }
                 DeltaBatch output=batch; ReasoningBatch thoughts=reasoning;
                 LlmProvider.ChatResponse resp = cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),
-                    ()->primaryProvider.chatStream(req,output::accept,thoughts::accept));
+                    ()->observed(streamId,req,r->primaryProvider.chatStream(r,output::accept,thoughts::accept)));
                 batch.flush();
                 reasoning.finish();
                 return resp;
+            } catch (AgentEvaluationMeter.LimitExceeded e) { throw e;
             } catch (java.util.concurrent.CancellationException e) {
                 batch.discard(); reasoning.discard(); throw e;
             } catch (Exception e) {
@@ -100,7 +102,7 @@ public class AgentLlmCaller {
                 }
             }
         }
-        return emitWhole(safeStub(req), ctx, streamId, round + 2000);
+        return emitWhole(observed(streamId,req,this::safeStub), ctx, streamId, round + 2000);
     }
 
     /** Specialist output is task-local and must not enter the shared final-answer delta channel. */
@@ -110,14 +112,29 @@ public class AgentLlmCaller {
         for (int attempt=0; attempt<2; attempt++) {
             if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
             try {
-                LlmProvider.ChatResponse response = "stub".equals(primaryProvider.name()) ? safeStub(req)
-                    : cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),()->primaryProvider.chat(req));
+                LlmProvider.ChatResponse response = "stub".equals(primaryProvider.name()) ? observed(streamId,req,this::safeStub)
+                    : cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),()->observed(streamId,req,primaryProvider::chat));
                 if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
                 return response;
-            } catch (java.util.concurrent.CancellationException e) { throw e; }
+            } catch (AgentEvaluationMeter.LimitExceeded e) { throw e; }
+            catch (java.util.concurrent.CancellationException e) { throw e; }
             catch (Exception e) { log.warn("专家模型调用失败：attempt={} reason={}",attempt+1,e.getMessage()); }
         }
-        return safeStub(req);
+        return observed(streamId,req,this::safeStub);
+    }
+
+    private LlmProvider.ChatResponse observed(String stream,LlmProvider.ChatRequest req,java.util.function.Function<LlmProvider.ChatRequest,LlmProvider.ChatResponse> call) {
+        int cap=evaluation==null?req.maxTokens():evaluation.before(stream,req.maxTokens());
+        var limited=new LlmProvider.ChatRequest(req.messages(),req.tools(),req.temperature(),cap);
+        long started=System.nanoTime();
+        try {
+            var response=call.apply(limited);
+            if(evaluation!=null)evaluation.record(stream,response,(System.nanoTime()-started)/1000000,false);
+            return response;
+        } catch(RuntimeException e) {
+            if(evaluation!=null)evaluation.record(stream,null,(System.nanoTime()-started)/1000000,true);
+            throw e;
+        }
     }
 
     /**

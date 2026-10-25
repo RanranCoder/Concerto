@@ -153,7 +153,7 @@ class AgentEventPublisherTest {
         for(String id:List.copyOf(times.keySet())) {bounded.clear(id);times.put(id,0L);}
         bounded.prune();assertThat(bounded.cachedStreamCount()).isZero();
         bounded.publish("u",AgentStreamEvent.thinking(second,10,"late"));bounded.markAborted(second);
-        for(String field:List.of("buffers","counters","owners","authorizationVersions","aborted","identities","touched"))
+        for(String field:List.of("buffers","counters","owners","authorizationVersions","aborted","identities","touched","creationOrder"))
             assertThat((Map<?,?>)org.springframework.test.util.ReflectionTestUtils.getField(bounded,field)).as(field).isEmpty();
     }
     @Test void aTruncatedReplayRequestsASnapshotInsteadOfPretendingToBeComplete() {

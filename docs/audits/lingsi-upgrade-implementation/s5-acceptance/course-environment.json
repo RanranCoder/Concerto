@@ -1,0 +1,7 @@
+{
+  "activityId": 31,
+  "prefix": "S5-daf3be96",
+  "mysql": "8.0.46",
+  "database": "pams_s5_20261025_20ae2b15",
+  "fixture": "synthetic-only-v1"
+}

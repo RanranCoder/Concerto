@@ -41,6 +41,7 @@ public class CollaborationRouter {
     }
 
     private final CoordinatorAgent coordinator;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.pams.module.agent.config.AgentProperties properties;
 
     public CollaborationRouter(CoordinatorAgent coordinator) {
         this.coordinator = coordinator;
@@ -61,6 +62,9 @@ public class CollaborationRouter {
         if (!"standard".equals(m)) {
             // 只读档位不写数据、对话档位走 KbPipeline 问答流水线，两者都不涉及「派专家」
             return Decision.single("当前档位不走协作");
+        }
+        if (properties!=null && (!properties.isCollaborationEnabled() || (!properties.getCollaborationOrgIds().isEmpty() && !properties.getCollaborationOrgIds().contains(com.pams.common.OrgContext.get())))) {
+            return Decision.single("当前组织使用单 Agent 稳定路径");
         }
         if (!collabEnabled) {
             return Decision.single("自动协作已关闭");

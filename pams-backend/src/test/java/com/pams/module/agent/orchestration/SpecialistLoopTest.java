@@ -41,4 +41,27 @@ class SpecialistLoopTest {
         assertThat(requests.get(1)).anySatisfy(m->{ assertThat(m.role()).isEqualTo("assistant"); assertThat(m.reasoningContent()).isEqualTo("reasoning"); });
         verify(caller,never()).callLlm(any(),any(),any(),any(),anyInt());
     }
+    @Test void requiredActionPreviewCannotBeReplacedByAnUnconfirmedTextClaim() {
+        var registry=mock(AgentRegistry.class);var tools=mock(ToolRegistry.class);var caller=mock(AgentLlmCaller.class);
+        var definition=new AgentDefinition();definition.setName("writing");
+        var ctx=ToolContext.current(null,null);var tool=mock(AgentTool.class);
+        when(tool.name()).thenReturn("draftArticleFromActivity");when(tool.writeOperation()).thenReturn(true);when(tool.parametersSchema()).thenReturn(Map.of());
+        when(registry.byName("writing")).thenReturn(Optional.of(definition));when(registry.toolScopeOf(definition)).thenReturn(null);when(tools.visibleTools(ctx)).thenReturn(List.of(tool));
+        when(caller.callIsolated(anyList(),anyList(),isNull())).thenReturn(LlmProvider.ChatResponse.text("我已经保存了草稿","test"));
+        var props=new AgentProperties();props.setMaxToolIterations(1);
+        var result=new SpecialistAgent(registry,tools,caller,mock(AgentEventPublisher.class),mock(ToolOutcomeHandler.class),new PolicyGuard(),mock(AuditService.class),props)
+            .execute("writing","生成推文草稿，等待确认",ctx,null,null,null);
+        assertThat(result.state()).isEqualTo("PARTIAL");assertThat(result.text()).startsWith("尚未生成可确认清单");assertThat(result.plan()).isNull();
+        verify(caller,times(2)).callIsolated(anyList(),anyList(),isNull());verify(tools,never()).dispatch(anyString(),any(),anyMap());
+    }
+    @Test void aTruncatedTextAnswerRemainsPartial() {
+        var registry=mock(AgentRegistry.class);var tools=mock(ToolRegistry.class);var caller=mock(AgentLlmCaller.class);
+        var definition=new AgentDefinition();definition.setName("retrieval");var ctx=ToolContext.current(null,null);
+        when(registry.byName("retrieval")).thenReturn(Optional.of(definition));when(registry.toolScopeOf(definition)).thenReturn(List.of());when(tools.visibleTools(ctx)).thenReturn(List.of());
+        when(caller.callIsolated(anyList(),anyList(),isNull())).thenReturn(new LlmProvider.ChatResponse("只返回一半",List.of(),"test",false,null,null,"actual-model","length"));
+        var result=new SpecialistAgent(registry,tools,caller,mock(AgentEventPublisher.class),mock(ToolOutcomeHandler.class),new PolicyGuard(),mock(AuditService.class),new AgentProperties())
+            .execute("retrieval","查询活动",ctx,null,null,null);
+        assertThat(result.state()).isEqualTo("PARTIAL");
+    }
+
 }
