@@ -84,6 +84,11 @@ public class MaterialService {
         return repository.findById(id).orElseThrow(() -> new BizException(2401, "材料不存在"));
     }
 
+    public Map<String,Object> detail(Long id) {
+        Material material=getEntity(id);
+        return toVo(material,filenamesOf(List.of(material)));
+    }
+
     @Transactional
     public Material create(Long uploaderId, MaterialRequest req) {
         Material m = new Material();

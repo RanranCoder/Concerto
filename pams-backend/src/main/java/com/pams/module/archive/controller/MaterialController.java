@@ -31,6 +31,11 @@ public class MaterialController {
         return Result.ok(service.page(keyword, bizType, activityId, deptId, page, size));
     }
 
+    @GetMapping("/{id}")
+    public Result<Map<String,Object>> detail(@PathVariable Long id) {
+        return Result.ok(service.detail(id));
+    }
+
     @GetMapping("/tree")
     public Result<List<Map<String, Object>>> tree(@RequestParam(required = false) Long activityId) {
         return Result.ok(service.tree(activityId));

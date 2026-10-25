@@ -38,6 +38,8 @@ public class AgentLlmCaller {
     private final AgentProperties props;
     private final AgentEventPublisher publisher;
     private final ThinkingTrace thinkingTrace;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.llm.LlmCancellation cancellation = new com.pams.module.agent.llm.LlmCancellation();
 
     public AgentLlmCaller(LlmProvider primaryProvider,
                           @Qualifier("stubProvider") LlmProvider stubProvider,
@@ -61,6 +63,7 @@ public class AgentLlmCaller {
     public LlmProvider.ChatResponse callLlm(List<LlmProvider.ChatMessage> messages,
                                            List<LlmProvider.ToolSpec> specs,
                                            ToolContext ctx, String streamId, int round) {
+        if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
         LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
                 messages, specs, props.getTemperature(), props.getMaxTokens());
 
@@ -79,10 +82,14 @@ public class AgentLlmCaller {
                     batch = new DeltaBatch(ctx, streamId, round + 1000);
                     reasoning = new ReasoningBatch(ctx, streamId, round + 1000);
                 }
-                LlmProvider.ChatResponse resp = primaryProvider.chatStream(req, batch::accept, reasoning::accept);
+                DeltaBatch output=batch; ReasoningBatch thoughts=reasoning;
+                LlmProvider.ChatResponse resp = cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),
+                    ()->primaryProvider.chatStream(req,output::accept,thoughts::accept));
                 batch.flush();
                 reasoning.finish();
                 return resp;
+            } catch (java.util.concurrent.CancellationException e) {
+                batch.discard(); reasoning.discard(); throw e;
             } catch (Exception e) {
                 batch.discard();
                 reasoning.discard();
@@ -94,6 +101,23 @@ public class AgentLlmCaller {
             }
         }
         return emitWhole(safeStub(req), ctx, streamId, round + 2000);
+    }
+
+    /** Specialist output is task-local and must not enter the shared final-answer delta channel. */
+    public LlmProvider.ChatResponse callIsolated(List<LlmProvider.ChatMessage> messages,
+                                               List<LlmProvider.ToolSpec> specs, String streamId) {
+        LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(messages,specs,props.getTemperature(),props.getMaxTokens());
+        for (int attempt=0; attempt<2; attempt++) {
+            if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+            try {
+                LlmProvider.ChatResponse response = "stub".equals(primaryProvider.name()) ? safeStub(req)
+                    : cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),()->primaryProvider.chat(req));
+                if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+                return response;
+            } catch (java.util.concurrent.CancellationException e) { throw e; }
+            catch (Exception e) { log.warn("专家模型调用失败：attempt={} reason={}",attempt+1,e.getMessage()); }
+        }
+        return safeStub(req);
     }
 
     /**
@@ -132,6 +156,7 @@ public class AgentLlmCaller {
         }
 
         void accept(String piece) {
+            if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
             if (discarded || piece == null || piece.isEmpty()) return;
             buf.append(piece);
             if (buf.length() >= MAX_CHARS || System.currentTimeMillis() - lastFlush >= MAX_MS) flush();
@@ -178,6 +203,7 @@ public class AgentLlmCaller {
         }
 
         void accept(String piece) {
+            if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
             if (discarded || piece == null || piece.isEmpty()) return;
             thinkingTrace.append(streamId, round, piece);
             buf.append(piece);

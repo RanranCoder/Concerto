@@ -1,5 +1,6 @@
 import { get, post, put, del } from './http'
 import type { PageResult } from './types'
+export const getMaterial = (id: number) => get<MaterialVO>(`/materials/${id}`)
 
 export interface MaterialVO {
   id: number

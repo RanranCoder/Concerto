@@ -33,6 +33,11 @@ public class ArticleController {
         return Result.ok(service.page(status, type, keyword, activityId, page, size));
     }
 
+    @GetMapping("/{id}")
+    public Result<Map<String,Object>> detail(@PathVariable Long id) {
+        return Result.ok(service.detail(id));
+    }
+
     @PreAuthorize("hasAuthority('content:manage')")
     @PostMapping
     public Result<Article> create(@Valid @RequestBody ArticleRequest req,

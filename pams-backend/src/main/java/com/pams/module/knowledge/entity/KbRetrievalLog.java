@@ -96,6 +96,9 @@ public class KbRetrievalLog implements OrgScoped {
     @Column(nullable = false)
     private Integer degraded = 0;
 
+    @Column(columnDefinition="JSON")
+    private String inputFragmentsJson;
+
     /** 命中明细 JSON：[{sourceType,sourceId,sourceKey,seq,path,score,allowed}] */
     @Column(name = "hits_json", columnDefinition = "JSON")
     private String hitsJson;

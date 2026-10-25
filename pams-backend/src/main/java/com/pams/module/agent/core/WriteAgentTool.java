@@ -29,6 +29,7 @@ public interface WriteAgentTool extends AgentTool {
     /** 执行结果 */
     record CommitResult(String status, int affectedCount, int failedCount,
                         String message, Map<String, Object> detail, List<Map<String, Object>> references) {
+        public CommitResult { references = BusinessLinks.references(references); }
 
         public static CommitResult success(int affected, String message) {
             return new CommitResult("SUCCESS", affected, 0, message, Map.of(), List.of());

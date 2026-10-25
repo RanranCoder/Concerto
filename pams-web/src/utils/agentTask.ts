@@ -1,10 +1,12 @@
 import type { AgentConversationStatus, AgentConversationVO } from '@/api/agent'
 
 export const agentStatusLabels: Record<AgentConversationStatus, string> = {
+  STOPPING:'正在停止', REVIEW_REQUIRED:'需修订', NEEDS_RECONCILE:'结果待核对',
   READY: '可继续', RUNNING: '进行中', WAITING_INPUT: '待补充', PENDING_CONFIRM: '待确认',
   COMPLETED: '已完成', SUCCESS: '已完成', FAILED: '执行失败', PARTIAL: '部分完成', CANCELLED: '已取消', STOPPED:'已停止',
 }
 export function conversationStatus(c: AgentConversationVO): AgentConversationStatus {
+  if (c.status && ['STOPPING','REVIEW_REQUIRED','NEEDS_RECONCILE'].includes(c.status)) return c.status
   return c.pendingTaskCount > 0 ? 'PENDING_CONFIRM' : c.status ?? 'READY'
 }
 export function isCompleted(status: AgentConversationStatus) {

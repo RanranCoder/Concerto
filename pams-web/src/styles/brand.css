@@ -1,29 +1,30 @@
 /* V1.7：方形画布内含至少 H/4 净空；图形与组织主题色分离。 */
+.app-header-staff-accent { fill: #C7F36B; }
 .product-brand { display: flex; align-items: center; gap: 8px; min-width: 0; color: #17243A; }
 [data-theme='dark'] .product-brand { color: #FFFFFF; }
-.product-brand-blue { background: #1668DC; color: #FFFFFF; padding: 12px 16px 12px 4px; border-radius: 12px; overflow: hidden; }
+.product-brand-blue { background: #1668DC; color: #FFFFFF; padding: 12px 16px 12px 4px; border-radius: var(--r-xl); overflow: hidden; }
 .product-brand-symbol { display: block; flex: 0 0 auto; width: 64px; height: 64px; object-fit: contain; }
 .product-brand-copy { min-width: 0; }
 .product-brand-wordmark { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .product-brand .product-brand-name,
-.product-brand-english { font-size: 28px; font-weight: calc(750 - var(--font-weight-compensation)); line-height: 1.2; letter-spacing: -.6px; }
+.product-brand-english { font-size: var(--fs-statXl); font-weight: calc(750 - var(--font-weight-compensation)); line-height: 1.2; letter-spacing: -.6px; }
 .product-brand .product-brand-name { letter-spacing: 1px; }
-.product-brand-separator { font-size: 24px; font-weight: calc(700 - var(--font-weight-compensation)); }
-.product-brand-description { display: block; margin-top: 5px; font-size: 13px; letter-spacing: 2px; line-height: 1.4; white-space: nowrap; }
+.product-brand-separator { font-size: var(--fs-stat); font-weight: calc(700 - var(--font-weight-compensation)); }
+.product-brand-description { display: block; margin-top: 5px; font-size: var(--fs-body); letter-spacing: 2px; line-height: 1.4; white-space: nowrap; }
 /* 窄侧栏另排无描述语组合，维持可读字号和方形图标比例。 */
 .product-brand-compact { gap: 4px; }
 .product-brand-compact .product-brand-symbol { width: 48px; height: 48px; }
 .product-brand-compact .product-brand-wordmark { flex-wrap: wrap; column-gap: 5px; row-gap: 0; }
-.product-brand-compact .product-brand-english { flex-basis: 100%; font-size: 18px; }
-.product-brand-compact .product-brand-name { font-size: 16px; line-height: 1.4; }
+.product-brand-compact .product-brand-english { flex-basis: 100%; font-size: var(--fs-h2); }
+.product-brand-compact .product-brand-name { font-size: var(--fs-title); line-height: 1.4; }
 .product-brand-compact .product-brand-separator { display: none; }
 @media (max-width: 600px) {
   .onboarding .product-brand { gap: 4px; }
   .onboarding .product-brand-blue { padding: 4px 8px 4px 0; }
   .onboarding .product-brand-symbol { width: 48px; height: 48px; }
   .onboarding .product-brand-english,
-  .onboarding .product-brand-name { font-size: 20px; }
-  .onboarding .product-brand-separator { font-size: 18px; }
+  .onboarding .product-brand-name { font-size: var(--fs-h2); }
+  .onboarding .product-brand-separator { font-size: var(--fs-h2); }
   .onboarding .product-brand-description { display: none; }
 }
 .auth-brand { margin-bottom: 24px; }

@@ -60,6 +60,8 @@ public class ConversationStore {
      */
     private final PermissionResolver permissionResolver;
     private final ObjectMapper mapper = new ObjectMapper();
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.DagScheduler scheduler;
 
     public ConversationStore(AgentConversationRepository conversationRepository,
                              AgentMessageRepository messageRepository,
@@ -140,10 +142,15 @@ public class ConversationStore {
 
     /** 工作状态来自持久化任务与最近一条消息，不把“没有待确认”误读成已完成。 */
     static String conversationStatus(List<AgentTask> tasks, AgentMessage latest) {
+        if(latest!=null && java.util.Set.of("STOPPING","NEEDS_RECONCILE","REVIEW_REQUIRED").contains(java.util.Objects.toString(latest.getExecutionState(),""))) return latest.getExecutionState();
         for (String status : List.of(AgentTask.RUNNING, AgentTask.WAITING_INPUT, AgentTask.PENDING_CONFIRM)) {
             if (tasks.stream().anyMatch(t -> status.equals(t.getStatus()))) return status;
         }
         if (latest == null || !AgentMessage.ROLE_ASSISTANT.equals(latest.getRole())) return "READY";
+        if ("RUNNING".equals(latest.getExecutionState())) return "RUNNING";
+        if ("WAITING_INPUT".equals(latest.getExecutionState())) return "WAITING_INPUT";
+        if ("WAITING_CONFIRM".equals(latest.getExecutionState())) return "PENDING_CONFIRM";
+        if (latest.getExecutionState() != null && List.of("FAILED", "PARTIAL", "CANCELLED").contains(latest.getExecutionState())) return latest.getExecutionState();
         if (!tasks.isEmpty()) {
             AgentTask task = tasks.getFirst();
             if (task.getCreatedAt() != null && latest.getCreatedAt() != null
@@ -374,8 +381,17 @@ public class ConversationStore {
         List<Map<String, Object>> records = new ArrayList<>();
         for (AgentMessage m : content) {
             Map<String, Object> vo = toVo(m);
+            if (m.getRunId()!=null && AgentMessage.ROLE_ASSISTANT.equals(m.getRole())) {
+                try {
+                    Map<String,Object> run=scheduler.view(m.getRunId(),ctx);
+                    vo.put("run",run); vo.put("executionState",run.get("status"));
+                } catch(BizException denied) {
+                    vo.put("runUnavailable",true); vo.put("content","该协作任务所需权限已变化，请基于当前可访问资料重新发起。");
+                    for(String key:List.of("references","toolCalls","thinking","thinkingNotes","artifacts")) vo.put(key,List.of());
+                }
+            }
             if (AgentMessage.ROLE_ASSISTANT.equals(m.getRole()) && m.getStreamId() != null) {
-                AgentTask t = taskByStream.get(m.getStreamId());
+                AgentTask t = m.getRunId()==null ? taskByStream.get(m.getStreamId()) : null;
                 if (t != null) {
                     attachTaskCard(vo, t);
                     if (List.of(AgentTask.SUCCESS, AgentTask.FAILED, AgentTask.PARTIAL, AgentTask.CANCELLED).contains(t.getStatus())) {
@@ -536,6 +552,13 @@ public class ConversationStore {
         }
     }
 
+    @Transactional
+    public void saveExecutionState(AgentMessage message, String state) {
+        if (state == null) return;
+        message.setExecutionState(state);
+        messageRepository.save(message);
+    }
+
     private Map<String, Object> toVo(AgentMessage m) {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", m.getId());
@@ -545,6 +568,7 @@ public class ConversationStore {
         vo.put("sensitivity", m.getSensitivity());
         vo.put("streamId", m.getStreamId());
         vo.put("provider", m.getProvider());
+        vo.put("executionState", m.getExecutionState());
         vo.put("durationMs", m.getDurationMs());
         vo.put("createdAt", m.getCreatedAt());
         // 读侧统一走 readJsonList：容忍 H2 的字符串包装，且解析失败留 warn（不再静默变空数组）

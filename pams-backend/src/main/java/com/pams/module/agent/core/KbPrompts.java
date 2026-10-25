@@ -20,6 +20,32 @@ public final class KbPrompts {
 
     private KbPrompts() {}
 
+    /** Select once, then use this exact ordered set for both model input and citation validation. */
+    public static List<ScoredChunk> selectFragments(List<ScoredChunk> candidates) {
+        java.util.ArrayList<ScoredChunk> selected = new java.util.ArrayList<>();
+        int total = 0;
+        for (ScoredChunk c : candidates) {
+            String content = c.content() == null ? "" : c.content().strip();
+            if (content.isEmpty()) continue;
+            int length = Math.min(content.length(),MAX_FRAGMENT_CHARS);
+            if (selected.size() == MAX_FRAGMENTS || total + length > MAX_TOTAL_CHARS) break;
+            String marker="…（片段已截断）";
+            String actual=content.length()>MAX_FRAGMENT_CHARS ? content.substring(0,MAX_FRAGMENT_CHARS-marker.length())+marker : content;
+            selected.add(new ScoredChunk(c.id(),c.sourceType(),c.sourceId(),c.sourceKey(),c.seq(),c.title(),c.path(),actual,c.tier(),c.sensitivity(),c.asOf(),c.score())); total += length;
+        }
+        return List.copyOf(selected);
+    }
+
+    public static java.util.Map<String,Object> fragmentMetadata(ScoredChunk c) {
+        var out=new java.util.LinkedHashMap<String,Object>();
+        out.put("chunkId",c.id());out.put("sourceKey",c.sourceKey());out.put("sourceType",c.sourceType());out.put("sourceId",c.sourceId());out.put("path",c.path());
+        out.put("asOf",c.asOf()==null?null:c.asOf().toString());out.put("chars",c.content().length());out.put("start",0);
+        boolean truncated=c.content().endsWith("…（片段已截断）");out.put("truncated",truncated);out.put("end",c.content().length()-(truncated?"…（片段已截断）".length():0));
+        try {out.put("sha256",java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(c.content().getBytes(java.nio.charset.StandardCharsets.UTF_8))));}
+        catch(java.security.NoSuchAlgorithmException impossible) {throw new IllegalStateException(impossible);}
+        return out;
+    }
+
     /** 单片段进 prompt 的最大字符数（超出截断并标注） */
     public static final int MAX_FRAGMENT_CHARS = 600;
     /** 所有片段合计的最大字符数 */

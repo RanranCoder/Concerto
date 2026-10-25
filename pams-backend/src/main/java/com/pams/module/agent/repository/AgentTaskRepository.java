@@ -14,6 +14,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
+    @Transactional @Modifying(clearAutomatically=true,flushAutomatically=true)
+    @Query("update AgentTask t set t.status=:to,t.confirmedAt=:ts,t.executionOwner=:owner,t.rowVersion=t.rowVersion+1 where t.id=:id and t.status=:from")
+    int claimOwned(@Param("id")Long id,@Param("from")String from,@Param("to")String to,@Param("ts")LocalDateTime ts,@Param("owner")String owner);
+    List<AgentTask> findByRunIdOrderByIdAsc(Long runId);
+    List<AgentTask> findByStreamIdAndUserIdOrderByIdAsc(String streamId,Long userId);
 
     Optional<AgentTask> findByIdAndUserId(Long id, Long userId);
 
@@ -45,8 +50,8 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query("update AgentTask t set t.status = 'CANCELLED', t.finishedAt = :ts "
-            + "where t.id = :id and t.userId = :userId and t.status in ('PENDING_CONFIRM', 'WAITING_INPUT')")
+    @Query("update AgentTask t set t.status = 'CANCELLED', t.finishedAt = :ts, t.rowVersion = t.rowVersion + 1 "
+            + "where t.id = :id and t.userId = :userId and t.status in ('PENDING_CONFIRM', 'WAITING_INPUT', 'REVIEW_REQUIRED')")
     int cancelPending(@Param("id") Long id, @Param("userId") Long userId, @Param("ts") LocalDateTime ts);
 
     List<AgentTask> findByUserIdAndConversationIdInOrderByIdDesc(Long userId, List<Long> conversationIds);
@@ -61,9 +66,9 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
      * 无论调用方（Controller / 编排器）有没有事务，语义都一致；
      * 且抢占<b>立即独立提交</b>，不会被外层事务的回滚连带撤销。
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query("update AgentTask t set t.status = :to, t.confirmedAt = :ts where t.id = :id and t.status = :from")
+    @Query("update AgentTask t set t.status = :to, t.confirmedAt = :ts, t.rowVersion = t.rowVersion + 1 where t.id = :id and t.status = :from")
     int claimForRun(@Param("id") Long id, @Param("from") String from, @Param("to") String to,
                     @Param("ts") LocalDateTime ts);
 
@@ -72,9 +77,9 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
      * 独立提交，保证确认后的 {@code findById} 能读到终态，
      * 且不受调用方事务回滚/rollback-only 状态的影响。
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
-    @Query("update AgentTask t set t.status = :status, t.resultJson = :result, t.finishedAt = :ts where t.id = :id")
+    @Query("update AgentTask t set t.status = :status, t.resultJson = :result, t.finishedAt = :ts, t.rowVersion = t.rowVersion + 1 where t.id = :id")
     void finish(@Param("id") Long id, @Param("status") String status,
                 @Param("result") String result, @Param("ts") LocalDateTime ts);
 }

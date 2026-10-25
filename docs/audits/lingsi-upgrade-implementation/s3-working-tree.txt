@@ -1,0 +1,140 @@
+ M docs/design/README.md
+ M docs/design/superdoc-ribbon/superdoc-dark.png
+ M docs/design/superdoc-ribbon/superdoc-editor.png
+ M docs/design/superdoc-ribbon/superdoc-mobile.png
+ M docs/design/superdoc-ribbon/superdoc-preview.png
+ M docs/design/superdoc-ribbon/superdoc-ribbon-mobile.png
+ M docs/design/superdoc-ribbon/superdoc-saved.png
+ M docs/ui-v6-lingsi-implementation/citation-audit-fixed.png
+ M docs/ui-v6-lingsi-implementation/completed-dark.png
+ M docs/ui-v6-lingsi-implementation/conversation-mobile-dark.png
+ M docs/ui-v6-lingsi-implementation/input-needed-light.png
+ M docs/ui-v6-lingsi-implementation/plan-preview-light.png
+ M docs/ui-v6-lingsi-implementation/preview-mobile.png
+ M docs/ui-v6-lingsi-implementation/reasoning-expanded-fixed.png
+ M docs/ui-v6-lingsi-implementation/scroll-indicator-dark-phone.png
+ M docs/ui-v6-lingsi-implementation/scroll-indicator-light-desktop.png
+ M docs/ui-v6-lingsi-implementation/source-light.png
+ M docs/ui-v6-lingsi-implementation/welcome-light.png
+ M pams-backend/src/main/java/com/pams/module/agent/config/AgentProperties.java
+ M pams-backend/src/main/java/com/pams/module/agent/controller/AgentController.java
+ M pams-backend/src/main/java/com/pams/module/agent/controller/AgentTeamController.java
+ M pams-backend/src/main/java/com/pams/module/agent/core/KbPrompts.java
+ M pams-backend/src/main/java/com/pams/module/agent/core/ToolContext.java
+ M pams-backend/src/main/java/com/pams/module/agent/core/ToolRegistry.java
+ M pams-backend/src/main/java/com/pams/module/agent/core/ToolResult.java
+ M pams-backend/src/main/java/com/pams/module/agent/core/WriteAgentTool.java
+ M pams-backend/src/main/java/com/pams/module/agent/entity/AgentMessage.java
+ M pams-backend/src/main/java/com/pams/module/agent/entity/AgentRun.java
+ M pams-backend/src/main/java/com/pams/module/agent/entity/AgentStep.java
+ M pams-backend/src/main/java/com/pams/module/agent/entity/AgentTask.java
+ M pams-backend/src/main/java/com/pams/module/agent/llm/DeepSeekProvider.java
+ M pams-backend/src/main/java/com/pams/module/agent/llm/StubProvider.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/AgentRunService.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/BenchmarkService.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/Blackboard.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/CoordinatorAgent.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/SpecialistAgent.java
+ M pams-backend/src/main/java/com/pams/module/agent/orchestration/SpecialistExecutor.java
+ M pams-backend/src/main/java/com/pams/module/agent/registry/AgentCatalog.java
+ M pams-backend/src/main/java/com/pams/module/agent/registry/AgentDefinitionSeeder.java
+ M pams-backend/src/main/java/com/pams/module/agent/registry/AgentRegistry.java
+ M pams-backend/src/main/java/com/pams/module/agent/repository/AgentMessageRepository.java
+ M pams-backend/src/main/java/com/pams/module/agent/repository/AgentRunRepository.java
+ M pams-backend/src/main/java/com/pams/module/agent/repository/AgentStepRepository.java
+ M pams-backend/src/main/java/com/pams/module/agent/repository/AgentTaskRepository.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/AgentJson.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/AgentLlmCaller.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/AgentOrchestrator.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/ConversationStore.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/KbPipeline.java
+ M pams-backend/src/main/java/com/pams/module/agent/service/TaskGate.java
+ M pams-backend/src/main/java/com/pams/module/agent/stream/AgentEventPublisher.java
+ M pams-backend/src/main/java/com/pams/module/agent/stream/AgentStreamEvent.java
+ M pams-backend/src/main/java/com/pams/module/agent/tool/CreateActivityTool.java
+ M pams-backend/src/main/java/com/pams/module/archive/controller/MaterialController.java
+ M pams-backend/src/main/java/com/pams/module/archive/service/MaterialService.java
+ M pams-backend/src/main/java/com/pams/module/content/controller/ArticleController.java
+ M pams-backend/src/main/java/com/pams/module/content/service/ArticleService.java
+ M pams-backend/src/main/java/com/pams/module/knowledge/entity/KbRetrievalLog.java
+ M pams-backend/src/main/java/com/pams/module/permission/service/TenantAuthorizationService.java
+ M pams-backend/src/test/java/com/pams/module/agent/orchestration/BenchmarkServiceTest.java
+ M pams-backend/src/test/java/com/pams/module/agent/orchestration/MultiAgentBaseTest.java
+ M pams-backend/src/test/java/com/pams/module/agent/service/AgentOrchestratorTurnSensitivityTest.java
+ M pams-backend/src/test/java/com/pams/module/agent/service/TaskGateArtifactsTest.java
+ M pams-backend/src/test/java/com/pams/module/agent/stream/AgentEventPublisherTest.java
+ M pams-web/e2e/lingsi-v6.spec.ts
+ M pams-web/package.json
+ M pams-web/src/api/agent.ts
+ M pams-web/src/api/article.ts
+ M pams-web/src/api/material.ts
+ M pams-web/src/components/HeaderStaff.tsx
+ M pams-web/src/components/agent/LingsiComposer.tsx
+ M pams-web/src/components/agent/LingsiEntityPanel.tsx
+ M pams-web/src/components/agent/LingsiMessageBody.tsx
+ M pams-web/src/components/agent/LingsiRefs.tsx
+ M pams-web/src/components/agent/LingsiSources.tsx
+ M pams-web/src/components/agent/LingsiTeamPanel.tsx
+ M pams-web/src/components/word/SuperDocRibbon.tsx
+ M pams-web/src/components/word/superdoc.css
+ M pams-web/src/hooks/useWebSocket.ts
+ M pams-web/src/pages/agent/AgentHome.tsx
+ M pams-web/src/pages/archive/AnnouncementList.tsx
+ M pams-web/src/pages/archive/MaterialList.tsx
+ M pams-web/src/pages/content/ArticleList.tsx
+ M pams-web/src/stores/agent.lifecycle.test.ts
+ M pams-web/src/stores/agent.ts
+ M pams-web/src/styles/activity-v6.css
+ M pams-web/src/styles/brand.css
+ M pams-web/src/styles/business-v6.css
+ M pams-web/src/styles/lingsi-v6.css
+ M pams-web/src/styles/refinement.css
+ M pams-web/src/styles/tokens.ts
+ M pams-web/src/utils/agentTask.ts
+ M pams-web/src/utils/thinking.test.ts
+?? docs/audits/lingsi-upgrade-implementation/
+?? "docs/design/PAMS-\347\201\265\346\200\235Agent\345\215\207\347\272\247\344\274\230\345\214\226\346\226\271\346\241\210.md"
+?? "docs/design/PAMS-\347\201\265\346\200\235Agent\345\215\207\347\272\247\350\220\275\345\234\260\350\256\260\345\275\225.md"
+?? docs/ui-v6-lingsi-implementation/s2-durable-tasks-dark-mobile.png
+?? docs/ui-v6-lingsi-implementation/s2-durable-tasks-light.png
+?? docs/ui-v6-lingsi-implementation/s3-review-blocked-dark-mobile.png
+?? docs/ui-v6-lingsi-implementation/s3-review-blocked-light.png
+?? pams-backend/src/main/java/com/pams/module/agent/controller/AgentRuntimeController.java
+?? pams-backend/src/main/java/com/pams/module/agent/core/BusinessLinks.java
+?? pams-backend/src/main/java/com/pams/module/agent/entity/AgentRequest.java
+?? pams-backend/src/main/java/com/pams/module/agent/entity/AgentReviewIssue.java
+?? pams-backend/src/main/java/com/pams/module/agent/entity/AgentRunEvent.java
+?? pams-backend/src/main/java/com/pams/module/agent/entity/AgentWorkItem.java
+?? pams-backend/src/main/java/com/pams/module/agent/llm/LlmCancellation.java
+?? pams-backend/src/main/java/com/pams/module/agent/orchestration/DagScheduler.java
+?? pams-backend/src/main/java/com/pams/module/agent/orchestration/RuntimeIdentity.java
+?? pams-backend/src/main/java/com/pams/module/agent/orchestration/WorkItemState.java
+?? pams-backend/src/main/java/com/pams/module/agent/repository/AgentRequestRepository.java
+?? pams-backend/src/main/java/com/pams/module/agent/repository/AgentReviewIssueRepository.java
+?? pams-backend/src/main/java/com/pams/module/agent/repository/AgentRunEventRepository.java
+?? pams-backend/src/main/java/com/pams/module/agent/repository/AgentWorkItemRepository.java
+?? pams-backend/src/main/java/com/pams/module/agent/service/AgentRequestService.java
+?? pams-backend/src/main/java/com/pams/module/agent/service/PlanReviewService.java
+?? pams-backend/src/main/java/com/pams/module/agent/service/ToolOutcomeHandler.java
+?? pams-backend/src/main/java/com/pams/module/agent/stream/AgentRunOutbox.java
+?? pams-backend/src/main/resources/db/migration/V42__agent_execution_state.sql
+?? pams-backend/src/main/resources/db/migration/V43__agent_work_items.sql
+?? pams-backend/src/main/resources/db/migration/V44__agent_reliable_runtime.sql
+?? pams-backend/src/test/java/com/pams/module/agent/core/BusinessLinksTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/core/KbPromptBudgetTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/llm/LlmCancellationTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/AgentDefinitionUpgradeTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/AgentScopeTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/DagSchedulerTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/SpecialistExecutorContractTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/SpecialistLoopTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/SpecialistPipelineTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/orchestration/WorkItemMigrationTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/service/PlanReviewServiceTest.java
+?? pams-backend/src/test/java/com/pams/module/agent/stream/AgentRunOutboxTest.java
+?? pams-web/scripts/test.mjs
+?? pams-web/src/components/agent/LingsiTeamPanel.test.tsx
+?? pams-web/src/components/agent/LingsiWorkItems.tsx
+?? pams-web/src/utils/agentLinks.test.ts
+?? pams-web/src/utils/agentLinks.ts
+?? video/

@@ -62,6 +62,8 @@ select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   animation: pams-letter-reveal 90ms cubic-bezier(.215,.61,.355,1) both;
 }
 .pams-stream-pending { visibility: hidden; }
+/* ResizeObserver supplies the measured height inline; CSS also owns a safe initial value. */
+.lingsi-scroll { --lingsi-turn-min-height: 0px; }
 .lingsi-turn-wrap[data-scroll-anchor='true']:last-child { min-height: var(--lingsi-turn-min-height, 0px); }
 .lingsi-composer-dock { position: relative; flex-shrink: 0; min-width: 0; }
 .lingsi-scroll-bottom {

@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import FormSurface from '@/components/form/FormSurface'
 import { RecordsNav } from '@/components/records/RecordsLayout'
 import { useCallback, useEffect, useState } from 'react'
@@ -49,6 +50,11 @@ export default function AnnouncementList() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<AnnouncementFormValues>()
   const [detail, setDetail] = useState<AnnouncementVO | null>(null)
+  const [params] = useSearchParams()
+  const targetId = Number(params.get('id')) || undefined
+  useEffect(() => {
+    if (targetId) setDetail(data.find(item => item.id === targetId) ?? null)
+  }, [targetId, data])
 
   // 已读状态已落库（PRD-v5 F4），随账号走、跨设备一致；未登录兜底为空集合
   const loadReadIds = useCallback(() => {

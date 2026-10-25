@@ -39,6 +39,8 @@ export default function AgentHome() {
   const messagesLoading = useAgentStore((s) => s.messagesLoading)
   const userTexts = useAgentStore((s) => s.userTexts)
   const timeline = useAgentStore((s) => s.timeline)
+  const activeRequestId = useAgentStore((s) => s.activeRequestId)
+  const stopping = useAgentStore((s) => s.stopping)
   const thinking = useAgentStore((s) => s.thinking)
   const activeStreamId = useAgentStore((s) => s.activeStreamId)
   const pendingTaskCount = useAgentStore((s) => s.pendingTaskCount)
@@ -107,9 +109,16 @@ export default function AgentHome() {
 
   const conversation = conversations.find(c => c.id === currentConversationId)
   const lastOutcome = outcomes.at(-1)
-  const currentStatus: AgentConversationStatus = thinking ? 'RUNNING'
-    : outcomes.some(o => o.form) ? 'WAITING_INPUT'
-    : outcomes.some(o => o.plan) ? 'PENDING_CONFIRM'
+  const currentStatus: AgentConversationStatus = stopping || lastOutcome?.executionState==='STOPPING' ? 'STOPPING'
+    : lastOutcome?.executionState==='NEEDS_RECONCILE' ? 'NEEDS_RECONCILE'
+    : lastOutcome?.executionState==='REVIEW_REQUIRED' ? 'REVIEW_REQUIRED'
+    : thinking ? 'RUNNING'
+    : outcomes.some(o => o.run?.actions.some(a => a.status === 'WAITING_INPUT') || (!o.run && o.form)) ? 'WAITING_INPUT'
+    : outcomes.some(o => o.run?.actions.some(a => a.status === 'PENDING_CONFIRM') || (!o.run && o.plan)) ? 'PENDING_CONFIRM'
+    : lastOutcome?.run?.status === 'RUNNING' ? 'RUNNING'
+    : lastOutcome?.executionState === 'FAILED' ? 'FAILED'
+    : lastOutcome?.executionState === 'PARTIAL' ? 'PARTIAL'
+    : lastOutcome?.executionState === 'CANCELLED' ? 'STOPPED'
     : lastOutcome?.notice?.level === 'failed' ? 'FAILED'
     : lastOutcome?.notice?.level === 'partial' ? 'PARTIAL'
     : lastOutcome?.notice?.level === 'info' ? 'CANCELLED'
@@ -130,6 +139,14 @@ export default function AgentHome() {
     [outcomes, userTexts],
   )
 
+  // A history load starts at the newest message, regardless of the previous scroll position.
+  // Run before paint and only on entry/load completion; subsequent updates respect manual reading.
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el || messagesLoading || currentConversationId === null || anchoredTurn !== null) return
+    el.scrollTo({ top:el.scrollHeight, behavior:'instant' })
+  }, [currentConversationId, messagesLoading, anchoredTurn])
+
   // 自动滚到底（流式过程中持续跟随）—— 但只在用户本来就在底部附近时才跟随。
   // 字符流会高频触发本 effect，无条件置底会把"往上翻看过程"的用户一次次拽回来。
   useEffect(() => {
@@ -147,17 +164,42 @@ export default function AgentHome() {
     if (!el || alignedTurn.current === anchoredTurn) return
     const turn = el.querySelector<HTMLElement>('[data-scroll-anchor="true"]')
     if (!turn) return
-    const align = () => {
+    const targetTop = () => {
       const style = getComputedStyle(el)
       el.style.setProperty('--lingsi-turn-min-height', `${Math.max(0, el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom))}px`)
-      const top = el.scrollTop + turn.getBoundingClientRect().top - el.getBoundingClientRect().top - parseFloat(style.paddingTop)
-      el.scrollTo({top, behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'})
+      return el.scrollTop + turn.getBoundingClientRect().top - el.getBoundingClientRect().top - parseFloat(style.paddingTop)
     }
+    const align = () => el.scrollTo({top:targetTop(), behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'})
+    // Earlier action cards can collapse while a smooth scroll is in flight.
+    // Settle against the real final layout once, then relinquish scroll control.
+    let interrupted = false
+    const interrupt = () => { interrupted = true; el.removeEventListener('scrollend', settle) }
+    const settle = () => {
+      if (interrupted) return
+      const top = targetTop()
+      if (el.scrollTop > 0 || top < 2) el.scrollTo({top,behavior:'instant'})
+      interrupt()
+    }
+    const interruptKey = (event: KeyboardEvent) => {
+      if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) interrupt()
+    }
+    el.addEventListener('scrollend', settle, { once:true })
+    el.addEventListener('wheel', interrupt, { passive:true })
+    el.addEventListener('touchstart', interrupt, { passive:true })
+    el.addEventListener('pointerdown', interrupt)
+    el.addEventListener('keydown', interruptKey)
     align()
     // The composer resets its textarea height after sending. Recheck once in
     // the next frame so the enlarged phone viewport cannot clamp the target.
     const frame = requestAnimationFrame(() => { align(); alignedTurn.current = anchoredTurn })
-    return () => cancelAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(frame)
+      interrupt()
+      el.removeEventListener('wheel', interrupt)
+      el.removeEventListener('touchstart', interrupt)
+      el.removeEventListener('pointerdown', interrupt)
+      el.removeEventListener('keydown', interruptKey)
+    }
   }, [anchoredTurn, rows.length])
 
   const handleSend = useCallback(
@@ -377,7 +419,7 @@ export default function AgentHome() {
         <LingsiScrollToBottom scrollRef={scrollRef} generating={thinking || Boolean(lastOutcome?.streaming)} />
         <LingsiComposer
           busy={thinking}
-          canStop={Boolean(activeStreamId)}
+          canStop={Boolean(activeRequestId || activeStreamId) && !stopping}
           disabled={messagesLoading}
           mode={mode}
           onModeChange={(m) => void setMode(m)}

@@ -61,8 +61,12 @@ class AgentOrchestratorTurnSensitivityTest {
 
     @BeforeEach
     void resetScript() {
+        com.pams.common.OrgContext.set(1L);
         llm.reset();
     }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearTenant() { com.pams.common.OrgContext.clear(); }
 
     /* ------------------------------------------------------------------ 用例 */
 

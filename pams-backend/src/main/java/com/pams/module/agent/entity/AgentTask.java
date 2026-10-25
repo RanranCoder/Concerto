@@ -40,6 +40,14 @@ public class AgentTask implements OrgScoped {
 
     @Column(name = "conversation_id")
     private Long conversationId;
+    private Long runId;
+    private Long workItemId;
+    private Integer workItemRevision;
+    @Version
+    private long rowVersion;
+    @Column(nullable = false, length = 12)
+    private String dataSensitivity = "NORMAL";
+    private String executionOwner;
 
     /**
      * 产生本任务的过程流 ID（V26 历史恢复）。
@@ -62,9 +70,11 @@ public class AgentTask implements OrgScoped {
     private String summary;
 
     @Column(name = "plan_json", columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String planJson;
 
     @Column(name = "result_json", columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String resultJson;
 
     @Column(name = "confirm_token", length = 64)

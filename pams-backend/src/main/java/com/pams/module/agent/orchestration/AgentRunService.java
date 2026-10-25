@@ -26,6 +26,15 @@ public class AgentRunService {
 
     private final AgentRunRepository runRepository;
     private final AgentStepRepository stepRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.repository.AgentMessageRepository messages;
+    @org.springframework.beans.factory.annotation.Autowired
+    private WorkItemState workItems;
+
+    public String actionSettled(com.pams.module.agent.entity.AgentTask task, String status) {
+        if (task.getWorkItemId() != null) return workItems.settle(task);
+        return actionSettled(task.getRunId(),task.getUserId(),task.getStreamId(),status);
+    }
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AgentRunService(AgentRunRepository runRepository,
@@ -75,9 +84,26 @@ public class AgentRunService {
         AgentRun run = runRepository.findById(runId)
                 .orElseThrow(() -> new BizException(4004, "协作 Run 不存在"));
         run.setStatus(status);
-        run.setFinishedAt(LocalDateTime.now());
+        run.setFinishedAt(status.startsWith("WAITING_") || "RUNNING".equals(status) ? null : LocalDateTime.now());
         run.setBlackboardJson(toJson(blackboard));
         return runRepository.save(run);
+    }
+
+    /** Settle the current gated step without pretending queued downstream work has executed. */
+    @Transactional
+    public String actionSettled(Long runId, Long userId, String streamId, String actionStatus) {
+        AgentRun run = getOwned(runId,userId);
+        Blackboard bb;
+        try { bb = objectMapper.readValue(run.getBlackboardJson(),Blackboard.class); }
+        catch (Exception e) { run.setStatus("PARTIAL"); runRepository.save(run); return "PARTIAL"; }
+        for (var item : bb.getPlan()) if (item.getStatus().startsWith("WAITING_")) item.setStatus(actionStatus);
+        boolean queued = bb.getPlan().stream().anyMatch(item -> !com.pams.module.agent.registry.AgentCatalog.REVIEWER.equals(item.getAgent()) && "QUEUED".equals(item.getStatus()));
+        String state = "SUCCESS".equals(actionStatus) ? queued ? "PARTIAL" : "SUCCESS" : actionStatus;
+        run.setStatus(state); run.setFinishedAt(LocalDateTime.now()); run.setBlackboardJson(toJson(bb)); runRepository.save(run);
+        if (streamId != null) for (var message : messages.findByStreamIdAndRole(streamId,"ASSISTANT")) {
+            message.setExecutionState(state); messages.save(message);
+        }
+        return state;
     }
 
     /** 归属校验：只能看自己的 Run。 */

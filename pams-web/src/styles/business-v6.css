@@ -10,9 +10,9 @@
 .sidebar-brand .product-brand-symbol { width: 44px; height: 44px; }
 .sidebar-brand .product-brand-wordmark { gap: 3px; }
 .sidebar-brand .product-brand-english,
-.sidebar-brand .product-brand-name { font-size: 16px; }
-.sidebar-brand .product-brand-separator { font-size: 14px; }
-.sidebar-brand .product-brand-description { font-size: 9px; letter-spacing: 0; margin-top: 4px; }
+.sidebar-brand .product-brand-name { font-size: var(--fs-title); }
+.sidebar-brand .product-brand-separator { font-size: var(--fs-body-lg); }
+.sidebar-brand .product-brand-description { font-size: var(--fs-caption); letter-spacing: 0; margin-top: 4px; white-space: normal; overflow-wrap: anywhere; }
 .sidebar-organization { padding: 12px 12px 18px; margin-bottom: 7px; border-block: 1px solid var(--sider-border); flex-shrink: 0; }
 .sidebar-organization small { display: block; font-size: var(--fs-caption); color: var(--sider-text-dim); }
 .sidebar-organization strong { display: block; margin-top: 5px; font-size: var(--fs-body); font-weight: calc(500 - var(--font-weight-compensation)); overflow-wrap: anywhere; }

@@ -50,6 +50,8 @@ public class AgentController {
     private final ToolRegistry registry;
     private final AgentEventPublisher publisher;
     private final PolicyGuard policyGuard;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.orchestration.WorkItemState workItems;
 
     public AgentController(AgentOrchestrator orchestrator, ConversationStore conversations,
                            TaskGate taskGate, ToolRegistry registry,
@@ -89,7 +91,7 @@ public class AgentController {
         boolean collab = !(collabRaw instanceof Boolean) || (Boolean) collabRaw;
 
         return Result.ok(orchestrator.chatSync(message, conversationId,
-                ctx(user, conversationId, str(body.get("mode"))), extractRefs(body.get("refs")), collab));
+                ctx(user, conversationId, str(body.get("mode"))).withRequestId(str(body.get("requestId"))), extractRefs(body.get("refs")), collab));
     }
 
     /** 中止一次进行中的回答（编排器在下一个阶段边界退出） */
@@ -98,6 +100,8 @@ public class AgentController {
     public Result<Map<String, Object>> abort(@PathVariable String streamId,
                                             @AuthenticationPrincipal LoginUser user) {
         boolean aborted = publisher.abortOwned(streamId, user == null ? null : user.getId());
+        if(aborted) taskGate.cancelUnsubmitted(streamId,user.getId());
+        if(aborted) requests.byStream(streamId).filter(r->r.getRunId()!=null).ifPresent(r->workItems.cancel(r.getRunId(),user.getId()));
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("streamId", streamId);
         r.put("aborted", aborted);
@@ -122,13 +126,7 @@ public class AgentController {
     public Result<Map<String, Object>> stream(@PathVariable String streamId,
                                              @RequestParam(defaultValue = "0") int since,
                                              @AuthenticationPrincipal LoginUser user) {
-        List<AgentStreamEvent> events = publisher.since(streamId, since,
-                user == null ? null : user.getId());
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("streamId", streamId);
-        r.put("since", since);
-        r.put("events", events);
-        return Result.ok(r);
+        return Result.ok(publisher.replay(streamId,since,user.getId()));
     }
 
     /* ================================================================= 会话 */

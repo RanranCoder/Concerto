@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom'
+import { getArticle } from '@/api/article'
 import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import ArticleDocument from '@/components/records/ArticleDocument'
 import { RecordsName, RecordsSummary } from '@/components/records/RecordsLayout'
@@ -94,6 +96,14 @@ export default function ArticleList() {
   const [form] = Form.useForm<ArticleFormValues>()
 
   const [preview, setPreview] = useState<ArticleVO | null>(null)
+  const [params] = useSearchParams()
+  const targetId = Number(params.get('id')) || undefined
+  useEffect(() => {
+    if (!targetId) return
+    let live = true
+    getArticle(targetId).then(article => { if (live) setPreview(article) }).catch(() => {})
+    return () => { live = false }
+  }, [targetId])
   const [reviewTarget, setReviewTarget] = useState<ArticleVO | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [reviewForm] = Form.useForm<ReviewFormValues>()

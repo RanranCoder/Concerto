@@ -37,6 +37,7 @@ database/materials.csv
 # 本地数据库备份与临时构建（含真实数据，勿提交）
 .backups/
 .build/
+.acl-repair/
 
 # 数据抽取临时产物
 extract_stdout.txt

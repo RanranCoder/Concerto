@@ -1,0 +1,32 @@
+{
+ "name": "cream-cute",
+ "from": "cases/pams-cat-yarn-30s (riso variant, made for this film)",
+ "mood": "warm cream desk under soft light, brand red yarn and sakura pink, rounded CJK type — a cute tabletop, not an interface",
+ "color": {
+  "ground": "#FAF3E8",
+  "deep": "#EFD9BE",
+  "card": "#FFFBF4",
+  "line": "#EADAC6",
+  "mute": "#98826C",
+  "ink": "#4A3428",
+  "accent": "#DE2910",
+  "accent2": "#FF8FAB"
+ },
+ "type": {
+  "display": {
+   "face": "Archivo",
+   "weight": 800,
+   "tracking": 0
+  },
+  "text": {
+   "face": "Instrument Sans",
+   "weight": 500,
+   "tracking": 0
+  },
+  "mono": {
+   "face": "Geist Mono",
+   "weight": 400,
+   "tracking": 0.02
+  }
+ }
+}

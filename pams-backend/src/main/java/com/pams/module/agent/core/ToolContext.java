@@ -48,6 +48,11 @@ public class ToolContext {
     private final Long conversationId;
     private final String streamId;
     private final String mode;
+    private Long runId;
+    private String requestId;
+    private Integer attempt;
+    private Long workItemId;
+    private Integer workItemRevision;
 
     public ToolContext(LoginUser loginUser, Collection<? extends GrantedAuthority> granted,
                        Long conversationId, String streamId) {
@@ -114,13 +119,40 @@ public class ToolContext {
      * （编排器第 148 行必然走 derive），写类工具重新可见——这是典型的 D11 第 ③ 类语义变更。
      */
     public ToolContext derive(Long conversationId, String streamId) {
-        return new ToolContext(loginUser, authorities, conversationId, streamId, mode);
+        return new ToolContext(loginUser, authorities, conversationId, streamId, mode).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt);
     }
 
     /** 换运行模式，其余字段原样保留 */
     public ToolContext withMode(String mode) {
-        return new ToolContext(loginUser, authorities, conversationId, streamId, normalizeMode(mode));
+        return new ToolContext(loginUser, authorities, conversationId, streamId, normalizeMode(mode)).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt);
     }
+
+    public Long getRunId() { return runId; }
+    public ToolContext withRunId(Long id) {
+        ToolContext copy = new ToolContext(loginUser, authorities, conversationId, streamId, mode);
+        copy.runId = id;
+        copy.requestId = requestId;
+        copy.attempt = attempt;
+        copy.workItemId = workItemId;
+        copy.workItemRevision = workItemRevision;
+        return copy;
+    }
+    public Long getWorkItemId() { return workItemId; }
+    public Integer getWorkItemRevision() { return workItemRevision; }
+    public ToolContext withWorkItem(Long id, Integer revision) {
+        ToolContext copy = withRunId(runId);
+        copy.workItemId = id;
+        copy.workItemRevision = revision;
+        return copy;
+    }
+    public ToolContext restrictTo(Set<String> ceiling) {
+        Set<String> permitted = authorities.stream().filter(ceiling::contains).collect(Collectors.toUnmodifiableSet());
+        return new ToolContext(loginUser,permitted,conversationId,streamId,mode).withRunId(runId).withWorkItem(workItemId,workItemRevision).withRequestId(requestId).withAttempt(attempt);
+    }
+    public Integer getAttempt() { return attempt; }
+    public ToolContext withAttempt(Integer value) { ToolContext copy=withRunId(runId); copy.attempt=value; return copy; }
+    public String getRequestId() { return requestId; }
+    public ToolContext withRequestId(String id) { ToolContext copy=withRunId(runId); copy.requestId=id; return copy; }
 
     /** 从当前 SecurityContext 构造（同步路径用；异步路径请显式传 loginUser 构造）。 */
     public static ToolContext current(Long conversationId, String streamId) {

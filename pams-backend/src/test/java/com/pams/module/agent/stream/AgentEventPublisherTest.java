@@ -11,6 +11,7 @@ import org.mockito.Mockito;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -140,5 +141,27 @@ class AgentEventPublisherTest {
                 .thenReturn(Optional.empty());
 
         assertThat(publisher.since("st_notexist", 0, 1L)).isEmpty();
+    }
+
+    @Test void capacityAndExpiryRemoveEveryStreamCacheAndDoNotResurrectUnknownStreams() {
+        var props=new AgentProperties();props.setStreamCacheMaxEntries(2);props.setStreamBufferSize(2);props.setStreamCacheTtlMs(1);
+        var bounded=new AgentEventPublisher(messaging,toolCallRepository,conversationRepository,props);
+        String first=bounded.newStream("bounded",1L);bounded.markAborted(first);
+        String second=bounded.newStream("bounded",1L);bounded.newStream("bounded",1L);
+        assertThat(bounded.cachedStreamCount()).isEqualTo(2);assertThat(bounded.nextSeq(first)).isZero();
+        @SuppressWarnings("unchecked") var times=(Map<String,Long>)org.springframework.test.util.ReflectionTestUtils.getField(bounded,"touched");
+        for(String id:List.copyOf(times.keySet())) {bounded.clear(id);times.put(id,0L);}
+        bounded.prune();assertThat(bounded.cachedStreamCount()).isZero();
+        bounded.publish("u",AgentStreamEvent.thinking(second,10,"late"));bounded.markAborted(second);
+        for(String field:List.of("buffers","counters","owners","authorizationVersions","aborted","identities","touched"))
+            assertThat((Map<?,?>)org.springframework.test.util.ReflectionTestUtils.getField(bounded,field)).as(field).isEmpty();
+    }
+    @Test void aTruncatedReplayRequestsASnapshotInsteadOfPretendingToBeComplete() {
+        var props=new AgentProperties();props.setStreamBufferSize(2);
+        var bounded=new AgentEventPublisher(messaging,toolCallRepository,conversationRepository,props);
+        String id=bounded.newStream("bounded",1L);
+        for(int i=0;i<4;i++) bounded.publish("u",AgentStreamEvent.thinking(id,bounded.nextSeq(id),"note"));
+        assertThat(bounded.replay(id,0,1L)).containsEntry("requiresSnapshot",true).containsEntry("lastSeq",4);
+        assertThat(bounded.replay(id,3,1L)).containsEntry("requiresSnapshot",false);
     }
 }

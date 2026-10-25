@@ -31,6 +31,7 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
         int created = 0;
         for (AgentCatalog.Def d : AgentCatalog.defaults()) {
             if (repository.existsByName(d.name())) {
+                repository.findByName(d.name()).ifPresent(existing -> upgradeUnmodifiedScope(existing,d));
                 order++;
                 continue;
             }
@@ -53,7 +54,7 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
     }
 
     private String toJson(java.util.List<String> scope) {
-        if (scope == null || scope.isEmpty()) {
+        if (scope == null) {
             return null;
         }
         StringBuilder sb = new StringBuilder("[");
@@ -64,5 +65,25 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
             sb.append('"').append(scope.get(i)).append('"');
         }
         return sb.append("]").toString();
+    }
+
+    /** Upgrade only known old defaults. Custom scopes and disabled definitions are preserved. */
+    private void upgradeUnmodifiedScope(AgentDefinition existing, AgentCatalog.Def current) {
+        var legacy = switch (current.name()) {
+            case AgentCatalog.RETRIEVAL -> current.toolScope().stream().filter(n -> !n.equals("queryPartyMemberProgress")).toList();
+            case AgentCatalog.PLANNING -> java.util.List.of("createActivity","draftPlanSections","generateAgendaFromPlan");
+            case AgentCatalog.WRITING -> java.util.List.of("draftArticleFromActivity","draftNewsFromActivity","draftAnnouncement","publishAnnouncement");
+            default -> null;
+        };
+        if (legacy == null) return;
+        try {
+            var old = new com.fasterxml.jackson.databind.ObjectMapper().readTree(existing.getToolScope());
+            var expected = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(legacy));
+            if (expected.equals(old)) {
+                existing.setToolScope(toJson(current.toolScope()));
+                existing.setUpdatedAt(LocalDateTime.now());
+                repository.save(existing);
+            }
+        } catch (Exception ignored) { /* malformed or custom definitions require explicit diagnosis */ }
     }
 }

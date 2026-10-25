@@ -10,6 +10,8 @@ import { DEFAULT_PRIMARY_COLOR } from '@/stores/org'
 import { normalizePrimaryColor } from '@/styles/tokens'
 import LoginOrganization from '@/components/auth/LoginOrganization'
 import AuthLayout from '@/components/auth/AuthLayout'
+import DemoAccountPicker from '@/components/auth/DemoAccountPicker'
+import type { DemoAccount } from '@/components/auth/demoAccounts'
 
 const ORG_KEY = 'pams.login.orgId'
 
@@ -25,6 +27,7 @@ export default function Login() {
   const location = useLocation()
   const created = location.state as { adminUsername?: string; orgId?: number; orgName?: string } | null
   const setLogin = useAuthStore((s) => s.setLogin)
+  const [form] = Form.useForm<{ username: string; password: string }>()
   const [orgs, setOrgs] = useState<PublicOrg[]>([])
   const [orgStatus, setOrgStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [orgId, setOrgId] = useState<number | null>(() => {
@@ -46,6 +49,17 @@ export default function Login() {
   const brand = selected ? orgPrimaryColor(selected.themeJson) : DEFAULT_PRIMARY_COLOR
   const orgLabel = selected ? selected.shortName || selected.name : '你的组织工作台'
 
+  const fillDemoAccount = (account: DemoAccount) => {
+    form.setFieldsValue({ username: account.username, password: account.password })
+    form.setFields([
+      { name: 'username', errors: [] },
+      { name: 'password', errors: [] },
+    ])
+    setError('')
+    const passwordInput = form.getFieldInstance('password') as { focus?: () => void } | undefined
+    passwordInput?.focus?.()
+  }
+
   const onFinish = async (values: { username: string; password: string }) => {
     if (busy.current) return
     busy.current = true
@@ -65,15 +79,20 @@ export default function Login() {
   }
 
   return (
-    <AuthLayout brand={brand} brandVariant="blue" aside={<>
-      <div className="welcome-copy"><h1>把每一份热爱，<br />汇成共同的成果。</h1><p>从一次活动到一届传承，<br />让组织里的协作，在这里有序发生。</p></div>
-      <div className="collaboration-map" aria-hidden="true">
-        <div className="map-root"><ApartmentOutlined /><span>{orgLabel}</span></div>
-        <div className="map-branches"><span>组织与成员</span><span>活动与协作</span><span>资料与传承</span></div>
-        <div className="map-task"><span className="map-check"><CheckOutlined /></span><div><strong>每一件事，都有着落</strong><p>连接成员，让进展清晰可见</p></div><span className="map-avatars"><i>协</i><i>作</i><i>力</i></span></div>
-      </div>
-      <p className="welcome-note">众智协奏，事事闭环。</p>
-    </>}>
+    <AuthLayout
+      brand={brand}
+      brandVariant="blue"
+      floating={<DemoAccountPicker brand={brand} disabled={loading} onPick={fillDemoAccount} />}
+      aside={<>
+        <div className="welcome-copy"><h1>把每一份热爱，<br />汇成共同的成果。</h1><p>从一次活动到一届传承，<br />让组织里的协作，在这里有序发生。</p></div>
+        <div className="collaboration-map" aria-hidden="true">
+          <div className="map-root"><ApartmentOutlined /><span>{orgLabel}</span></div>
+          <div className="map-branches"><span>组织与成员</span><span>活动与协作</span><span>资料与传承</span></div>
+          <div className="map-task"><span className="map-check"><CheckOutlined /></span><div><strong>每一件事，都有着落</strong><p>连接成员，让进展清晰可见</p></div><span className="map-avatars"><i>协</i><i>作</i><i>力</i></span></div>
+        </div>
+        <p className="welcome-note">众智协奏，事事闭环。</p>
+      </>}
+    >
       <div className="login-form-wrap">
         <div className="onboarding-title"><h2>欢迎回来</h2><p>登录协奏，继续你的组织工作。</p></div>
         {created?.orgName && <div className="onboarding-notice" role="status">「{created.orgName}」已创建，使用管理员账号登录即可开始。</div>}
@@ -82,7 +101,7 @@ export default function Login() {
         {selected && <LoginOrganization selected={selected} orgs={orgs}
           onSelect={(id) => { setOrgId(id); localStorage.setItem(ORG_KEY, String(id)) }} />}
         <p className="onboarding-hint login-account-hint">账号由组织管理员分配，登录后自动进入所属组织。</p>
-        <Form name="login" layout="vertical" requiredMark={false} onFinish={onFinish} initialValues={{ username: created?.adminUsername }} disabled={loading}>
+        <Form form={form} name="login" layout="vertical" requiredMark={false} onFinish={onFinish} initialValues={{ username: created?.adminUsername }} disabled={loading}>
           <Form.Item label="用户名" name="username" rules={[{ required: true, whitespace: true, message: '请输入用户名' }]}>
             <Input prefix={<UserOutlined />} placeholder="请输入用户名 / 学号" autoComplete="username" autoFocus={!created?.adminUsername} />
           </Form.Item>

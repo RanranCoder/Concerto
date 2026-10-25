@@ -1,180 +1,123 @@
 package com.pams.module.agent.orchestration;
 
-import com.pams.module.agent.core.AgentTool;
-import com.pams.module.agent.core.ToolContext;
-import com.pams.module.agent.core.ToolRegistry;
-import com.pams.module.agent.core.ToolResult;
+import com.pams.module.agent.core.*;
 import com.pams.module.agent.entity.AgentDefinition;
 import com.pams.module.agent.llm.LlmProvider;
 import com.pams.module.agent.registry.AgentRegistry;
-import com.pams.module.agent.service.AgentLlmCaller;
-import com.pams.module.agent.stream.AgentEventPublisher;
-import com.pams.module.agent.stream.AgentStreamEvent;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
+import com.pams.module.agent.service.*;
+import com.pams.module.agent.stream.*;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-/**
- * 专家 Agent（C 批次）：按「工具作用域 ∩ 当前用户可见工具」装配能力，执行一个子任务。
- *
- * <p><b>权限不放大</b>（策划 §3.5）：专家能看到的工具 = 其声明作用域 ∩ {@code ToolRegistry.visibleTo(ctx)}，
- * 即「Agent 职责 ∩ 发起用户权限」。执行一律走 {@link ToolRegistry#dispatch}（D3 第 2 层断言），
- * 因此多 Agent 协作不改变系统的授权边界。
- *
- * <p><b>两种执行方式</b>：
- * <ul>
- *   <li>默认：把子任务与作用域内工具的 schema 交给 LLM，取回工具调用；</li>
- *   <li>显式：调用方直接给出工具调用（{@code predecided}），跳过 LLM —— 用于测试与 P4 委派。</li>
- * </ul>
- */
-@Slf4j
+/** Bounded specialist loop. Writes prepare actions through the same gate as the ordinary loop. */
 @Service
-public class  SpecialistAgent {
-
-    /** 单个工具调用的执行记录。 */
-    public record ToolInvocation(String name, String label, String status, String summary, long durationMs) {
+public class SpecialistAgent {
+    public record ToolInvocation(String name,String label,String status,String summary,long durationMs) {}
+    public record Result(String agent,String text,List<ToolInvocation> invocations,String state,
+                         String provider,boolean degraded,Sensitivity sensitivity,
+                         AgentActionPlan plan,Map<String,Object> form,
+                         List<Map<String,Object>> references,List<Map<String,Object>> toolCalls) {
+        public Result(String agent,String text,List<ToolInvocation> invocations) {
+            this(agent,text,invocations,invocations.stream().anyMatch(i->!"OK".equals(i.status())) ? "FAILED" : "SUCCESS",
+                "",false,Sensitivity.NORMAL,null,null,List.of(),List.of());
+        }
+        public boolean waiting() { return plan != null || form != null; }
     }
-
-    /** 专家执行结果。 */
-    public record Result(String agent, String text, List<ToolInvocation> invocations) {
-    }
-
     private final AgentRegistry registry;
     private final ToolRegistry toolRegistry;
-    private final AgentLlmCaller llmCaller;
+    private final AgentLlmCaller caller;
     private final AgentEventPublisher publisher;
-
-    public SpecialistAgent(AgentRegistry registry, ToolRegistry toolRegistry,
-                           AgentLlmCaller llmCaller, AgentEventPublisher publisher) {
-        this.registry = registry;
-        this.toolRegistry = toolRegistry;
-        this.llmCaller = llmCaller;
-        this.publisher = publisher;
+    private final ToolOutcomeHandler outcomes;
+    private final PolicyGuard policy;
+    private final AuditService audit;
+    private final com.pams.module.agent.config.AgentProperties props;
+    public SpecialistAgent(AgentRegistry registry,ToolRegistry toolRegistry,AgentLlmCaller caller,
+                           AgentEventPublisher publisher,ToolOutcomeHandler outcomes,PolicyGuard policy,
+                           AuditService audit,com.pams.module.agent.config.AgentProperties props) {
+        this.registry=registry; this.toolRegistry=toolRegistry; this.caller=caller; this.publisher=publisher;
+        this.outcomes=outcomes; this.policy=policy; this.audit=audit; this.props=props;
     }
-
-    /**
-     * 执行一个专家子任务。
-     *
-     * @param predecided 显式工具调用（非空则跳过 LLM）
-     */
-    public Result execute(String agentName, String task, ToolContext ctx,
-                          List<LlmProvider.ToolCallRequest> predecided,
-                          String streamId, String username) {
-        List<AgentTool> scoped = scopedTools(agentName, ctx);
-        List<LlmProvider.ToolCallRequest> calls = predecided;
-        String text = null;
-
-        if (calls == null) {
-            List<LlmProvider.ToolSpec> specs = scoped.stream()
-                    .map(t -> new LlmProvider.ToolSpec(t.name(), t.description(), t.parametersSchema()))
-                    .toList();
-            List<LlmProvider.ChatMessage> messages = List.of(
-                    LlmProvider.ChatMessage.text("system", rolePrompt(agentName)),
-                    LlmProvider.ChatMessage.text("user", task == null ? "" : task));
-            LlmProvider.ChatResponse resp = llmCaller.callLlm(messages, specs, ctx, streamId, 0);
-            if (resp.toolCalls() != null && !resp.toolCalls().isEmpty()) {
-                calls = resp.toolCalls();
-            } else {
-                text = resp.content();
+    public Result execute(String agent,String task,ToolContext ctx,List<LlmProvider.ToolCallRequest> predecided,
+                          String streamId,String username) {
+        List<AgentTool> scoped=scopedTools(agent,ctx);
+        Set<String> allowed=new HashSet<>(scoped.stream().map(AgentTool::name).toList());
+        List<LlmProvider.ToolSpec> specs=scoped.stream().map(t->new LlmProvider.ToolSpec(t.name(),t.description(),t.parametersSchema())).toList();
+        List<LlmProvider.ChatMessage> messages=new ArrayList<>();
+        messages.add(LlmProvider.ChatMessage.text("system",rolePrompt(agent)+"\n依据工具事实完成子任务。写入先生成预览，等待系统确认，不自行提交。"));
+        messages.add(LlmProvider.ChatMessage.text("user",task==null?"":task));
+        List<ToolInvocation> invocations=new ArrayList<>();
+        List<Map<String,Object>> refs=new ArrayList<>(), rows=new ArrayList<>();
+        String provider="", text="", state="SUCCESS";
+        boolean degraded=false;
+        Sensitivity sensitivity=Sensitivity.NORMAL;
+        int max=Math.max(1,props.getMaxToolIterations());
+        for(int round=0;round<=max;round++) {
+            if(aborted(streamId)) { state="CANCELLED"; break; }
+            LlmProvider.ChatResponse response=null;
+            List<LlmProvider.ToolCallRequest> calls=predecided;
+            if(calls==null) {
+                try { response=caller.callIsolated(messages,specs,streamId); }
+                catch(java.util.concurrent.CancellationException e) { state="CANCELLED"; break; }
+                provider=response.provider(); degraded|=response.degraded(); text=response.content()==null?"":response.content();
+                calls=response.toolCalls();
             }
-        }
-
-        List<ToolInvocation> invocations = new ArrayList<>();
-        if (calls != null) {
-            Set<String> allowed = new LinkedHashSet<>(scoped.stream().map(AgentTool::name).toList());
-            for (LlmProvider.ToolCallRequest c : calls) {
-                invocations.add(invoke(agentName, c, allowed, ctx, streamId, username));
+            if(calls==null || calls.isEmpty()) {
+                if(!"FAILED".equals(state) && (text.isBlank() || (invocations.isEmpty() && degraded))) state="PARTIAL";
+                break;
             }
+            if(round==max) { if(!"FAILED".equals(state)) state="PARTIAL"; text="子任务已达到工具调用上限，尚未完成。"; break; }
+            if(response!=null) messages.add(LlmProvider.ChatMessage.assistantCalling(text,calls,response.reasoningContent()));
+            for(LlmProvider.ToolCallRequest call:calls) {
+                if(aborted(streamId)) { state="CANCELLED"; break; }
+                AgentTool tool=toolRegistry.find(call.name()).orElse(null);
+                if(tool==null || !allowed.contains(call.name())) {
+                    invocations.add(new ToolInvocation(call.name(),call.name(),"DENIED","工具不可用或超出专家作用域",0));
+                    messages.add(LlmProvider.ChatMessage.toolResult(call.id(),"工具不可用或超出专家作用域")); state="FAILED"; continue;
+                }
+                emit(ctx,streamId,AgentStreamEvent.toolStart(streamId,publisher.nextSeq(streamId),tool.name(),tool.runningLabel()));
+                long start=System.currentTimeMillis();
+                ToolResult result;
+                try { result=toolRegistry.dispatch(call.name(),ctx,call.arguments()); }
+                catch(AccessDeniedException e) { result=ToolResult.denied(e.getMessage()); }
+                catch(Exception e) { result=ToolResult.failed(e.getMessage()==null?"工具执行异常":e.getMessage()); }
+                long duration=System.currentTimeMillis()-start;
+                sensitivity=Sensitivity.max(sensitivity,tool.sensitivity());
+                String safe=policy.egressText(tool.sensitivity(),tool.toLlmText(ctx,result));
+                if(safe==null) safe="此结果为受限资料，请在对应业务页面查看。";
+                invocations.add(new ToolInvocation(tool.name(),tool.label(),result.status(),safe,duration));
+                refs.addAll(result.references()==null?List.of():result.references());
+                Map<String,Object> row=new LinkedHashMap<>();
+                row.put("tool",tool.name()); row.put("label",tool.label()); row.put("status",result.status());
+                row.put("durationMs",duration); row.put("write",tool.writeOperation()); row.put("sensitivity",tool.sensitivity().name().toLowerCase());
+                row.put("argsJson",policy.egressArgs(tool.sensitivity(),audit.toJson(call.arguments()))); row.put("ts",start);
+                rows.add(row);
+                publisher.recordToolCall(ctx.getConversationId(),null,streamId,publisher.nextSeq(streamId),ctx.getUserId(),tool.name(),tool.label(),
+                    audit.toJson(call.arguments()),tool.sensitivity().name().toLowerCase(),tool.writeOperation()?"WRITE":"READ",duration,result.status(),result.error());
+                try { audit.log(ctx,tool.name(),call.arguments(),tool.writeOperation()?"PREVIEW":"READ",tool.sensitivity(),result.status()); }
+                catch(Exception ignored) { /* audit is independent of a successful preview */ }
+                emit(ctx,streamId,AgentStreamEvent.toolEnd(streamId,publisher.nextSeq(streamId),tool.name(),tool.label(),result.status(),duration,result.error()));
+                if(aborted(streamId)) { state="CANCELLED"; break; }
+                ToolOutcomeHandler.PendingAction pending=outcomes.prepare(ctx,tool,result,call);
+                if(pending.waiting()) return new Result(agent,safe,invocations,pending.form()!=null?"WAITING_INPUT":"WAITING_CONFIRM",
+                    provider,degraded,sensitivity,pending.plan(),pending.form(),refs,rows);
+                messages.add(LlmProvider.ChatMessage.toolResult(call.id(),safe));
+                if(!result.isOk()) state="FAILED";
+            }
+            if("CANCELLED".equals(state) || predecided!=null) break;
         }
-        return new Result(agentName, text, invocations);
+        return new Result(agent,policy.egressText(sensitivity,text),invocations,state,provider,degraded,sensitivity,null,null,refs,rows);
     }
-
-    private ToolInvocation invoke(String agentName, LlmProvider.ToolCallRequest call, Set<String> allowed,
-                                  ToolContext ctx, String streamId, String username) {
-        String name = call.name();
-        String label = toolRegistry.find(name).map(AgentTool::label).orElse(name);
-        long t0 = System.currentTimeMillis();
-        boolean emit = streamId != null && username != null;
-
-        // 作用域约束：LLM 可能幻觉出作用域外的工具名（正确性由 dispatch 的权限断言兜底）
-        if (!allowed.contains(name)) {
-            log.warn("专家 Agent「{}」尝试越出工具作用域：{}", agentName, name);
-            if (emit) {
-                emitStart(username, streamId, name, label);
-            }
-            long d = System.currentTimeMillis() - t0;
-            if (emit) {
-                emitEnd(username, streamId, name, label, "DENIED", d, "超出工具作用域");
-            }
-            return new ToolInvocation(name, label, "DENIED", "超出工具作用域", d);
-        }
-
-        if (emit) {
-            emitStart(username, streamId, name, label);
-        }
-        try {
-            ToolResult r = toolRegistry.dispatch(name, ctx, call.arguments());
-            long d = System.currentTimeMillis() - t0;
-            if (emit) {
-                emitEnd(username, streamId, name, label, r.status(), d, r.error());
-            }
-            return new ToolInvocation(name, label, r.status(), r.summary(), d);
-        } catch (AccessDeniedException e) {
-            long d = System.currentTimeMillis() - t0;
-            if (emit) {
-                emitEnd(username, streamId, name, label, "DENIED", d, e.getMessage());
-            }
-            return new ToolInvocation(name, label, "DENIED", e.getMessage(), d);
-        } catch (Exception e) {
-            long d = System.currentTimeMillis() - t0;
-            log.warn("专家 Agent 工具执行失败：agent={} tool={}", agentName, name, e);
-            if (emit) {
-                emitEnd(username, streamId, name, label, "FAILED", d, e.getMessage());
-            }
-            return new ToolInvocation(name, label, "FAILED", e.getMessage(), d);
-        }
+    public List<AgentTool> scopedTools(String agent,ToolContext ctx) {
+        Optional<AgentDefinition> definition=registry.byName(agent);
+        if(definition.isEmpty()) return List.of();
+        List<String> scope=registry.toolScopeOf(definition.get());
+        List<AgentTool> visible=toolRegistry.visibleTools(ctx);
+        return scope==null?visible:visible.stream().filter(t->scope.contains(t.name())).toList();
     }
-
-    private void emitStart(String username, String streamId, String name, String label) {
-        publisher.publish(username, AgentStreamEvent.toolStart(
-                streamId, publisher.nextSeq(streamId), name, label));
-    }
-
-    /**
-     * 专家的工具池 = 声明作用域 ∩ 当前用户可见工具。
-     * 作用域为 null 表示「不限」（如协调者无工具、审查者只读黑板 → 空作用域返回空）。
-     */
-    public List<AgentTool> scopedTools(String agentName, ToolContext ctx) {
-        List<AgentTool> visible = toolRegistry.visibleTools(ctx);
-        List<String> scope = registry.byName(agentName).map(registry::toolScopeOf).orElse(List.of());
-        if (scope == null) {
-            return visible;
-        }
-        Set<String> allow = new LinkedHashSet<>(scope);
-        return visible.stream().filter(t -> allow.contains(t.name())).toList();
-    }
-
-    private String rolePrompt(String agentName) {
-        return registry.byName(agentName).map(AgentDefinition::getRolePrompt)
-                .filter(p -> p != null && !p.isBlank())
-                .orElse("你是学生组织工作台的专家 Agent（" + agentName + "），只依据检索到的证据作答，绝不编造。");
-    }
-
-    private void emit(String username, String streamId, AgentStreamEvent e) {
-        if (streamId != null && username != null) {
-            publisher.publish(username, e);
-        }
-    }
-
-    private void emitEnd(String username, String streamId, String tool, String label,
-                         String status, long durationMs, String error) {
-        emit(username, streamId, AgentStreamEvent.toolEnd(
-                streamId, publisher.nextSeq(streamId), tool, label, status, durationMs, error));
+    private boolean aborted(String stream) { return stream!=null && publisher.isAborted(stream); }
+    private String rolePrompt(String agent) { return registry.byName(agent).map(AgentDefinition::getRolePrompt).filter(Objects::nonNull).orElse("你是组织工作助手。"); }
+    private void emit(ToolContext ctx,String stream,AgentStreamEvent event) {
+        if(stream!=null && ctx.getLoginUser()!=null) publisher.publish(ctx.getLoginUser().getUsername(),event.withContext(ctx));
     }
 }

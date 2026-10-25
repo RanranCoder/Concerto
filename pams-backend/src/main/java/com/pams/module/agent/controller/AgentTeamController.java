@@ -42,6 +42,12 @@ public class AgentTeamController {
     private final AgentEventPublisher eventPublisher;
     private final java.util.concurrent.Executor executor;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.DagScheduler scheduler;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.WorkItemState workItems;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.service.ConversationStore conversations;
 
     public AgentTeamController(CoordinatorAgent coordinator, AgentRunService runService,
                                AgentRegistry registry, AgentEventPublisher eventPublisher,
@@ -70,7 +76,8 @@ public class AgentTeamController {
     public Result<Map<String, Object>> run(@RequestBody TeamRequest req,
                                            @AuthenticationPrincipal LoginUser lu) {
         String streamId = eventPublisher.newStream("run", lu.getId());
-        ToolContext ctx = ToolContext.current(req.conversationId(), streamId);
+        ToolContext ctx = eventPublisher.bind(streamId,ToolContext.current(req.conversationId(), streamId,req.toolMode()).withRequestId(req.requestId()));
+        if (req.conversationId()!=null) conversations.require(req.conversationId(),lu.getId());
         String mode = req.mode() == null ? "P1" : req.mode();
         AgentRun run = coordinator.start(req.goal(), ctx, req.conversationId(), mode);
 
@@ -78,8 +85,13 @@ public class AgentTeamController {
         final String username = lu.getUsername();
         executor.execute(() -> {
             try {
-                coordinator.executeRun(run, goal, ctx, streamId, mode);
-                publishRunDone(username, streamId, run.getId(), AgentRun.STATUS_SUCCESS);
+                var outcome = coordinator.executeRun(run, goal, ctx, streamId, mode);
+                for (var result : outcome.blackboard().getResults()) {
+                    if (result.plan()!=null) eventPublisher.publish(username,AgentStreamEvent.planReady(streamId,eventPublisher.nextSeq(streamId),result.plan().toJson()));
+                    if (result.form()!=null) eventPublisher.publish(username,AgentStreamEvent.inputNeeded(streamId,eventPublisher.nextSeq(streamId),result.form()));
+                }
+                publishRunDone(username, streamId, run.getId(), outcome.run().getStatus());
+                eventPublisher.clear(streamId);
             } catch (Exception e) {
                 log.warn("协作 Run 执行失败：runId={}", run.getId(), e);
                 runService.finishRun(run.getId(), AgentRun.STATUS_FAILED, new Blackboard());
@@ -106,8 +118,26 @@ public class AgentTeamController {
     @GetMapping("/runs/{id}")
     public Result<Map<String, Object>> detail(@PathVariable Long id,
                                               @AuthenticationPrincipal LoginUser lu) {
-        return Result.ok(toDetail(runService.getOwned(id, lu.getId())));
+        AgentRun run=runService.getOwned(id,lu.getId());
+        if(!workItems.nodes(id).isEmpty()) return Result.ok(scheduler.view(id,ToolContext.current(run.getConversationId(),run.getStreamId())));
+        return Result.ok(toDetail(run));
     }
+
+    @PostMapping("/runs/{id}/resume")
+    public Result<Void> resume(@PathVariable Long id) {
+        scheduler.resume(id,ToolContext.current(null,null)); return Result.ok();
+    }
+    @PostMapping("/runs/{id}/nodes/{nodeId}/retry")
+    public Result<Void> retry(@PathVariable Long id,@PathVariable Long nodeId,@AuthenticationPrincipal LoginUser lu) {
+        scheduler.snapshot(id,ToolContext.current(null,null));
+        workItems.retry(id,nodeId,lu.getId()); scheduler.resume(id,ToolContext.current(null,null)); return Result.ok();
+    }
+    @PostMapping("/runs/{id}/nodes/{nodeId}/revise")
+    public Result<Void> revise(@PathVariable Long id,@PathVariable Long nodeId,@RequestBody Revision req,@AuthenticationPrincipal LoginUser lu) {
+        scheduler.snapshot(id,ToolContext.current(null,null));
+        workItems.revise(id,nodeId,lu.getId(),req.revision(),req.instruction()); scheduler.resume(id,ToolContext.current(null,null)); return Result.ok();
+    }
+    public record Revision(int revision,String instruction) {}
 
     /** 已注册的 Agent 定义（供前端展示专家团队）。 */
     @GetMapping("/agents")
@@ -154,6 +184,7 @@ public class AgentTeamController {
     }
 
     /** 协作请求体。 */
-    public record TeamRequest(String goal, Long conversationId, String mode) {
+    public record TeamRequest(String goal, Long conversationId, String mode, String toolMode, String requestId) {
+        public TeamRequest(String goal,Long conversationId,String mode,String toolMode) { this(goal,conversationId,mode,toolMode,null); }
     }
 }

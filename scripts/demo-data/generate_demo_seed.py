@@ -394,6 +394,42 @@ def build_csv() -> str:
     return buf.getvalue()
 
 
+def build_ts() -> str:
+    lines: list[str] = []
+    add = lines.append
+    add("// 由 scripts/demo-data/generate_demo_seed.py 生成；与数据库演示种子保持一致。")
+    add("")
+    add("export type DemoAccount = {")
+    add("  username: string")
+    add("  password: string")
+    add("  name: string")
+    add("  dept: string")
+    add("  position: string")
+    add("  role: string")
+    add("}")
+    add("")
+    add(f"export const DEMO_PASSWORD = {json.dumps(PASSWORD)}")
+    add("")
+    add("export const DEMO_DEPARTMENTS = [")
+    for _key, name, *_rest in DEPARTMENTS:
+        add(f"  {json.dumps(name, ensure_ascii=False)},")
+    add("] as const")
+    add("")
+    add("export const DEMO_ACCOUNTS: DemoAccount[] = [")
+    for username, real_name, dept_key, role_code, position in ACCOUNTS:
+        add("  {")
+        add(f"    username: {json.dumps(username)},")
+        add("    password: DEMO_PASSWORD,")
+        add(f"    name: {json.dumps(real_name, ensure_ascii=False)},")
+        add(f"    dept: {json.dumps(dept_name(dept_key), ensure_ascii=False)},")
+        add(f"    position: {json.dumps(position, ensure_ascii=False)},")
+        add(f"    role: {json.dumps(ROLE_NAMES[role_code], ensure_ascii=False)},")
+        add("  },")
+    add("]")
+    add("")
+    return "\n".join(lines)
+
+
 def main() -> None:
     usernames = [row[0] for row in ACCOUNTS]
     names = [row[1] for row in ACCOUNTS]
@@ -405,8 +441,10 @@ def main() -> None:
     (OUT_DIR / "reset-and-seed-demo.sql").write_text(build_sql(), encoding="utf-8")
     (OUT_DIR / "demo-accounts.md").write_text(build_markdown(), encoding="utf-8")
     (OUT_DIR / "demo-accounts.csv").write_text(build_csv(), encoding="utf-8-sig")
+    (OUT_DIR / "demoAccounts.generated.ts").write_text(build_ts(), encoding="utf-8")
     print(f"accounts={len(ACCOUNTS)} departments={len(DEPARTMENTS)}")
     print(OUT_DIR / "reset-and-seed-demo.sql")
+    print(OUT_DIR / "demoAccounts.generated.ts")
 
 
 if __name__ == "__main__":

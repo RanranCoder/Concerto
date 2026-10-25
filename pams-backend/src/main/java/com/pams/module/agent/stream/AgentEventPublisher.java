@@ -36,13 +36,21 @@ public class AgentEventPublisher {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.pams.module.permission.service.TenantAuthorizationService authorization;
     private final Map<String,Long> authorizationVersions = new ConcurrentHashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.agent.service.AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.agent.llm.LlmCancellation cancellation;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private ThinkingTrace trace;
+    private final Map<String,com.pams.module.agent.entity.AgentRequest> identities=new ConcurrentHashMap<>();
+    private final Map<String,Long> touched=new ConcurrentHashMap<>();
+    private final java.util.Set<String> finished=ConcurrentHashMap.newKeySet();
 
     private boolean authorizedStream(String sid) {
         Long uid = owners.get(sid);
         if (authorization == null || uid == null) return true;
         Long baseline = authorizationVersions.get(sid);
         boolean allowed = authorization.valid(uid) && baseline != null && baseline.equals(((Number)authorization.identity(uid).get("authz_version")).longValue());
-        if (!allowed) { aborted.put(sid,true); buffers.remove(sid); }
+        if (!allowed) { aborted.put(sid,true); buffers.remove(sid); if(cancellation!=null) cancellation.abort(sid); }
         return allowed;
     }
 
@@ -86,8 +94,11 @@ public class AgentEventPublisher {
      *                    传 {@code null} 表示"无归属信息"（此时补拉会走数据库回查，
      *                    回查也拿不到就拒绝 —— 宁可少给，也不要放行一条无法确认归属的流）
      */
-    public String newStream(String prefix, Long ownerUserId) {
-        String id = (prefix == null ? "s" : prefix) + "_" + Long.toHexString(System.nanoTime());
+    public synchronized String newStream(String prefix, Long ownerUserId) {
+        prune();
+        if(touched.size()>=Math.max(1,props.getStreamCacheMaxEntries())) evict(touched.entrySet().stream().min(Map.Entry.comparingByValue()).orElseThrow().getKey());
+        String id = (prefix == null ? "s" : prefix) + "_" + java.util.UUID.randomUUID();
+        touched.put(id,System.currentTimeMillis());
         counters.put(id, new AtomicInteger(0));
         buffers.put(id, new ArrayList<>());
         if (ownerUserId != null) {
@@ -97,7 +108,9 @@ public class AgentEventPublisher {
         return id;
     }
 
-    public int nextSeq(String streamId) {
+    public synchronized int nextSeq(String streamId) {
+        if (streamId == null) return 0;
+        if(!touched.containsKey(streamId)) return 0;
         return counters.computeIfAbsent(streamId, k -> new AtomicInteger(0)).incrementAndGet();
     }
 
@@ -106,11 +119,23 @@ public class AgentEventPublisher {
      *
      * @param username 目标用户（用户定向队列）
      */
-    public void publish(String username, AgentStreamEvent event) {
+    public synchronized void publish(String username, AgentStreamEvent event) {
         if (event == null) return;
         // 1) 缓冲（streamId 为空时不缓冲——例如协作基准等非会话场景，避免 ConcurrentHashMap 空键 NPE）
         String sid = event.streamId();
         if (sid != null && !authorizedStream(sid)) return;
+        if(sid!=null && !touched.containsKey(sid)) return; // Evicted/unknown streams cannot resurrect cache entries.
+        if(sid!=null) {
+            touched.put(sid,System.currentTimeMillis());
+            var identity=identities.get(sid);
+            if(identity!=null) {
+                var payload=new java.util.LinkedHashMap<>(event.payload());
+                payload.put("requestId",identity.getId()); payload.put("conversationId",identity.getConversationId());
+                if(identity.getRunId()!=null) payload.put("runId",identity.getRunId());
+                payload.putIfAbsent("channel","final"); payload.put("protocolVersion",2);
+                event=new AgentStreamEvent(event.streamId(),event.seq(),event.type(),payload,event.ts());
+            }
+        }
         if (sid != null) {
             List<AgentStreamEvent> buf = buffers.computeIfAbsent(sid, k -> new ArrayList<>());
             synchronized (buf) {
@@ -125,6 +150,10 @@ public class AgentEventPublisher {
             messagingTemplate.convertAndSendToUser(username, DEST_STREAM, event);
         } catch (Exception e) {
             log.warn("灵思过程事件推送失败：stream={} type={}", event.streamId(), event.type(), e);
+        }
+        if(sid!=null && java.util.Set.of("MESSAGE_DONE","ERROR","ABORTED").contains(event.type())) {
+            finished.add(sid);
+            if(requests!=null && identities.containsKey(sid)) requests.finish(sid,"ABORTED".equals(event.type())?"CANCELLED":"ERROR".equals(event.type())?"FAILED":"SUCCESS");
         }
     }
 
@@ -169,6 +198,10 @@ public class AgentEventPublisher {
 
         Long owner = owners.get(streamId);
         if (owner != null) return owner.equals(requesterUserId);
+        if(requests!=null) {
+            var durable=requests.byStream(streamId);
+            if(durable.isPresent()) return requesterUserId.equals(durable.get().getUserId()) && java.util.Objects.equals(com.pams.common.OrgContext.get(),durable.get().getOrgId()) && requests.live(durable.get());
+        }
 
         // 内存里没有 → 回查：流的第一条工具调用 → conversationId → 会话的 userId
         try {
@@ -222,25 +255,29 @@ public class AgentEventPublisher {
         }
     }
 
-    public void markAborted(String streamId) {
-        aborted.put(streamId, Boolean.TRUE);
+    public synchronized void markAborted(String streamId) {
+        if(streamId==null) return;
+        if(touched.containsKey(streamId)) aborted.put(streamId, Boolean.TRUE);
+        if(cancellation!=null) cancellation.abort(streamId);
     }
 
     /** Only a stream's owner may interrupt it; unknown IDs never allocate state. */
     public boolean abortOwned(String streamId, Long requesterUserId) {
         if (!ownedBy(streamId, requesterUserId)) return false;
+        if(requests!=null) requests.byStream(streamId).ifPresent(r->requests.cancel(r.getId(),requesterUserId));
         markAborted(streamId);
         return true;
     }
 
     public boolean isAborted(String streamId) {
-        return Boolean.TRUE.equals(aborted.get(streamId));
+        if(streamId==null) return false;
+        if(Boolean.TRUE.equals(aborted.get(streamId))) return true;
+        if(identities.containsKey(streamId)) return identities.get(streamId).isCancelled();
+        return requests!=null && requests.byStream(streamId).map(com.pams.module.agent.entity.AgentRequest::isCancelled).orElse(false);
     }
 
-    public void clear(String streamId) {
-        counters.remove(streamId);
-        aborted.remove(streamId);
-        // 缓冲保留一段时间供补拉；这里不主动清理，由 streamBufferSize 与 JVM 生命周期约束
+    public synchronized void clear(String streamId) {
+        if(streamId!=null && touched.containsKey(streamId)) { finished.add(streamId); touched.put(streamId,System.currentTimeMillis()); }
     }
 
     /** 异步任务完成推送（D7 长任务，前端 useWebSocket 加一个订阅即可） */
@@ -251,4 +288,43 @@ public class AgentEventPublisher {
             log.warn("灵思任务完成推送失败：{}", username, e);
         }
     }
+    /** Outbox delivery must observe broker failure instead of acknowledging a swallowed exception. */
+    public void publishDurable(String username,Map<String,Object> payload) { messagingTemplate.convertAndSendToUser(username,DEST_TASK,payload); }
+    public com.pams.module.agent.core.ToolContext bind(String stream,com.pams.module.agent.core.ToolContext ctx) {
+        String request=ctx.getRequestId()==null?java.util.UUID.randomUUID().toString():ctx.getRequestId();
+        var bound=ctx.derive(ctx.getConversationId(),stream).withRequestId(request);
+        if(requests!=null) identities.put(stream,requests.begin(request,stream,bound));
+        return bound;
+    }
+    public synchronized void identify(com.pams.module.agent.core.ToolContext ctx) {
+        if(requests==null || ctx.getStreamId()==null || !touched.containsKey(ctx.getStreamId())) return;
+        requests.link(ctx.getStreamId(),ctx.getConversationId(),ctx.getRunId());
+        requests.byStream(ctx.getStreamId()).ifPresent(r->identities.put(ctx.getStreamId(),r));
+    }
+    public Map<String,Object> replay(String stream,int since,Long uid) {
+        prune();
+        if(!ownedBy(stream,uid)) throw new com.pams.common.BizException(404,"请求不存在");
+        var events=buffers.containsKey(stream)?since(stream,Math.max(0,since),uid):List.<AgentStreamEvent>of();
+        var result=new java.util.LinkedHashMap<String,Object>(); result.put("streamId",stream); result.put("events",events);
+        var buffer=buffers.get(stream);
+        boolean gap=buffer==null;
+        if(buffer!=null) synchronized(buffer) { gap=!buffer.isEmpty() && since<buffer.getFirst().seq()-1; }
+        result.put("requiresSnapshot",gap); result.put("lastSeq",counters.containsKey(stream)?counters.get(stream).get():0);
+        if(requests!=null) requests.byStream(stream).ifPresent(r->{ result.put("requestId",r.getId());result.put("runId",r.getRunId());result.put("conversationId",r.getConversationId());result.put("status",r.getStatus()); });
+        return result;
+    }
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay=30000)
+    public synchronized void prune() {
+        long now=System.currentTimeMillis();
+        for(var entry:List.copyOf(touched.entrySet())) if(now-entry.getValue()>(finished.contains(entry.getKey())?props.getStreamCacheTtlMs():props.getStreamActiveTtlMs())) evict(entry.getKey());
+        while(touched.size()>Math.max(1,props.getStreamCacheMaxEntries())) {
+            var oldest=touched.entrySet().stream().min(Map.Entry.comparingByValue()).orElseThrow(); evict(oldest.getKey());
+        }
+    }
+    private void evict(String stream) {
+        if(trace!=null) trace.clear(stream);
+        buffers.remove(stream); counters.remove(stream); owners.remove(stream); authorizationVersions.remove(stream);
+        aborted.remove(stream); identities.remove(stream); touched.remove(stream); finished.remove(stream);
+    }
+    public int cachedStreamCount() { return touched.size(); }
 }

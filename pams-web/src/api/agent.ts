@@ -275,6 +275,9 @@ export interface AgentChatRef {
 
 /** POST /api/agent/chat 的返回 */
 export interface AgentChatResponse {
+  requestId?: string
+  run?: AgentRunView
+  executionState?: string | null
   streamId: string
   conversationId: number
   messageId: number
@@ -307,7 +310,7 @@ export interface AgentConversationVO {
   status?: AgentConversationStatus
 }
 
-export type AgentConversationStatus = 'READY' | 'RUNNING' | 'WAITING_INPUT' | 'PENDING_CONFIRM' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED' | 'STOPPED'
+export type AgentConversationStatus = 'STOPPING' | 'REVIEW_REQUIRED' | 'NEEDS_RECONCILE' | 'READY' | 'RUNNING' | 'WAITING_INPUT' | 'PENDING_CONFIRM' | 'COMPLETED' | 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'CANCELLED' | 'STOPPED'
 
 export interface AgentConversationsPage {
   records: AgentConversationVO[]
@@ -319,6 +322,8 @@ export interface AgentConversationsPage {
 }
 
 export interface AgentMessageVO {
+  run?: AgentRunView
+  executionState?: string | null
   id: number
   conversationId: number
   role: string
@@ -376,6 +381,11 @@ export interface AgentMessagesPage {
 }
 
 export interface AgentTaskVO {
+  runId?: number | null
+  workItemId?: number | null
+  revision?: number
+  form?: AgentInputForm | null
+  executionState?: string | null
   id: number
   toolName: string
   status: string
@@ -412,14 +422,15 @@ export const agentChat = (
    * 省略时后端按 true 处理（老客户端不受影响）。
    */
   collab: boolean = true,
-) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab })
+  requestId?: string,
+) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab, requestId })
 
 export const agentAbort = (streamId: string) =>
   post<{ streamId: string; aborted: boolean }>(`/agent/chat/${streamId}/abort`)
 
 /** 补拉过程事件（断连补齐 / 历史回看，D7 降级通道） */
 export const agentStreamSince = (streamId: string, since = 0) =>
-  get<{ streamId: string; since: number; events: AgentStreamEvent[] }>(
+  get<{ streamId: string; since: number; requiresSnapshot?: boolean; lastSeq?: number; events: AgentStreamEvent[] }>(
     `/agent/streams/${streamId}`,
     { since },
   )
@@ -437,6 +448,33 @@ export const deleteConversation = (id: number) => del<void>(`/agent/conversation
 /* ------------------------------------------------------------ 任务门禁 */
 
 export const getAgentTask = (id: number) => get<AgentTaskVO>(`/agent/tasks/${id}`)
+export interface AgentWorkItem {
+  id: number
+  workItemId: number
+  agent: string
+  task: string
+  status: string
+  dependsOn: number[]
+  revision: number
+  attempt: number
+}
+export interface AgentRunView {
+  stateVersion?: number
+  eventSeq?: number
+  requestId?: string
+  cancelRequested?: boolean
+  reviews?: Record<string, { status: string; issues: AgentReviewIssue[] }>
+  id: number
+  streamId: string | null
+  conversationId: number | null
+  status: string
+  nodes: AgentWorkItem[]
+  actions: AgentTaskVO[]
+}
+export const getAgentRun = (id: number) => get<AgentRunView>(`/agent/team/runs/${id}`)
+export const retryAgentNode = (runId: number, nodeId: number) => post<void>(`/agent/team/runs/${runId}/nodes/${nodeId}/retry`)
+export const reviseAgentNode = (runId: number, nodeId: number, revision: number, instruction: string) => post<void>(`/agent/team/runs/${runId}/nodes/${nodeId}/revise`, { revision, instruction })
+export const resumeAgentRun = (id: number) => post<void>(`/agent/team/runs/${id}/resume`)
 
 export const confirmAgentTask = (id: number, confirmToken: string, mode: AgentMode = 'standard') =>
   post<AgentTaskVO>(`/agent/tasks/${id}/confirm`, { confirmToken, mode })
@@ -466,3 +504,29 @@ export const cancelAgentTask = (id: number) => post<void>(`/agent/tasks/${id}/ca
 /** mode=readonly 时后端不会返回任何写类工具（与模型实际可见集一致） */
 export const listAgentTools = (mode: AgentMode = 'standard') =>
   get<AgentToolVO[]>('/agent/tools', { mode })
+
+export interface AgentReviewIssue {
+  id: number
+  revision: number
+  attempt: number
+  severity: string
+  code: string
+  location: string
+  quote: string
+  reason: string
+  sourceRef: string
+}
+export interface AgentRequestSnapshot {
+  requestId: string
+  streamId: string | null
+  conversationId: number | null
+  status: string
+  cancelled: boolean
+  run?: AgentRunView
+  message?: AgentMessageVO | null
+  actions?: AgentTaskVO[]
+}
+export const abortAgentRequest = (id: string) => post<{ status: string; runId?: number; aborted: boolean }>(`/agent/requests/${id}/abort`)
+export const getAgentRequest = (id: string) => get<AgentRequestSnapshot>(`/agent/requests/${id}`)
+export const cancelAgentRun = (id: number) => post<AgentRunView>(`/agent/team/runs/${id}/cancel`)
+export const getAgentRunEvents = (id: number, since = 0) => get<{ requiresSnapshot: boolean; lastSeq: number; hasMore: boolean; events: { eventSeq: number }[] }>(`/agent/team/runs/${id}/events`, { since })

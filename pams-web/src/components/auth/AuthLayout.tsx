@@ -8,12 +8,14 @@ import { useThemeStore } from '@/stores/theme'
 import { readableOn } from '@/styles/color'
 import '@/styles/auth.css'
 
-export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_COLOR, register = false, brandVariant = 'auto' }: {
+export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_COLOR, register = false, brandVariant = 'auto', floating }: {
   children: ReactNode
   aside: ReactNode
   brand?: string
   register?: boolean
   brandVariant?: 'auto' | 'blue'
+  /** 固定悬浮内容（如演示账号列表）：不参与主网格布局。 */
+  floating?: ReactNode
 }) {
   const mode = useThemeStore((state) => state.mode)
   const colors = resolveTokens(mode, brand)
@@ -32,6 +34,7 @@ export default function AuthLayout({ children, aside, brand = DEFAULT_PRIMARY_CO
           <aside className="onboarding-aside">{aside}</aside>
           <section className="onboarding-content">{children}</section>
         </main>
+        {floating}
         <footer className="onboarding-footer">协奏 Concerto <span>让学生组织的每一份努力，都有回响。</span></footer>
       </div>
     </ConfigProvider>

@@ -74,11 +74,16 @@ export function useWebSocket() {
             const data = JSON.parse(msg.body) as Record<string, unknown>
             if (data.type === 'AGENT_TASK_DONE') {
               useAgentStore.getState().applyTaskDone(data)
+            } else if (data.type === 'AGENT_RUN_UPDATED' && typeof data.runId === 'number') {
+              const store=useAgentStore.getState()
+              const known=store.outcomes.find(o=>o.run?.id===data.runId)?.run
+              if (typeof data.eventSeq!=='number' || data.eventSeq>(known?.stateVersion ?? -1)) void store.refreshRun(data.runId)
             }
           } catch (e) {
             console.error('[WS] 解析灵思任务事件失败', e)
           }
         })
+        void useAgentStore.getState().reconcileConnection()
       },
       onDisconnect: () => {
         console.log('[WS] 已断开')

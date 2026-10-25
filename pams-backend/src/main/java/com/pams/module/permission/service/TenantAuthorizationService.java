@@ -241,7 +241,7 @@ public class TenantAuthorizationService {
             .toList(),
         ctx.getConversationId(),
         ctx.getStreamId(),
-        ctx.getMode());
+        ctx.getMode()).withRunId(ctx.getRunId()).withWorkItem(ctx.getWorkItemId(), ctx.getWorkItemRevision()).withRequestId(ctx.getRequestId()).withAttempt(ctx.getAttempt());
   }
 
   public Set<String> grantable(long uid) {

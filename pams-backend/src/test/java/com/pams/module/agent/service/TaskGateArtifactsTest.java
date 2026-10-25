@@ -51,7 +51,7 @@ class TaskGateArtifactsTest {
                 .containsEntry("entityType", "activity")
                 .containsEntry("entityId", 412)
                 .containsEntry("name", "开班仪式 · 活动任务")
-                .containsEntry("path", "/activity/412/tasks");
+                .containsEntry("path", "/activities/412/gantt");
         assertThat(a).as("不得把 references 的原始键名一起漏出去").doesNotContainKey("label");
     }
 

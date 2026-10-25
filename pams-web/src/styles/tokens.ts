@@ -15,6 +15,12 @@ import { deriveBrandScale, lighten, parseColor, readableOn, toHex, withAlpha } f
 
 export type ThemeMode = 'light' | 'dark'
 
+/** Document formatting values are fixed content colors, independent of the surrounding UI theme. */
+export const documentColors = {
+  text: '#000000',
+  highlight: '#FFF176',
+} as const
+
 /** 材质层级 */
 export interface SurfaceTokens {
   /** 页面底 */

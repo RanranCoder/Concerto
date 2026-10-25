@@ -102,12 +102,18 @@ public class AgentProperties {
     private int executorCoreSize = 4;
     private int executorMaxSize = 8;
     private int executorQueueCapacity = 64;
+    /** Ready dependency nodes per run; separately bounded to avoid nested pool starvation. */
+    private int maxParallelNodes = 2;
 
     /** 单次编排最多允许的工具调用轮数（防 LLM 死循环） */
     private int maxToolIterations = 5;
 
     /** 每个 StreamEvent 的补拉窗口上限（断连补齐，D7） */
     private int streamBufferSize = 500;
+    private int streamCacheMaxEntries = 200;
+    private long streamCacheTtlMs = 600000;
+    private long streamActiveTtlMs = 3600000;
+    private boolean runtimeRecoveryEnabled = true;
 
     /**
      * 解析 API Key：优先环境变量 {@code PAMS_AGENT_API_KEY}，其次 {@code pams.agent.api-key}

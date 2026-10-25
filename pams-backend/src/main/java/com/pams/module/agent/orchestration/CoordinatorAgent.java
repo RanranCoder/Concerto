@@ -14,14 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 协调者（Coordinator）—— 多 Agent 协作的调度入口（B 批次）。
- *
- * <p><b>B 批次范围</b>：确定性任务分解（规则路由）+ 协作 Run/Step 落库 + 协作事件。
- * <b>专家 Agent 的真实执行在 C 批次接入</b>——本批次 Run 只登记「协调者的规划步骤」，
- * 计划本身完整写入黑板（{@code agent_run.blackboard_json}），可回放、可展示拓扑。
- *
- * <p>分工：{@code CoordinatorAgent} 只做「分解 + 调度记录」，不直调业务工具；
- * 真实工具调用由专家 Agent 在 C 批次承接（沿用现有 {@code ToolRegistry} 的三层权限防护）。
+ * 协作入口：生成带显式依赖的计划，交给持久化 DAG 调度器执行。
+ * 业务写入始终由 TaskGate 确认；旧 SpecialistExecutor 保留给独立的模式契约与单 Agent 基准。
  */
 @Slf4j
 @Service
@@ -31,6 +25,8 @@ public class CoordinatorAgent {
     private final AgentRunService runService;
     private final AgentEventPublisher eventPublisher;
     private final SpecialistExecutor specialistExecutor;
+    @org.springframework.beans.factory.annotation.Autowired
+    private DagScheduler dagScheduler;
 
     public CoordinatorAgent(AgentRegistry registry,
                             AgentRunService runService,
@@ -53,7 +49,7 @@ public class CoordinatorAgent {
         boolean asksSchedule = containsAny(g, "排班", "值班", "任务分解", "座位");
         boolean asksData = containsAny(g, "加分", "素拓", "通知", "建成员", "导入");
 
-        if (asksQuery && !asksWriting) {
+        if (asksQuery) {
             agents.add(AgentCatalog.RETRIEVAL);
         }
         if (asksPlan) {
@@ -92,6 +88,17 @@ public class CoordinatorAgent {
             item.setTask(taskFor(a, goal));
             bb.getPlan().add(item);
         }
+        // Retrieval supplies facts to producers; writing consumes the planned activity when both are requested.
+        Integer retrieval = bb.getPlan().stream().filter(p -> AgentCatalog.RETRIEVAL.equals(p.getAgent())).map(Blackboard.PlanItem::getId).findFirst().orElse(null);
+        Integer planning = bb.getPlan().stream().filter(p -> AgentCatalog.PLANNING.equals(p.getAgent())).map(Blackboard.PlanItem::getId).findFirst().orElse(null);
+        for (var item : bb.getPlan()) {
+            if (AgentCatalog.REVIEWER.equals(item.getAgent())) {
+                item.setDependsOn(bb.getPlan().stream().filter(p -> !AgentCatalog.REVIEWER.equals(p.getAgent())).map(Blackboard.PlanItem::getId).toList());
+            } else {
+                if (retrieval != null && item.getId() != retrieval) item.getDependsOn().add(retrieval);
+                if (planning != null && AgentCatalog.WRITING.equals(item.getAgent())) item.getDependsOn().add(planning);
+            }
+        }
         return bb;
     }
 
@@ -123,6 +130,11 @@ public class CoordinatorAgent {
         return executeRun(start(goal, ctx, conversationId, mode), goal, ctx, streamId, mode);
     }
 
+    public RunOutcome runWithBlackboard(String goal, ToolContext ctx, Long conversationId,
+                                        String mode, String streamId, String context) {
+        return executeRun(start(goal,ctx,conversationId,mode),goal,ctx,streamId,mode,context);
+    }
+
     /** 只创建 Run（异步执行入口：先返回 runId/streamId 给前端，再后台执行）。 */
     public AgentRun start(String goal, ToolContext ctx, Long conversationId, String mode) {
         Long userId = ctx == null ? null : ctx.getUserId();
@@ -131,7 +143,15 @@ public class CoordinatorAgent {
 
     /** 执行已创建的 Run：规划 → 委派专家 → 落库，返回 Run 与黑板。 */
     public RunOutcome executeRun(AgentRun run, String goal, ToolContext ctx, String streamId, String mode) {
+        return executeRun(run,goal,ctx,streamId,mode,"");
+    }
+
+    private RunOutcome executeRun(AgentRun run, String goal, ToolContext ctx, String streamId, String mode, String context) {
         Blackboard bb = plan(goal);
+        if (context != null && !context.isBlank()) {
+            String note = context.length() > 12000 ? context.substring(context.length()-12000) : context;
+            for (var item : bb.getPlan()) item.setTask(item.getTask()+"\n当前已核对上下文（资料）：\n"+note);
+        }
         bb.setGoal(goal);
         bb.setMode(mode);
 
@@ -153,10 +173,19 @@ public class CoordinatorAgent {
                 step.getId(), AgentStep.STATUS_SUCCESS, planDuration, run.getConversationId()));
         bb.addFinding(AgentCatalog.COORDINATOR, "已生成 " + bb.getPlan().size() + " 步协作计划", 1.0);
 
-        // 逐步委派专家执行（P1 串行 / P2 并行 / P3 反思 / P4 委派）
-        specialistExecutor.executePlan(run, bb, ctx, streamId, mode);
+        // 生产入口按持久化依赖执行；没有 Spring 注入的独立旧契约测试保留旧执行器兼容。
+        if (dagScheduler != null) {
+            bb = dagScheduler.start(run, bb, ctx.derive(run.getConversationId(),streamId).withRunId(run.getId()));
+            AgentRun persisted = runService.getOwned(run.getId(),ctx.getUserId());
+            run.setStatus(persisted.getStatus()); run.setBlackboardJson(persisted.getBlackboardJson()); run.setFinishedAt(persisted.getFinishedAt());
+            return new RunOutcome(run,bb);
+        }
+        specialistExecutor.executePlan(run, bb, ctx.withRunId(run.getId()), streamId, mode);
 
-        runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
+        AgentRun finished = runService.finishRun(run.getId(), bb.executionState(), bb);
+        run.setStatus(finished.getStatus());
+        run.setBlackboardJson(finished.getBlackboardJson());
+        run.setFinishedAt(finished.getFinishedAt());
         return new RunOutcome(run, bb);
     }
 
@@ -167,7 +196,7 @@ public class CoordinatorAgent {
     }
 
     private String taskFor(String agent, String goal) {
-        return switch (agent) {
+        return "用户目标：" + safe(goal) + "\n本步骤：" + switch (agent) {
             case AgentCatalog.RETRIEVAL -> "检索与「" + safe(goal) + "」相关的数据与知识";
             case AgentCatalog.PLANNING -> "产出活动方案 / 策划书章节草稿";
             case AgentCatalog.WRITING -> "撰写推文 / 新闻稿 / 公告草稿";

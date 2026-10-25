@@ -42,6 +42,12 @@ public class TaskGate {
     private final AuditService auditService;
     private final AgentEventPublisher publisher;
     private final ObjectMapper mapper = new ObjectMapper();
+    @org.springframework.beans.factory.annotation.Autowired private PlanReviewService review;
+    @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.AgentRunService runService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.WorkItemState workItems;
 
     public TaskGate(AgentTaskRepository repository, ToolRegistry registry,
                     AuditService auditService, AgentEventPublisher publisher) {
@@ -74,20 +80,25 @@ public class TaskGate {
                                       int total, List<AgentActionPlan.PlanItem> items,
                                       List<AgentActionPlan.SkippedItem> skipped,
                                       List<String> detailLines, boolean reversible, String preview) {
-        // 多轮「接续」（用户反馈 item 3）：出新的确认卡之前，先把本会话里旧的待确认任务作废，
-        // 保证"会话里始终只有一张可确认卡"。用户纠正后不会出现"首轮卡片还在、上下文已走"的错位。
+        // 单 Agent 延续会话级替换；协作清单由 WorkItem/revision 管理，不作废兄弟分支。
+        if(requests!=null && ctx.getWorkItemId()==null) requests.requireActive(ctx.getStreamId());
         supersedePending(ctx);
 
         AgentTask t = new AgentTask();
         t.setUserId(ctx.getUserId());
+        t.setRunId(ctx.getRunId());
+        t.setWorkItemId(ctx.getWorkItemId());
+        t.setWorkItemRevision(ctx.getWorkItemRevision());
         t.setConversationId(ctx.getConversationId());
         // V26 历史恢复：任务与产生它的流绑定，前端据此把确认卡挂回对应消息
         t.setStreamId(ctx.getStreamId());
         t.setToolName(tool.name());
+        t.setDataSensitivity(tool.sensitivity().name());
         t.setTaskType("SYNC");
-        t.setStatus(AgentTask.PENDING_CONFIRM);
+        t.setStatus(review!=null && "BLOCKED".equals(review.review(ctx,tool,preview)) ? "REVIEW_REQUIRED" : AgentTask.PENDING_CONFIRM);
         t.setSummary(summary);
         t.setConfirmToken("ct_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
+        if("REVIEW_REQUIRED".equals(t.getStatus())) t.setConfirmToken("");
         t.setCreatedAt(LocalDateTime.now());
 
         AgentActionPlan plan = new AgentActionPlan(null, summary, total, items, skipped,
@@ -98,6 +109,7 @@ public class TaskGate {
             log.warn("plan_json 序列化失败", e);
         }
         AgentTask saved = repository.save(t);
+        if (saved.getWorkItemId()!=null) workItems.attach(saved);
 
         return new AgentActionPlan(saved.getId(), summary, total, items, skipped,
                 detailLines, reversible, saved.getConfirmToken(), preview);
@@ -113,12 +125,15 @@ public class TaskGate {
      * 误作废会让 D2.5 表单补全链路半途失效。会话内多张确认卡才是用户反馈的问题（上下文偏移）。
      */
     private void supersedePending(ToolContext ctx) {
-        if (ctx == null || ctx.getConversationId() == null) return;
+        if (ctx == null || ctx.getConversationId() == null || ctx.getWorkItemId()!=null) return;
         try {
             List<AgentTask> olds = repository.findByConversationIdAndStatusOrderByIdAsc(
                     ctx.getConversationId(), AgentTask.PENDING_CONFIRM);
             for (AgentTask old : olds) {
-                repository.cancelPending(old.getId(), ctx.getUserId(), LocalDateTime.now());
+                if (old.getWorkItemId()!=null) continue;
+                if (repository.cancelPending(old.getId(), ctx.getUserId(), LocalDateTime.now()) > 0 && old.getRunId()!=null) {
+                    runService.actionSettled(old.getRunId(),ctx.getUserId(),old.getStreamId(),"CANCELLED");
+                }
             }
             if (!olds.isEmpty()) {
                 log.info("多轮接续：作废会话 {} 内 {} 条旧待确认清单", ctx.getConversationId(), olds.size());
@@ -175,12 +190,17 @@ public class TaskGate {
     @Transactional
     public Map<String, Object> createForm(ToolContext ctx, AgentTool tool, AgentInputForm form,
                                           Map<String, Object> originalArgs) {
+        if(requests!=null && ctx.getWorkItemId()==null) requests.requireActive(ctx.getStreamId());
         AgentTask t = new AgentTask();
         t.setUserId(ctx.getUserId());
+        t.setRunId(ctx.getRunId());
+        t.setWorkItemId(ctx.getWorkItemId());
+        t.setWorkItemRevision(ctx.getWorkItemRevision());
         t.setConversationId(ctx.getConversationId());
         // V26 历史恢复：同 createPlan
         t.setStreamId(ctx.getStreamId());
         t.setToolName(tool.name());
+        t.setDataSensitivity(tool.sensitivity().name());
         t.setTaskType("SYNC");
         t.setStatus(AgentTask.WAITING_INPUT);
         t.setSummary(form.title());
@@ -196,6 +216,7 @@ public class TaskGate {
             log.warn("表单 payload 序列化失败", e);
         }
         AgentTask saved = repository.save(t);
+        if (saved.getWorkItemId()!=null) workItems.attach(saved);
 
         payload.put("taskId", saved.getId());
         payload.put("status", saved.getStatus());
@@ -251,6 +272,7 @@ public class TaskGate {
             merged.put(e.getKey(), v);
         }
 
+        ctx=ctx.derive(task.getConversationId(),task.getStreamId()).withRunId(task.getRunId()).withWorkItem(task.getWorkItemId(),task.getWorkItemRevision());
         ToolResult result;
         try {
             // 与编排器同一入口：权限断言 + 工具执行（D3 第 2 层防护在提交时依然生效）
@@ -264,7 +286,7 @@ public class TaskGate {
 
         // 审计留痕（D9）：表单提交是写链路的一环
         try {
-            auditService.log(ctx, tool.name(), merged, "WRITE_INPUT",
+            auditService.log(ctx, tool.name(), merged, "INPUT",
                     tool.sensitivity(), result.status());
         } catch (Exception e) {
             log.warn("灵思表单审计旁路异常已忽略：tool={} err={}", tool.name(), e.getMessage());
@@ -282,6 +304,7 @@ public class TaskGate {
                 // 序列化失败保留旧 payload：用户可重试
             }
             repository.save(task);
+            if (task.getWorkItemId()!=null) workItems.settle(task);
             next.put("taskId", taskId);
             next.put("status", AgentTask.WAITING_INPUT);
             Map<String, Object> out = new LinkedHashMap<>();
@@ -293,15 +316,17 @@ public class TaskGate {
         // 分支 B：参数齐全 —— 同一任务转入确认门禁（换发一次性令牌，plan_json 整体替换为清单）
         if (result.plan() != null) {
             AgentActionPlan raw = result.plan();
-            task.setStatus(AgentTask.PENDING_CONFIRM);
+            task.setStatus(review!=null && "BLOCKED".equals(review.review(ctx,tool,raw.preview())) ? "REVIEW_REQUIRED" : AgentTask.PENDING_CONFIRM);
             task.setSummary(raw.summary());
             task.setConfirmToken("ct_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
             try {
+                if("REVIEW_REQUIRED".equals(task.getStatus())) task.setConfirmToken("");
                 task.setPlanJson(mapper.writeValueAsString(raw.toJson()));
             } catch (Exception e) {
                 log.warn("表单转清单序列化失败", e);
             }
             repository.save(task);
+            if (task.getWorkItemId()!=null) workItems.settle(task);
             AgentActionPlan persisted = new AgentActionPlan(task.getId(), raw.summary(), raw.total(),
                     raw.items(), raw.skipped(), raw.detailLines(), raw.reversible(), task.getConfirmToken(), raw.preview());
             Map<String, Object> out = new LinkedHashMap<>();
@@ -325,6 +350,7 @@ public class TaskGate {
             repository.save(task);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("status", "CANCELLED");
+            if (task.getRunId()!=null) runService.actionSettled(task,"CANCELLED");
             out.put("message", result.summary());
             return out;
         }
@@ -335,6 +361,14 @@ public class TaskGate {
         out.put("error", result.error() == null ? result.summary() : result.error());
         return out;
     }
+
+    public void cancelUnsubmitted(String stream,Long uid) {
+        if(stream==null) return;
+        for(var action:repository.findByStreamIdAndUserIdOrderByIdAsc(stream,uid)) if(action.getWorkItemId()==null && SetOfPending.contains(action.getStatus())) {
+            try {cancel(action.getId(),uid);} catch(BizException raced) { /* A started commit is reconciled from its result, never replayed. */ }
+        }
+    }
+    private static final java.util.Set<String> SetOfPending=java.util.Set.of("PENDING_CONFIRM","WAITING_INPUT","REVIEW_REQUIRED");
 
     private Map<String, Object> readFormPayload(AgentTask task) {
         if (task.getPlanJson() == null) return null;
@@ -388,8 +422,9 @@ public class TaskGate {
         }
 
         // 【乐观锁抢占】—— 影响行数 0 = 重复提交
-        int claimed = repository.claimForRun(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
-                LocalDateTime.now());
+        if (!registry.visibleTo(tool, ctx)) throw new BizException(4403,"无权限执行该操作");
+        int claimed = task.getWorkItemId()==null ? (requests==null ? repository.claimOwned(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
+                LocalDateTime.now(),com.pams.module.agent.orchestration.RuntimeIdentity.ID) : requests.claimOrdinary(task)) : workItems.claimAction(task,ctx);
         if (claimed == 0) {
             AgentTask fresh = repository.findById(taskId).orElseThrow();
             return toResultVo(fresh, true);
@@ -438,13 +473,18 @@ public class TaskGate {
         }
         repository.finish(taskId, status, resultJson, LocalDateTime.now());
 
+        String executionState = task.getRunId() == null ? null : runService.actionSettled(task,status);
+
         // 审计留痕（D9，写操作 100% 覆盖）
         auditService.logWrite(ctx, task, result.affectedCount(), status);
 
         // 推任务完成事件（D7 长任务；前端 useWebSocket 加一个订阅即可）
         Map<String, Object> done = new LinkedHashMap<>();
         done.put("type", "AGENT_TASK_DONE");
+        done.put("executionState", executionState);
         done.put("taskId", taskId);
+        done.put("runId",task.getRunId());
+        done.put("workItemId",task.getWorkItemId());
         done.put("status", status);
         done.put("summary", task.getSummary());
         done.put("affectedCount", result.affectedCount());
@@ -467,7 +507,9 @@ public class TaskGate {
         }
 
         AgentTask finished = repository.findById(taskId).orElse(task);
-        return toResultVo(finished, false);
+        Map<String,Object> response = toResultVo(finished, false);
+        response.put("executionState", executionState);
+        return response;
     }
 
     @Transactional
@@ -475,13 +517,14 @@ public class TaskGate {
         AgentTask task = repository.findByIdAndUserId(taskId, userId)
                 .orElseThrow(() -> new BizException(4404, "任务不存在或无权访问"));
         boolean cancellable = AgentTask.PENDING_CONFIRM.equals(task.getStatus())
-                || AgentTask.WAITING_INPUT.equals(task.getStatus());
+                || AgentTask.WAITING_INPUT.equals(task.getStatus()) || "REVIEW_REQUIRED".equals(task.getStatus());
         if (!cancellable) {
             throw new BizException(4400, "仅待确认或待填写的任务可以取消");
         }
         if (repository.cancelPending(taskId, userId, LocalDateTime.now()) == 0) {
             throw new BizException(4400, "任务状态已变化，请刷新后查看执行结果");
         }
+        if (task.getRunId()!=null) runService.actionSettled(task,"CANCELLED");
     }
 
     private AgentActionPlan readPlan(AgentTask task) {
@@ -568,6 +611,9 @@ public class TaskGate {
     private Map<String, Object> toResultVo(AgentTask t, boolean withPlan) {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", t.getId());
+        vo.put("runId",t.getRunId());
+        vo.put("workItemId",t.getWorkItemId());
+        vo.put("revision",t.getWorkItemRevision());
         vo.put("toolName", t.getToolName());
         vo.put("status", t.getStatus());
         vo.put("summary", t.getSummary());
@@ -632,7 +678,7 @@ public class TaskGate {
             a.put("entityType", r.get("type"));
             a.put("entityId", r.get("id"));
             a.put("name", r.get("label"));
-            a.put("path", r.get("link"));
+            a.put("path", r.get("link") instanceof String link ? com.pams.module.agent.core.BusinessLinks.normalize(link) : null);
             out.add(a);
         }
         return out;

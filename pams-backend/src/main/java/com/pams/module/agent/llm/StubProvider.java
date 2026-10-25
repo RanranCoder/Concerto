@@ -35,7 +35,8 @@ public class StubProvider implements LlmProvider {
     @Override
     public ChatResponse chat(ChatRequest request) {
         String userText = lastUserText(request);
-        List<ToolCallRequest> calls = route(userText);
+        List<ToolCallRequest> calls = route(userText).stream()
+                .filter(c -> request.tools().stream().anyMatch(t -> t.name().equals(c.name()))).toList();
 
         // 已执行过工具（有 tool 角色消息）→ 直接给兜底话术，不再无限循环调工具
         boolean alreadyRanTools = request.messages().stream()
@@ -64,17 +65,17 @@ public class StubProvider implements LlmProvider {
 
         // —— 写类：批量加分（验证确认门禁链路） ——
         if (hasAny(t, "加分", "素拓分", "批量加分")) {
-            out.add(call("previewCreditBatch", mapOf("activityId", Long.valueOf(1))));
+            out.add(call("previewCreditBatch", Map.of()));
             return out;
         }
         // —— 写类：文书起草 ——
         if (hasAny(t, "起草", "写稿", "推文", "新闻稿", "公告草稿")) {
-            out.add(call("draftArticleFromActivity", mapOf("activityId", Long.valueOf(1))));
+            out.add(call("draftArticleFromActivity", Map.of()));
             return out;
         }
         // —— 写类：议程 / 排班 ——
         if (hasAny(t, "排班")) {
-            out.add(call("generateActivitySchedule", mapOf("activityId", Long.valueOf(1))));
+            out.add(call("generateActivitySchedule", Map.of()));
             return out;
         }
         // —— 读类：待办（最高频，放最前） ——
@@ -99,7 +100,7 @@ public class StubProvider implements LlmProvider {
         }
         // —— 读类：签到统计 ——
         if (hasAny(t, "签到", "签到率", "应签", "已签")) {
-            out.add(call("queryRosterSigninStats", mapOf("activityId", Long.valueOf(1))));
+            out.add(call("queryRosterSigninStats", Map.of()));
             return out;
         }
         // —— 读类：党务（脱敏） ——
@@ -142,7 +143,10 @@ public class StubProvider implements LlmProvider {
     /** 兜底话术：明确告知当前是规则模式，并给出可用问法（避免用户以为"坏了"） */
     private String fallback(String userText, ChatRequest req) {
         StringBuilder sb = new StringBuilder();
-        sb.append("当前为**规则模式**（未接入大模型），已按关键词匹配为你执行了可用能力。\n\n");
+        sb.append("当前为**规则模式**。仅支持有限的关键词查询；复杂生成需要恢复智能服务。\n\n");
+        for (ChatMessage message : req.messages()) {
+            if ("tool".equals(message.role()) && message.content() != null) sb.append(message.content()).append("\n\n");
+        }
         if (!userText.isBlank()) {
             sb.append("你问的是：「").append(userText.length() > 60 ? userText.substring(0, 60) + "…" : userText).append("」\n\n");
         }

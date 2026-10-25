@@ -13,6 +13,7 @@ import LingsiFormCard from './LingsiFormCard'
 import LingsiArtifactCard from './LingsiArtifactCard'
 import LingsiSources from './LingsiSources'
 import LingsiMessageActions from './LingsiMessageActions'
+import LingsiWorkItems from './LingsiWorkItems'
 
 interface Props {
   msg: OutcomeMessage
@@ -89,7 +90,7 @@ export default function LingsiMessageBody({
           位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，
           过程区是「具体每一步做了什么」的明细层，先汇总后明细。
         */}
-        <LingsiTeamPanel items={timeline} active={active} />
+        {!msg.run && <LingsiTeamPanel items={timeline} active={active} />}
 
         {/* ---------- 过程区（§7.1 上半段） ---------- */}
         {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active}
@@ -119,7 +120,8 @@ export default function LingsiMessageBody({
         */}
         {msg.citations && msg.citations.length > 0 && <LingsiSources citations={msg.citations} />}
 
-        {hasPlan && msg.plan && (
+        {msg.run && <LingsiWorkItems run={msg.run} readonly={readonly} busy={planBusy || formBusy} onConfirm={onConfirmPlan} onCancel={onCancelPlan} onSubmit={onSubmitForm} />}
+        {!msg.run && hasPlan && msg.plan && (
           <LingsiActionCard
             plan={msg.plan}
             busy={planBusy}
@@ -131,7 +133,7 @@ export default function LingsiMessageBody({
         )}
 
         {/* 表单补全卡（D2.5）：与清单卡互斥——提交表单后原位变为清单卡 */}
-        {!hasPlan && msg.form && (
+        {!msg.run && !hasPlan && msg.form && (
           <LingsiFormCard
             form={msg.form}
             inline

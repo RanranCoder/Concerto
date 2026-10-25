@@ -1,3 +1,4 @@
+import { agentBusinessLink } from '@/utils/agentLinks'
 import { citationSnippet } from '@/utils/citationSnippet'
 import type { AgentCitation } from '@/api/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
@@ -117,7 +118,7 @@ export default function LingsiSources({ citations }: Props) {
                     </button>
                   )}
                   {c.link && (
-                    <a className="lingsi-source-link" href={c.link}>
+                    <a className="lingsi-source-link" href={agentBusinessLink(c.link)!}>
                       打开原文
                       <OpenExternal size={12} />
                     </a>

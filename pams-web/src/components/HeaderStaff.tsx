@@ -21,7 +21,7 @@ export default function HeaderStaff() {
         <circle cx="695" cy="12" r="3.5" />
         <circle cx="840" cy="24" r="4.5" />
       </g>
-      <circle cx="615" cy="18" r="3.5" fill="#C7F36B" />
+      <circle cx="615" cy="18" r="3.5" className="app-header-staff-accent" />
     </svg>
   )
 }

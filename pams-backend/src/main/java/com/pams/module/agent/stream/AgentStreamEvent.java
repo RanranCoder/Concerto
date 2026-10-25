@@ -25,6 +25,11 @@ import java.util.Map;
 public record AgentStreamEvent(String streamId, int seq, String type,
                                Map<String, Object> payload, long ts) {
 
+    public AgentStreamEvent withContext(com.pams.module.agent.core.ToolContext ctx) {
+        var data=new LinkedHashMap<>(payload);data.put("requestId",ctx.getRequestId());data.put("conversationId",ctx.getConversationId());
+        data.put("runId",ctx.getRunId());data.put("workItemId",ctx.getWorkItemId());data.put("revision",ctx.getWorkItemRevision());data.put("attempt",ctx.getAttempt());
+        data.put("channel",ctx.getWorkItemId()==null?"final":"task");return new AgentStreamEvent(streamId,seq,type,data,ts);
+    }
     // —— 一期实发的事件类型 ——
     /**
      * 编排自述（「正在理解你的问题…」这类后端写死的短句）。

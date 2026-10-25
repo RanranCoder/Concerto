@@ -23,7 +23,7 @@ interface Props {
 export default function LingsiTeamPanel({ items, active }: Props) {
   const [manual, setManual] = useState<boolean | null>(null)
 
-  const { agents, mode, reason, reviews } = useMemo(() => {
+  const { agents, reason, reviews } = useMemo(() => {
     const seen = new Map<string, TimelineItem>()
     let collabMode = ''
     let collabReason = ''
@@ -34,7 +34,7 @@ export default function LingsiTeamPanel({ items, active }: Props) {
         collabReason = it.label
       } else if (it.kind === 'agent' && it.agent) {
         // 同一专家可能出现多轮：保留最后一条状态（后面的覆盖前面的）
-        seen.set(it.agent, it)
+        seen.set(it.key, it)
       } else if (it.kind === 'review') {
         rv.push(it)
       }
@@ -48,18 +48,19 @@ export default function LingsiTeamPanel({ items, active }: Props) {
   // （一边藏了、一边没渲染 → 信息直接消失）
   if (!hasTeamPanel(items)) return null
 
-  const open = manual ?? Boolean(active)
-  const done = agents.filter((a) => a.completed && a.status !== 'FAILED').length
+  const waiting = agents.some(a => a.status?.startsWith('WAITING_'))
+  const open = manual ?? Boolean(active || waiting)
+  const done = agents.filter((a) => a.completed && a.status === 'SUCCESS').length
   const failed = agents.filter((a) => a.status === 'FAILED').length
   const lastReview = reviews[reviews.length - 1]
 
   const summary = (() => {
-    const parts: string[] = [`${agents.length} 位专家协作`]
-    if (mode) parts.push(mode)
+    const parts: string[] = [`${agents.length} 项执行记录`]
+    if (waiting) parts.push('需要你处理')
     if (active) parts.push(`已完成 ${done}/${agents.length}`)
     else if (failed) parts.push(`${failed} 位失败`)
-    if (lastReview) parts.push(lastReview.verdict === 'PASS' ? '审查通过' : '审查要求修订')
-    return parts.join(' · ')
+    if (lastReview) parts.push(lastReview.verdict === 'PASS' ? '基础检查已完成' : '审查要求修订')
+    return parts.join(' / ')
   })()
 
   return (
@@ -85,8 +86,8 @@ export default function LingsiTeamPanel({ items, active }: Props) {
           {reason && <div className="lingsi-team-reason">判定为协作：{reason}</div>}
           <div className="lingsi-team-list">
             {agents.map((a) => {
-              const st = !a.completed ? 'run' : a.status === 'FAILED' ? 'warn' : 'ok'
-              const text = !a.completed ? '执行中' : a.status === 'FAILED' ? '失败' : '已完成'
+              const st = !a.completed || a.status?.startsWith('WAITING_') ? 'run' : a.status === 'SUCCESS' ? 'ok' : 'warn'
+              const text = !a.completed ? '执行中' : ({ SUCCESS:'已完成', FAILED:'失败', WAITING_INPUT:'待补充', WAITING_CONFIRM:'待确认', PARTIAL:'未完成', CANCELLED:'已停止' } as Record<string,string>)[a.status ?? ''] ?? '待核对'
               return (
                 <div className="lingsi-team-agent" key={a.key}>
                   <span className="lingsi-team-av" style={{ background: agentColorOf(a.agent ?? '') }}>

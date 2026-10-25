@@ -111,7 +111,7 @@ public class KbPipeline {
                     : KbPrompts.noEvidenceReply(question);
             emitNote(ctx, streamId, "知识库里没有找到相关依据");
             writeLog(ctx, convId, question, outcome, 0, null, null, false,
-                    System.currentTimeMillis() - t0);
+                    System.currentTimeMillis() - t0,List.of());
             return new KbOutcome(reply, null, false, List.of());
         }
 
@@ -119,13 +119,13 @@ public class KbPipeline {
         emitNote(ctx, streamId, "已找到 " + allowed.size() + " 条相关依据，正在整理…");
 
         // ===== ④ 片段过闸口 → 拼 prompt → 生成 =====
-        List<ScoredChunk> safe = egressFragments(allowed);
+        List<ScoredChunk> safe = KbPrompts.selectFragments(egressFragments(allowed));
         if (safe.isEmpty()) {
             // 全部片段被出网闸口拦下（restricted）——理论上不该发生（索引期已排除），
             // 但真发生了就必须拒答，不能拿空片段去问模型
             String reply = KbPrompts.noEvidenceReply(question);
             writeLog(ctx, convId, question, outcome, 0, null, null, false,
-                    System.currentTimeMillis() - t0);
+                    System.currentTimeMillis() - t0,List.of());
             return new KbOutcome(reply, null, false, List.of());
         }
 
@@ -150,8 +150,12 @@ public class KbPipeline {
         }
 
         List<Map<String, Object>> citationMaps = toMaps(mapped.citations());
+        for(var citation:citationMaps) {
+            var fragment=safe.get(((Number)citation.get("index")).intValue()-1);
+            citation.put("inputFragment",KbPrompts.fragmentMetadata(fragment));
+        }
         writeLog(ctx, convId, question, outcome, safe.size(), skipReason,
-                response.provider(), response.degraded(), System.currentTimeMillis() - t0);
+                response.provider(), response.degraded(), System.currentTimeMillis() - t0,safe);
 
         return new KbOutcome(reply, response.provider(), response.degraded(), citationMaps);
     }
@@ -216,7 +220,7 @@ public class KbPipeline {
      */
     private void writeLog(ToolContext ctx, Long convId, String question,
                           KnowledgeQuery.RetrievalOutcome outcome, int allowedCount,
-                          String skipReason, String provider, boolean degraded, long totalMs) {
+                          String skipReason, String provider, boolean degraded, long totalMs,List<ScoredChunk> input) {
         try {
             KbRetrievalLog row = new KbRetrievalLog();
             row.setUserId(ctx.getUserId());
@@ -235,6 +239,7 @@ public class KbPipeline {
             row.setProvider(provider);
             row.setDegraded(degraded ? 1 : 0);
             row.setHitsJson(buildHitsJson(outcome.allowed()));
+            row.setInputFragmentsJson(mapper.writeValueAsString(input.stream().map(KbPrompts::fragmentMetadata).toList()));
             row.setCreatedAt(LocalDateTime.now());
             logRepository.save(row);
         } catch (Exception e) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Drawer } from 'antd'
+import { agentBusinessLink } from '@/utils/agentLinks'
 import { useNavigate } from 'react-router-dom'
 import { useAgentPanel, type PanelItem } from '@/stores/agentPanel'
 import { useAgentStore } from '@/stores/agent'
@@ -23,7 +24,7 @@ export default function LingsiEntityPanel() {
   useEffect(() => setTab('content'), [activeId])
   if (!active || collapsed) return null
   const tabs = [['content','内容预览'],['changes','本次变更'],['sources','参考资料']]
-  const showBusinessPage = (item: PanelItem) => { if (item.path) { setCollapsed(true); navigate(item.path) } }
+  const showBusinessPage = (item: PanelItem) => { if (item.path) { setCollapsed(true); navigate(agentBusinessLink(item.path)!) } }
   const content = <div className="lingsi-v6-panel-content">
     <header className="lingsi-preview-header"><div><h2>{active.title}</h2><small>与对话对照核对</small></div><button type="button" className="lingsi-icon-btn" aria-label="关闭工作成果预览" onClick={() => setCollapsed(true)}><Close size={16}/></button></header>
     {items.length > 1 && <div className="lingsi-preview-items">{items.map(it => <div key={it.id} className={active.id===it.id?'active':''}><button type="button" onClick={() => activate(it.id)} aria-pressed={active.id===it.id}>{it.title}</button><button type="button" aria-label={`关闭预览：${it.title}`} onClick={() => close(it.id)}><Close size={11}/></button></div>)}</div>}
@@ -37,7 +38,7 @@ export default function LingsiEntityPanel() {
         <div className="lingsi-preview-document-meta"><span>{active.source ? '资料片段' : result ? '已处理' : '待核对内容'}</span><LingsiCopyButton key={active.id} text={active.text || ''} label="复制预览全文" /></div>
         {active.source && <div className="lingsi-preview-empty">{active.source.sourceTitle}{active.source.path?` / ${active.source.path}`:''}{active.source.asOf?` / 数据截至 ${active.source.asOf}`:''}</div>}
         <article className="lingsi-preview-document"><LingsiMarkdown text={active.source ? citationSnippet({ ...active.source, snippet: active.text || '' }) : active.text || ''}/></article>
-        {active.source?.link && <a href={active.source.link}>打开资料原文</a>}
+        {active.source?.link && <a href={agentBusinessLink(active.source.link)!}>打开资料原文</a>}
       </> : <div className="lingsi-preview-artifact"><h2>{active.name}</h2><p>该成果已写入业务系统。请在对应页面查看完整内容与状态。</p>{active.path ? <button type="button" className="lingsi-business-link" onClick={() => showBusinessPage(active)}>打开完整页面</button> : <p>没有可跳转的业务页面。</p>}</div>}
     </div>
     <footer className="lingsi-preview-footer"><span>{active.source?'引用资料请核对适用范围':result?.text || (active.kind==='artifact'?'已产生业务成果':'尚未执行 / 请在对话中确认')}</span><button type="button" onClick={() => setCollapsed(true)}>回到对话</button></footer>

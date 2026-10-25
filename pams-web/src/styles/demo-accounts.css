@@ -1,0 +1,336 @@
+/* 登录页演示账号：固定悬浮在右侧，不参与登录卡片布局。 */
+.demo-accounts-panel {
+  position: fixed;
+  top: 50%;
+  right: 20px;
+  z-index: 30;
+  display: none;
+  width: 300px;
+  height: min(78vh, 760px);
+  transform: translateY(-50%);
+}
+
+@media (min-width: 1860px) {
+  .demo-accounts-panel { display: block; }
+}
+
+.demo-accounts-surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--canvas);
+  border: 1px solid var(--soft-strong);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-2);
+}
+
+.demo-accounts-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 8px;
+}
+
+.demo-accounts-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--demo-brand) 12%, var(--canvas));
+  color: var(--demo-brand);
+  font-size: 15px;
+}
+
+.demo-accounts-heading { flex: 1; min-width: 0; }
+.demo-accounts-heading strong {
+  display: block;
+  font-size: var(--fs-body-lg);
+  font-weight: calc(600 - var(--font-weight-compensation));
+  line-height: 1.4;
+}
+.demo-accounts-heading small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+
+.demo-accounts-count {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--soft-strong);
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-accounts-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.demo-accounts-close:hover { background: var(--soft-strong); color: var(--text-primary); }
+
+.demo-accounts-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 16px 10px;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+}
+.demo-accounts-meta code {
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  background: var(--soft-strong);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: var(--fs-micro);
+}
+.demo-accounts-meta > span { margin-left: auto; }
+
+.demo-accounts-search { padding: 0 16px 10px; }
+.demo-accounts-search .ant-input-affix-wrapper {
+  min-height: 32px;
+  border-radius: var(--r-lg);
+  background: var(--soft);
+}
+.demo-accounts-search .ant-input-prefix { color: var(--text-tertiary); margin-right: 6px; }
+.demo-accounts-search input.ant-input { background: transparent; font-size: var(--fs-caption); }
+
+.demo-accounts-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 8px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--soft-strong) transparent;
+}
+.demo-accounts-scroll::-webkit-scrollbar { width: 6px; }
+.demo-accounts-scroll::-webkit-scrollbar-thumb { background: var(--soft-strong); border-radius: var(--r-pill); }
+.demo-accounts-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.demo-accounts-group + .demo-accounts-group { margin-top: 2px; }
+
+.demo-accounts-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 8px 6px;
+  border: 0;
+  background: var(--canvas);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-micro);
+  letter-spacing: .02em;
+  text-align: left;
+  cursor: pointer;
+}
+.demo-accounts-group-head > span { font-weight: calc(600 - var(--font-weight-compensation)); }
+.demo-accounts-group-head small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+.demo-accounts-group-head .anticon {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform var(--dur) var(--ease);
+}
+.demo-accounts-group-head .anticon.collapsed { transform: rotate(-90deg); }
+
+.demo-accounts-rows { padding: 0 0 4px; }
+
+.demo-account-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.demo-account-row:hover { background: var(--soft); }
+.demo-account-row.selected {
+  background: color-mix(in srgb, var(--demo-brand) 9%, var(--canvas));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--demo-brand) 28%, transparent);
+}
+.demo-account-row:disabled { opacity: .55; cursor: default; }
+.demo-account-row:focus-visible,
+.demo-accounts-group-head:focus-visible,
+.demo-accounts-close:focus-visible,
+.demo-accounts-launcher:focus-visible {
+  outline: 2px solid var(--demo-brand);
+  outline-offset: 2px;
+}
+
+.demo-account-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--demo-brand) 10%, var(--canvas));
+  color: var(--demo-brand);
+  font-size: var(--fs-micro);
+  font-weight: calc(600 - var(--font-weight-compensation));
+}
+
+.demo-account-copy { min-width: 0; }
+.demo-account-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-caption);
+  font-weight: calc(600 - var(--font-weight-compensation));
+  line-height: 1.4;
+}
+.demo-account-position {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--soft-strong);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: calc(400 - var(--font-weight-compensation));
+  line-height: 16px;
+}
+.demo-account-username {
+  display: block;
+  overflow: hidden;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-account-fill {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  opacity: .55;
+}
+.demo-account-row:hover .demo-account-fill { color: var(--demo-brand); opacity: 1; }
+.demo-account-check { color: var(--demo-brand); font-size: 12px; }
+
+.demo-accounts-empty {
+  padding: 28px 8px;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+
+.demo-accounts-foot {
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: 9px 16px;
+  border-top: 1px solid var(--soft-strong);
+  color: var(--text-tertiary);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 窄屏入口：右侧竖排页签，点击后从右侧打开同一个列表。 */
+.demo-accounts-launcher {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 30;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 6px;
+  border: 1px solid var(--soft-strong);
+  border-right: 0;
+  border-radius: var(--r-xl) 0 0 var(--r-xl);
+  background: var(--canvas);
+  box-shadow: var(--shadow-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: calc(600 - var(--font-weight-compensation));
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.demo-accounts-launcher:hover {
+  transform: translateY(-50%) translateX(-2px);
+  box-shadow: var(--shadow-2);
+}
+.demo-accounts-launcher .anticon { color: var(--demo-brand, var(--brand)); font-size: 14px; }
+.demo-accounts-launcher > span { writing-mode: vertical-rl; letter-spacing: .12em; line-height: 1; }
+.demo-accounts-launcher b {
+  padding: 1px 4px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--demo-brand, var(--brand)) 12%, var(--canvas));
+  color: var(--demo-brand, var(--brand));
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  writing-mode: horizontal-tb;
+}
+
+.demo-accounts-drawer .ant-drawer-content-wrapper { max-width: 92vw; }
+.demo-accounts-drawer .ant-drawer-body { height: 100%; padding: 0; background: var(--canvas); }
+.demo-accounts-drawer .demo-accounts-surface {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (min-width: 1860px) {
+  .demo-accounts-launcher { display: none; }
+}
+
+@media (max-width: 760px) {
+  .demo-accounts-launcher {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px 11px;
+    border-right: 1px solid var(--soft-strong);
+    border-radius: var(--r-pill);
+    transform: none;
+  }
+  .demo-accounts-launcher:hover { transform: translateY(-1px); }
+  .demo-accounts-launcher > span { writing-mode: horizontal-tb; letter-spacing: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-accounts-launcher,
+  .demo-accounts-group-head .anticon { transition: none; }
+}

@@ -1,0 +1,47 @@
+{
+  "backend_latest_reports": {
+    "tests": 608,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 607
+  },
+  "backend_note": "Full run plus the supplemental sensitive-storage contract; counts deduplicated by latest suite report.",
+  "frontend_all": {
+    "tests": 179,
+    "passed": 179,
+    "failed": 0,
+    "note": "All five original style failures fixed; assertions and test scope unchanged. See s2-style-fixes-tests.log."
+  },
+  "browser": {
+    "passed": 7,
+    "api": "mocked",
+    "themes": [
+      "desktop light",
+      "mobile dark"
+    ]
+  },
+  "build": "passed",
+  "typescript": "passed",
+  "antd_lint": {
+    "files": 3,
+    "issues": 0
+  },
+  "deployment": "not deployed",
+  "database": "H2 integration and isolated H2 MySQL-mode migration; no production MySQL changes",
+  "post_validation_fixes": {
+    "style_failures_resolved": 5,
+    "scroll_alignment": "Fixed layout shift during the second smooth scroll; manual scrolling interrupts final correction.",
+    "browser_passed": 9,
+    "browser_api": "mocked business APIs; real SuperDoc load/edit/save and formatting controls",
+    "build": "passed including TypeScript",
+    "antd_lint_issues": 0,
+    "logs": [
+      "s2-style-fixes-tests.log",
+      "s2-style-fixes-build.log",
+      "s2-style-fixes-browser.log",
+      "s2-style-fixes-scroll.log",
+      "s2-style-fixes-antd.json"
+    ]
+  }
+}

@@ -274,7 +274,7 @@ export default function LingsiComposer({
             {modelNode}
 
             {busy ? (
-              <Tooltip title={canStop ? '停止本次回答' : '正在建立连接，请稍候'}>
+              <Tooltip title={canStop ? '停止本次回答' : '正在停止，等待执行状态确认'}>
                 <button type="button" className="lingsi-send lingsi-send-stop" aria-label="停止任务" disabled={!canStop} onClick={onStop}>
                   <Stop size={13} />
                 </button>

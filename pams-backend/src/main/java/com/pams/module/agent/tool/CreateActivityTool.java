@@ -96,7 +96,7 @@ public class CreateActivityTool implements WriteAgentTool {
         List<Map<String, Object>> fields = new ArrayList<>();
         fields.add(row("活动名称", name));
         addIfNotEmpty(fields, "活动主题", ToolArgs.str(args, "theme"));
-        addIfNotEmpty(fields, "活动类型", ToolArgs.str(args, "type"));
+        fields.add(row("活动类型", ToolArgs.str(args, "type", "OTHER")));
         if (start != null) fields.add(row("开始日期", start.toString()));
         if (end != null) fields.add(row("结束日期", end.toString()));
         addIfNotEmpty(fields, "活动地点", ToolArgs.str(args, "location"));
@@ -121,6 +121,7 @@ public class CreateActivityTool implements WriteAgentTool {
 
         Map<String, Object> exec = new LinkedHashMap<>();
         exec.put("name", name);
+        exec.put("type", ToolArgs.str(args, "type", "OTHER"));
         for (String k : List.of("theme", "type", "location", "organizer", "host", "targetAudience", "description")) {
             String v = ToolArgs.str(args, k);
             if (v != null && !v.isBlank()) exec.put(k, v);
@@ -144,7 +145,8 @@ public class CreateActivityTool implements WriteAgentTool {
             ActivityRequest req = new ActivityRequest();
             req.setName(str(exec.get("name")));
             req.setTheme(str(exec.get("theme")));
-            req.setType(str(exec.get("type")));
+            String type = str(exec.get("type"));
+            req.setType(type == null || type.isBlank() ? "OTHER" : type);
             req.setLocation(str(exec.get("location")));
             req.setOrganizer(str(exec.get("organizer")));
             req.setHost(str(exec.get("host")));

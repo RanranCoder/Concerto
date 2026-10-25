@@ -1,0 +1,199 @@
+{
+  "name": "Drawer",
+  "nameZh": "抽屉",
+  "description": "A panel that slides out from the edge of the screen.",
+  "props": [
+    {
+      "name": "autoFocus",
+      "type": "boolean",
+      "default": "true",
+      "since": "4.17.0"
+    },
+    {
+      "name": "afterOpenChange",
+      "type": "function(open)",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "className",
+      "type": "string",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "classNames",
+      "type": "[Record<SemanticDOM, string>](#semantic-dom)",
+      "default": "-",
+      "since": "5.10.0"
+    },
+    {
+      "name": "closeIcon",
+      "type": "ReactNode",
+      "default": "<CloseOutlined />",
+      "since": ""
+    },
+    {
+      "name": "destroyOnClose",
+      "type": "boolean",
+      "default": "false",
+      "since": ""
+    },
+    {
+      "name": "extra",
+      "type": "ReactNode",
+      "default": "-",
+      "since": "4.17.0"
+    },
+    {
+      "name": "footer",
+      "type": "ReactNode",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "forceRender",
+      "type": "boolean",
+      "default": "false",
+      "since": ""
+    },
+    {
+      "name": "getContainer",
+      "type": "HTMLElement | () => HTMLElement | Selectors | false",
+      "default": "body",
+      "since": ""
+    },
+    {
+      "name": "headerStyle",
+      "type": "CSSProperties",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "height",
+      "type": "string | number",
+      "default": "378",
+      "since": ""
+    },
+    {
+      "name": "keyboard",
+      "type": "boolean",
+      "default": "true",
+      "since": ""
+    },
+    {
+      "name": "mask",
+      "type": "boolean",
+      "default": "true",
+      "since": ""
+    },
+    {
+      "name": "maskClosable",
+      "type": "boolean",
+      "default": "true",
+      "since": ""
+    },
+    {
+      "name": "placement",
+      "type": "`top` | `right` | `bottom` | `left`",
+      "default": "`right`",
+      "since": ""
+    },
+    {
+      "name": "push",
+      "type": "boolean | { distance: string | number }",
+      "default": "{ distance: 180 }",
+      "since": "4.5.0+"
+    },
+    {
+      "name": "rootStyle",
+      "type": "CSSProperties",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "style",
+      "type": "CSSProperties",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "styles",
+      "type": "[Record<SemanticDOM, CSSProperties>](#semantic-dom)",
+      "default": "-",
+      "since": "5.10.0"
+    },
+    {
+      "name": "size",
+      "type": "'default' | 'large'",
+      "default": "'default'",
+      "since": "4.17.0"
+    },
+    {
+      "name": "title",
+      "type": "ReactNode",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "loading",
+      "type": "boolean",
+      "default": "false",
+      "since": "5.17.0"
+    },
+    {
+      "name": "open",
+      "type": "boolean",
+      "default": "false",
+      "since": ""
+    },
+    {
+      "name": "width",
+      "type": "string | number",
+      "default": "378",
+      "since": ""
+    },
+    {
+      "name": "zIndex",
+      "type": "number",
+      "default": "1000",
+      "since": ""
+    },
+    {
+      "name": "onClose",
+      "type": "function(e)",
+      "default": "-",
+      "since": ""
+    },
+    {
+      "name": "drawerRender",
+      "type": "(node: ReactNode) => ReactNode",
+      "default": "-",
+      "since": "5.18.0"
+    }
+  ],
+  "commonProps": [
+    {
+      "name": "className",
+      "type": "string",
+      "default": "-",
+      "description": "Additional CSS class",
+      "descriptionZh": "额外的 CSS 类名"
+    },
+    {
+      "name": "style",
+      "type": "CSSProperties",
+      "default": "-",
+      "description": "Additional style",
+      "descriptionZh": "额外的样式"
+    },
+    {
+      "name": "rootClassName",
+      "type": "string",
+      "default": "-",
+      "description": "ClassName on the root element",
+      "descriptionZh": "根元素的类名"
+    }
+  ],
+  "htmlElement": "div"
+}

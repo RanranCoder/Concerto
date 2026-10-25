@@ -8,7 +8,6 @@ import com.pams.module.agent.config.AgentProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,19 +26,11 @@ public class DeepSeekProvider implements LlmProvider {
 
     private final AgentProperties props;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final RestClient client;
     /** 流式通道独立用 JDK HttpClient：RestClient 会把响应整体缓冲，拿不到逐行 SSE */
     private final java.net.http.HttpClient sseClient;
 
     public DeepSeekProvider(AgentProperties props) {
         this.props = props;
-        this.client = RestClient.builder()
-                .baseUrl(props.getBaseUrl())
-                .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory() {{
-                    setConnectTimeout(Duration.ofMillis(props.getTimeoutMs()));
-                    setReadTimeout(Duration.ofMillis(props.getTimeoutMs()));
-                }})
-                .build();
         this.sseClient = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(props.getTimeoutMs()))
                 .build();
@@ -63,15 +54,17 @@ public class DeepSeekProvider implements LlmProvider {
         // ⚠️ 刻意取 byte[] 而不是 String：真实 API 的响应头是 application/json（**不带 charset**），
         // 而 Spring 的 StringHttpMessageConverter 在缺 charset 时按 ISO-8859-1 解码 ——
         // 中文答复会变成一堆 ? 与乱码，且不报错。JSON 按 RFC 8259 就是 UTF-8，自己解码最稳。
-        byte[] raw = client.post()
-                .uri("/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body.toString())
-                .retrieve()
-                .body(byte[].class);
-
-        return parse(raw == null ? "" : new String(raw, java.nio.charset.StandardCharsets.UTF_8));
+        var requestMessage=java.net.http.HttpRequest.newBuilder(java.net.URI.create(props.getBaseUrl()+"/chat/completions"))
+                .header(HttpHeaders.AUTHORIZATION,"Bearer "+apiKey).header(HttpHeaders.CONTENT_TYPE,MediaType.APPLICATION_JSON_VALUE)
+                .timeout(Duration.ofMillis(props.getTimeoutMs())).POST(java.net.http.HttpRequest.BodyPublishers.ofString(body.toString())).build();
+        var pending=sseClient.sendAsync(requestMessage,java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+        LlmCancellation.onCancel(()->pending.cancel(true));
+        try {
+            var response=pending.get(); LlmCancellation.check();
+            if(response.statusCode()>=300) throw new IllegalStateException("LLM 响应异常：HTTP "+response.statusCode());
+            return parse(new String(response.body(),java.nio.charset.StandardCharsets.UTF_8));
+        } catch(InterruptedException e) { pending.cancel(true); Thread.currentThread().interrupt(); throw new java.util.concurrent.CancellationException(); }
+        catch(java.util.concurrent.ExecutionException e) { throw new IllegalStateException("模型连接失败",e.getCause()); }
     }
 
     /**
@@ -134,13 +127,17 @@ public class DeepSeekProvider implements LlmProvider {
         Map<Integer, StringBuilder> callArgs = new LinkedHashMap<>();
 
         try {
-            java.net.http.HttpResponse<java.util.stream.Stream<String>> resp =
-                    sseClient.send(req, java.net.http.HttpResponse.BodyHandlers.ofLines());
+            var pending=sseClient.sendAsync(req,java.net.http.HttpResponse.BodyHandlers.ofLines());
+            LlmCancellation.onCancel(()->pending.cancel(true));
+            java.net.http.HttpResponse<java.util.stream.Stream<String>> resp = pending.get();
+            LlmCancellation.onCancel(resp.body()::close);
+            try(var lines=resp.body()) {
             if (resp.statusCode() >= 300) {
                 throw new IllegalStateException("LLM 流式响应异常：HTTP " + resp.statusCode());
             }
             // BodyHandlers.ofLines() 惰性求值：forEach 不结束连接就不关闭
-            resp.body().forEach(line -> {
+            lines.forEach(line -> {
+                LlmCancellation.check();
                 if (line == null || line.isBlank() || !line.startsWith("data:")) return;
                 String data = line.substring(5).trim();
                 if (data.isEmpty() || "[DONE]".equals(data)) return;
@@ -170,16 +167,18 @@ public class DeepSeekProvider implements LlmProvider {
                         callNames.computeIfAbsent(idx, k -> new StringBuilder()).append(fn.path("name").asText(""));
                         callArgs.computeIfAbsent(idx, k -> new StringBuilder()).append(fn.path("arguments").asText(""));
                     }
+                } catch (java.util.concurrent.CancellationException e) { throw e;
                 } catch (Exception e) {
                     // 单行解析失败只丢这一行（通常是注释/心跳），不该让整轮失败
                     log.debug("忽略无法解析的 SSE 行：{}", line);
                 }
             });
-        } catch (java.io.IOException e) {
-            throw new IllegalStateException("LLM 流式调用失败：" + e.getMessage(), e);
+            }
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new IllegalStateException("LLM 流式调用失败",e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("LLM 流式调用被中断", e);
+            throw new java.util.concurrent.CancellationException("LLM 流式调用被中断");
         }
 
         List<ToolCallRequest> calls = new ArrayList<>();

@@ -84,6 +84,10 @@ public class ArticleService {
         return Enum.valueOf(type, value);
     }
 
+    public Map<String,Object> detail(Long id) {
+        return toVo(repository.findById(id).orElseThrow(() -> new BizException(2001,"推文不存在")));
+    }
+
     private Map<String, Object> toVo(Article a) {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", a.getId());

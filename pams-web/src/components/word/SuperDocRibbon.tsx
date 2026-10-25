@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Modal } from 'antd'
+import { documentColors } from '@/styles/tokens'
 import {
   UndoOutlined, RedoOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined,
   StrikethroughOutlined, FormatPainterOutlined, ClearOutlined, AlignLeftOutlined,
@@ -221,8 +222,8 @@ export default function SuperDocRibbon({ superdoc, ready, disabled, mode, onMode
             <select className="pams-ribbon-size" aria-label="字号" disabled={blocked || !state('font-size')?.enabled} value={fontSize} onChange={event => void execute('font-size', event.target.value)}>
               <option value="" disabled>字号</option>{fontSizes.map(size => <option key={size} value={size}>{sizes.find(item => item[0] === size)?.[1] ?? size} · {size}</option>)}</select></div>
             <div className="pams-ribbon-row pams-ribbon-compact">{button('加粗', <BoldOutlined />, 'bold', undefined, true)}{button('斜体', <ItalicOutlined />, 'italic', undefined, true)}{button('下划线', <UnderlineOutlined />, 'underline', undefined, true)}{button('删除线', <StrikethroughOutlined />, 'strikethrough', undefined, true)}
-              <label className="pams-ribbon-color" title="文字颜色">A<input type="color" aria-label="文字颜色" disabled={blocked || !state('text-color')?.enabled} defaultValue="#000000" onChange={event => void execute('text-color', event.target.value)} /></label>
-              <label className="pams-ribbon-color is-highlight" title="文字高亮">A<input type="color" aria-label="文字高亮" disabled={blocked || !state('highlight-color')?.enabled} defaultValue="#fff176" onChange={event => void execute('highlight-color', event.target.value)} /></label>
+              <label className="pams-ribbon-color" title="文字颜色">A<input type="color" aria-label="文字颜色" disabled={blocked || !state('text-color')?.enabled} defaultValue={documentColors.text} onChange={event => void execute('text-color', event.target.value)} /></label>
+              <label className="pams-ribbon-color is-highlight" title="文字高亮">A<input type="color" aria-label="文字高亮" disabled={blocked || !state('highlight-color')?.enabled} defaultValue={documentColors.highlight} onChange={event => void execute('highlight-color', event.target.value)} /></label>
             </div></Group>
           <Group name="段落"><div className="pams-ribbon-row pams-ribbon-compact">{button('左对齐', <AlignLeftOutlined />, 'text-align', 'left')}{button('居中对齐', <AlignCenterOutlined />, 'text-align', 'center')}{button('右对齐', <AlignRightOutlined />, 'text-align', 'right')}{button('两端对齐', <span>☰</span>, 'text-align', 'justify')}{button('项目符号', <UnorderedListOutlined />, 'bullet-list', undefined, true)}{button('编号列表', <OrderedListOutlined />, 'numbered-list', undefined, true)}</div>
             <div className="pams-ribbon-row">{button('减少缩进', <span>⇤</span>, 'indent-decrease')}{button('增加缩进', <span>⇥</span>, 'indent-increase')}

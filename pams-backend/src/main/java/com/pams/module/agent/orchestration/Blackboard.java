@@ -23,6 +23,24 @@ public class Blackboard {
     private List<Artifact> artifacts = new ArrayList<>();
     private List<Decision> decisions = new ArrayList<>();
     private List<String> openQuestions = new ArrayList<>();
+    private boolean cancelled;
+    private String persistedState;
+    /** Live handoff only: raw confirmation tokens belong to TaskGate, not the run snapshot. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private List<SpecialistAgent.Result> results = new ArrayList<>();
+
+    public String executionState() {
+        if (persistedState != null) return persistedState;
+        if (cancelled) return "CANCELLED";
+        if (results.stream().anyMatch(r -> "CANCELLED".equals(r.state()))) return "CANCELLED";
+        if (results.stream().anyMatch(r -> "WAITING_INPUT".equals(r.state()))) return "WAITING_INPUT";
+        if (results.stream().anyMatch(r -> "WAITING_CONFIRM".equals(r.state()))) return "WAITING_CONFIRM";
+        if (results.isEmpty()) return "FAILED";
+        boolean completed = results.stream().anyMatch(r -> "SUCCESS".equals(r.state()));
+        boolean failed = results.stream().anyMatch(r -> !"SUCCESS".equals(r.state()));
+        boolean revise = !decisions.isEmpty() && "REVISE".equals(decisions.get(decisions.size()-1).getVerdict());
+        return failed || revise ? completed || results.stream().anyMatch(r -> "PARTIAL".equals(r.state())) ? "PARTIAL" : "FAILED" : "SUCCESS";
+    }
 
     public void addFinding(String agent, String summary, Double confidence) {
         Finding f = new Finding();
@@ -46,6 +64,12 @@ public class Blackboard {
         private int id;
         private String agent;
         private String task;
+        private String status = "QUEUED";
+        private Long durationMs;
+        private Long workItemId;
+        private int revision = 1;
+        private int attempt;
+        private List<Integer> dependsOn = new ArrayList<>();
     }
 
     /** 证据/发现：某 Agent 产出的结论与置信度。 */

@@ -1,3 +1,4 @@
+import { getMaterial } from '@/api/material'
 import FormSurface, { FormSection } from '@/components/form/FormSurface'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -76,6 +77,13 @@ export default function MaterialList() {
   const [saving, setSaving] = useState(false)
   const [fileId, setFileId] = useState<number | null>(null)
   const [detail, setDetail] = useState<MaterialVO | null>(null)
+  const targetId = Number(params.get('id')) || undefined
+  useEffect(() => {
+    if (!targetId) return
+    let live = true
+    getMaterial(targetId).then(material => { if (live) setDetail(material) }).catch(() => {})
+    return () => { live = false }
+  }, [targetId])
   const [preview, setPreview] = useState<MaterialVO | null>(null)
   const [form] = Form.useForm<MaterialFormValues>()
   const request = useRef(0)

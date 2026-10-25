@@ -23,7 +23,13 @@ const COLLAB_EVENT_TYPES = new Set([
   'COLLAB_DECISION', 'AGENT_START', 'AGENT_END', 'AGENT_DELEGATE', 'REVIEW_RESULT',
 ])
 let requestVersion = 0
+const runRequests = new Map<number, number>()
+const runTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const stoppedStreams = new Set<string>()
+let requestTimer: ReturnType<typeof setTimeout> | undefined
+const receivedSeqs = new Set<number>()
+let streamCursor = 0
+let reconcilingVersion: number | undefined
 
 /**
  * 收到这些事件就说明"这一轮的推理已经结束"：模型要么开始调工具、要么开始出正文、要么收官。
@@ -85,6 +91,9 @@ export interface TimelineItem {
 
 /** 结果区的一条助手消息 */
 export interface OutcomeMessage {
+  requestId?: string
+  run?: api.AgentRunView
+  executionState?: string | null
   status?: 'failed' | 'stopped'
   messageId: number | null
   streamId: string | null
@@ -273,6 +282,8 @@ interface AgentState {
 
   /* 过程区 */
   timeline: TimelineItem[]
+  activeRequestId: string | null
+  stopping: boolean
   activeStreamId: string | null
   thinking: boolean
   /**
@@ -333,6 +344,8 @@ interface AgentState {
   applyStreamEvent: (e: AgentStreamEvent) => void
   /** 任务完成事件（/user/queue/agent，AGENT_TASK_DONE） */
   applyTaskDone: (payload: Record<string, unknown>) => void
+  refreshRun: (runId: number) => Promise<void>
+  reconcileConnection: () => Promise<void>
 
   confirmPlan: (planId: number, confirmToken: string) => Promise<void>
   cancelPlan: (planId: number) => Promise<void>
@@ -573,6 +586,9 @@ export function timelineFromToolCalls(toolCalls: AgentToolCallEntry[]): Timeline
  */
 let deltaBuffer: { streamId: string; round: number; text: string } | null = null
 let deltaFrame = 0
+const deltaParts=new Map<number,string>()
+let deltaStartSeq=0
+let deltaStream: string | null=null
 
 const scheduleFrame = (cb: () => void): number =>
   typeof requestAnimationFrame === 'function'
@@ -603,7 +619,7 @@ export function flushStreamDeltas(): void {
     const idx = list.length - 1
     // REST 返回已用权威全文覆盖过（streaming=false）→ 这段缓冲作废，别追加到终稿后面
     if (idx < 0 || !list[idx].streaming || s.activeStreamId !== buffered.streamId) return {}
-    list[idx] = { ...list[idx], reply: list[idx].reply + buffered.text }
+    list[idx] = { ...list[idx], reply: buffered.text }
     return { outcomes: list }
   })
 }
@@ -614,7 +630,9 @@ function acceptStreamDelta(e: AgentStreamEvent): void {
   const text = String(e.payload?.['text'] ?? '')
   if (!text) return
   const state = useAgentStore.getState()
-  if (state.deltaRound !== round) {
+  if (state.deltaRound !== round && deltaStream===e.streamId && e.seq<deltaStartSeq) return
+  if (state.deltaRound !== round || deltaStream!==e.streamId) {
+    deltaParts.clear();deltaStartSeq=e.seq;deltaStream=e.streamId
     flushStreamDeltas()
     useAgentStore.setState((s) => {
       const list = [...s.outcomes]
@@ -627,7 +645,8 @@ function acceptStreamDelta(e: AgentStreamEvent): void {
     // reasoning on its first text chunk as well, before the answer is painted.
     useAgentStore.setState(s => ({timeline:sealThinking(s.timeline)}))
   }
-  deltaBuffer = { streamId: e.streamId, round, text: (deltaBuffer?.round === round ? deltaBuffer.text : '') + text }
+  deltaParts.set(e.seq,text)
+  deltaBuffer = { streamId: e.streamId, round, text: [...deltaParts.entries()].sort((a,b)=>a[0]-b[0]).map(([,part])=>part).join('') }
   if (!deltaFrame) {
     deltaFrame = scheduleFrame(() => {
       deltaFrame = 0
@@ -644,6 +663,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   messagesLoading: false,
   userTexts: [],
   timeline: [],
+  activeRequestId: null,
+  stopping: false,
   activeStreamId: null,
   thinking: false,
   deltaRound: null,
@@ -705,7 +726,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       currentConversationId: id,
       conversationsLoading: false,
       thinking: false,
-      activeStreamId: null,
+      activeRequestId: null,
+  stopping: false,
+  activeStreamId: null,
       outcomes: [],
       timeline: [],
       pendingPlan: null,
@@ -739,6 +762,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           messageId: m.id,
           streamId: m.streamId,
           reply: m.content,
+          executionState: m.executionState,
+          run: m.run,
           toolCalls: m.toolCalls ?? [],
           // V26 历史恢复：确认卡/表单卡/引用由后端按 stream_id 挂回，不再硬置 null
           plan: m.plan ?? null,
@@ -765,6 +790,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         })
       }
       set({ outcomes, userTexts: users, userRefs })
+      for (const o of outcomes) if (o.run?.status === 'RUNNING') void get().refreshRun(o.run.id)
     } catch {
       // http 拦截器已提示
     } finally {
@@ -788,6 +814,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (!content) return
     if (get().thinking) return
     const version = ++requestVersion
+    const requestId = crypto.randomUUID()
+    receivedSeqs.clear(); streamCursor = 0
+    if (requestTimer) clearTimeout(requestTimer)
 
     // 附加上下文必须在 set 之前取走：set 里会清空 pendingRefs，之后再读就是空数组
     const refs = get().pendingRefs
@@ -801,7 +830,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       timeline: [],
       pendingPlan: null,
       thinking: true,
-      activeStreamId: null,
+      activeRequestId: requestId,
+  stopping: false,
+  activeStreamId: null,
       deltaRound: null,
       // 用户提问与占位消息在「同一次 set」写入（单一数据源，下标一一对齐）：
       // 此前用户文案放在页面本地 state、占位消息放在 store，两条更新互相竞态，
@@ -814,6 +845,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       outcomes: [
         ...s.outcomes,
         {
+          requestId,
           messageId: null,
           streamId: null,
           reply: '',
@@ -834,20 +866,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       ],
     }))
 
+    requestTimer=setTimeout(()=>{void get().reconcileConnection()},3000)
     try {
       const res = await api.agentChat(
-        content, get().currentConversationId, get().mode, refs, get().autoCollab,
+        content, get().currentConversationId, get().mode, refs, get().autoCollab, requestId,
       )
       if (version !== requestVersion) return
+      if (requestTimer) clearTimeout(requestTimer)
       set((s) => {
         // 用真实结果替换最后那条占位
         const list = [...s.outcomes]
         const placeholderIdx = list.length - 1
         if (placeholderIdx >= 0 && list[placeholderIdx].status !== 'stopped') {
           list[placeholderIdx] = {
+            requestId: res.requestId ?? requestId,
             messageId: res.messageId,
             streamId: res.streamId,
             reply: res.reply,
+            executionState: res.executionState,
+            run: res.run,
             toolCalls: res.toolCalls ?? [],
             plan: res.plan ?? null,
             form: res.form ?? null,
@@ -877,11 +914,11 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         // 多轮「接续」（用户反馈 item 3）：本轮出了新清单 → 会话里旧的确认卡原地退役。
         // 后端创建新清单时已把旧任务置 CANCELLED；这里让旧卡立刻显式变成"已被取代"，
         // 避免"首轮确认按钮还在、但上下文已经走了"的错位感（会话中始终只有一张可确认卡）。
-        if (res.plan) {
+        if (res.plan && !res.run) {
           const newSummary = res.plan.summary
           for (let i = 0; i < list.length - 1; i += 1) {
             const o = list[i]
-            if (o.plan) {
+            if (o.plan && !o.run) {
               list[i] = {
                 ...o,
                 plan: null,
@@ -897,13 +934,16 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         return {
           outcomes: list,
           thinking: false,
-          activeStreamId: null,
+          activeRequestId: requestId,
+  stopping: false,
+  activeStreamId: null,
           currentConversationId: res.conversationId,
           pendingPlan: res.plan ?? null,
           pendingTaskCount: res.pendingTaskCount ?? s.pendingTaskCount,
         }
       })      // 新会话首次问答后刷新列表（标题已确定）
       void get().fetchConversations()
+      if (res.run) void get().refreshRun(res.run.id)
     } catch {
       if (version !== requestVersion) return
       set((s) => {
@@ -918,26 +958,54 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   stop: async () => {
-    const streamId = get().activeStreamId
-    if (!streamId) {
-      return
-    }
+    const { activeStreamId: streamId, activeRequestId: requestId, stopping } = get()
+    if (stopping || (!requestId && !streamId)) return
     flushStreamDeltas()
     requestVersion++
-    stoppedStreams.add(streamId)
-    if (stoppedStreams.size > 256) stoppedStreams.delete(stoppedStreams.values().next().value!)
-    set(s => ({ thinking:false, activeStreamId:null, outcomes:s.outcomes.map((o,i) => i===s.outcomes.length-1 ? {...o,streaming:false,status:'stopped',reply:o.reply || '任务已停止，未继续生成内容。'}:o) }))
-    try { await api.agentAbort(streamId) } catch { /* local stop remains effective */ }
+    if (streamId) {
+      stoppedStreams.add(streamId)
+      if (stoppedStreams.size > 256) stoppedStreams.delete(stoppedStreams.values().next().value!)
+    }
+    set(s => ({ stopping: true, thinking: true, outcomes: s.outcomes.map((o,i) => i===s.outcomes.length-1
+      ? {...o, executionState:'STOPPING', notice:{level:'info',text:'正在停止，等待执行状态确认。'}}:o) }))
+    const version = requestVersion
+    try {
+      if (requestId) {
+        await api.abortAgentRequest(requestId)
+        if (version === requestVersion) await get().reconcileConnection()
+      } else {
+        await api.agentAbort(streamId!)
+        if (version === requestVersion) set(s => ({ stopping:false, thinking:false, activeStreamId:null,
+          outcomes:s.outcomes.map((o,i)=>i===s.outcomes.length-1?{...o,streaming:false,status:'stopped'}:o) }))
+      }
+    } catch {
+      if (version === requestVersion) set(s => ({ stopping:false, outcomes:s.outcomes.map((o,i)=>i===s.outcomes.length-1
+        ? {...o,notice:{level:'failed',text:'停止请求尚未确认，请重试停止或查看执行结果。'}}:o) }))
+    }
   },
 
   applyStreamEvent: (e) => {
     if (stoppedStreams.has(e.streamId)) return
     const current = get()
+    const eventRequest = e.payload?.requestId
+    if (eventRequest != null && eventRequest !== current.activeRequestId) return
+    if (e.payload?.protocolVersion === 2 && !eventRequest) return
+    if (e.seq <= streamCursor || receivedSeqs.has(e.seq)) return
     if (!current.outcomes.at(-1)?.streaming) return
     if (current.outcomes.some(o => o.streamId === e.streamId && !o.streaming)) return
     if (current.activeStreamId && current.activeStreamId !== e.streamId) return
+    receivedSeqs.add(e.seq)
+    while (receivedSeqs.has(streamCursor + 1)) streamCursor++
+    // Keep only a bounded replay window. Reconnect can fall back to the saved message.
+    if (receivedSeqs.size > 4096) {
+      streamCursor=Math.max(streamCursor,Math.max(...receivedSeqs)-2048)
+      for (const seq of receivedSeqs) if (seq<=streamCursor) receivedSeqs.delete(seq)
+    }
+    if (e.type === 'MESSAGE_DELTA' && e.payload?.channel === 'task') return
     // 收官/中止类事件：先把字符流缓冲同步落地，否则最后一段正文会丢
-    if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') flushStreamDeltas()
+    if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') {
+      flushStreamDeltas();deltaParts.clear();deltaStream=null
+    }
     // 字符流走按帧合并的旁路（不进入下面的 set，避免一个 token 一次全列表重渲染）
     if (e.type === 'MESSAGE_DELTA') {
       acceptStreamDelta(e)
@@ -993,8 +1061,10 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         next.thinking = true
       }
       if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') {
+        next.stopping = false
         next.thinking = false
         next.deltaRound = null
+        if(e.type!=='MESSAGE_DONE') next.outcomes=s.outcomes.map((o,i)=>i===s.outcomes.length-1?{...o,streaming:false,status:e.type==='ABORTED'?'stopped':'failed'}:o)
       }
       // V27：依据随收官事件一起下发，用户不必等 REST 返回就能看到出处
       if (e.type === 'MESSAGE_DONE') {
@@ -1007,6 +1077,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
               reply: typeof e.payload?.reply === 'string' ? e.payload.reply : list[idx].reply,
               streaming: false,
               citations: Array.isArray(cits) ? cits as AgentCitation[] : [],
+              executionState: typeof e.payload.executionState === 'string' ? e.payload.executionState : list[idx].executionState,
             }
             next.outcomes = list
           }
@@ -1030,8 +1101,92 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
    * - 卡片不在（异步完成 / 历史轮次）→ 追加一条结果消息
    * taskId 去重：确认按钮的 REST 返回也会写同一条结果，避免重复出现两块。
    */
+  refreshRun: async (runId) => {
+    const current = get()
+    if (!current.outcomes.some(o => o.run?.id === runId)) return
+    const version = requestVersion
+    const previousRun = current.outcomes.find(o => o.run?.id === runId)?.run
+    const conversationId = current.currentConversationId
+    const sequence = (runRequests.get(runId) ?? 0) + 1
+    runRequests.set(runId, sequence)
+    const timer = runTimers.get(runId)
+    if (timer) clearTimeout(timer)
+    runTimers.delete(runId)
+    try {
+      const run = await api.getAgentRun(runId)
+      if (version !== requestVersion || runRequests.get(runId) !== sequence || get().currentConversationId !== conversationId) return
+      const latest=get().outcomes.find(o=>o.run?.id===runId)?.run
+      if ((run.stateVersion ?? 0) < (latest?.stateVersion ?? 0)) return
+      set(s => ({ outcomes: s.outcomes.map(o => o.run?.id === runId && (run.stateVersion ?? 0) >= (o.run.stateVersion ?? 0)
+        ? { ...o, run, executionState: run.status, plan: null, form: null }
+        : o) }))
+      if (['RUNNING','STOPPING'].includes(run.status)) runTimers.set(runId, setTimeout(() => { void get().refreshRun(runId) }, 1500))
+      if (run.status !== previousRun?.status || run.actions.length !== previousRun?.actions.length) void get().fetchConversations()
+    } catch { /* Keep the last durable snapshot; the next event or reopening the chat can refresh it. */ }
+  },
+
+  reconcileConnection: async () => {
+    const version = requestVersion
+    if (reconcilingVersion === version) return
+    reconcilingVersion = version
+    const requestId = get().activeRequestId
+    const conversation = get().currentConversationId
+    if (requestTimer) clearTimeout(requestTimer)
+    const stillCurrent = () => requestVersion === version && get().currentConversationId === conversation
+    try {
+      // Snapshots first, then events newer than their durable cursor.
+      for (const outcome of get().outcomes) if (outcome.run) {
+        await get().refreshRun(outcome.run.id)
+        if (!stillCurrent()) return
+        const run = get().outcomes.find(o=>o.run?.id===outcome.run!.id)?.run
+        if (run?.stateVersion != null) {
+          const replay = await api.getAgentRunEvents(run.id,run.stateVersion)
+          if (!stillCurrent()) return
+          if (replay.requiresSnapshot || replay.events.length) await get().refreshRun(run.id)
+        }
+      }
+      if (!requestId) return
+      const snapshot = await api.getAgentRequest(requestId)
+      if (!stillCurrent() || get().activeRequestId !== requestId) return
+      const existingRun=get().outcomes.find(o=>o.requestId===requestId)?.run
+      const recoveredRun=(snapshot.run?.stateVersion ?? 0) >= (existingRun?.stateVersion ?? 0) ? snapshot.run ?? existingRun : existingRun
+      const state = recoveredRun?.status ?? snapshot.status
+      const generating = ['CREATED','RUNNING','STOPPING'].includes(state)
+      set(s => ({ currentConversationId:snapshot.conversationId ?? s.currentConversationId,
+        stopping:state==='STOPPING', thinking:generating,
+        activeStreamId:generating ? snapshot.streamId : null,
+        outcomes:s.outcomes.map(o=>o.requestId!==requestId?o:{...o,
+          streamId:snapshot.streamId, run:recoveredRun ?? o.run, executionState:state,
+          ...(snapshot.message ? {
+            messageId:snapshot.message.id, reply:snapshot.message.content,
+            references:snapshot.message.references ?? [],citations:snapshot.message.citations ?? [],
+            artifacts:snapshot.message.artifacts ?? [],plan:snapshot.run?null:snapshot.message.plan,form:snapshot.run?null:snapshot.message.form,
+            timeline:timelineFromMessage(snapshot.message),toolCalls:snapshot.message.toolCalls ?? [],
+          } : {}),
+          ...(generating ? {} : {streaming:false,notice:undefined,
+            status:snapshot.cancelled?'stopped':state==='INTERRUPTED'?'failed':o.status,
+            reply:snapshot.message?.content ?? (o.reply || (snapshot.cancelled?'本次生成已停止。':'执行已中断，请核对结果后重新发起。'))}),
+        }) }))
+      // A snapshot may bind the newly created conversation; guard with request identity from here on.
+      if (snapshot.streamId && generating && !snapshot.cancelled) {
+        const replay=await api.agentStreamSince(snapshot.streamId,streamCursor)
+        if (version !== requestVersion || get().activeRequestId!==requestId) return
+        if (!replay.requiresSnapshot) for(const event of replay.events) get().applyStreamEvent(event)
+      }
+      if (generating) requestTimer=setTimeout(()=>{void get().reconcileConnection()},2000)
+    } catch { /* Preserve the last known state, and retry while a request is active. */
+      if (stillCurrent() && (get().thinking || get().stopping)) requestTimer=setTimeout(()=>{void get().reconcileConnection()},3000)
+    } finally { if(reconcilingVersion===version) reconcilingVersion=undefined }
+  },
+
   applyTaskDone: (payload) => {
+    if (typeof payload['runId'] === 'number') {
+      void get().refreshRun(payload['runId'])
+      void get().fetchConversations()
+      return
+    }
     const taskId = Number(payload['taskId'] ?? 0)
+    const executionState = typeof payload.executionState === 'string' ? payload.executionState : undefined
     const notice = noticeFromStatus(String(payload['status'] ?? ''), {
       message: payload['message'],
       summary: payload['summary'],
@@ -1062,12 +1217,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const outcomes = hasCard
         ? s.outcomes.map((o) =>
             o.plan && o.plan.planId === taskId
-              ? { ...o, plan: null, notice, artifacts: notice.artifacts ?? [] }
+              ? { ...o, plan: null, notice, executionState: executionState ?? o.executionState, artifacts: notice.artifacts ?? [] }
               : o,
           )
         : [
             ...s.outcomes,
-            { ...emptyOutcome(), provider: 'system', notice, artifacts: notice.artifacts ?? [] },
+            { ...emptyOutcome(), provider: 'system', notice, executionState, artifacts: notice.artifacts ?? [] },
           ]
       return {
         outcomes,
@@ -1086,6 +1241,11 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     // V26：令牌随卡传入而非读全局 pendingPlan——历史恢复的确认卡（msg.plan）也要能确认
     // mode 一并带上：只读档位下后端会在可见性断言处拦下（前端也已禁用按钮，这里是第二道）
     const task = await api.confirmAgentTask(planId, confirmToken, get().mode)
+    if (task.runId) {
+      await get().refreshRun(task.runId)
+      void get().fetchConversations()
+      return
+    }
     const r = (task?.result ?? {}) as Record<string, unknown>
     const notice = noticeFromStatus(String(task?.status ?? ''), {
       summary: task?.summary,
@@ -1101,22 +1261,24 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     // 原位把确认卡换成结果块：既回答"确认后到底做了什么"，也不留下还能再点的僵尸按钮
     set((s) => ({
       outcomes: s.outcomes.map((o) =>
-        o.plan && o.plan.planId === planId
-          ? { ...o, plan: null, notice, artifacts: notice.artifacts ?? [] }
+        o.plan?.planId === planId || o.notice?.taskId === planId
+          ? { ...o, plan: null, notice, executionState: task.executionState ?? o.executionState, artifacts: notice.artifacts ?? [] }
           : o,
       ),
       pendingPlan: null,
-      pendingTaskCount: Math.max(0, s.pendingTaskCount - 1),
+      pendingTaskCount: Math.max(0, s.pendingTaskCount - (s.outcomes.some(o => o.plan?.planId === planId) ? 1 : 0)),
     }))
     void get().fetchConversations()
   },
 
   cancelPlan: async (planId) => {
+    const runId = get().outcomes.find(o => o.run?.actions.some(a => a.id === planId))?.run?.id
     await api.cancelAgentTask(planId)
+    if (runId) { await get().refreshRun(runId); void get().fetchConversations(); return }
     set((s) => ({
       outcomes: s.outcomes.map((o) =>
         o.plan && o.plan.planId === planId
-          ? { ...o, plan: null, notice: { level: 'info', text: '已取消该操作，未执行写入', taskId: planId, skipped: o.plan.skipped } }
+          ? { ...o, plan: null, executionState: 'CANCELLED', notice: { level: 'info', text: '已取消该操作，未执行写入', taskId: planId, skipped: o.plan.skipped } }
           : o,
       ),
       pendingPlan: null,
@@ -1128,13 +1290,15 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   dismissPlan: () => set({ pendingPlan: null }),
 
   submitForm: async (taskId, values) => {
+    const runId = get().outcomes.find(o => o.run?.actions.some(a => a.id === taskId))?.run?.id
     const res = await api.submitTaskInput(taskId, values, get().mode)
+    if (runId) { await get().refreshRun(runId); void get().fetchConversations(); return res }
     set((s) => {
       const list = s.outcomes.map((o) => {
         if (o.form?.taskId !== taskId) return o
         if (res.status === 'PLAN' && res.plan) {
           // 参数已齐：表单卡原位变为确认卡（走既有 D2 门禁）
-          return { ...o, form: null, plan: res.plan }
+          return { ...o, form: null, plan: res.plan, executionState: 'WAITING_CONFIRM' }
         }
         if (res.status === 'FORM' && res.form) {
           return { ...o, form: { ...res.form, taskId } }
@@ -1156,6 +1320,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   reset: () => {
+    if (requestTimer) clearTimeout(requestTimer)
+    requestTimer=undefined; receivedSeqs.clear(); streamCursor=0; reconcilingVersion=undefined
+    deltaParts.clear();deltaStream=null;deltaStartSeq=0
+    for (const timer of runTimers.values()) clearTimeout(timer)
+    runTimers.clear()
+    runRequests.clear()
     requestVersion++
     flushStreamDeltas()
     stoppedStreams.clear()
@@ -1167,7 +1337,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       messagesLoading: false,
       userTexts: [],
       timeline: [],
-      activeStreamId: null,
+      activeRequestId: null,
+  stopping: false,
+  activeStreamId: null,
       thinking: false,
       deltaRound: null,
       mode: 'standard',

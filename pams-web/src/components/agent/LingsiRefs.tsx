@@ -1,3 +1,4 @@
+import { agentBusinessLink } from '@/utils/agentLinks'
 import { useNavigate } from 'react-router-dom'
 import type { AgentReference } from '@/api/agent'
 import { ArrowRight } from './LingsiIcons'
@@ -27,12 +28,12 @@ export default function LingsiRefs({ references }: Props) {
             key={`${r.type}-${r.id ?? i}`}
             style={clickable ? undefined : { cursor: 'default' }}
             onClick={() => {
-              if (clickable) navigate(r.link as string)
+              if (clickable) navigate(agentBusinessLink(r.link) as string)
             }}
             role={clickable ? 'button' : undefined}
             tabIndex={clickable ? 0 : undefined}
             onKeyDown={(e) => {
-              if (clickable && (e.key === 'Enter' || e.key === ' ')) navigate(r.link as string)
+              if (clickable && (e.key === 'Enter' || e.key === ' ')) navigate(agentBusinessLink(r.link) as string)
             }}
           >
             {r.label}

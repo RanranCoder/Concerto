@@ -72,6 +72,8 @@ public class AgentOrchestrator {
             6. 如果问题超出现有工具能力范围，直接说明你能做什么，并给出可用的问法示例。
             """;
 
+    @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.repository.AgentMessageRepository messageRows;
     private final ToolRegistry registry;
     private final LlmProvider primaryProvider;
     private final ConversationStore conversations;
@@ -92,6 +94,7 @@ public class AgentOrchestrator {
     private final CoordinatorAgent coordinatorAgent;
     /** 思维链暂存：推理是流式片段，落库发生在收官段，中间靠它按 streamId 攒起来（V35） */
     private final ThinkingTrace thinkingTrace;
+    private final ToolOutcomeHandler outcomeHandler;
 
     public AgentOrchestrator(ToolRegistry registry,
                              LlmProvider primaryProvider,
@@ -123,6 +126,7 @@ public class AgentOrchestrator {
         this.collaborationRouter = collaborationRouter;
         this.coordinatorAgent = coordinatorAgent;
         this.thinkingTrace = thinkingTrace;
+        this.outcomeHandler = new ToolOutcomeHandler(taskGate, publisher);
     }
 
     /* ===================================================================== 对外入口 */
@@ -149,7 +153,7 @@ public class AgentOrchestrator {
                                         List<Map<String, Object>> refs) {
         // streamId 记归属：补拉接口要校验"这个流是不是你的"（权限审计 A5）
         String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
-        return run(message, conversationId, ctx, streamId, refs, true);
+        return managed(message,conversationId,ctx,streamId,refs,true);
     }
 
     /**
@@ -161,7 +165,7 @@ public class AgentOrchestrator {
     public Map<String, Object> chatSync(String message, Long conversationId, ToolContext ctx,
                                         List<Map<String, Object>> refs, boolean collabEnabled) {
         String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
-        return run(message, conversationId, ctx, streamId, refs, collabEnabled);
+        return managed(message,conversationId,ctx,streamId,refs,collabEnabled);
     }
 
     /** 发起异步编排（用于显式要求后台执行的场景），立即返回 streamId */
@@ -169,7 +173,7 @@ public class AgentOrchestrator {
         String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
         agentExecutor.execute(() -> {
             try {
-                run(message, conversationId, ctx, streamId, List.of(), true);
+                managed(message, conversationId, ctx, streamId, List.of(), true);
             } catch (Exception e) {
                 log.error("灵思异步编排失败：stream={}", streamId, e);
             }
@@ -178,6 +182,31 @@ public class AgentOrchestrator {
     }
 
     /* ===================================================================== 主流程 */
+    private Map<String,Object> managed(String message,Long conversationId,ToolContext ctx,String streamId,List<Map<String,Object>> refs,boolean collab) {
+        ToolContext bound=publisher.bind(streamId,ctx);
+        try {
+            if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+            return run(message,conversationId,bound,streamId,refs,collab);
+        } catch(java.util.concurrent.CancellationException cancelled) {
+            String reply="本次生成已停止。已提交的业务动作请查看执行结果。";
+            var request=requests==null?null:requests.byStream(streamId).orElse(null);
+            Long actualConversation=request==null?conversationId:request.getConversationId();
+            Long messageId=null;
+            if(actualConversation!=null && messageRows!=null) {
+                var existing=messageRows.findByStreamIdAndRole(streamId,AgentMessage.ROLE_ASSISTANT);
+                if(existing.isEmpty()) {
+                    var saved=conversations.save(actualConversation,AgentMessage.ROLE_ASSISTANT,reply,Sensitivity.NORMAL,reply,null,List.of(),streamId,"",0,bound.getMode(),null);
+                    saved.setRunId(request==null?null:request.getRunId());conversations.saveExecutionState(saved,"CANCELLED");messageId=saved.getId();
+                    conversations.touch(actualConversation);
+                } else messageId=existing.getLast().getId();
+            }
+            emit(bound,AgentStreamEvent.aborted(streamId,publisher.nextSeq(streamId)));
+            var out=new LinkedHashMap<String,Object>(); out.put("requestId",bound.getRequestId());out.put("streamId",streamId);
+            out.put("conversationId",actualConversation);out.put("messageId",messageId);out.put("executionState","CANCELLED");out.put("reply",reply);return out;
+        } catch(RuntimeException failure) {
+            emit(bound,AgentStreamEvent.error(streamId,publisher.nextSeq(streamId),"请求未完成，请恢复请求状态后重试。"));throw failure;
+        } finally { thinkingTrace.clear(streamId);publisher.clear(streamId); }
+    }
 
     private Map<String, Object> run(String message, Long conversationId, ToolContext ctx, String streamId,
                                     List<Map<String, Object>> refs, boolean collabEnabled) {
@@ -199,6 +228,8 @@ public class AgentOrchestrator {
         // 会话在此刻才真正确定（新会话首轮 conversationId=null，streamId 也是本方法内生成的）
         // → 回填 ctx。否则：首轮任务的 conversation_id 落 NULL、任务无法与流绑定（历史恢复失效）。
         ctx = ctx.derive(convId, streamId);
+        publisher.identify(ctx);
+        if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
 
         // 用户消息落库（写时脱敏由 ConversationStore 内部完成）
         // 附加引用随消息落 refs_json：历史里能看到"当时选了哪个活动"，而不只是文字里的一个代词
@@ -243,13 +274,30 @@ public class AgentOrchestrator {
         // 协作与单 Agent 共用**同一条流**（streamId）与同一套事件：
         // 前端因此不需要知道"这次是协作"，过程区自然就把专家进度与审查结论显示出来了。
         boolean collabMode = false;
+        String collaborationState = null;
+        Long collaborationRunId = null;
         if (!kbMode) {
             CollaborationRouter.Decision decision =
                     collaborationRouter.route(message, ctx.getMode(), collabEnabled);
             if (decision.upgrade()) {
                 collabMode = true;
-                reply = runCollaboration(decision, message, convId, ctx, streamId);
-                providerName = "multi-agent";
+                String context = buildContext(convId,message,ctx,attached.note()).stream()
+                        .filter(m -> !SYSTEM_PROMPT.equals(m.content()))
+                        .map(m -> m.role()+": "+m.content()).collect(java.util.stream.Collectors.joining("\n"));
+                CollaborationOutcome collaboration = runCollaboration(decision, message, convId, ctx, streamId, context);
+                reply = collaboration.reply();
+                collaborationState = collaboration.state();
+                collaborationRunId = collaboration.runId();
+                if (collaboration.blackboard() != null) {
+                    for (var result : collaboration.blackboard().getResults()) {
+                        if (result.plan() != null) pendingPlan = result.plan();
+                        if (result.form() != null) pendingForm = result.form();
+                        toolCallVo.addAll(result.toolCalls()); allReferences.addAll(result.references());
+                        turnSensitivity = Sensitivity.max(turnSensitivity,result.sensitivity());
+                        degraded |= result.degraded();
+                        if (result.provider()!=null && !result.provider().isBlank()) providerName = result.provider();
+                    }
+                }
             }
         }
 
@@ -268,9 +316,7 @@ public class AgentOrchestrator {
             while (true) {
                 // 中止检查点（阶段边界）
                 if (publisher.isAborted(streamId)) {
-                    emit(ctx, AgentStreamEvent.aborted(streamId, publisher.nextSeq(streamId)));
-                    reply = "已中止本次回答。";
-                    break;
+                    throw new java.util.concurrent.CancellationException();
                 }
 
                 // ===== ③ 调 LLM（含重试 1 次 + 降级；文本增量按 round 实时推送） =====
@@ -363,29 +409,14 @@ public class AgentOrchestrator {
                         allReferences.addAll(result.references());
                     }
 
-                    // ===== ⑤.5 表单补全（D2.5 elicitation）：写类工具缺参 → 落 WAITING_INPUT → 推 INPUT_NEEDED → 收尾 =====
-                    // 注意顺序：FORM 判定必须在 PLAN 之前——工具一次只返回其一
-                    if (tool instanceof WriteAgentTool && result.needsInput() && result.form() != null) {
-                        // LLM 首次调用的原始参数一并入库存档，表单提交后合并重跑 dry-run
-                        pendingForm = taskGate.createForm(ctx, tool, result.form(), call.arguments());
-                        emit(ctx, AgentStreamEvent.inputNeeded(streamId, publisher.nextSeq(streamId),
-                                pendingForm));
-                        formRequested = true;
-                        break; // 一次只处理一张表单，避免多个弹窗让用户无所适从
+                    if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+                    // Both execution strategies share the same action persistence and event contract.
+                    ToolOutcomeHandler.PendingAction action = outcomeHandler.prepare(ctx,tool,result,call);
+                    if (action.form() != null) {
+                        pendingForm = action.form(); formRequested = true; break;
                     }
-
-                    // ===== ⑥ 写类工具：出清单 → 落 PENDING_CONFIRM → 推 PLAN_READY → 收尾 =====
-                    if (tool instanceof WriteAgentTool && result.plan() != null) {
-                        AgentActionPlan raw = result.plan();
-                        // dry-run 阶段返回的 plan 尚未落库，这里统一走门禁落库 + 签发一次性令牌
-                        AgentActionPlan persisted = taskGate.createPlan(ctx, tool,
-                                raw.summary(), raw.total(), raw.items(), raw.skipped(),
-                                raw.detailLines(), raw.reversible(), raw.preview());
-                        pendingPlan = persisted;
-                        emit(ctx, AgentStreamEvent.planReady(streamId, publisher.nextSeq(streamId),
-                                persisted.toJson()));
-                        writePlanProduced = true;
-                        break; // 一次只处理一个待确认清单，避免多清单让用户无所适从
+                    if (action.plan() != null) {
+                        pendingPlan = action.plan(); writePlanProduced = true; break;
                     }
 
                     // ===== 结果过 PolicyGuard 闸口才进上下文 =====
@@ -421,6 +452,7 @@ public class AgentOrchestrator {
                 }
             }
 
+        } catch (java.util.concurrent.CancellationException cancelled) { throw cancelled;
         } catch (Exception e) {
             log.error("灵思编排失败：stream={}", streamId, e);
             emit(ctx, AgentStreamEvent.error(streamId, publisher.nextSeq(streamId),
@@ -450,12 +482,17 @@ public class AgentOrchestrator {
                 streamId, providerName, duration,
                 ctx.getMode(), citationsOut.isEmpty() ? null : citationsOut,
                 thinkingJson, thinkingNotesJson);
+        saved.setRunId(collaborationRunId);
+        conversations.saveExecutionState(saved, collaborationState);
+        if (collabMode && pendingPlan != null) emit(ctx,AgentStreamEvent.planReady(streamId,publisher.nextSeq(streamId),pendingPlan.toJson()));
+        if (collabMode && pendingForm != null) emit(ctx,AgentStreamEvent.inputNeeded(streamId,publisher.nextSeq(streamId),pendingForm));
         thinkingTrace.clear(streamId);
         conversations.touch(convId);
 
         Map<String, Object> extra = new LinkedHashMap<>();
         extra.put("degraded", degraded);
         extra.put("provider", providerName);
+        extra.put("executionState", collaborationState);
         extra.put("durationMs", duration);
         // V27：依据随收官事件一起下发，前端无需再拉一次接口
         if (!citationsOut.isEmpty()) extra.put("citations", citationsOut);
@@ -464,12 +501,15 @@ public class AgentOrchestrator {
         // 组装 Controller 的返回值（契约见 业务设计方案 §3.4）
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("streamId", streamId);
+        out.put("requestId",ctx.getRequestId());
         out.put("conversationId", convId);
         out.put("messageId", saved.getId());
         out.put("reply", reply);
         out.put("toolCalls", toolCallVo);
         out.put("plan", pendingPlan == null ? null : pendingPlan.toJson());
         out.put("form", pendingForm);
+        out.put("executionState", collaborationState);
+        if (collaborationRunId!=null) out.put("run",dagScheduler.view(collaborationRunId,ctx));
         out.put("references", finalRefs);
         // V27：答案依据（服务端回填）。前端据此渲染依据卡；为空时前端需显式提示"未标注出处"
         out.put("citations", citationsOut);
@@ -690,8 +730,12 @@ public class AgentOrchestrator {
      *
      * <p>失败一律降级为可读文案而不抛异常：协作是增强路径，不能因为它出错就让对话不可用。
      */
-    private String runCollaboration(CollaborationRouter.Decision decision, String message, Long convId,
-                                    ToolContext ctx, String streamId) {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.DagScheduler dagScheduler;
+    private record CollaborationOutcome(String reply, Blackboard blackboard, String state, Long runId) {}
+
+    private CollaborationOutcome runCollaboration(CollaborationRouter.Decision decision, String message, Long convId,
+                                    ToolContext ctx, String streamId, String context) {
         // 先声明判定结果：否则用户会看到专家行突然出现却不知道原因
         emit(ctx, AgentStreamEvent.collabDecision(
                 streamId, publisher.nextSeq(streamId), convId, decision.mode(), decision.reason()));
@@ -701,17 +745,18 @@ public class AgentOrchestrator {
             // 用 runWithBlackboard：既落库 Run，又把黑板拿回来组织回复
             long t0 = System.currentTimeMillis();
             CoordinatorAgent.RunOutcome outcome =
-                    coordinatorAgent.runWithBlackboard(message, ctx, convId, decision.mode(), streamId);
+                    coordinatorAgent.runWithBlackboard(message, ctx, convId, decision.mode(), streamId, context);
             run = outcome.run();
             Blackboard bb = outcome.blackboard();
             log.info("协作完成：runId={} mode={} 专家={} 耗时={}ms",
                     run == null ? null : run.getId(), decision.mode(), decision.experts(),
                     System.currentTimeMillis() - t0);
-            return composeCollabReply(bb, decision);
+            return new CollaborationOutcome(composeCollabReply(bb, decision),bb,run.getStatus(),run.getId());
+        } catch (java.util.concurrent.CancellationException cancelled) { throw cancelled;
         } catch (Exception e) {
             log.warn("协作执行失败，本轮不产出结果：runId={}",
                     run == null ? null : run.getId(), e);
-            return "这次协作没能完成。你可以换一种说法，或把任务拆成一步再试。";
+            return new CollaborationOutcome("这次协作没能完成，请查看执行结果或稍后重试。",null,"FAILED",run==null?null:run.getId());
         }
     }
 
@@ -724,11 +769,15 @@ public class AgentOrchestrator {
      */
     private String composeCollabReply(Blackboard bb, CollaborationRouter.Decision decision) {
         StringBuilder sb = new StringBuilder();
-        sb.append("已由 ").append(decision.experts().size()).append(" 个专家协作完成");
-        if (decision.mode() != null) {
-            sb.append("（").append(decision.mode()).append("）");
-        }
-        sb.append("。\n");
+        String state = bb == null ? "FAILED" : bb.executionState();
+        sb.append(switch (state) {
+            case "WAITING_INPUT" -> "请补齐本步骤的信息，再继续处理。";
+            case "WAITING_CONFIRM" -> "已生成待确认预览，确认后才会写入。依赖该结果的步骤会在确认后继续。";
+            case "CANCELLED" -> "本次执行已停止。";
+            case "PARTIAL" -> "已保留本次结果，仍有未完成或待核对的事项。";
+            case "SUCCESS" -> "本轮任务已完成。";
+            default -> "本轮任务尚未完成，请查看执行结果。";
+        }).append('\n');
 
         if (bb == null) {
             return sb.toString();

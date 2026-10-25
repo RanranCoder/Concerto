@@ -24,7 +24,8 @@
 | 文件 | 用途 |
 | --- | --- |
 | `reset-and-seed-demo.sql` | 清空业务/账号数据，重建组织、岗位与 70 个账号 |
-| `generate_demo_seed.py` | 重新生成 SQL 与账号清单 |
+| `generate_demo_seed.py` | 重新生成 SQL、账号清单与前端演示账号数据 |
+| `demoAccounts.generated.ts` | 前端登录页演示账号数据（生成后复制到 `pams-web/src/components/auth/demoAccounts.ts`） |
 | `demo-accounts.md` / `.csv` | 账号凭据清单 |
 | `apply-demo-data.ps1` | 备份 + 执行种子 SQL 的一键脚本 |
 
@@ -58,6 +59,18 @@ powershell -ExecutionPolicy Bypass -File scripts/demo-data/apply-demo-data.ps1
 ```powershell
 cmd /c "mysql -u root -proot pams_db < .backups\pams_db-<时间戳>.sql"
 ```
+
+## 登录页演示账号面板
+
+登录页右侧提供演示账号列表：宽屏（≥ 1860px）固定显示完整列表；较窄屏幕显示右侧竖排页签，点击后从右侧抽屉打开同一列表。点击任一账号会把用户名和统一密码填入登录表单，不自动提交，也不改变登录卡片的布局和位置。
+
+![登录页演示账号面板](preview-login-demo.png)
+
+- 组件：`pams-web/src/components/auth/DemoAccountPicker.tsx`
+- 数据：`pams-web/src/components/auth/demoAccounts.ts`（由本目录生成脚本产出）
+- 样式：`pams-web/src/styles/demo-accounts.css`
+
+修改账号后，重新运行生成脚本，把 `demoAccounts.generated.ts` 复制为 `pams-web/src/components/auth/demoAccounts.ts` 即可同步。
 
 ## 说明
 

@@ -46,15 +46,15 @@ public class AgentRegistry {
 
     /** 解析工具作用域；返回 null 表示「不限」（全部可见工具）。 */
     public List<String> toolScopeOf(AgentDefinition def) {
-        if (def == null || def.getToolScope() == null || def.getToolScope().isBlank()) {
-            return null;
-        }
+        if (def == null) return List.of();
+        if (AgentCatalog.COORDINATOR.equals(def.getName()) || AgentCatalog.REVIEWER.equals(def.getName())) return List.of();
+        if (def.getToolScope() == null || def.getToolScope().isBlank()) return null;
         try {
-            return objectMapper.readValue(def.getToolScope(), new TypeReference<List<String>>() {
-            });
+            List<String> scope = objectMapper.readValue(def.getToolScope(), new TypeReference<List<String>>() {});
+            return scope == null ? List.of() : scope;
         } catch (Exception e) {
             log.warn("解析 Agent 工具作用域失败：agent={} scope={}", def.getName(), def.getToolScope(), e);
-            return null;
+            return List.of();
         }
     }
 
@@ -72,7 +72,7 @@ public class AgentRegistry {
     }
 
     private static String serialize(List<String> scope) {
-        if (scope == null || scope.isEmpty()) {
+        if (scope == null) {
             return null;
         }
         StringBuilder sb = new StringBuilder("[");

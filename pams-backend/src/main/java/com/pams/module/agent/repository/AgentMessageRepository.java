@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface AgentMessageRepository extends JpaRepository<AgentMessage, Long> {
+    List<AgentMessage> findByStreamIdAndRole(String streamId, String role);
 
     List<AgentMessage> findByConversationIdOrderByIdAsc(Long conversationId);
 

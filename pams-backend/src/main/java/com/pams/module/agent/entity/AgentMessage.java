@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "agent_message")
 public class AgentMessage implements OrgScoped {
+    private Long runId;
 
     public static final String ROLE_SYSTEM = "SYSTEM";
     public static final String ROLE_USER = "USER";
@@ -115,6 +116,9 @@ public class AgentMessage implements OrgScoped {
     /** 实际答复的 provider（deepseek/ollama/stub）——前端据此标注"规则模式"（灵思 §3.5.1） */
     @Column(length = 20)
     private String provider;
+
+    @Column(name = "execution_state", length = 20)
+    private String executionState;
 
     @Column(name = "duration_ms")
     private Integer durationMs;

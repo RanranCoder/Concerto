@@ -106,7 +106,7 @@ public class BenchmarkService {
         String streamId = publisher.newStream("bench", userId);
         ToolContext ctx = ToolContext.current(null, streamId);
         specialistExecutor.executePlan(run, bb, ctx, streamId, "P1");
-        runService.finishRun(run.getId(), AgentRun.STATUS_SUCCESS, bb);
+        runService.finishRun(run.getId(), bb.executionState(), bb);
         return toRow(batchId, task, AgentBenchmark.ARM_SINGLE, "P1", run, bb);
     }
 

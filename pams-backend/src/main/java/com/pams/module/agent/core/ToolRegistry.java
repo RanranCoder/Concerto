@@ -35,6 +35,7 @@ public class ToolRegistry {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.pams.module.agent.service.AgentRequestService requests;
     private final Map<String, AgentTool> tools = new ConcurrentHashMap<>();
 
     public ToolRegistry(List<AgentTool> all) {
@@ -103,7 +104,13 @@ public class ToolRegistry {
      * LLM 可能凭空编造工具名或参数，只有后者能兜住。
      */
     public ToolResult dispatch(String toolName, ToolContext ctx, Map<String, Object> args) {
-        if (authorization != null) ctx = authorization.refresh(ctx);
+        if(requests!=null && ctx.getStreamId()!=null && requests.byStream(ctx.getStreamId()).map(com.pams.module.agent.entity.AgentRequest::isCancelled).orElse(false)) throw new java.util.concurrent.CancellationException("本次请求已停止");
+        if (authorization != null) {
+            var ceiling=ctx.getAuthorities();
+            boolean durable=ctx.getWorkItemId()!=null;
+            ctx = authorization.refresh(ctx);
+            if(durable) ctx=ctx.restrictTo(ceiling);
+        }
         AgentTool tool = tools.get(toolName);
         if (tool == null) {
             // LLM 幻觉工具名（D5 风险表）：不抛异常，返回可读结果让编排器继续

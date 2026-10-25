@@ -34,9 +34,9 @@ class BenchmarkServiceTest {
 
     @BeforeEach
     void auth() {
+        com.pams.common.OrgContext.set(1L);
         LoginUser lu = new LoginUser(1L, "bench", "基准用户", "DIRECTOR", 4, null, null, 1L);
         var authorities = List.of(
-                new SimpleGrantedAuthority("ROLE_DIRECTOR"),
                 new SimpleGrantedAuthority("material:view"));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(lu, null, authorities));
@@ -44,6 +44,7 @@ class BenchmarkServiceTest {
 
     @AfterEach
     void clear() {
+        com.pams.common.OrgContext.clear();
         SecurityContextHolder.clearContext();
     }
 
@@ -67,8 +68,8 @@ class BenchmarkServiceTest {
         // 多 Agent 臂：参与 Agent 数应多于单 Agent
         assertThat((double) multi.get("avgAgents")).isGreaterThan(1.0);
         // 完成率
-        assertThat((double) single.get("completionRate")).isEqualTo(1.0);
-        assertThat((double) multi.get("completionRate")).isEqualTo(1.0);
+        assertThat((double) single.get("completionRate")).isLessThan(1.0);
+        assertThat((double) multi.get("completionRate")).isLessThan(1.0);
 
         // 落库：任务数 × (1 单臂 + modes)
         List<AgentBenchmark> rows = repository.findByBatchIdOrderByIdAsc((String) res.get("batchId"));

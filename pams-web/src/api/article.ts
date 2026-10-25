@@ -62,6 +62,7 @@ export const listArticles = (params: {
   page?: number
   size?: number
 }) => get<PageResult<ArticleVO>>('/articles', params)
+export const getArticle = (id: number) => get<ArticleVO>(`/articles/${id}`)
 export const createArticle = (data: ArticleSave) => post<number>('/articles', data)
 export const updateArticle = (id: number, data: ArticleSave) => put<void>(`/articles/${id}`, data)
 export const submitArticle = (id: number) => put<void>(`/articles/${id}/submit`)

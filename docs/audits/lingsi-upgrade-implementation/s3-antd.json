@@ -1,0 +1,21 @@
+{
+  "issues": [
+    {
+      "file": "pams-web/src/pages/agent/AgentHome.tsx",
+      "line": 339,
+      "rule": "deprecated",
+      "severity": "warning",
+      "message": "Drawer `width` is deprecated. Width of the Drawer dialog, please use `size` instead"
+    }
+  ],
+  "skippedFiles": [],
+  "partial": false,
+  "summary": {
+    "total": 1,
+    "deprecated": 1,
+    "a11y": 0,
+    "usage": 0,
+    "performance": 0,
+    "skipped": 0
+  }
+}

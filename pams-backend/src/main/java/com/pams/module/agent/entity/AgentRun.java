@@ -26,6 +26,18 @@ public class AgentRun implements OrgScoped {
     private Long conversationId;
     private Long userId;
     private Long orgId;
+    private long eventSeq;
+    private boolean cancelRequested;
+    private String requestId;
+    private String dispatchOwner;
+    private String streamId;
+    @Column(nullable = false, length = 10)
+    private String toolMode = "standard";
+    @Column(columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String authorityJson;
+    private String dispatchToken;
+    private LocalDateTime dispatchStartedAt;
 
     @Column(columnDefinition = "TEXT")
     private String goal;
@@ -38,6 +50,7 @@ public class AgentRun implements OrgScoped {
     private String status = STATUS_RUNNING;
 
     @Column(name = "blackboard_json", columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String blackboardJson;
 
     @Column(name = "started_at")

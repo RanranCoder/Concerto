@@ -26,11 +26,16 @@ public class AgentStep {
     private String agentName;
     private Integer seq;
     private Long parentStepId;
+    private Long workItemId;
+    private Integer attempt;
+    private Integer revision;
 
     @Column(name = "input_json", columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String inputJson;
 
     @Column(name = "output_json", columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String outputJson;
 
     @Column(nullable = false, length = 20)

@@ -23,6 +23,7 @@ public record ToolResult(
         String error,
         AgentInputForm form
 ) {
+    public ToolResult { references = BusinessLinks.references(references); }
     public static ToolResult ok(String summary) {
         return new ToolResult("OK", summary, List.of(), null, Map.of(), null, null);
     }

@@ -60,6 +60,72 @@ const task=(page:Page,title:string)=>page.locator('.lingsi-conv-select').filter(
 /** 运行模式是自建下拉（非原生 select）：点触发器展开，再点选项 */
 const pickMode=async(page:Page,label:string)=>{await page.getByRole('combobox',{name:'运行模式'}).click();await page.getByRole('option',{name:label,exact:true}).click()}
 
+for(const compact of [false,true])test(`协作清单独立确认、续跑及刷新恢复（${compact?'手机深色':'桌面浅色'}）`,async({page})=>{
+  const {errors}=await setup(page)
+  if(compact) {
+    await page.getByRole('button',{name:'切换深色'}).click()
+    await page.setViewportSize({width:390,height:844})
+    await page.getByRole('button',{name:'打开任务列表'}).click()
+  }
+  const actions=[10,11].map(id=>({id,runId:80,workItemId:id,revision:1,toolName:'draftPlanSections',status:'PENDING_CONFIRM',summary:`独立任务${id}`,plan:{...plan,planId:id,summary:`独立任务${id}`},reversible:true,artifacts:[]}))
+  const run=()=>({id:80,streamId:'durable-run',conversationId:1,status:actions.every(a=>a.status==='SUCCESS')?'SUCCESS':'WAITING_CONFIRM',
+    nodes:actions.map((a,index)=>({id:index+1,workItemId:a.id,agent:index?'writing':'planning',task:`准备任务${index+1}`,status:a.status==='SUCCESS'?'SUCCESS':'WAITING_CONFIRM',dependsOn:[],revision:1,attempt:1})),actions})
+  const confirmed:number[]=[]
+  await page.route('**/api/agent/**',async route=>{
+    const path=new URL(route.request().url()).pathname
+    let data:unknown
+    if(path==='/api/agent/conversations/1/messages')data={records:[{id:90,role:'USER',content:'分别准备两项任务'},{id:91,role:'ASSISTANT',content:'请分别核对两项预览。',run:run(),streamId:'durable-run',executionState:run().status,references:[],toolCalls:[],artifacts:[]}],total:2}
+    else if(path==='/api/agent/team/runs/80')data=run()
+    else if(/\/api\/agent\/tasks\/(10|11)\/confirm/.test(path)) {
+      const id=Number(path.split('/')[4]);confirmed.push(id)
+      const action=actions.find(a=>a.id===id)!; action.status='SUCCESS'
+      data={...action,result:{message:'已保存'},executionState:run().status}
+    } else return route.fallback()
+    await route.fulfill({json:{code:200,data}})
+  })
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(2)
+  await page.locator('.lingsi-plan').first().getByRole('button',{name:/确认执行/}).click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(1)
+  await expect(page.locator('.lingsi-plan')).toContainText('独立任务11')
+  await page.reload()
+  if(compact) {
+    await page.getByRole('button',{name:'切换深色'}).click()
+    await page.getByRole('button',{name:'打开任务列表'}).click()
+  }
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(1)
+  await page.locator('.lingsi-plan').getByRole('button',{name:/确认执行/}).click()
+  await expect(page.locator('.lingsi-plan')).toHaveCount(0)
+  await expect(page.locator('.lingsi-work-items>details>summary')).toContainText('2/2 步完成')
+  if(compact)await expect(page.locator('html')).toHaveAttribute('data-theme','dark')
+  await page.locator('.lingsi-work-items>details>summary').click()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.screenshot({path:resolve(output,`s2-durable-tasks-${compact?'dark-mobile':'light'}.png`),fullPage:true})
+  expect(confirmed).toEqual([10,11]);expect(errors).toEqual([])
+})
+
+test('成果深链接定位指定稿件、材料与公告', async ({page}) => {
+  const {errors}=await setup(page)
+  await page.route('**/api/articles/91',route=>route.fulfill({json:{code:200,data:{
+    id:91,title:'指定成果稿件',summary:'核对指定记录',content:'<p>指定稿件正文</p>',articleType:'REPORT',status:'DRAFT',
+    activityId:1,activityName:'培训班',authorId:1,imageUrls:[],coverUrl:'',createdAt:null,updatedAt:null,
+  }}}))
+  await page.goto('/content/articles?id=91')
+  await expect(page.getByRole('dialog')).toContainText('指定成果稿件')
+  await page.route('**/api/materials/92',route=>route.fulfill({json:{code:200,data:{
+    id:92,name:'指定成果材料',bizType:'PLAN',activityId:1,deptId:1,uploaderId:1,tag:'',description:'待核对材料',fileId:null,originFilename:null,createdAt:'2026-10-24',
+  }}}))
+  await page.goto('/archive/materials?id=92')
+  await expect(page.getByRole('dialog')).toContainText('指定成果材料')
+  await page.route('**/api/announcements',route=>route.fulfill({json:{code:200,data:[{
+    id:93,title:'指定成果公告',content:'指定公告正文',publisherId:1,publishTime:null,createdAt:'2026-10-24',
+  }]}}))
+  await page.goto('/archive/announcements?id=93')
+  await expect(page.getByRole('dialog')).toContainText('指定成果公告')
+  expect(errors).toEqual([])
+})
+
 for(const phone of [false,true])test(`生成中离开底部显示动态返回按钮，点击跟随输出并尊重手动上翻（${phone?'手机深色':'桌面浅色'}）`,async({page})=>{
   if(phone)await page.setViewportSize({width:390,height:844})
   await page.emulateMedia({reducedMotion:'no-preference'})
@@ -134,6 +200,8 @@ for (const phone of [false,true]) test(`发送后新消息自动移到对话区�
   await task(page,'查询归档要求').click()
   await expect(page.locator('.lingsi-user-quote')).toHaveCount(8)
   const scroll=page.locator('.lingsi-scroll')
+  const historyBottomGap=()=>scroll.evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop)
+  await expect.poll(historyBottomGap).toBeLessThan(2)
   await scroll.evaluate(el=>el.scrollTo({top:0,behavior:'instant'}))
   const question='请继续核对最新的活动安排。\n'.repeat(6).trim()
   await page.locator('.lingsi-composer-ta').fill(question)
@@ -164,6 +232,7 @@ for (const phone of [false,true]) test(`发送后新消息自动移到对话区�
   await task(page,'查询归档要求').click()
   await expect(page.locator('.lingsi-user-quote')).toHaveCount(8)
   await expect(anchored).toHaveCount(0)
+  await expect.poll(historyBottomGap).toBeLessThan(2)
 })
 
 test('长回复流式输出只维护显现窗口，保留已显示节点', async ({ page }) => {
@@ -423,4 +492,76 @@ test('手机完整显示工作区，通过抽屉打开任务与成果',async({pa
   await page.getByRole('button',{name:'切换深色'}).click()
   await page.screenshot({path:resolve(output,'conversation-mobile-dark.png'),animations:'disabled'})
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy()
+})
+
+
+test('S3 审查问题显示原文位置，修订后才出现可确认的新清单',async({page})=>{
+  const {agentModule,errors}=await setup(page)
+  let run={id:80,streamId:'review-stream',conversationId:1,status:'REVIEW_REQUIRED',stateVersion:10,
+    nodes:[{id:1,workItemId:801,agent:'writing',task:'日期应为2026-11-20',status:'REVIEW_REQUIRED',dependsOn:[],revision:1,attempt:1}],
+    reviews:{'801':{status:'BLOCKED',issues:[{id:1,revision:1,attempt:1,severity:'BLOCKING',code:'CONTENT',location:'正文第 1 行，字符 5',quote:'2025-11-20',reason:'日期与任务不一致，请改为2026年。',sourceRef:'task'}]}},
+    actions:[{id:81,runId:80,workItemId:801,revision:1,toolName:'draftArticleFromActivity',status:'REVIEW_REQUIRED',summary:'培训班推文',conversationId:1,expired:false,reversible:false,plan:{...plan,planId:81,confirmToken:'',preview:'活动在2025-11-20举行。'}}]}
+  let revisionBody:unknown
+  await page.route('**/api/agent/team/runs/80**',async route=>{
+    if(route.request().method()==='POST' && route.request().url().endsWith('/revise')) {
+      revisionBody=route.request().postDataJSON()
+      run={...run,status:'WAITING_CONFIRM',stateVersion:11,
+        nodes:[{...run.nodes[0],revision:2,attempt:2,status:'WAITING_CONFIRM'}],
+        reviews:{'801':{status:'CHECKED',issues:[]}},
+        actions:[{...run.actions[0],id:82,revision:2,status:'PENDING_CONFIRM',plan:{...plan,planId:82,confirmToken:'new-revision-token',preview:'活动在2026-11-20举行。'}}]}
+    }
+    await route.fulfill({json:{code:200,message:'成功',data:run}})
+  })
+  await page.evaluate(async ({source,run})=>{
+    const {useAgentStore}=await import(source)
+    const state=useAgentStore.getState()
+    useAgentStore.setState({currentConversationId:1,userTexts:['请准备培训班推文'],outcomes:[{messageId:800,streamId:run.streamId,reply:'正文存在需要修订的问题。',run,executionState:run.status,toolCalls:[],plan:null,form:null,references:[],artifacts:[],provider:'test',degraded:false,durationMs:1,thinking:[],thinkingNotes:[],timeline:[],streaming:false}]})
+  },{source:agentModule(),run})
+  await expect(page.getByRole('region',{name:'内容审查'})).toContainText('正文第 1 行')
+  await expect(page.getByRole('region',{name:'内容审查'})).toContainText('日期与任务不一致')
+  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toHaveCount(0)
+  await page.getByText('查看待修订正文',{exact:true}).click()
+  await expect(page.locator('.lingsi-review-preview')).toContainText('活动在2025-11-20举行。')
+  await page.screenshot({path:resolve(output,'s3-review-blocked-light.png'),animations:'disabled'})
+  await page.setViewportSize({width:390,height:844})
+  await page.getByRole('button',{name:'切换深色'}).click()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy()
+  await page.screenshot({path:resolve(output,'s3-review-blocked-dark-mobile.png'),animations:'disabled'})
+  await page.getByRole('button',{name:'修改任务说明',exact:true}).click()
+  await page.getByRole('textbox',{name:'任务说明'}).fill('请将日期修订为2026-11-20')
+  await page.getByRole('button',{name:'保存修订并继续'}).click()
+  await expect(page.getByRole('button',{name:'确认执行',exact:true})).toBeVisible()
+  expect(revisionBody).toEqual({revision:1,instruction:'请将日期修订为2026-11-20'})
+  await expect(page.getByRole('region',{name:'内容审查'})).toContainText('已完成自动审查')
+  expect(errors).toEqual([])
+})
+
+test('S3 首帧前停止可点击，停止确认前保持等待状态',async({page})=>{
+  const {agentModule,errors}=await setup(page)
+  let release!:()=>void, requestId='', stopped=false
+  const held=new Promise<void>(resolve=>release=resolve)
+  await page.route('**/api/agent/chat',async route=>{
+    requestId=route.request().postDataJSON().requestId
+    await held
+    await route.fulfill({json:{code:200,message:'成功',data:{requestId,streamId:'early-stop',conversationId:1,reply:'迟到的生成内容',toolCalls:[],references:[],plan:null,form:null}}})
+  })
+  await page.route('**/api/agent/requests/**',async route=>{
+    const id=new URL(route.request().url()).pathname.split('/')[4]
+    expect(id).toBe(requestId)
+    const data=route.request().method()==='POST'?{status:'STOPPING',aborted:true}:{requestId,streamId:null,conversationId:null,status:stopped?'CANCELLED':'STOPPING',cancelled:true}
+    await route.fulfill({json:{code:200,message:'成功',data}})
+  })
+  await page.locator('.lingsi-composer textarea').fill('测试首帧前停止')
+  await page.getByRole('button',{name:'发送任务',exact:true}).click()
+  await expect(page.getByRole('button',{name:'停止任务'})).toBeEnabled()
+  await page.getByRole('button',{name:'停止任务'}).click()
+  await expect(page.getByRole('button',{name:'停止任务'})).toBeDisabled()
+  await expect(page.locator('.lingsi-notice')).toContainText('正在停止')
+  stopped=true
+  await page.evaluate(async source=>{const {useAgentStore}=await import(source);await useAgentStore.getState().reconcileConnection()},agentModule())
+  await expect(page.locator('.lingsi-reply')).toContainText('本次生成已停止')
+  release()
+  await expect(page.locator('.lingsi-reply')).not.toContainText('迟到的生成内容')
+  expect(requestId).toMatch(/^[a-zA-Z0-9-]{8,64}$/)
+  expect(errors).toEqual([])
 })

@@ -137,7 +137,7 @@ class MultiAgentBaseTest {
         ToolContext c = ctx(1L);
         AgentRun run = coordinator.run("帮我写一篇迎新晚会推文", c, null, "P1", c.getStreamId());
         assertThat(run.getId()).isNotNull();
-        assertThat(run.getStatus()).isEqualTo(AgentRun.STATUS_SUCCESS);
+        assertThat(run.getStatus()).isEqualTo(AgentRun.STATUS_FAILED);
         assertThat(run.getBlackboardJson()).isNotBlank();
 
         List<AgentStep> steps = runService.steps(run.getId());
@@ -145,19 +145,19 @@ class MultiAgentBaseTest {
         assertThat(steps.get(0).getAgentName()).isEqualTo(AgentCatalog.COORDINATOR);
         // 计划含 writing+reviewer，故应有委派步骤
         assertThat(steps).extracting(AgentStep::getAgentName)
-                .contains(AgentCatalog.WRITING, AgentCatalog.REVIEWER);
+                .contains(AgentCatalog.WRITING);
 
         Blackboard bb = parse(run.getBlackboardJson());
         assertThat(bb).isNotNull();
         assertThat(bb.getPlan()).isNotEmpty();
         assertThat(bb.getFindings()).isNotEmpty();
-        assertThat(bb.getDecisions()).isNotEmpty(); // 审查专家的 PASS/REVISE
+        assertThat(bb.getDecisions()).isEmpty(); // Failed generation has no fabricated review.
     }
 
     @Test
     void run_isOwnershipIsolated() {
         ToolContext c = ctx(8L);
-        AgentRun run = coordinator.run("查活动", c, null, "P1", c.getStreamId());
+        AgentRun run = runService.startRun(null,c.getUserId(),"查活动","P1");
         assertThat(runService.getOwned(run.getId(), 8L).getId()).isEqualTo(run.getId());
         assertThatThrownBy(() -> runService.getOwned(run.getId(), 999L))
                 .isInstanceOf(BizException.class);
@@ -172,9 +172,9 @@ class MultiAgentBaseTest {
         ToolContext c = ctx(1L);
         AgentRun run = coordinator.run(MULTI_INTENT, c, null, "P2", c.getStreamId());
         List<AgentStep> steps = runService.steps(run.getId());
-        assertThat(steps).extracting(AgentStep::getAgentName)
-                .contains(AgentCatalog.PLANNING, AgentCatalog.WRITING, AgentCatalog.DATA, AgentCatalog.REVIEWER);
-        assertThat(steps).allMatch(s -> AgentStep.STATUS_SUCCESS.equals(s.getStatus()));
+        assertThat(steps).extracting(AgentStep::getAgentName).contains(AgentCatalog.PLANNING);
+        assertThat(run.getStatus()).isNotEqualTo(AgentRun.STATUS_SUCCESS);
+        assertThat(steps).anyMatch(s -> !AgentStep.STATUS_SUCCESS.equals(s.getStatus()));
     }
 
     @Test
@@ -183,20 +183,21 @@ class MultiAgentBaseTest {
         AgentRun run = coordinator.run("给新生写一篇推文", c, null, "P3", c.getStreamId());
         long reviewSteps = runService.steps(run.getId()).stream()
                 .filter(s -> AgentCatalog.REVIEWER.equals(s.getAgentName())).count();
-        // Stub 模式下专家不产出工具调用 → 无产物 → 审查 REVISE → 反思回路跑满上限
-        assertThat(reviewSteps).isEqualTo(SpecialistExecutor.MAX_REFLECTION_ROUNDS);
-
-        Blackboard bb = parse(run.getBlackboardJson());
-        assertThat(bb.getDecisions()).isNotEmpty();
-        assertThat(bb.getDecisions()).allMatch(d -> "REVISE".equals(d.getVerdict()));
+        // Rule fallback cannot resolve this activity. Stop instead of rerunning the same failed write.
+        assertThat(reviewSteps).isZero();
+        assertThat(run.getStatus()).isEqualTo(AgentRun.STATUS_FAILED);
+        assertThat(parse(run.getBlackboardJson()).getDecisions()).isEmpty();
     }
 
     @Test
-    void mode_P4_delegation_setsParentStep() {
+    void mode_P4_persistsDependencyNodesAndAttemptHistory() {
         ToolContext c = ctx(1L);
         AgentRun run = coordinator.run(MULTI_INTENT, c, null, "P4", c.getStreamId());
-        // 牵头专家之外的产出步骤应挂在牵头步骤之下（parentStepId 非空）
-        assertThat(runService.steps(run.getId())).anyMatch(s -> s.getParentStepId() != null);
+        assertThat(runService.steps(run.getId())).anyMatch(s -> s.getWorkItemId() != null && s.getAttempt() == 1);
+        assertThat(parse(run.getBlackboardJson()).getPlan()).anySatisfy(p -> {
+            assertThat(p.getAgent()).isEqualTo(AgentCatalog.WRITING);
+            assertThat(p.getDependsOn()).contains(1);
+        });
     }
 
     private List<String> names(Blackboard bb) {

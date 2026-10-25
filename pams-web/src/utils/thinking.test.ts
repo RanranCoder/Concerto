@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStreamEvent } from '@/api/agent'
 import { flushStreamDeltas, useAgentStore, type OutcomeMessage } from '@/stores/agent'
 import {
@@ -289,6 +289,8 @@ describe('MESSAGE_DELTA 批量落地', () => {
       streaming: true,
     }) as unknown as OutcomeMessage
 
+  beforeEach(() => { useAgentStore.getState().reset(); useAgentStore.setState({outcomes:[streamingOutcome()],activeStreamId:'s1'}) })
+
   it('不逐条写状态：先缓冲，flush 后一次写入', () => {
     useAgentStore.setState({ outcomes: [streamingOutcome()], deltaRound: null, timeline: [] })
     const { applyStreamEvent } = useAgentStore.getState()
@@ -313,6 +315,11 @@ describe('MESSAGE_DELTA 批量落地', () => {
 describe('applyStreamEvent：推理增量拼进同一段', () => {
   const ev = (seq: number, type: string, payload: Record<string, unknown>): AgentStreamEvent =>
     ({ streamId: 's1', seq, type, payload, ts: 1000 + seq } as AgentStreamEvent)
+
+  beforeEach(() => {
+    useAgentStore.getState().reset()
+    useAgentStore.setState({activeStreamId:'s1',outcomes:[{messageId:null,streamId:'s1',reply:'',toolCalls:[],plan:null,form:null,references:[],citations:[],artifacts:[],provider:'',degraded:false,durationMs:0,thinking:[],thinkingNotes:[],timeline:[],streaming:true}]})
+  })
 
   it('同 round 的多个片段合成一段（而不是每个片段一行）', () => {
     useAgentStore.setState({ timeline: [] })
