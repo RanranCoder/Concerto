@@ -23,12 +23,12 @@ public class PlanController {
     private final PlanAccessService access;
     public PlanController(PlanService service,PlanAccessService access) { this.service=service; this.access=access; }
     @GetMapping("/reviewers")
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('plan:submit')")
     public Result<?> reviewers() { return Result.ok(access.candidates(ToolContext.current(null,null))); }
     @GetMapping("/workspace")
     public Result<?> workspace(@RequestParam Long activityId) { return Result.ok(service.workspace(activityId)); }
     @PostMapping("/{id}/revision")
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('plan:edit')")
     public Result<ActivityPlan> revision(@PathVariable Long id) { return Result.ok(service.revise(id)); }
 
 
@@ -50,13 +50,13 @@ public class PlanController {
             .body(service.document(id));
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('plan:edit')")
     @PostMapping
     public Result<ActivityPlan> create(@Valid @RequestBody PlanRequest req) {
         return Result.ok(service.create(req));
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('plan:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody PlanRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -64,7 +64,7 @@ public class PlanController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('plan:submit')")
     @PutMapping("/{id}/submit")
     public Result<Void> submit(@PathVariable Long id, @Valid @RequestBody PlanSubmitRequest req,
                                @AuthenticationPrincipal LoginUser user) {
@@ -72,7 +72,7 @@ public class PlanController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:review')")
+    @PreAuthorize("hasAuthority('plan:review')")
     @PutMapping("/{id}/review")
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody PlanReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {

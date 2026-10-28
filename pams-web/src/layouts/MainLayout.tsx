@@ -119,25 +119,14 @@ export default function MainLayout() {
         icon: <CalendarOutlined />,
       })
     }
-    if (hasPerm('schedule:view')) {
-      items.push({
-        key: 'routine',
-        label: '排班考勤',
-        icon: <ScheduleOutlined />,
-        children: [
-          { key: '/routine/schedules', label: '排班' },
-          { key: '/routine/my-schedules', label: '我的排班' },
-          { key: '/routine/activity-schedules', label: '活动排班' },
-          { key: '/routine/attendance', label: '考勤' },
-          ...(hasPerm('schedule:free_table')
-            ? [
-                { key: '/routine/course-schedule', label: '无课表制作' },
-                { key: '/routine/free-schedules', label: '无课表' },
-              ]
-            : []),
-        ],
-      })
-    }
+    const routineChildren = [
+      ...(hasPerm('schedule:view') ? [{key:'/routine/schedules',label:'排班'},{key:'/routine/activity-schedules',label:'活动排班'}] : []),
+      ...(hasPerm('schedule:self:view') ? [{key:'/routine/my-schedules',label:'我的排班'}] : []),
+      ...(hasPerm('attendance:view') || hasPerm('attendance:self:view') ? [{key:'/routine/attendance',label:'考勤'}] : []),
+      ...(hasPerm('course:self:manage') || hasPerm('course:manage') ? [{key:'/routine/course-schedule',label:'课表制作'}] : []),
+      ...(hasPerm('schedule:free_table') ? [{key:'/routine/free-schedules',label:'无课表'}] : []),
+    ]
+    if (routineChildren.length) items.push({key:'routine',label:'排班考勤',icon:<ScheduleOutlined />,children:routineChildren})
     // 党务台账路由守卫是 RequireRole(LEADER_ROLES) 不含 STAFF，菜单按角色对齐避免干事点进去 403
     // 党务台账 = party 领域包；组织未启用该包时整块隐藏（A2：按领域包装配）
     if (hasPerm('party:view') && isPackEnabled(packs, 'party')) {

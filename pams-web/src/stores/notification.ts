@@ -1,77 +1,40 @@
 import { create } from 'zustand'
 import type { NotificationVO } from '@/api/notification'
 import * as api from '@/api/notification'
+import { useAuthStore } from './auth'
 
-interface NotificationState {
-  unreadCount: number
-  notifications: NotificationVO[]
-  loading: boolean
-  fetchUnreadCount: () => Promise<void>
-  fetchNotifications: () => Promise<void>
-  markAsRead: (id: number) => Promise<void>
-  markAllAsRead: () => Promise<void>
-  addRealtimeNotification: (n: NotificationVO) => void
-  setUnreadCount: (count: number) => void
-}
-
-export const useNotificationStore = create<NotificationState>()((set, _get) => ({
-  unreadCount: 0,
-  notifications: [],
-  loading: false,
-
-  fetchUnreadCount: async () => {
-    try {
-      const count = await api.getUnreadCount()
-      set({ unreadCount: count ?? 0 })
-    } catch {
-      // http interceptor handles error
-    }
-  },
-
-  fetchNotifications: async () => {
+let requestVersion = 0
+export const useNotificationStore = create<{
+  unreadCount: number; notifications: NotificationVO[]; loading: boolean; revision: number
+  refresh: () => Promise<NotificationVO[]>
+  fetchUnreadCount: () => Promise<void>; fetchNotifications: () => Promise<void>
+  markAsRead: (id: number) => Promise<void>; markAllAsRead: () => Promise<void>
+  reset: () => void
+}>()((set, get) => ({
+  unreadCount: 0, notifications: [], loading: false, revision: 0,
+  reset: () => { requestVersion++; set({ unreadCount: 0, notifications: [], loading: false, revision: get().revision + 1 }) },
+  refresh: async () => {
+    const token = useAuthStore.getState().token
+    if (!token) return []
+    const version = ++requestVersion
     set({ loading: true })
     try {
-      const list = await api.listNotifications()
-      set({ notifications: list ?? [] })
-    } catch {
-      // http interceptor handles error
+      const [list, count] = await Promise.all([api.listNotifications(), api.getUnreadCount()])
+      if (useAuthStore.getState().token !== token || version !== requestVersion) return []
+      const known = new Set(get().notifications.map(n => n.id))
+      const next = list ?? []
+      set({ notifications: next, unreadCount: count ?? 0, loading: false, revision: get().revision + 1 })
+      return next.filter(n => !known.has(n.id) && !n.read && n.notify !== false)
     } finally {
-      set({ loading: false })
+      if (version === requestVersion && token === useAuthStore.getState().token) set({ loading: false })
     }
   },
-
-  markAsRead: async (id: number) => {
-    try {
-      await api.markAsRead(id)
-      set((state) => ({
-        notifications: state.notifications.map((n) =>
-          n.id === id ? { ...n, read: true } : n,
-        ),
-        unreadCount: Math.max(0, state.unreadCount - 1),
-      }))
-    } catch {
-      // http interceptor handles error
-    }
-  },
-
-  markAllAsRead: async () => {
-    try {
-      await api.markAllAsRead()
-      set((state) => ({
-        notifications: state.notifications.map((n) => ({ ...n, read: true })),
-        unreadCount: 0,
-      }))
-    } catch {
-      // http interceptor handles error
-    }
-  },
-
-  addRealtimeNotification: (n: NotificationVO) => {
-    set((state) => ({
-      notifications: [n, ...state.notifications].slice(0, 50),
-      unreadCount: state.unreadCount + 1,
-    }))
-  },
-
-  setUnreadCount: (count: number) => set({ unreadCount: count }),
+  fetchUnreadCount: async () => { await get().refresh().catch(() => []) },
+  fetchNotifications: async () => { await get().refresh().catch(() => []) },
+  markAsRead: async id => { await api.markAsRead(id); await get().refresh() },
+  markAllAsRead: async () => { await api.markAllAsRead(); await get().refresh() },
 }))
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.token !== previous.token || state.user?.id !== previous.user?.id) useNotificationStore.getState().reset()
+})

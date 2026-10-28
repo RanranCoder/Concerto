@@ -362,7 +362,7 @@ export default function ActivityList() {
           !['FINISHED', 'ARCHIVED'].includes(r.status)
         )
           items.push({ key: 'edit', icon: <EditOutlined />, label: '编辑' })
-        if (hasPerm('activity:edit') && NEXT_STATUS[r.status]) {
+        if (hasPerm('activity:transition') && NEXT_STATUS[r.status]) {
           items.push({
             key: 'advance',
             label: `推进至${ACTIVITY_STATUS_LABEL[NEXT_STATUS[r.status]]}`,

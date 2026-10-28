@@ -1,148 +1,101 @@
 package com.pams.module.notification;
 
-import com.pams.common.BizException;
-import com.pams.entity.User;
-import com.pams.module.notification.entity.Notification;
-import com.pams.module.notification.entity.NotificationType;
-import com.pams.module.notification.repository.NotificationRepository;
-import com.pams.module.notification.service.NotificationService;
-import com.pams.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.*;
+import com.pams.common.*;
+import com.pams.module.notification.entity.*;
+import com.pams.module.notification.dto.NotificationPreferenceVO;
+import com.pams.module.notification.service.*;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
-
+@SpringBootTest
+@ActiveProfiles("test")
 class NotificationServiceTest {
-
-    NotificationRepository repo;
-    UserRepository userRepo;
-    NotificationService service;
-
-    @BeforeEach
-    void setup() {
-        repo = mock(NotificationRepository.class);
-        userRepo = mock(UserRepository.class);
-        service = new NotificationService(repo, userRepo);
-    }
-
-    @Test
-    void createAndSave_savesEntity() {
-        Notification n = new Notification();
-        n.setId(1L);
-        when(repo.save(any(Notification.class))).thenReturn(n);
-
-        Notification result = service.createAndSave(
-            NotificationType.TASK_ASSIGNED, "标题", "内容",
-            "TASK", 10L, 1L, 2L, null, null);
-
-        assertThat(result.getId()).isEqualTo(1L);
-        verify(repo).save(any(Notification.class));
-    }
-
-    @Test
-    void markAsRead_notFound_throws() {
-        when(repo.findById(99L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.markAsRead(99L, 1L))
-            .isInstanceOf(BizException.class)
-            .hasMessageContaining("通知不存在");
-    }
-
-    @Test
-    void markAsRead_setsReadAndTime() {
-        Notification n = new Notification();
-        n.setId(1L);
-        n.setIsRead(0);
-        when(repo.findById(1L)).thenReturn(Optional.of(n));
-        when(repo.save(any())).thenReturn(n);
-
-        service.markAsRead(1L, 1L);
-
-        assertThat(n.getIsRead()).isEqualTo(1);
-        assertThat(n.getReadAt()).isNotNull();
-        verify(repo).save(n);
-    }
-
-    @Test
-    void markAsRead_alreadyRead_noop() {
-        Notification n = new Notification();
-        n.setId(2L);
-        n.setIsRead(1);
-        n.setReadAt(LocalDateTime.of(2025, 1, 1, 0, 0));
-        when(repo.findById(2L)).thenReturn(Optional.of(n));
-
-        service.markAsRead(2L, 1L);
-
-        // Should not save again since already read
-        verify(repo, never()).save(any());
-    }
-
-    @Test
-    void findForUser_mapsToVO_withSenderName() {
-        Notification n = new Notification();
-        n.setId(1L);
-        n.setType(NotificationType.TASK_ASSIGNED);
-        n.setTitle("标题");
-        n.setContent("内容");
-        n.setEntityType("TASK");
-        n.setEntityId(10L);
-        n.setSenderId(1L);
-        n.setIsRead(0);
-        n.setCreatedAt(LocalDateTime.of(2025, 6, 1, 10, 0));
-
-        User sender = new User();
-        sender.setId(1L);
-        sender.setRealName("张三");
-
-        when(repo.pageForUser(any(), any(), any(), any(), any())).thenReturn(List.of(n));
-        when(userRepo.findAllById(any())).thenReturn(List.of(sender));
-
-        var result = service.findForUser(2L, null, null);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getTitle()).isEqualTo("标题");
-        assertThat(result.get(0).getType()).isEqualTo("TASK_ASSIGNED");
-        assertThat(result.get(0).getSenderName()).isEqualTo("张三");
-        assertThat(result.get(0).isRead()).isFalse();
-    }
-
-    @Test
-    void findForUser_senderNotSet_senderNameNull() {
-        Notification n = new Notification();
-        n.setId(2L);
-        n.setType(NotificationType.PLAN_SUBMITTED);
-        n.setTitle("t");
-        n.setContent("c");
-        n.setIsRead(1);
-        n.setCreatedAt(LocalDateTime.now());
-
-        when(repo.pageForUser(any(), any(), any(), any(), any())).thenReturn(List.of(n));
-
-        var result = service.findForUser(2L, null, null);
-
-        assertThat(result.get(0).getSenderName()).isNull();
-        verify(userRepo, never()).findAllById(any());
-    }
-
-    @Test
-    void countUnreadForUser_delegatesToRepo() {
-        when(repo.countUnreadForUser(2L, "ROLE_USER", 10L)).thenReturn(5L);
-
-        long count = service.countUnreadForUser(2L, "ROLE_USER", 10L);
-
-        assertThat(count).isEqualTo(5L);
-    }
-
-    @Test
-    void markAllAsRead_delegatesToRepo() {
-        service.markAllAsRead(2L, "ROLE_USER", 10L);
-
-        verify(repo).markAllAsRead(eq(2L), eq("ROLE_USER"), eq(10L), any(LocalDateTime.class));
-    }
+  @Autowired NotificationService service;
+  @Autowired NotificationOutboxWorker worker;
+  @Autowired JdbcTemplate db;
+  @Autowired PlatformTransactionManager manager;
+  @Autowired org.springframework.context.ApplicationEventPublisher events;
+  TransactionTemplate tx;
+  long teacher,staff;
+  @BeforeEach void setup(){
+    OrgContext.set(1L);tx=new TransactionTemplate(manager);
+    teacher=db.queryForObject("SELECT id FROM sys_user WHERE username='teacher'",Long.class);
+    staff=db.queryForObject("SELECT id FROM sys_user WHERE username='staff'",Long.class);
+  }
+  @AfterEach void cleanup(){OrgContext.clear();}
+  Notification send(Long user,String role){return service.createAndSave(NotificationType.SYSTEM,"测试-"+UUID.randomUUID(),"test",null,null,null,user,role,null);}
+  @Test void rollbackDoesNotLeakOutboxOrInbox(){
+    long before=db.queryForObject("SELECT COUNT(*) FROM notification_outbox",Long.class);
+    tx.executeWithoutResult(s->{send(teacher,null);s.setRollbackOnly();});
+    worker.tick();
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_outbox",Long.class)).isEqualTo(before);
+  }
+  @Test void longBusinessCommentsAreSummarizedWithoutRejectingTheTransaction(){
+    var n=tx.execute(s->service.createAndSave(NotificationType.SYSTEM,"有效业务结果","审".repeat(1000),null,null,null,teacher,null,null));
+    assertThat(n.getContent()).hasSize(500).endsWith("…");
+    worker.tick();
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE message_id=?",Long.class,n.getId())).isEqualTo(1);
+  }
+  @Test void committedEventRecoversAndRepeatedDeliveryIsIdempotent(){
+    Notification n=tx.execute(s->send(teacher,null));
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE message_id=?",Long.class,n.getId())).isZero();
+    worker.tick();
+    db.update("UPDATE notification_outbox SET status='PENDING',next_attempt_at=CURRENT_TIMESTAMP WHERE message_id=?",n.getId());
+    worker.tick();
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE message_id=?",Long.class,n.getId())).isEqualTo(1);
+    assertThat(service.findForUser(teacher,null,null)).anyMatch(v->v.getId().equals(n.getId()));
+  }
+  @Test void independentReadsAndOwnershipAndTenantChecks(){
+    Notification n=tx.execute(s->service.createAndSave(NotificationType.SYSTEM,"共同消息-"+UUID.randomUUID(),"test",null,null,null,teacher,"STAFF",null));
+    worker.tick();
+    assertThat(db.queryForList("SELECT user_id FROM notification_inbox WHERE message_id=?",Long.class,n.getId()))
+      .as("outbox=%s targets=%s",db.queryForList("SELECT * FROM notification_outbox WHERE message_id=?",n.getId()),db.queryForList("SELECT * FROM notification_outbox_recipient"))
+      .contains(teacher,staff);
+    service.markAsRead(n.getId(),teacher);service.markAsRead(n.getId(),teacher);
+    assertThat(db.queryForObject("SELECT read_at IS NULL FROM notification_inbox WHERE message_id=? AND user_id=?",Boolean.class,n.getId(),staff)).isTrue();
+    assertThatThrownBy(()->service.markAsRead(n.getId(),-1L)).isInstanceOf(BizException.class);
+    OrgContext.set(2L);
+    assertThatThrownBy(()->service.markAsRead(n.getId(),teacher)).isInstanceOf(BizException.class);
+    assertThat(service.countUnreadForUser(teacher,null,null)).isZero();
+  }
+  @Test void duplicateAudienceWithinOneTransactionAndPersistentPreference(){
+    String title="去重-"+UUID.randomUUID();
+    long id=tx.execute(s->{
+      var first=service.createAndSave(NotificationType.SYSTEM,title,"test",null,null,null,teacher,null,null);
+      var second=service.createAndSave(NotificationType.SYSTEM,title,"test",null,null,null,teacher,null,null);
+      assertThat(second.getId()).isEqualTo(first.getId());return first.getId();
+    });
+    worker.tick();
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE message_id=?",Long.class,id)).isEqualTo(1);
+    service.savePreferences(teacher,List.of(NotificationPreferenceVO.of("ARTICLE_PUBLISHED",false,false)));
+    assertThat(service.getPreferences(teacher)).anyMatch(p->p.getType().equals("ARTICLE_PUBLISHED") && !p.isEnabled());
+    assertThat(db.queryForObject("SELECT enabled FROM notification_preference WHERE org_id=1 AND user_id=? AND event_type='ARTICLE_PUBLISHED'",Boolean.class,teacher)).isFalse();
+  }
+  @Test void selectedPlanReviewerReceivesCommittedSubmissionAndActionTracksBusinessState(){
+    String name="审核链路-"+UUID.randomUUID();
+    long plan=tx.execute(s->{
+      db.update("INSERT INTO activity(name,status,org_id,deleted,created_at,updated_at) VALUES(?,'ASSIGNED',1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",name);
+      Long activity=db.queryForObject("SELECT id FROM activity WHERE name=?",Long.class,name);
+      db.update("INSERT INTO activity_plan(activity_id,version,status,owner_id,submitter_id,org_id,revision,created_at,updated_at) VALUES(?,1,'PENDING',?,?,1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",activity,staff,staff);
+      Long id=db.queryForObject("SELECT id FROM activity_plan WHERE activity_id=?",Long.class,activity);
+      db.update("INSERT INTO activity_plan_review(plan_id,reviewer_id,name) VALUES(?,?,?)",id,teacher,"审核人");
+      events.publishEvent(new com.pams.module.notification.event.PlanSubmittedEvent(id,activity,name,staff,List.of(teacher)));
+      return id;
+    });
+    worker.tick();
+    var notice=service.findForUser(teacher,null,null).stream().filter(v->"PLAN_SUBMITTED".equals(v.getType()) && Objects.equals(v.getEntityId(),plan)).findFirst().orElseThrow();
+    assertThat(notice.getActionState()).isEqualTo("open");
+    service.markAsRead(notice.getId(),teacher);
+    assertThat(service.findForUser(teacher,null,null).stream().filter(v->v.getId().equals(notice.getId())).findFirst().orElseThrow().getActionState()).isEqualTo("open");
+    db.update("UPDATE activity_plan_review SET approved=TRUE WHERE plan_id=? AND reviewer_id=?",plan,teacher);
+    assertThat(service.findForUser(teacher,null,null).stream().filter(v->v.getId().equals(notice.getId())).findFirst().orElseThrow().getActionState()).isEqualTo("completed");
+    assertThat(service.findForUser(teacher,null,null).stream().filter(v->v.getId().equals(notice.getId())).findFirst().orElseThrow().isNotify()).isFalse();
+  }
 }

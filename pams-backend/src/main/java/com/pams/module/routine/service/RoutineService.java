@@ -76,6 +76,7 @@ public class RoutineService {
     public Long createSchedule(ScheduleRequest req) {
         Schedule s = new Schedule();
         applySchedule(s, req);
+        s.setStatus(Schedule.STATUS_DRAFT);
         s.setCreatedAt(LocalDateTime.now());
         s.setUpdatedAt(LocalDateTime.now());
         Schedule saved = scheduleRepository.save(s);
@@ -85,7 +86,8 @@ public class RoutineService {
 
     @Transactional
     public void updateSchedule(Long id, ScheduleRequest req) {
-        Schedule s = getSchedule(id);
+        Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        requirePublishedMutation(s);
         applySchedule(s, req);
         scheduleRepository.save(s);
         schedulePersonRepository.deleteByScheduleId(id);
@@ -94,7 +96,7 @@ public class RoutineService {
 
     @Transactional
     public void deleteSchedule(Long id) {
-        getSchedule(id);
+        requirePublishedMutation(scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在")));
         schedulePersonRepository.deleteByScheduleId(id);
         // attendance.schedule_id 有 FK 约束，先清掉该排班的考勤记录再删排班
         attendanceRepository.deleteByScheduleId(id);
@@ -125,9 +127,10 @@ public class RoutineService {
     public List<Schedule> listMySchedules(Long userId, String realName) {
         List<Schedule> all = listSchedules(null, null, null, null);
         return all.stream()
+                .filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus()) || Schedule.STATUS_ENDED.equals(s.getStatus()))
                 .filter(s -> s.getPersons().stream().anyMatch(p ->
                         (userId != null && p.getUserId() != null && userId.equals(p.getUserId()))
-                                || (p.getUserId() == null && realName != null && realName.equalsIgnoreCase(p.getPersonName()))))
+                                ))
                 .collect(Collectors.toList());
     }
 
@@ -206,6 +209,11 @@ public class RoutineService {
         }
     }
 
+    private void requirePublishedMutation(Schedule s) {
+        if ((s.getStatus() == null || Schedule.STATUS_PUBLISHED.equals(s.getStatus()))
+                && !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("schedule:publish"))
+            throw new BizException(403,"修改已生效班次需要排班发布权限");
+    }
     private Schedule getSchedule(Long id) {
         return scheduleRepository.findById(id).orElseThrow(() -> new BizException(2401, "排班不存在"));
     }
@@ -217,6 +225,43 @@ public class RoutineService {
     }
 
     // ==================== 考勤 ====================
+
+    /** Public self-service never trusts the submitted person, result status or a matching name. */
+    @Transactional
+    public Attendance checkInSelf(AttendanceRequest req) {
+        var ctx = com.pams.module.agent.core.ToolContext.current(null, null);
+        if (ctx.getUserId() == null || !ctx.hasPermission("schedule:check"))
+            throw new BizException(403, "没有本人打卡权限");
+        Schedule schedule = scheduleRepository.lockById(req.getScheduleId()).orElseThrow(() -> new BizException(404,"班次不存在或不可见"));
+        if (!Schedule.STATUS_PUBLISHED.equals(schedule.getStatus()))
+            throw new BizException(409, "仅已发布班次可打卡");
+        var today = java.time.LocalDate.now();
+        if (schedule.getScheduleDate() != null ? !today.equals(schedule.getScheduleDate())
+                : schedule.getWeekday() == null || schedule.getWeekday() != today.getDayOfWeek().getValue())
+            throw new BizException(409, "不在本班次打卡日期内");
+        var now = java.time.LocalTime.now();
+        if (schedule.getStartTime() != null && LocalDateTime.now().isBefore(today.atTime(schedule.getStartTime()).minusMinutes(30))
+                || schedule.getEndTime() != null && now.isAfter(schedule.getEndTime()))
+            throw new BizException(409, "不在本班次打卡时间内");
+        var person = schedulePersonRepository.findByScheduleId(schedule.getId()).stream()
+                .filter(p -> ctx.getUserId().equals(p.getUserId())).findFirst()
+                .orElseThrow(() -> new BizException(403, "本班次未关联你的账号，请联系排班人员核对"));
+        var existing = attendanceRepository.findByScheduleId(schedule.getId()).stream()
+                .filter(a -> ctx.getUserId().equals(a.getPersonId())).findFirst();
+        Attendance attendance = existing.orElseGet(Attendance::new);
+        if (existing.isPresent() && !Attendance.STATUS_PENDING.equals(attendance.getStatus()))
+            return attendance;
+        attendance.setScheduleId(schedule.getId());
+        attendance.setPersonId(ctx.getUserId());
+        attendance.setPersonName(person.getPersonName());
+        attendance.setStatus(schedule.getStartTime() != null && now.isAfter(schedule.getStartTime())
+                ? Attendance.STATUS_LATE : Attendance.STATUS_NORMAL);
+        attendance.setStatusSource(Attendance.SOURCE_AUTO);
+        attendance.setCheckedInAt(LocalDateTime.now());
+        attendance.setRecordTime(LocalDateTime.now());
+        if (attendance.getCreatedAt() == null) attendance.setCreatedAt(LocalDateTime.now());
+        return attendanceRepository.save(attendance);
+    }
 
     @Transactional
     public Attendance createAttendance(AttendanceRequest req) {

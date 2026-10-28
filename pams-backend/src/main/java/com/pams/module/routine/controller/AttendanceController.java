@@ -31,7 +31,7 @@ public class AttendanceController {
     }
 
     /** 考勤中心列表（含活动/场次展开）。attendance:view 或 schedule:check 可见 */
-    @PreAuthorize("hasAnyAuthority('attendance:view','schedule:check')")
+    @PreAuthorize("hasAuthority('attendance:view')")
     @GetMapping
     public Result<List<AttendanceVO>> list(@RequestParam(required = false) Long activityId,
                                            @RequestParam(required = false) LocalDate date,
@@ -52,7 +52,7 @@ public class AttendanceController {
     }
 
     /** 考勤统计卡：todayActivities/shouldAttend/signed/normal/late/absent/leave/makeup/pending */
-    @PreAuthorize("hasAnyAuthority('attendance:view','schedule:check')")
+    @PreAuthorize("hasAuthority('attendance:view')")
     @GetMapping("/stats")
     public Result<Map<String, Object>> stats(@RequestParam(required = false) Long activityId,
                                              @RequestParam(required = false) LocalDate date,
@@ -73,13 +73,14 @@ public class AttendanceController {
     }
 
     /** 我的考勤 */
+    @PreAuthorize("hasAuthority('attendance:self:view')")
     @GetMapping("/my")
     public Result<List<AttendanceVO>> my(@AuthenticationPrincipal LoginUser user) {
         return Result.ok(manageService.my(user.getId(), user.getRealName()));
     }
 
     /** 人工修改考勤状态（写审计，置 MANUAL） */
-    @PreAuthorize("hasAnyAuthority('attendance:manage','checkin:manage','schedule:check')")
+    @PreAuthorize("hasAuthority('attendance:manage')")
     @PutMapping("/{id}/status")
     public Result<Attendance> updateStatus(@PathVariable Long id, @Valid @RequestBody AttendanceStatusRequest req,
                                            @AuthenticationPrincipal LoginUser user) {
@@ -87,7 +88,7 @@ public class AttendanceController {
     }
 
     /** 人工补签（置 MAKEUP） */
-    @PreAuthorize("hasAnyAuthority('attendance:manage','checkin:manage','schedule:check')")
+    @PreAuthorize("hasAuthority('attendance:manage')")
     @PostMapping("/{id}/makeup")
     public Result<Attendance> makeup(@PathVariable Long id,
                                      @RequestParam(required = false) String remark,
@@ -96,7 +97,7 @@ public class AttendanceController {
     }
 
     /** 考勤修改审计记录 */
-    @PreAuthorize("hasAnyAuthority('attendance:view','attendance:manage','schedule:check')")
+    @PreAuthorize("hasAuthority('attendance:view')")
     @GetMapping("/{id}/audits")
     public Result<List<AttendanceAudit>> audits(@PathVariable Long id) {
         return Result.ok(manageService.audits(id));
@@ -106,7 +107,7 @@ public class AttendanceController {
     @PreAuthorize("hasAuthority('schedule:check')")
     @PostMapping
     public Result<Attendance> create(@Valid @RequestBody AttendanceRequest req) {
-        return Result.ok(routineService.createAttendance(req));
+        return Result.ok(routineService.checkInSelf(req));
     }
 
     @PreAuthorize("hasAuthority('attendance:manage')")
@@ -119,6 +120,7 @@ public class AttendanceController {
     /**
      * 按人汇总：应到/实到/请假/缺勤（兼容保留，改走新考勤列表）。
      */
+    @PreAuthorize("hasAuthority('attendance:view')")
     @GetMapping("/summary")
     public Result<List<Map<String, Object>>> summary(@RequestParam(required = false) Integer weekNo,
                                                      @RequestParam(required = false) String type) {

@@ -34,13 +34,17 @@ class ActivityScheduleServiceTest {
     private ActivityScheduleService service;
     private Schedule schedule;
 
+    @org.junit.jupiter.api.AfterEach void clearSecurity() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
     @BeforeEach void setup() {
+        var user=new com.pams.security.LoginUser(1L,"scheduler","排班员","CUSTOM",1,null,null,1L);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user,null,List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("schedule:publish"))));
         service = new ActivityScheduleService(matcher, schedules, people, attendances,
                 mock(DepartmentRepository.class), mock(UserRepository.class), mock(ActivityRepository.class));
         schedule = new Schedule(); schedule.setId(1L); schedule.setScheduleType(Schedule.TYPE_ACTIVITY);
         schedule.setStatus(Schedule.STATUS_PUBLISHED); schedule.setSource(Schedule.SOURCE_AUTO);
         schedule.setScheduleDate(LocalDate.of(2026, 10, 14)); schedule.setStartTime(LocalTime.of(14, 0)); schedule.setEndTime(LocalTime.of(15, 40)); schedule.setDeptId(5L);
         when(schedules.findById(1L)).thenReturn(Optional.of(schedule));
+        when(schedules.lockById(1L)).thenReturn(Optional.of(schedule));
         when(schedules.save(any())).thenAnswer(i -> { Schedule s = i.getArgument(0); s.setId(1L); return s; });
         when(people.findByScheduleId(1L)).thenAnswer(i -> new ArrayList<>(storedPeople));
         doAnswer(i -> { storedPeople.clear(); return null; }).when(people).deleteByScheduleId(1L);

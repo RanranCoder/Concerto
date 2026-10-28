@@ -35,7 +35,7 @@ public class PlanAccessService {
     }
 
     public boolean canRead(ActivityPlan plan, ToolContext ctx) {
-        if (ctx==null || ctx.getLoginUser()==null || !ctx.hasPermission("activity:view")
+        if (ctx==null || ctx.getLoginUser()==null || (!ctx.hasPermission("activity:view") || !ctx.hasPermission("plan:view"))
                 || !Objects.equals(plan.getOrgId(),ctx.getLoginUser().getOrgId())) return false;
         if (!isCurrent(plan)) return true;
         return Objects.equals(owner(plan),ctx.getUserId())
@@ -59,7 +59,7 @@ public class PlanAccessService {
 
     public void requireOwner(ActivityPlan plan, ToolContext ctx) {
         if (!canRead(plan,ctx) || !Objects.equals(owner(plan),ctx.getUserId())
-                || !ctx.hasPermission("activity:edit")) throw new BizException(403,"仅策划书作者可修改或提交当前版本");
+                ) throw new BizException(403,"仅策划书作者可修改或提交当前版本");
         if (!isCurrent(plan)) throw new BizException(2003,"历史版本只读，请操作当前版本");
     }
 
@@ -77,12 +77,12 @@ public class PlanAccessService {
     }
 
     public List<Candidate> candidates(ToolContext ctx) {
-        if (ctx==null || ctx.getLoginUser()==null || !ctx.hasPermission("activity:edit"))
+        if (ctx==null || ctx.getLoginUser()==null || !ctx.hasPermission("plan:submit"))
             throw new BizException(403,"无权选择审核人");
         return users.findByOrgIdOrderByIdAsc(ctx.getLoginUser().getOrgId()).stream()
                 .filter(u -> !Objects.equals(u.getId(),ctx.getUserId()))
                 .filter(u -> authorization.valid(u.getId()) && authorization.business(u.getId())
-                        .containsAll(Set.of("activity:view","activity:review")))
+                        .containsAll(Set.of("activity:view","plan:view","plan:review")))
                 .map(u -> new Candidate(u.getId(),u.getRealName()==null?u.getUsername():u.getRealName(),
                         u.getDept()==null?"":u.getDept().getName(),u.getRole()==null?"":u.getRole().getName())).toList();
     }

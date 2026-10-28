@@ -36,6 +36,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ActivityScheduleService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationBusinessEvents notifications;
+
 
     private final FreeSlotMatcher matcher;
     private final ScheduleRepository scheduleRepository;
@@ -263,21 +266,25 @@ public class ActivityScheduleService {
 
     @Transactional
     public void publish(Long id) {
-        Schedule s = getSchedule(id);
+        Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
         validate(Schedule.STATUS_DRAFT.equals(s.getStatus()) || Schedule.STATUS_PUBLISHED.equals(s.getStatus()),
                 "当前状态不可发布");
+        var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setStatus(Schedule.STATUS_PUBLISHED);
         s.setUpdatedAt(LocalDateTime.now());
         scheduleRepository.save(s);
         ensureAttendanceRows(s);
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
     }
 
     @Transactional
     public void cancel(Long id) {
-        Schedule s = getSchedule(id);
+        Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setStatus(Schedule.STATUS_CANCELLED);
         s.setUpdatedAt(LocalDateTime.now());
         scheduleRepository.save(s);
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
         // 联动：该排班人员考勤置「取消」（不覆盖人工改过的行）
         for (Attendance a : attendanceRepository.findByScheduleId(id)) {
             if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())) continue;
@@ -297,10 +304,12 @@ public class ActivityScheduleService {
                 .toList();
         int n = 0;
         for (Schedule s : drafts) {
-            s.setStatus(Schedule.STATUS_PUBLISHED);
+            var notificationBefore = notifications == null ? null : notifications.snapshot(s);
+        s.setStatus(Schedule.STATUS_PUBLISHED);
             s.setUpdatedAt(LocalDateTime.now());
             scheduleRepository.save(s);
             ensureAttendanceRows(s);
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
             n++;
         }
         return n;
@@ -310,6 +319,7 @@ public class ActivityScheduleService {
     @Transactional
     public int regenerate(Long id, Long deptId, String semester, LocalDate semesterStartDate) {
         Schedule s = getSchedule(id);
+        requirePublishedMutation(s);
         validate(Schedule.SOURCE_AUTO.equals(s.getSource()), "仅无课表自动生成的排班可重新生成");
         if (s.getScheduleDate() == null || s.getStartTime() == null || s.getEndTime() == null) {
             throw new BizException(2406, "该排班缺少日期或时间，无法重新生成");
@@ -326,6 +336,7 @@ public class ActivityScheduleService {
         if (target == null && !slots.isEmpty()) target = slots.get(0);
         List<FreeSlotMatcher.Candidate> cands = target == null ? List.of() : target.candidates();
         if (cands.isEmpty()) throw new BizException(2407, "该日期时段无符合无课表的候选人员");
+        var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
         for (int i = 0; i < cands.size(); i++) {
             FreeSlotMatcher.Candidate c = cands.get(i);
@@ -336,6 +347,7 @@ public class ActivityScheduleService {
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
             syncAttendanceRows(s);
         }
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
         return cands.size();
     }
 
@@ -364,6 +376,8 @@ public class ActivityScheduleService {
     @Transactional
     public void updateManual(Long id, ActivityScheduleSaveRequest req) {
         Schedule s = getSchedule(id);
+        requirePublishedMutation(s);
+        var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setScheduleDate(req.getScheduleDate());
         s.setStartTime(req.getStartTime());
         s.setEndTime(req.getEndTime());
@@ -376,17 +390,26 @@ public class ActivityScheduleService {
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
             syncAttendanceRows(s);
         }
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
     }
 
     @Transactional
     public void delete(Long id) {
-        getSchedule(id);
+        Schedule s = getSchedule(id);
+        requirePublishedMutation(s);
+        var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
         attendanceRepository.deleteByScheduleId(id);
         scheduleRepository.deleteById(id);
+        if (notifications != null) notifications.scheduleChanged(notificationBefore, null);
     }
 
     /** 发布后为每位排班人员预建 PENDING 考勤行（自动判断引擎将据此落考勤）。 */
+    private void requirePublishedMutation(Schedule s) {
+        if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())
+                && !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("schedule:publish"))
+            throw new BizException(403,"修改已发布班次需要排班发布权限");
+    }
     private void ensureAttendanceRows(Schedule s) {
         List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(s.getId());
         List<Attendance> existing = new ArrayList<>(attendanceRepository.findByScheduleId(s.getId()));

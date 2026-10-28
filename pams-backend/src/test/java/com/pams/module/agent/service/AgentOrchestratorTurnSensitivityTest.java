@@ -172,7 +172,7 @@ class AgentOrchestratorTurnSensitivityTest {
     private ToolContext ctx(boolean withSchedulePermission) {
         LoginUser lu = new LoginUser(1L, "turn", "档位测试", "DIRECTOR", 4, null, null, 1L);
         List<SimpleGrantedAuthority> authorities = withSchedulePermission
-                ? List.of(new SimpleGrantedAuthority("schedule:check"))
+                ? List.of(new SimpleGrantedAuthority("attendance:self:view"))
                 : List.of();
         return new ToolContext(lu, authorities, null, null, ToolContext.MODE_STANDARD);
     }

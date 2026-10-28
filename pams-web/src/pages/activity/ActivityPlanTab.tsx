@@ -340,7 +340,7 @@ export default function ActivityPlanTab({
     !!workspace?.canEdit && isCurrent && latest?.status !== 'DRAFT'
   const canReview =
     isCurrent &&
-    hasPerm('activity:review') &&
+    hasPerm('plan:review') &&
     latest?.status === 'PENDING' &&
     latest.reviewers?.some((r) => r.userId === userId && r.approved === null)
   return (
@@ -455,7 +455,7 @@ export default function ActivityPlanTab({
             {latest.updatedAt?.replace('T', ' ').slice(0, 16)}
           </span>
           <Space>
-            {canEdit && isCurrent && !editor && (
+            {hasPerm('plan:submit') && isCurrent && latest?.status === 'DRAFT' && latest.ownerId === userId && !editor && (
               <Button type="primary" onClick={chooseReviewers} loading={saving}>
                 提交审核
               </Button>

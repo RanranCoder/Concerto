@@ -18,6 +18,10 @@ import java.util.List;
 
 @Component
 public class ArticleDeadlineTask {
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate db;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactions;
     private static final Logger log = LoggerFactory.getLogger(ArticleDeadlineTask.class);
     private final ArticleRepository repository;
     private final ApplicationEventPublisher eventPublisher;
@@ -31,23 +35,23 @@ public class ArticleDeadlineTask {
     }
 
     /** 每天 8:30 扫描：未发布且 3 天内到期的推文，向负责人发截止提醒（每天一次，去重） */
-    @Transactional
-    @Scheduled(cron = "0 30 8 * * ?")
+    @Scheduled(cron = "0 30 8 * * ?", zone = "Asia/Shanghai")
     public void remindOverdue() {
+        if (db != null) {
+            for (Long org : db.queryForList("SELECT id FROM organization WHERE status=1 AND deleted=0", Long.class)) {
+                Long previous = com.pams.common.OrgContext.get();
+                com.pams.common.OrgContext.set(org);
+                try { new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(s -> doRemind()); }
+                catch (Exception e) { log.error("推文截止提醒失败 org={}", org, e); }
+                finally { if (previous == null) com.pams.common.OrgContext.clear(); else com.pams.common.OrgContext.set(previous); }
+            }
+            return;
+        }
         try {
             doRemind();
         } catch (Exception e) {
-            // X2：定时任务异常不再静默——结构化日志 + SYSTEM 通知指导老师（role 广播）
+            // Independent monitoring must see failures even if the notification pipeline is unavailable.
             log.error("ArticleDeadlineTask 执行失败", e);
-            try {
-                notificationService.createAndSave(NotificationType.SYSTEM,
-                        "定时任务执行失败：推文截止提醒",
-                        "每日 8:30 的推文截止提醒任务执行失败：" + e.getMessage()
-                                + "。当日提醒可能不完整，请检查服务日志并手动核实临期推文。",
-                        "TASK", null, null, null, "TEACHER", null);
-            } catch (Exception notifyEx) {
-                log.error("定时任务失败告警通知发送失败", notifyEx);
-            }
         }
     }
 
@@ -57,6 +61,7 @@ public class ArticleDeadlineTask {
         List<Article> candidates = repository.findOverdue(now.plusDays(3));
         int reminded = 0;
         for (Article a : candidates) {
+            if (a.getStatus() == Article.ArticleStatus.PENDING || a.getStatus() == Article.ArticleStatus.APPROVED) continue;
             if (a.getDeadlineRemindedAt() != null
                     && a.getDeadlineRemindedAt().toLocalDate().equals(today)) {
                 continue; // 今天已提醒过

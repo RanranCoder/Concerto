@@ -35,14 +35,17 @@ public class BusinessPermissionConfig implements WebMvcConfigurer {
                   throw new BizException(403, "没有党务查看权限");
                 String permission =
                     switch (parts[2]) {
-                      case "activities", "tasks", "plans", "agendas", "scores" -> "activity:view";
+                      case "activities" -> "activity:view";
+                      case "tasks" -> "task:view";
+                      case "plans" -> "plan:view";
+                      case "agendas" -> "agenda:view";
+                      case "scores" -> "score:view";
                       case "seats", "seat-layouts" -> "seat:view";
                       case "members", "member-sessions" -> "member:view";
                       case "party" -> "party:view";
                       case "articles", "news" -> "content:view";
                       case "schedules",
                               "activity-schedules",
-                              "course-schedules",
                               "free-schedules",
                               "no-class-schedules" ->
                           "schedule:view";
@@ -53,6 +56,7 @@ public class BusinessPermissionConfig implements WebMvcConfigurer {
                       case "announcements" -> "notice:view";
                       default -> null;
                     };
+                if (req.getRequestURI().equals("/api/schedules/my")) permission = "schedule:self:view";
                 if (permission != null && !auth.business(u.getId()).contains(permission))
                   throw new BizException(403, "没有操作权限：" + permission);
                 return true;

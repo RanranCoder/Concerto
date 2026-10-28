@@ -28,8 +28,8 @@ public class UserController {
 
     /** 用户选项（选人组件数据源，登录即可）：仅 id/姓名/部门/角色最小字段（PRD-v5 F5） */
     @GetMapping("/options")
-    public Result<java.util.List<Map<String, Object>>> options() {
-        return Result.ok(userService.options());
+    public Result<java.util.List<Map<String, Object>>> options(@RequestParam(required = false) Long deptId) {
+        return Result.ok(userService.options(deptId));
     }
 
     /** 用户列表：由当前有效治理身份的 user:view 控制。 */

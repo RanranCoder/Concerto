@@ -21,7 +21,7 @@ export default function FreeScheduleList() {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     user = useAuthStore((s) => s.user);
-  const canManage = user?.permissions.includes("schedule:manage");
+  const canManage = user?.permissions.includes("course:manage");
   const [depts, setDepts] = useState<DeptVO[]>([]),
     [deptId, setDeptId] = useState<number | undefined>(
       Number(params.get("deptId")) || user?.deptId || undefined,

@@ -70,7 +70,10 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
     }
 
     @Override
-    public boolean requiresLeader() { return true; }
+    public boolean requiresLeader() { return false; }
+
+    @Override
+    public List<String> requiredPermissions() { return List.of("article:create", "activity:view"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }

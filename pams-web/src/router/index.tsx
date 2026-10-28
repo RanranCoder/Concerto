@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import { useOrgStore } from '@/stores/org'
+import { useAuthorizationSync } from '@/hooks/useAuthorizationSync'
 import { meApi } from '@/api/auth'
 import MainLayout from '@/layouts/MainLayout'
 import DocumentTitle from '@/components/DocumentTitle'
@@ -48,6 +49,7 @@ const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
 const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
+  useAuthorizationSync()
   const token = useAuthStore((s) => s.token)
   const refreshUser = useAuthStore((s) => s.refreshUser)
   // 启动/刷新页面时用 JWT 换取最新 user+permissions，使权限管理页的变更刷新即生效（无需重新登录）
@@ -117,18 +119,18 @@ export const router = createBrowserRouter([
           // 原 /agent/team 页面与路由已删除，见 docs/PAMS-协作内聚进灵思-修改计划.md
 
           // 活动管理（干事可看，删除/改状态后端已限制部长及以上）
-          { path: '/activities', element: <Activities /> },
-          { path: '/activities/:id', element: <ActivityDetail /> },
-          { path: '/activities/:id/edit', element: <ActivityEdit /> },
-          { path: '/activities/:id/gantt', element: <Gantt /> },
+          { path: '/activities', element: <RequirePerm codes={['activity:view']}><Activities /></RequirePerm> },
+          { path: '/activities/:id', element: <RequirePerm codes={['activity:view']}><ActivityDetail /></RequirePerm> },
+          { path: '/activities/:id/edit', element: <RequirePerm codes={['activity:edit']}><ActivityEdit /></RequirePerm> },
+          { path: '/activities/:id/gantt', element: <RequirePerm codes={['task:view']}><Gantt /></RequirePerm> },
 
           // 排班考勤
-          { path: '/routine/schedules', element: <Schedules /> },
-          { path: '/routine/my-schedules', element: <MySchedules /> },
-          { path: '/routine/attendance', element: <Attendance /> },
-          { path: '/routine/activity-schedules', element: <ActivitySchedules /> },
-          { path: '/routine/course-schedule', element: <CourseSchedule /> },
-          { path: '/routine/free-schedules', element: <FreeSchedules /> },
+          { path: '/routine/schedules', element: <RequirePerm codes={['schedule:view']}><Schedules /></RequirePerm> },
+          { path: '/routine/my-schedules', element: <RequirePerm codes={['schedule:self:view']}><MySchedules /></RequirePerm> },
+          { path: '/routine/attendance', element: <RequirePerm codes={['attendance:view','attendance:self:view']}><Attendance /></RequirePerm> },
+          { path: '/routine/activity-schedules', element: <RequirePerm codes={['schedule:view']}><ActivitySchedules /></RequirePerm> },
+          { path: '/routine/course-schedule', element: <RequirePerm codes={['course:self:manage','course:manage']}><CourseSchedule /></RequirePerm> },
+          { path: '/routine/free-schedules', element: <RequirePerm codes={['schedule:free_table']}><FreeSchedules /></RequirePerm> },
 
           // 成员管理（敏感名单，仅拥有 member:view 权限码的角色可见）
           {
@@ -152,15 +154,15 @@ export const router = createBrowserRouter([
           },
 
           // 内容宣传（推文干事可看；新闻稿入口部长及以上显示）
-          { path: '/content/articles', element: <Articles /> },
-          { path: '/content/news', element: <News /> },
+          { path: '/content/articles', element: <RequirePerm codes={['content:view']}><Articles /></RequirePerm> },
+          { path: '/content/news', element: <RequirePerm codes={['content:view']}><News /></RequirePerm> },
 
           // 档案资产
-          { path: '/archive/materials', element: <Materials /> },
-          { path: '/archive/templates', element: <Templates /> },
-          { path: '/archive/credits', element: <Credits /> },
-          { path: '/archive/announcements', element: <Announcements /> },
-          { path: '/archive/group-chats', element: <GroupChats /> },
+          { path: '/archive/materials', element: <RequirePerm codes={['material:view']}><Materials /></RequirePerm> },
+          { path: '/archive/templates', element: <RequirePerm codes={['template:view']}><Templates /></RequirePerm> },
+          { path: '/archive/credits', element: <RequirePerm codes={['quality:view']}><Credits /></RequirePerm> },
+          { path: '/archive/announcements', element: <RequirePerm codes={['notice:view']}><Announcements /></RequirePerm> },
+          { path: '/archive/group-chats', element: <RequirePerm codes={['chat:view']}><GroupChats /></RequirePerm> },
 
           // 通知中心
           { path: '/notifications', element: <NotificationList /> },

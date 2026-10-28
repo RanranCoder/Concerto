@@ -77,7 +77,7 @@ public class ActivityController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('activity:transition')")
     @PutMapping("/{id}/status")
     public Result<Void> changeStatus(@PathVariable Long id, @Valid @RequestBody StatusChangeRequest req) {
         // B2 fix: 用 DTO + @NotBlank + try-catch 替代裸 Map，消除 NPE

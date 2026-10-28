@@ -1,6 +1,14 @@
+import './permissions.css'
+import RoleLinkedRecords from './RoleLinkedRecords'
+import PermissionDelta from './PermissionDelta'
+import { useBlocker } from 'react-router-dom'
+import PermissionExplanation from './PermissionExplanation'
+import PermissionGovernance, { managementLabel } from './PermissionGovernance'
+import { grantChanges, togglePermission } from './permissionEditing'
 import FormSurface from '@/components/form/FormSurface'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Checkbox,
@@ -8,6 +16,7 @@ import {
   Form,
   Grid,
   Input,
+  Pagination,
   Select,
   Space,
   Spin,
@@ -24,7 +33,10 @@ import {
   roleTemplates,
   updateRoleMetadata,
   getAdministrator,
-  managedRoles,
+  managedRolePage,
+  roleReferences,
+  discardRoleDraft,
+  deleteUnpublishedRole,
   roleCatalog,
   roleDetail,
   createRole,
@@ -32,10 +44,9 @@ import {
   previewRole,
   applyAuthorizationChange,
   previewRoleAssignment,
-  setAdministrator,
-  governanceLogs,
+  previewAdministrator,
+  authorizationChange,
   effectivePermissions,
-  type GovernanceLog,
   type EffectivePermissions,
   type ManagedRole,
   type RoleDetail,
@@ -77,9 +88,39 @@ export default function PermissionManage() {
   const [detail, setDetail] = useState<RoleDetail>()
   const [grants, setGrants] = useState<Grant[]>([])
   const [filter, setFilter] = useState('')
+  const [rolePage, setRolePage] = useState(1)
+  const [roleTotal, setRoleTotal] = useState(0)
+  const [reason, setReason] = useState('')
+  const [referencesOpen, setReferencesOpen] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [onlyDraft, setOnlyDraft] = useState(false)
+  const [module, setModule] = useState('')
+  const [onlySelected, setOnlySelected] = useState(false)
+  const [onlyChanged, setOnlyChanged] = useState(false)
+  const [onlyRisk, setOnlyRisk] = useState(false)
+  const [topTab, setTopTab] = useState('roles')
+  const [showPublished, setShowPublished] = useState(false)
+  const [historyGrants, setHistoryGrants] = useState<Grant[]>()
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const blocker = useBlocker(dirty)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    const dialog = modal.confirm({
+      title: '放弃尚未保存的修改？',
+      okText: '放弃修改',
+      cancelText: '继续编辑',
+      onOk: () => {
+        setDirty(false)
+        blocker.proceed()
+      },
+      onCancel: () => blocker.reset(),
+    })
+    return () => dialog.destroy()
+  }, [blocker, modal])
   const [creation, setCreation] = useState<{
     source?: number
     editing?: number
@@ -89,7 +130,7 @@ export default function PermissionManage() {
   const [templates, setTemplates] = useState<{ code: string; name: string }[]>(
     [],
   )
-  const [template, setTemplate] = useState<string>()
+  const [template, setTemplate] = useState<string[]>([])
   const [preview, setPreview] = useState<ChangePreview>()
   const [people, setPeople] = useState<UserOptionVO[]>([])
   const [person, setPerson] = useState<number>()
@@ -98,30 +139,45 @@ export default function PermissionManage() {
   const [adminGrants, setAdminGrants] = useState<string[]>([])
   const [adminExpires, setAdminExpires] = useState('')
   const [adminVersion, setAdminVersion] = useState(0)
-  const [logs, setLogs] = useState<GovernanceLog[]>()
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [effectiveUserId, setEffectiveUserId] = useState<number>()
   const [effective, setEffective] = useState<EffectivePermissions>()
   const loadList = useCallback(async () => {
-    const [r, c] = await Promise.all([managedRoles(), roleCatalog()])
-    setRoles(r)
+    const [r, c] = await Promise.all([
+      managedRolePage(rolePage, roleFilter, statusFilter, onlyDraft),
+      roleCatalog(),
+    ])
+    setRoles(r.items)
+    setRoleTotal(r.total)
     setCatalog(c)
-    setSelected((id) => id ?? r[0]?.id)
-  }, [])
-  const loadDetail = useCallback(async (id: number) => {
-    setLoading(true)
-    try {
-      const d = await roleDetail(id)
-      setDetail(d)
-      setGrants(d.draft ? JSON.parse(d.draft.grants) : d.published)
-      setDirty(false)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    setSelected((id) => id ?? r.items[0]?.id)
+  }, [rolePage, roleFilter, statusFilter, onlyDraft])
+  useEffect(() => {
+    if (!currentUser?.managementCapabilities.includes('role:view')) return
+    roleCatalog()
+      .then(setCatalog)
+      .catch(() => {})
+  }, [currentUser?.authzVersion])
+  const loadDetail = useCallback(
+    async (id: number) => {
+      setLoading(true)
+      try {
+        const d = await roleDetail(id)
+        setDetail(d)
+        setShowPublished(!canEdit || d.actions?.canEdit === false)
+        setGrants(d.draft ? JSON.parse(d.draft.grants) : d.published)
+        setDirty(false)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [canEdit],
+  )
   useEffect(() => {
     roleTemplates()
       .then(setTemplates)
       .catch(() => {})
-    loadList().catch(() => {})
+    loadList().catch(() => setLoadError('角色与权限目录读取失败，请重试。'))
     listUserOptions()
       .then(setPeople)
       .catch(() => {})
@@ -135,18 +191,21 @@ export default function PermissionManage() {
       .then((d) => {
         if (alive) {
           setDetail(d)
+          setShowPublished(!canEdit || d.actions?.canEdit === false)
           setGrants(d.draft ? JSON.parse(d.draft.grants) : d.published)
           setDirty(false)
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (alive) setLoadError('角色详情读取失败，请重试。')
+      })
       .finally(() => {
         if (alive) setLoading(false)
       })
     return () => {
       alive = false
     }
-  }, [selected])
+  }, [selected, canEdit])
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => {
       if (dirty) e.preventDefault()
@@ -167,6 +226,7 @@ export default function PermissionManage() {
   useEffect(() => {
     if (!adminPerson) return
     let alive = true
+    setAdminLoading(true)
     setAdminGrants([])
     setAdminExpires('')
     getAdministrator(adminPerson)
@@ -178,33 +238,87 @@ export default function PermissionManage() {
         }
       })
       .catch(() => {})
+      .finally(() => {
+        if (alive) setAdminLoading(false)
+      })
     return () => {
       alive = false
     }
   }, [adminPerson])
+  const baseline = detail?.draft
+    ? (JSON.parse(detail.draft.grants) as Grant[])
+    : (detail?.published ?? [])
+  const changes = grantChanges(detail?.published ?? [], grants)
+  const viewGrants = showPublished ? (detail?.published ?? []) : grants
+  const modules = [
+    ...new Map(
+      catalog.map((p) => [p.module, p.groupName ?? p.module]),
+    ).entries(),
+  ]
+  const roleCanEdit = canEdit && (detail?.actions?.canEdit ?? true)
+  const roleCanGrant = canGrant && (detail?.actions?.canGrant ?? true)
   const rows = useMemo(
     () =>
       catalog.filter(
-        (p) => !filter || `${p.name} ${p.code} ${p.module}`.includes(filter),
+        (p) =>
+          (!filter ||
+            `${p.name} ${p.code} ${p.module} ${p.description ?? ''}`
+              .toLowerCase()
+              .includes(filter.toLowerCase())) &&
+          (!module || p.module === module) &&
+          (!onlySelected || viewGrants.some((g) => g.permission === p.code)) &&
+          (!onlyChanged || changes.some((g) => g.code === p.code)) &&
+          (!onlyRisk || p.risk),
       ),
-    [catalog, filter],
+    [
+      catalog,
+      filter,
+      module,
+      onlySelected,
+      onlyChanged,
+      onlyRisk,
+      viewGrants,
+      changes,
+    ],
   )
-  const selectedCodes = new Set(grants.map((g) => g.permission))
-  const previewRows = useMemo(() => {
-    if (!preview) return []
-    const before = preview.details.before ?? []
-    const after = preview.details.grants ?? []
-    return [...new Set([...before, ...after].map((g) => g.permission))]
-      .map((code) => {
-        const old = before.find((g) => g.permission === code)
-        const next = after.find((g) => g.permission === code)
-        return { code, old, next }
-      })
-      .filter((r) => JSON.stringify(r.old) !== JSON.stringify(r.next))
-  }, [preview])
+  const selectedCodes = new Set(viewGrants.map((g) => g.permission))
+  const previewRows = grantChanges(
+    preview?.details.before ?? [],
+    preview?.details.grants ?? [],
+  )
+  const editPermission = (p: CatalogPermission, checked: boolean) => {
+    try {
+      const next = togglePermission(catalog, grants, p.code, checked)
+      const apply = () => {
+        setGrants(next.grants)
+        setDirty(true)
+      }
+      if (next.changed.length > 1)
+        modal.confirm({
+          title: checked ? '同时添加必要依赖？' : '同时撤销依赖此权限的操作？',
+          content: next.changed
+            .map(
+              (code) =>
+                catalog.find((item) => item.code === code)?.name ?? code,
+            )
+            .join('、'),
+          onOk: apply,
+        })
+      else apply()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '无法调整此操作')
+    }
+  }
   const previewChange = (action: string) =>
     run(async () => {
       if (!detail || !selected) return
+      if (['DISABLE', 'ARCHIVE'].includes(action)) {
+        const refs = await roleReferences(selected)
+        if (refs.blockingTotal > 0) {
+          setReferencesOpen(true)
+          return
+        }
+      }
       if (dirty && ['PUBLISH', 'ENABLE'].includes(action)) {
         await saveRoleDraft(
           selected,
@@ -215,7 +329,7 @@ export default function PermissionManage() {
         await loadDetail(selected)
       }
       setPreview(
-        await previewRole(selected, action, detail.role.config_version),
+        await previewRole(selected, action, detail.role.config_version, reason),
       )
     })
   const chooseRole = (id: number) => {
@@ -230,15 +344,35 @@ export default function PermissionManage() {
       })
   }
   return (
-    <div>
+    <div className="permission-workspace">
       <PageHeader
         title="角色与权限"
         description={`${currentUser?.orgName ?? '当前组织'} · 业务角色与管理身份分别授权`}
         extra={
           <Space wrap>
+            <Select
+              aria-label="查询人员有效权限"
+              placeholder="查询人员有效权限"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ minWidth: 190 }}
+              value={effectiveUserId}
+              options={people.map((p) => ({ value: p.id, label: p.realName }))}
+              onChange={(id) => {
+                setEffectiveUserId(id)
+                if (id)
+                  void run(async () =>
+                    setEffective(await effectivePermissions(id)),
+                  )
+                else setEffective(undefined)
+              }}
+            />
             {caps.includes('org:audit:view') && (
               <Button
-                onClick={() => run(async () => setLogs(await governanceLogs()))}
+                disabled={dirty}
+                title={dirty ? '请先保存或取消本地修改' : undefined}
+                onClick={() => setTopTab('audit')}
               >
                 治理记录
               </Button>
@@ -249,10 +383,12 @@ export default function PermissionManage() {
             {canEdit && (
               <Button
                 type="primary"
+                disabled={busy || dirty}
+                title={dirty ? '请先保存或取消本地修改' : undefined}
                 onClick={() => {
                   setName('')
                   setDescription('')
-                  setTemplate(undefined)
+                  setTemplate([])
                   setCreation({})
                 }}
               >
@@ -262,9 +398,66 @@ export default function PermissionManage() {
           </Space>
         }
       />
+      <Tabs
+        className="permission-top-tabs"
+        activeKey={topTab}
+        onChange={(value) => {
+          if (!dirty) setTopTab(value)
+          else
+            modal.confirm({
+              title: '放弃尚未保存的修改？',
+              onOk: () => {
+                setGrants(baseline)
+                setDirty(false)
+                setTopTab(value)
+              },
+            })
+        }}
+        items={[
+          { key: 'roles', label: '业务角色' },
+          { key: 'management', label: '管理身份' },
+          ...(caps.includes('org:audit:view')
+            ? [{ key: 'audit', label: '变更记录' }]
+            : []),
+          { key: 'migration', label: '迁移核对' },
+        ]}
+      />
+      {loadError && (
+        <Alert
+          type="error"
+          message={loadError}
+          action={
+            <Button
+              onClick={() =>
+                run(async () => {
+                  await loadList()
+                  if (selected && !dirty) await loadDetail(selected)
+                  setLoadError('')
+                })
+              }
+            >
+              重试
+            </Button>
+          }
+        />
+      )}
+      {topTab !== 'roles' && (
+        <PermissionGovernance
+          mode={topTab}
+          catalog={catalog}
+          onDelegate={(id) => {
+            setAdminPerson(id)
+            setAdminOpen(true)
+          }}
+          onSelectRole={(id) => {
+            setSelected(id)
+            setTopTab('roles')
+          }}
+        />
+      )}
       <div
         style={{
-          display: 'grid',
+          display: topTab === 'roles' ? 'grid' : 'none',
           gridTemplateColumns: screens.md
             ? 'minmax(180px, 1fr) minmax(0, 4fr)'
             : 'minmax(0, 1fr)',
@@ -272,17 +465,98 @@ export default function PermissionManage() {
         }}
       >
         <GlassCard style={{ padding: 12 }}>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {roles.map((r) => (
-              <Button
-                key={r.id}
-                block
-                type={selected === r.id ? 'primary' : 'default'}
-                onClick={() => chooseRole(r.id)}
-              >
-                {r.name} · {statusLabel[r.status]}
-              </Button>
-            ))}
+          {!screens.md && (
+            <Select
+              aria-label="选择业务角色"
+              showSearch
+              optionFilterProp="label"
+              style={{ width: '100%' }}
+              value={selected}
+              onChange={chooseRole}
+              options={roles.map((role) => ({
+                value: role.id,
+                label: `${role.name} · ${statusLabel[role.status]}`,
+              }))}
+            />
+          )}
+          <div style={{ display: screens.md ? 'block' : 'none' }}>
+            <Input
+              aria-label="搜索角色"
+              placeholder="搜索角色或职责"
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value)
+                setRolePage(1)
+              }}
+              allowClear
+            />
+            <Select
+              aria-label="角色状态"
+              value={statusFilter}
+              onChange={(value) => {
+                setStatusFilter(value)
+                setRolePage(1)
+              }}
+              style={{ width: '100%', margin: '10px 0' }}
+              options={[
+                { value: '', label: '全部状态' },
+                ...Object.entries(statusLabel).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <Checkbox
+              checked={onlyDraft}
+              onChange={(e) => {
+                setOnlyDraft(e.target.checked)
+                setRolePage(1)
+              }}
+            >
+              仅看有工作稿
+            </Checkbox>
+            <div className="permission-role-list" style={{ marginTop: 12 }}>
+              {roles.map((r) => (
+                <Button
+                  key={r.id}
+                  block
+                  type={selected === r.id ? 'primary' : 'default'}
+                  onClick={() => chooseRole(r.id)}
+                >
+                  <span>
+                    <span className="permission-role-name">
+                      {r.name}
+                      <small>{statusLabel[r.status]}</small>
+                    </span>
+                    <span className="permission-role-meta">
+                      {r.description || '尚未填写职责说明'}
+                    </span>
+                    <span className="permission-role-meta">
+                      {r.userCount ?? 0} 个账号 · {r.permissionCount ?? 0}{' '}
+                      项生效权限
+                      {r.draftRevisionId ? ' · 有工作稿' : ''}
+                    </span>
+                    <span className="permission-role-meta">
+                      {{ COPY: '复制', TEMPLATE: '模板', BLANK: '空白' }[
+                        r.sourceKind ?? ''
+                      ] ?? '存量迁移'}{' '}
+                      · {r.updatedByName || '历史记录'}
+                      {r.updatedAt
+                        ? ' · ' + new Date(r.updatedAt).toLocaleString('zh-CN')
+                        : ''}
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+            <Pagination
+              size="small"
+              current={rolePage}
+              pageSize={20}
+              total={roleTotal}
+              showSizeChanger={false}
+              onChange={setRolePage}
+            />
           </div>
         </GlassCard>
         <GlassCard style={{ padding: 20, minWidth: 0 }}>
@@ -294,10 +568,11 @@ export default function PermissionManage() {
                   <Tag>{statusLabel[detail.role.status]}</Tag>
                   <span>
                     版本 {detail.role.config_version} · 使用账号{' '}
-                    {detail.users.length} 人
+                    {detail.impact?.userCount ?? detail.users.length} 人
                   </span>
-                  {canEdit && (
+                  {roleCanEdit && (
                     <Button
+                      disabled={dirty}
                       onClick={() => {
                         setName(detail.role.name)
                         setDescription(
@@ -312,8 +587,9 @@ export default function PermissionManage() {
                   )}
                   {canEdit && (
                     <Button
+                      disabled={dirty}
                       onClick={() => {
-                        setTemplate(undefined)
+                        setTemplate([])
                         setName(`${detail.role.name}副本`)
                         setDescription('')
                         setCreation({ source: selected })
@@ -322,7 +598,7 @@ export default function PermissionManage() {
                       复制角色
                     </Button>
                   )}
-                  {canGrant && detail.role.status === 'ACTIVE' && (
+                  {roleCanGrant && detail.role.status === 'ACTIVE' && (
                     <Button
                       danger
                       disabled={busy || dirty}
@@ -340,6 +616,65 @@ export default function PermissionManage() {
                     </Button>
                   )}
                 </Space>
+                <Space wrap style={{ marginBottom: 16 }}>
+                  <Button
+                    disabled={busy || dirty}
+                    onClick={() => setReferencesOpen(true)}
+                  >
+                    查看引用清单
+                  </Button>
+                  {roleCanEdit && detail.draft && (
+                    <Button
+                      danger
+                      disabled={busy || dirty}
+                      onClick={() =>
+                        modal.confirm({
+                          title:
+                            detail.role.status === 'DRAFT'
+                              ? '删除尚未发布的角色？'
+                              : '放弃已保存工作稿？',
+                          content: '此操作会核对最新版本，已发布历史会保留。',
+                          onOk: () =>
+                            run(async () => {
+                              if (detail.role.status === 'DRAFT') {
+                                await deleteUnpublishedRole(
+                                  selected!,
+                                  detail.role.config_version,
+                                  detail.draft!.version,
+                                )
+                                setSelected(undefined)
+                                setDetail(undefined)
+                              } else {
+                                await discardRoleDraft(
+                                  selected!,
+                                  detail.role.config_version,
+                                  detail.draft!.version,
+                                )
+                                await loadDetail(selected!)
+                              }
+                              await loadList()
+                              message.success('已处理工作稿')
+                            }),
+                        })
+                      }
+                    >
+                      {detail.role.status === 'DRAFT'
+                        ? '删除未发布角色'
+                        : '放弃已保存工作稿'}
+                    </Button>
+                  )}
+                </Space>
+                {(roleCanGrant || canAssign) && (
+                  <Form.Item label="本次变更原因（选填）">
+                    <Input.TextArea
+                      aria-label="变更原因"
+                      maxLength={500}
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="如：职责调整、人员交接；原因会随预览绑定并留在审计记录中"
+                    />
+                  </Form.Item>
+                )}
                 <Tabs
                   items={[
                     {
@@ -347,9 +682,90 @@ export default function PermissionManage() {
                       label: '权限配置',
                       children: (
                         <>
-                          <p>
-                            首版开放全组织范围。部门、本人等范围将在资源关联及校验完成后开放；编辑活动权限也包含现有任务写操作。
+                          {detail.actions?.reason && (
+                            <Alert
+                              type="info"
+                              message={detail.actions.reason}
+                            />
+                          )}
+                          {detail.migrationReview?.some(
+                            (r) => r.status === 'PENDING',
+                          ) && (
+                            <Alert
+                              type="warning"
+                              showIcon
+                              message="此角色有待核对考勤权限。工作稿保留原候选授权，请确认哪些职责应保留，再预览发布。"
+                            />
+                          )}
+                          <p className="permission-caption">
+                            {showPublished
+                              ? detail.role.status === 'ACTIVE'
+                                ? '当前显示已发布配置，正在生效。'
+                                : '当前显示已发布配置；未发布、停用或归档的角色不产生业务权限。'
+                              : detail.draft
+                                ? '当前显示已保存工作稿，发布前不会改变实际权限。'
+                                : '当前显示角色配置。修改后需预览发布。'}{' '}
+                            本期授权范围为本组织，仍受作者、指定审核人和业务状态限制。
                           </p>
+                          <Space wrap>
+                            <Button
+                              size="small"
+                              type={showPublished ? 'primary' : 'default'}
+                              disabled={dirty}
+                              onClick={() => setShowPublished(true)}
+                            >
+                              已发布配置
+                            </Button>
+                            <Button
+                              size="small"
+                              type={!showPublished ? 'primary' : 'default'}
+                              onClick={() => setShowPublished(false)}
+                            >
+                              工作稿
+                            </Button>
+                          </Space>
+                          <nav
+                            className="permission-module-nav"
+                            aria-label="业务权限分组"
+                          >
+                            <button
+                              aria-pressed={!module}
+                              onClick={() => setModule('')}
+                            >
+                              全部业务
+                            </button>
+                            {modules.map(([code, label]) => (
+                              <button
+                                key={code}
+                                aria-pressed={module === code}
+                                onClick={() => setModule(code)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </nav>
+                          <Space wrap>
+                            <Checkbox
+                              checked={onlySelected}
+                              onChange={(e) =>
+                                setOnlySelected(e.target.checked)
+                              }
+                            >
+                              仅看已授权
+                            </Checkbox>
+                            <Checkbox
+                              checked={onlyChanged}
+                              onChange={(e) => setOnlyChanged(e.target.checked)}
+                            >
+                              仅看改动
+                            </Checkbox>
+                            <Checkbox
+                              checked={onlyRisk}
+                              onChange={(e) => setOnlyRisk(e.target.checked)}
+                            >
+                              重点影响操作
+                            </Checkbox>
+                          </Space>
                           <Input
                             placeholder="搜索模块、操作或权限码"
                             value={filter}
@@ -365,10 +781,42 @@ export default function PermissionManage() {
                             columns={[
                               {
                                 title: '模块',
-                                dataIndex: 'module',
+                                render: (_, p: CatalogPermission) =>
+                                  p.groupName ?? p.module,
                                 width: 120,
                               },
-                              { title: '操作', dataIndex: 'name' },
+                              {
+                                title: '操作',
+                                render: (_, p: CatalogPermission) => (
+                                  <div>
+                                    <div className="permission-op-name">
+                                      {p.name}
+                                      {p.risk && (
+                                        <Tag color="warning">重点影响</Tag>
+                                      )}
+                                      {changes.some(
+                                        (g) => g.code === p.code,
+                                      ) && <Tag color="processing">待发布</Tag>}
+                                    </div>
+                                    <div className="permission-op-description">
+                                      {p.description}
+                                    </div>
+                                    {!!p.dependencies?.length && (
+                                      <div className="permission-op-description">
+                                        依赖：
+                                        {p.dependencies
+                                          .map(
+                                            (code) =>
+                                              catalog.find(
+                                                (item) => item.code === code,
+                                              )?.name ?? code,
+                                          )
+                                          .join('、')}
+                                      </div>
+                                    )}
+                                  </div>
+                                ),
+                              },
                               {
                                 title: '允许',
                                 width: 70,
@@ -377,28 +825,14 @@ export default function PermissionManage() {
                                     aria-label={p.name}
                                     checked={selectedCodes.has(p.code)}
                                     disabled={
-                                      !canEdit ||
+                                      !roleCanEdit ||
+                                      showPublished ||
                                       !p.grantable ||
                                       detail.role.status === 'ARCHIVED'
                                     }
-                                    onChange={(e) => {
-                                      setGrants((g) =>
-                                        e.target.checked
-                                          ? [
-                                              ...g.filter(
-                                                (x) => x.permission !== p.code,
-                                              ),
-                                              {
-                                                permission: p.code,
-                                                scope: 'ORG',
-                                              },
-                                            ]
-                                          : g.filter(
-                                              (x) => x.permission !== p.code,
-                                            ),
-                                      )
-                                      setDirty(true)
-                                    }}
+                                    onChange={(e) =>
+                                      editPermission(p, e.target.checked)
+                                    }
                                   />
                                 ),
                               },
@@ -407,7 +841,10 @@ export default function PermissionManage() {
                                 width: 130,
                                 render: (_, p: CatalogPermission) =>
                                   selectedCodes.has(p.code)
-                                    ? '本组织全部'
+                                    ? p.code.includes(':self:') ||
+                                      p.code === 'schedule:check'
+                                      ? '本人'
+                                      : '本组织（受业务规则约束）'
                                     : '—',
                               },
                               {
@@ -452,62 +889,77 @@ export default function PermissionManage() {
                               },
                             ]}
                           />
-                          <Space wrap style={{ marginTop: 16 }}>
-                            <span>
-                              已选 {grants.length} 项
-                              {dirty
-                                ? ' · 有未保存修改'
-                                : detail.draft
-                                  ? ' · 已保存工作稿'
-                                  : ''}
-                            </span>
-                            {canEdit && (
-                              <Button
-                                loading={busy}
-                                disabled={
-                                  !dirty || detail.role.status === 'ARCHIVED'
-                                }
-                                onClick={() =>
-                                  run(async () => {
-                                    await saveRoleDraft(
-                                      selected!,
-                                      detail.draft?.version ?? 0,
-                                      grants,
-                                      detail.draft
-                                        ? JSON.parse(detail.draft.grants)
-                                        : detail.published,
-                                    )
-                                    await loadDetail(selected!)
-                                    message.success(
-                                      '工作稿已保存，当前权限尚未改变',
-                                    )
-                                  })
-                                }
-                              >
-                                保存工作稿
-                              </Button>
-                            )}
-                            {canGrant && detail.role.status !== 'ARCHIVED' && (
-                              <Button
-                                type="primary"
-                                loading={busy}
-                                disabled={
-                                  !dirty &&
-                                  !detail.draft &&
-                                  detail.role.status === 'ACTIVE'
-                                }
-                                onClick={() =>
-                                  previewChange(
-                                    detail.role.status === 'DISABLED'
-                                      ? 'ENABLE'
-                                      : 'PUBLISH',
-                                  )
-                                }
-                              >
-                                预览并发布
-                              </Button>
-                            )}
-                          </Space>
+                          <div className="permission-sticky-actions">
+                            <Space wrap>
+                              <span>
+                                已选 {viewGrants.length} 项 · 待发布{' '}
+                                {changes.length} 项
+                                {dirty
+                                  ? ' · 有未保存修改'
+                                  : detail.draft
+                                    ? ' · 已保存工作稿'
+                                    : ''}
+                              </span>
+                              {roleCanEdit && !showPublished && (
+                                <Button
+                                  loading={busy}
+                                  disabled={
+                                    !dirty || detail.role.status === 'ARCHIVED'
+                                  }
+                                  onClick={() =>
+                                    run(async () => {
+                                      await saveRoleDraft(
+                                        selected!,
+                                        detail.draft?.version ?? 0,
+                                        grants,
+                                        detail.draft
+                                          ? JSON.parse(detail.draft.grants)
+                                          : detail.published,
+                                      )
+                                      await loadDetail(selected!)
+                                      message.success(
+                                        '工作稿已保存，当前权限尚未改变',
+                                      )
+                                    })
+                                  }
+                                >
+                                  保存工作稿
+                                </Button>
+                              )}
+                              {roleCanGrant &&
+                                !showPublished &&
+                                detail.role.status !== 'ARCHIVED' && (
+                                  <Button
+                                    type="primary"
+                                    loading={busy}
+                                    disabled={
+                                      !dirty &&
+                                      !detail.draft &&
+                                      detail.role.status === 'ACTIVE'
+                                    }
+                                    onClick={() =>
+                                      previewChange(
+                                        detail.role.status === 'DISABLED'
+                                          ? 'ENABLE'
+                                          : 'PUBLISH',
+                                      )
+                                    }
+                                  >
+                                    预览并发布
+                                  </Button>
+                                )}
+                              {dirty && (
+                                <Button
+                                  onClick={() => {
+                                    setGrants(baseline)
+                                    setDirty(false)
+                                  }}
+                                >
+                                  取消本地修改
+                                </Button>
+                              )}
+                            </Space>
+                          </div>
                         </>
                       ),
                     },
@@ -531,13 +983,14 @@ export default function PermissionManage() {
                                 }))}
                               />
                               <Button
-                                disabled={!person || busy}
+                                disabled={!person || busy || dirty}
                                 onClick={() =>
                                   run(async () =>
                                     setPreview(
                                       await previewRoleAssignment(
                                         person!,
                                         selected!,
+                                        reason,
                                       ),
                                     ),
                                   )
@@ -547,30 +1000,16 @@ export default function PermissionManage() {
                               </Button>
                             </Space>
                           )}
-                          <Table
-                            rowKey="id"
-                            dataSource={detail.users}
-                            columns={[
-                              { title: '姓名', dataIndex: 'realName' },
-                              { title: '账号', dataIndex: 'username' },
-                              {
-                                title: '权限来源',
-                                render: (_, user) => (
-                                  <Button
-                                    type="link"
-                                    onClick={() =>
-                                      run(async () =>
-                                        setEffective(
-                                          await effectivePermissions(user.id),
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    查看有效权限
-                                  </Button>
-                                ),
-                              },
-                            ]}
+                          <RoleLinkedRecords
+                            key={selected}
+                            roleId={selected!}
+                            mode="members"
+                            onEffective={(id) =>
+                              run(async () => {
+                                setEffectiveUserId(id)
+                                setEffective(await effectivePermissions(id))
+                              })
+                            }
                           />
                         </>
                       ),
@@ -579,17 +1018,13 @@ export default function PermissionManage() {
                       key: 'history',
                       label: '发布历史',
                       children: (
-                        <Table
-                          rowKey="id"
-                          dataSource={detail.history}
-                          columns={[
-                            { title: '发布版本', dataIndex: 'id' },
-                            { title: '发布时间', dataIndex: 'publishedAt' },
-                            {
-                              title: '权限数量',
-                              render: (_, r) => JSON.parse(r.grants).length,
-                            },
-                          ]}
+                        <RoleLinkedRecords
+                          key={selected}
+                          roleId={selected!}
+                          mode="history"
+                          onHistory={(data) =>
+                            setHistoryGrants(JSON.parse(data))
+                          }
                         />
                       ),
                     },
@@ -603,41 +1038,48 @@ export default function PermissionManage() {
         </GlassCard>
       </div>
       <FormSurface
-        mode="dialog"
-        title="最近 100 条治理记录"
-        open={!!logs}
-        onCancel={() => setLogs(undefined)}
+        title="角色引用清单"
+        open={referencesOpen}
         footer={null}
-        width={800}
+        onCancel={() => setReferencesOpen(false)}
       >
+        {selected && <RoleLinkedRecords roleId={selected} mode="references" />}
+      </FormSurface>
+      <FormSurface
+        title="历史配置与当前生效配置对比"
+        open={!!historyGrants}
+        onCancel={() => setHistoryGrants(undefined)}
+        footer={null}
+        width={720}
+      >
+        <p className="permission-caption">
+          历史版本只读，不覆盖当前授权。以下显示历史版本与当前生效配置的差异。
+        </p>
         <Table
-          rowKey="id"
-          dataSource={logs}
-          scroll={{ x: 560 }}
+          rowKey="code"
+          size="small"
+          dataSource={grantChanges(
+            historyGrants ?? [],
+            detail?.published ?? [],
+          )}
           columns={[
-            { title: '时间', dataIndex: 'createdAt' },
             {
-              title: '操作人',
+              title: '操作',
               render: (_, row) =>
-                people.find((p) => p.id === row.actorId)?.realName ??
-                `账号 #${row.actorId}`,
+                catalog.find((p) => p.code === row.code)?.name ?? row.code,
             },
             {
-              title: '动作',
-              render: (_, row) => actionLabel[row.action] ?? row.action,
+              title: '历史版本',
+              render: (_, row) => (row.old ? '已授权' : '无'),
             },
             {
-              title: '对象',
-              render: (_, row) =>
-                ['ASSIGN', 'DELEGATE'].includes(row.action)
-                  ? (people.find((p) => p.id === row.targetId)?.realName ??
-                    `账号 #${row.targetId}`)
-                  : (roles.find((r) => r.id === row.targetId)?.name ??
-                    `历史角色 #${row.targetId}`),
+              title: '当前生效',
+              render: (_, row) => (row.next ? '已授权' : '无'),
             },
           ]}
         />
       </FormSurface>
+
       <FormSurface
         mode="dialog"
         title="有效权限与来源"
@@ -647,7 +1089,9 @@ export default function PermissionManage() {
       >
         <p>
           主角色：
-          {roles.find((r) => r.id === effective?.roleId)?.name ?? '角色不可用'}
+          {effective?.roleName ??
+            roles.find((r) => r.id === effective?.roleId)?.name ??
+            '角色不可用'}
         </p>
         <p>
           管理身份：
@@ -657,6 +1101,7 @@ export default function PermissionManage() {
               ? '有效管理员委派'
               : '无'}
         </p>
+        {effectiveUserId && <PermissionExplanation userId={effectiveUserId} />}
         <p>业务权限（来自当前启用角色的发布配置）</p>
         <Space wrap>
           {effective?.businessPermissions.map((code) => (
@@ -665,10 +1110,28 @@ export default function PermissionManage() {
             </Tag>
           ))}
         </Space>
+        <Table
+          rowKey="permission"
+          size="small"
+          pagination={{ pageSize: 8 }}
+          dataSource={effective?.configured ?? []}
+          columns={[
+            {
+              title: '已配置操作',
+              render: (_, row) =>
+                catalog.find((p) => p.code === row.permission)?.name ??
+                row.permission,
+            },
+            {
+              title: '生效状态',
+              render: (_, row) => (row.effective ? '有效' : row.reason),
+            },
+          ]}
+        />
         <p style={{ marginTop: 16 }}>管理能力</p>
         <Space wrap>
           {effective?.managementCapabilities.map((code) => (
-            <Tag key={code}>{code}</Tag>
+            <Tag key={code}>{managementLabel(code)}</Tag>
           ))}
         </Space>
       </FormSurface>
@@ -719,10 +1182,11 @@ export default function PermissionManage() {
       >
         <Form layout="vertical">
           {!creation?.source && !creation?.editing && (
-            <Form.Item label="初始模板">
+            <Form.Item label="职责模板（可组合）">
               <Select
                 allowClear
-                placeholder="可选：使用系统模板；留空为空白创建"
+                mode="multiple"
+                placeholder="可选多个职责模板；留空为空白创建"
                 value={template}
                 onChange={setTemplate}
                 style={{ width: '100%', marginBottom: 12 }}
@@ -762,33 +1226,122 @@ export default function PermissionManage() {
         onCancel={() => setPreview(undefined)}
         onOk={() =>
           run(async () => {
-            await applyAuthorizationChange(preview!.id)
+            try {
+              await applyAuthorizationChange(preview!.id)
+            } catch (error) {
+              const result = await authorizationChange(preview!.id)
+              if (result.status !== 'APPLIED') throw error
+            }
             setPreview(undefined)
+            setReason('')
             await loadList()
-            if (selected) await loadDetail(selected)
+            if (selected && !dirty) await loadDetail(selected)
             refreshUser(await meApi())
             message.success('变更已生效')
           })
         }
       >
-        {preview?.action === 'ASSIGN' ? (
-          <p>
-            将用户 #{preview.targetId} 的主角色从 #{preview.details.oldRoleId}{' '}
-            替换为 #{preview.details.roleId}。其余角色的配置保持独立。
-          </p>
+        <p>变更原因：{preview?.details.reason || '未填写'}</p>
+        {preview?.action === 'DELEGATE' ? (
+          <>
+            <p>
+              {preview.details.active
+                ? '保存管理员身份与可授权清单'
+                : '撤销管理身份，原业务角色保留'}
+              ：
+              {people.find((p) => p.id === preview.targetId)?.realName ??
+                `账号 #${preview.targetId}`}
+            </p>
+            <p>
+              原可授权清单：
+              {preview.details.delegationBefore?.grantable
+                .map(
+                  (code) => catalog.find((p) => p.code === code)?.name ?? code,
+                )
+                .join('、') || '无'}
+            </p>
+            <p>
+              新可授权清单：
+              {preview.details.grantable
+                ?.map(
+                  (code) => catalog.find((p) => p.code === code)?.name ?? code,
+                )
+                .join('、') || '无'}
+            </p>
+            <p>
+              有效期：
+              {preview.details.expiresAt
+                ? new Date(preview.details.expiresAt).toLocaleString('zh-CN')
+                : '长期'}
+            </p>
+          </>
+        ) : preview?.action === 'ASSIGN' ? (
+          <>
+            <p>
+              将{' '}
+              {people.find((p) => p.id === preview.targetId)?.realName ??
+                `账号 #${preview.targetId}`}{' '}
+              的主角色从{' '}
+              {roles.find((r) => r.id === preview.details.oldRoleId)?.name ??
+                '原角色'}{' '}
+              替换为{' '}
+              {roles.find((r) => r.id === preview.details.roleId)?.name ??
+                '目标角色'}
+              。
+            </p>
+            <p>
+              授权范围为本组织，仍受作者、指定审核人和业务状态限制。高影响操作请重点核对。
+            </p>
+            <PermissionDelta
+              before={preview.details.before ?? []}
+              after={preview.details.grants ?? []}
+              catalog={catalog}
+            />
+          </>
         ) : (
           <>
             <p>
               动作：{actionLabel[preview?.action ?? '']}
-              ；当前角色使用者都会受到影响。预览 5 分钟内有效。
+              ；当前角色使用者都会受到影响。预览有效期：
+              {preview?.expiresAt
+                ? new Date(preview.expiresAt).toLocaleTimeString('zh-CN')
+                : '5 分钟'}
+              。
             </p>
+            {preview?.details.impact && (
+              <div className="permission-impact">
+                <span>
+                  影响账号 <strong>{preview.details.impact.userCount}</strong>
+                </span>
+                <span>
+                  有效账号{' '}
+                  <strong>{preview.details.impact.activeUserCount}</strong>
+                </span>
+                <span>
+                  岗位引用{' '}
+                  <strong>{preview.details.impact.positions.length}</strong>
+                </span>
+                <span>
+                  有效邀请 <strong>{preview.details.impact.invitations}</strong>
+                </span>
+              </div>
+            )}
             <Table
               rowKey="code"
               size="small"
               pagination={false}
               dataSource={previewRows}
               columns={[
-                { title: '权限', dataIndex: 'code' },
+                {
+                  title: '权限',
+                  render: (_, row) => (
+                    <span>
+                      {catalog.find((p) => p.code === row.code)?.name ??
+                        row.code}
+                      <small className="permission-op-code">{row.code}</small>
+                    </span>
+                  ),
+                },
                 {
                   title: '原配置',
                   render: (_, r) =>
@@ -820,18 +1373,21 @@ export default function PermissionManage() {
             <Button onClick={() => setAdminOpen(false)}>取消</Button>
             <Button
               danger
-              disabled={!adminPerson || busy}
+              disabled={!adminPerson || busy || adminLoading}
               onClick={() =>
                 run(async () => {
-                  await setAdministrator(
-                    adminPerson!,
-                    false,
-                    [],
-                    undefined,
-                    adminVersion,
+                  setPreview(
+                    await previewAdministrator(
+                      adminPerson!,
+                      false,
+                      [],
+                      undefined,
+                      adminVersion,
+                      reason,
+                    ),
                   )
                   setAdminOpen(false)
-                  message.success('管理身份已撤销，原业务角色保留')
+                  message.info('请核对变更后确认撤销')
                 })
               }
             >
@@ -839,22 +1395,25 @@ export default function PermissionManage() {
             </Button>
             <Button
               type="primary"
-              disabled={!adminPerson || busy}
+              disabled={!adminPerson || busy || adminLoading}
               onClick={() =>
                 run(async () => {
-                  await setAdministrator(
-                    adminPerson!,
-                    true,
-                    adminGrants,
-                    adminExpires ? `${adminExpires}:00` : undefined,
-                    adminVersion,
+                  setPreview(
+                    await previewAdministrator(
+                      adminPerson!,
+                      true,
+                      adminGrants,
+                      adminExpires ? `${adminExpires}:00` : undefined,
+                      adminVersion,
+                      reason,
+                    ),
                   )
                   setAdminOpen(false)
-                  message.success('管理员身份与可授权清单已保存')
+                  message.info('请核对变更后确认保存')
                 })
               }
             >
-              保存委派
+              预览委派
             </Button>
           </Space>
         }
@@ -863,6 +1422,13 @@ export default function PermissionManage() {
           管理身份与主角色分开。该管理员可管理本组织普通角色和账号，能授予的业务操作限定为下方明确选择的清单。
         </p>
         <Form layout="vertical">
+          <Form.Item label="变更原因（选填）">
+            <Input.TextArea
+              maxLength={500}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Form.Item>
           <Form.Item label="委派给" required>
             <Select
               aria-label="委派给"

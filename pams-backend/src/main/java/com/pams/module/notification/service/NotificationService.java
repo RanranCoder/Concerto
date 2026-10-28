@@ -1,148 +1,105 @@
 package com.pams.module.notification.service;
 
-import com.pams.common.BizException;
-import com.pams.common.PageResult;
-import com.pams.entity.User;
-import com.pams.module.notification.dto.NotificationPreferenceVO;
-import com.pams.module.notification.dto.NotificationVO;
-import com.pams.module.notification.entity.Notification;
-import com.pams.module.notification.entity.NotificationType;
-import com.pams.module.notification.repository.NotificationRepository;
-import com.pams.repository.UserRepository;
-import org.springframework.data.domain.PageRequest;
+import com.pams.common.*;
+import com.pams.module.notification.dto.*;
+import com.pams.module.notification.entity.*;
+import java.sql.*;
+import java.util.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 @Service
+@Transactional(readOnly=true)
 public class NotificationService {
-
-    private final NotificationRepository repo;
-    private final UserRepository userRepo;
-    // 通知偏好本期轻量实现：内存按用户维度存取（重启即清空，不落库、不改表结构）
-    private final java.util.concurrent.ConcurrentHashMap<Long, Map<String, Boolean>> prefStore = new java.util.concurrent.ConcurrentHashMap<>();
-
-    public NotificationService(NotificationRepository repo, UserRepository userRepo) {
-        this.repo = repo;
-        this.userRepo = userRepo;
+  private final JdbcTemplate db;
+  private final NotificationPipeline pipeline;
+  private final NotificationVisibility visibility;
+  public NotificationService(JdbcTemplate db,NotificationPipeline pipeline,NotificationVisibility visibility) {
+    this.db=db;this.pipeline=pipeline;this.visibility=visibility;
+  }
+  @Transactional
+  public Notification createAndSave(NotificationType type,String title,String content,String entity,Long id,
+                                    Long sender,Long user,String role,Long dept) {
+    return pipeline.record(type,title,content,entity,id,sender,user,role,dept);
+  }
+  public List<NotificationVO> findForUser(Long uid,String role,Long dept) {
+    return pageForUser(uid,role,dept,null,1,50).getRecords();
+  }
+  public long countUnreadForUser(Long uid,String role,Long dept) {
+    return db.queryForObject("SELECT COUNT(*) FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id "
+      +"WHERE i.org_id=? AND i.user_id=? AND i.read_at IS NULL AND i.archived_at IS NULL AND n.deleted=0",Long.class,NotificationPipeline.org(),uid);
+  }
+  public PageResult<NotificationVO> pageForUser(Long uid,String role,Long dept,NotificationType type,int page,int size) {
+    int current=Math.max(1,page),limit=Math.max(1,Math.min(100,size));
+    String where=" FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id "
+      +"LEFT JOIN sys_user u ON u.id=n.sender_id AND u.org_id=n.org_id AND u.deleted=0 "
+      +"WHERE i.org_id=? AND i.user_id=? AND n.deleted=0"+(type==null?"":" AND n.type=?");
+    var args=new ArrayList<Object>(List.of(NotificationPipeline.org(),uid));if(type!=null)args.add(type.name());
+    PageResult<NotificationVO> result=new PageResult<>();result.setCurrent(current);result.setSize(limit);
+    result.setTotal(db.queryForObject("SELECT COUNT(*)"+where,Long.class,args.toArray()));
+    args.add(limit);args.add((long)(current-1)*limit);
+    result.setRecords(db.query("SELECT n.*,i.read_at AS personal_read_at,u.real_name AS sender_name"+where
+      +" ORDER BY i.created_at DESC,i.id DESC LIMIT ? OFFSET ?",(rs,row)->toVO(rs,uid),args.toArray()));
+    return result;
+  }
+  private NotificationVO toVO(ResultSet rs,long uid) throws SQLException {
+    Notification n=new Notification();n.setId(rs.getLong("id"));n.setOrgId(rs.getLong("org_id"));
+    n.setType(NotificationType.valueOf(rs.getString("type")));n.setEntityType(rs.getString("entity_type"));
+    n.setEntityId(rs.getObject("entity_id",Long.class));n.setActivityId(rs.getObject("activity_id",Long.class));
+    NotificationVO v=new NotificationVO();v.setId(n.getId());v.setType(n.getType().name());
+    v.setRead(rs.getTimestamp("personal_read_at")!=null);v.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+    v.setPriority(n.getType().name().contains("CANCEL")?"URGENT":"NORMAL");
+    if(!visibility.canRead(uid,n)) {
+      v.setTitle("业务通知");v.setContent("当前没有该业务内容的查看权限");return v;
     }
-
-    @Transactional
-    public Notification createAndSave(NotificationType type, String title, String content,
-                                      String entityType, Long entityId, Long senderId,
-                                      Long recipientId, String recipientRole, Long recipientDeptId) {
-        Notification n = new Notification();
-        n.setType(type);
-        n.setTitle(title);
-        n.setContent(content);
-        n.setEntityType(entityType);
-        n.setEntityId(entityId);
-        n.setSenderId(senderId);
-        n.setRecipientId(recipientId);
-        n.setRecipientRole(recipientRole);
-        n.setRecipientDeptId(recipientDeptId);
-        n.setIsRead(0);
-        n.setDeleted(0);
-        n.setCreatedAt(LocalDateTime.now());
-        return repo.save(n);
+    v.setTitle(rs.getString("title"));v.setContent(rs.getString("content"));v.setSenderName(rs.getString("sender_name"));
+    v.setNotify(db.queryForObject("SELECT COUNT(*) FROM notification_preference WHERE org_id=? AND user_id=? AND event_type=? AND enabled=FALSE",Long.class,NotificationPipeline.org(),uid,n.getType().name())==0);
+    v.setEntityType(n.getEntityType());v.setEntityId(n.getEntityId());v.setActivityId(n.getActivityId());
+    if(n.getType()==NotificationType.PLAN_SUBMITTED) {
+      var rows=db.queryForList("SELECT p.status,r.approved FROM activity_plan p JOIN activity_plan_review r ON r.plan_id=p.id "
+        +"WHERE p.org_id=? AND p.id=? AND r.reviewer_id=?",NotificationPipeline.org(),n.getEntityId(),uid);
+      boolean open=!rows.isEmpty() && "PENDING".equals(rows.getFirst().get("status")) && rows.getFirst().get("approved")==null;
+      v.setActionState(open?"open":!rows.isEmpty() && ("WITHDRAWN".equals(rows.getFirst().get("status")) || "REJECTED".equals(rows.getFirst().get("status")))?"cancelled":"completed");
+    } else if(n.getType()==NotificationType.TASK_ASSIGNED || n.getType()==NotificationType.TASK_CHANGED) {
+      var tasks=db.queryForList("SELECT status,assignee_user_id FROM task WHERE id=? AND org_id=? AND deleted=0",n.getEntityId(),NotificationPipeline.org());
+      if(tasks.isEmpty())v.setActionState("cancelled");
+      else if("DONE".equals(tasks.getFirst().get("status")))v.setActionState("completed");
+      else {
+        Object assigned=tasks.getFirst().get("assignee_user_id");
+        v.setActionState(assigned==null || ((Number)assigned).longValue()==uid?"open":"cancelled");
+      }
     }
-
-    public List<NotificationVO> findForUser(Long userId, String roleCode, Long deptId) {
-        // 铃铛列表只取前 50 条（分页下沉 DB），并对 sender 批量取数避免 N+1
-        List<Notification> list = repo.pageForUser(userId, roleCode, deptId, null, PageRequest.of(0, 50));
-        return toVOs(list);
+    if((n.getType()==NotificationType.PLAN_SUBMITTED || n.getType()==NotificationType.TASK_ASSIGNED) && !"open".equals(v.getActionState())) v.setNotify(false);
+    return v;
+  }
+  @Transactional
+  public void markAsRead(Long id,Long uid) {
+    long org=NotificationPipeline.org();
+    if(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE org_id=? AND user_id=? AND message_id=?",Long.class,org,uid,id)==0)
+      throw new BizException(2050,"通知不存在");
+    if(db.update("UPDATE notification_inbox SET read_at=CURRENT_TIMESTAMP WHERE org_id=? AND user_id=? AND message_id=? AND read_at IS NULL",org,uid,id)>0)
+      pipeline.invalidate(uid);
+  }
+  @Transactional
+  public void markAllAsRead(Long uid,String role,Long dept) {
+    if(db.update("UPDATE notification_inbox SET read_at=CURRENT_TIMESTAMP WHERE org_id=? AND user_id=? AND read_at IS NULL",NotificationPipeline.org(),uid)>0)
+      pipeline.invalidate(uid);
+  }
+  public List<NotificationPreferenceVO> getPreferences(Long uid) {
+    Map<String,Boolean> prefs=new HashMap<>();
+    db.query("SELECT event_type,enabled FROM notification_preference WHERE org_id=? AND user_id=?",rs->{prefs.put(rs.getString(1),rs.getBoolean(2));},NotificationPipeline.org(),uid);
+    return Arrays.stream(NotificationType.values()).map(t->NotificationPreferenceVO.of(t.name(),t==NotificationType.SYSTEM || prefs.getOrDefault(t.name(),true),t==NotificationType.SYSTEM)).toList();
+  }
+  @Transactional
+  public void savePreferences(Long uid,List<NotificationPreferenceVO> prefs) {
+    if(prefs==null)return;
+    for(var p:prefs) {
+      if(p==null || p.getType()==null)continue;
+      NotificationType t;try{t=NotificationType.valueOf(p.getType());}catch(IllegalArgumentException e){continue;}
+      if(t==NotificationType.SYSTEM)continue;
+      db.update("INSERT INTO notification_preference(org_id,user_id,event_type,enabled) VALUES(?,?,?,?) "
+        +"ON DUPLICATE KEY UPDATE enabled=?",NotificationPipeline.org(),uid,t.name(),p.isEnabled(),p.isEnabled());
     }
-
-    public long countUnreadForUser(Long userId, String roleCode, Long deptId) {
-        return repo.countUnreadForUser(userId, roleCode, deptId);
-    }
-
-    public PageResult<NotificationVO> pageForUser(Long userId, String roleCode, Long deptId,
-                                                  NotificationType type, int page, int size) {
-        int safePage = Math.max(1, page);
-        int safeSize = Math.min(100, Math.max(1, size));
-        List<Notification> list = repo.pageForUser(userId, roleCode, deptId, type,
-            PageRequest.of(safePage - 1, safeSize));
-        long total = repo.countForUser(userId, roleCode, deptId, type);
-        PageResult<NotificationVO> pr = new PageResult<>();
-        pr.setRecords(toVOs(list));
-        pr.setTotal(total);
-        pr.setCurrent(safePage);
-        pr.setSize(safeSize);
-        return pr;
-    }
-
-    public List<NotificationPreferenceVO> getPreferences(Long userId) {
-        Map<String, Boolean> userPrefs = prefStore.getOrDefault(userId, java.util.Map.of());
-        List<NotificationPreferenceVO> result = new java.util.ArrayList<>();
-        for (NotificationType t : NotificationType.values()) {
-            boolean system = t == NotificationType.SYSTEM;
-            boolean enabled = system || userPrefs.getOrDefault(t.name(), true);
-            result.add(NotificationPreferenceVO.of(t.name(), enabled, system));
-        }
-        return result;
-    }
-
-    public void savePreferences(Long userId, List<NotificationPreferenceVO> prefs) {
-        if (prefs == null) return;
-        Map<String, Boolean> userPrefs = new java.util.concurrent.ConcurrentHashMap<>();
-        for (NotificationPreferenceVO p : prefs) {
-            if (p == null || p.getType() == null || p.isSystem()) continue;
-            try {
-                NotificationType.valueOf(p.getType());
-                userPrefs.put(p.getType(), p.isEnabled());
-            } catch (IllegalArgumentException ignored) {
-                // 未知类型忽略，不做库结构变更
-            }
-        }
-        prefStore.put(userId, userPrefs);
-    }
-
-    @Transactional
-    public void markAsRead(Long id, Long userId) {
-        Notification n = repo.findById(id)
-            .orElseThrow(() -> new BizException(2050, "通知不存在"));
-        if (n.getIsRead() == 0) {
-            n.setIsRead(1);
-            n.setReadAt(LocalDateTime.now());
-            repo.save(n);
-        }
-    }
-
-    @Transactional
-    public void markAllAsRead(Long userId, String roleCode, Long deptId) {
-        repo.markAllAsRead(userId, roleCode, deptId, LocalDateTime.now());
-    }
-
-    /** 批量 toVO：一次 findAllById 取所有发送者姓名，消除逐条 userRepo.findById 的 N+1。 */
-    private List<NotificationVO> toVOs(List<Notification> list) {
-        Set<Long> senderIds = list.stream()
-            .map(Notification::getSenderId)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
-        Map<Long, String> senderNames = senderIds.isEmpty()
-            ? Map.of()
-            : userRepo.findAllById(senderIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getRealName, (a, b) -> a));
-        return list.stream().map(n -> {
-            NotificationVO vo = new NotificationVO();
-            vo.setId(n.getId());
-            vo.setType(n.getType().name());
-            vo.setTitle(n.getTitle());
-            vo.setContent(n.getContent());
-            vo.setEntityType(n.getEntityType());
-            vo.setEntityId(n.getEntityId());
-            vo.setPriority("NORMAL");
-            vo.setRead(n.getIsRead() == 1);
-            vo.setCreatedAt(n.getCreatedAt());
-            vo.setSenderName(n.getSenderId() == null ? null : senderNames.get(n.getSenderId()));
-            return vo;
-        }).toList();
-    }
+  }
 }

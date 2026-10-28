@@ -1,3 +1,4 @@
+import PermissionExplanation from './PermissionExplanation'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Empty, Space, Spin } from 'antd'
 import FormSurface from '@/components/form/FormSurface'
@@ -24,7 +25,7 @@ export default function UserDetails({user, canEdit, canManage, canChangeStatus, 
     {user.pendingActivation && <Alert type="warning" showIcon message="此账号尚未完成首次密码设置，请由开户经办人核对交付状态。此处不展示明文凭证。" />}
     <h3 className="admin-section-title">实际访问权限</h3>
     {!canReadPermissions ? <p className="admin-note">当前账号无权读取权限明细，可向有权管理员核对此用户的已发布授权。</p> : error ? <LoadError message={error} retry={() => setRetry(v => v + 1)} /> : <Spin spinning={loading}>
-      {permissions && <><p className="admin-note">以下业务权限来自当前已发布角色。部门归属不会自动授予管理能力。</p><ul className="admin-permission-list">{permissions.businessPermissions.map(code => <li key={code}>{catalog.find(p => p.code === code)?.name || code}</li>)}</ul>{!permissions.businessPermissions.length && <Empty description="未授予业务操作权限" />}
+      {permissions && <><PermissionExplanation userId={user.id} /><p className="admin-note">以下业务权限来自当前已发布角色。部门归属不会自动授予管理能力。</p><ul className="admin-permission-list">{permissions.businessPermissions.map(code => <li key={code}>{catalog.find(p => p.code === code)?.name || code}</li>)}</ul>{!permissions.businessPermissions.length && <Empty description="未授予业务操作权限" />}
         <h3 className="admin-section-title">治理能力来源 · {managementLabel(permissions.managementSource)}</h3><ul className="admin-permission-list">{permissions.managementCapabilities.map(code => <li key={code}>{names[code] || code}</li>)}</ul>{!permissions.managementCapabilities.length && <p className="admin-note">未授予管理能力。</p>}</>}
     </Spin>}
   </FormSurface>

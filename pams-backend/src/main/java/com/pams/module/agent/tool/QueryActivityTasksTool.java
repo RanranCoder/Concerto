@@ -55,7 +55,7 @@ public class QueryActivityTasksTool implements AgentTool {
     }
 
     @Override
-    public List<String> requiredPermissions() { return List.of("activity:view"); }
+    public List<String> requiredPermissions() { return List.of("task:view"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }

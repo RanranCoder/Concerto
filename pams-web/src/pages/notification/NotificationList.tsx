@@ -2,20 +2,29 @@ import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Empty, Select, Space, Spin, Switch, Tag } from 'antd'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { useNavigate } from 'react-router-dom'
+import { useNotificationStore } from '@/stores/notification'
+import { useAuthStore } from '@/stores/auth'
+import { notificationRoute } from '@/utils/notificationRoute'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
 import {
   getNotificationPreferences,
   listNotificationsPage,
-  markAllNotificationsAsRead,
-  markNotificationAsRead,
   saveNotificationPreferences,
 } from '@/api/notificationPage'
 
 // 对照后端 NotificationType 枚举：TASK_ASSIGNED, PLAN_SUBMITTED, PLAN_APPROVED, PLAN_REJECTED, SYSTEM, PLAN_MODIFIED, NEWS_UPLOADED, SIGNIN_ROSTER_UPLOADED, SIGNIN_COMPLETED, ARTICLE_SUBMITTED, ARTICLE_ASSIGNED, ARTICLE_APPROVED, ARTICLE_REJECTED, ARTICLE_PUBLISHED, ARTICLE_DEADLINE_REMINDER, ANNOUNCEMENT
 const TYPE_LABEL: Record<string, string> = {
   TASK_ASSIGNED: '任务',
+  TASK_CHANGED: '任务变更',
+  TASK_COMPLETED: '任务完成',
+  SCHEDULE_PUBLISHED: '排班发布',
+  SCHEDULE_CHANGED: '排班调整',
+  SCHEDULE_CANCELLED: '排班取消',
+  PLAN_WITHDRAWN: '策划书撤回',
+  COLLABORATION: '协作提醒',
   PLAN_SUBMITTED: '策划书',
   PLAN_APPROVED: '策划书',
   PLAN_REJECTED: '策划书',
@@ -40,6 +49,8 @@ interface NotificationRow {
   content: string
   entityType: string | null
   entityId: number | null
+  activityId?: number | null
+  actionState?: string | null
   senderName: string | null
   priority: string
   read: boolean
@@ -48,6 +59,8 @@ interface NotificationRow {
 }
 
 export default function NotificationList() {
+  const navigate = useNavigate()
+  const revision = useNotificationStore(s => s.revision)
   const { message } = App.useApp()
   const [typeFilter, setTypeFilter] = useState<string>()
   const [data, setData] = useState<NotificationRow[]>([])
@@ -59,9 +72,11 @@ export default function NotificationList() {
   const [prefLoading, setPrefLoading] = useState(false)
 
   const fetchList = useCallback(() => {
+    const token = useAuthStore.getState().token
     setLoading(true)
     listNotificationsPage({ type: typeFilter, page, size })
       .then((res) => {
+        if (token !== useAuthStore.getState().token) return
         setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
         setTotal(res.total)
       })
@@ -73,7 +88,7 @@ export default function NotificationList() {
 
   useEffect(() => {
     fetchList()
-  }, [fetchList])
+  }, [fetchList, revision])
 
   const fetchPrefs = useCallback(() => {
     getNotificationPreferences()
@@ -89,8 +104,7 @@ export default function NotificationList() {
 
   const handleMarkRead = async (id: number) => {
     try {
-      await markNotificationAsRead(id)
-      fetchList()
+      await useNotificationStore.getState().markAsRead(id)
     } catch {
       /* 拦截已提示 */
     }
@@ -98,7 +112,7 @@ export default function NotificationList() {
 
   const handleMarkAll = async () => {
     try {
-      await markAllNotificationsAsRead()
+      await useNotificationStore.getState().markAllAsRead()
       message.success('已全部标记为已读')
       fetchList()
     } catch {
@@ -158,14 +172,15 @@ export default function NotificationList() {
       key: 'action',
       align: 'right' as const,
       width: 100,
-      render: (_: unknown, r: NotificationRow) =>
-        r.read ? (
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>已读</span>
-        ) : (
-          <Button type="link" size="small" onClick={() => handleMarkRead(r.id)}>
-            标记已读
-          </Button>
-        ),
+      render: (_: unknown, r: NotificationRow) => (
+        <Space>
+          {notificationRoute(r) && <Button type="link" size="small" onClick={() => {
+            if (!r.read) void handleMarkRead(r.id)
+            navigate(notificationRoute(r)!)
+          }}>{r.actionState === 'open' ? (r.type === 'PLAN_SUBMITTED' || r.type === 'ARTICLE_SUBMITTED' ? '去审核' : '去处理') : '查看'}</Button>}
+          {r.read ? '已读' : <Button type="link" size="small" onClick={() => handleMarkRead(r.id)}>标记已读</Button>}
+        </Space>
+      ),
     },
   ]
 

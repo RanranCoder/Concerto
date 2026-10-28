@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Select, Segmented, Spin } from 'antd'
+import { App, Button, Select, Segmented, Spin } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
@@ -14,6 +14,7 @@ import {
   shiftTitle,
   WeekControls,
 } from '@/components/routine/ScheduleViews'
+import { post } from '@/api/http'
 import { listMySchedules, type ScheduleVO } from '@/api/schedule'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { getScheduleConfigs, type ScheduleConfigVO } from '@/api/courseSchedule'
@@ -28,6 +29,12 @@ import {
 } from '@/utils/routine'
 
 export default function MyScheduleList() {
+  const { message } = App.useApp()
+  const [checking, setChecking] = useState(false)
+  const checkIn = async (shift: ScheduleVO) => {
+    setChecking(true)
+    try { await post('/attendances', {scheduleId:shift.id,personName:user?.realName || user?.username,status:'NORMAL'}); message.success('本人打卡已记录') } catch {} finally { setChecking(false) }
+  }
   const navigate = useNavigate(),
     user = useAuthStore((s) => s.user)
   const [rows, setRows] = useState<ScheduleVO[]>([]),
@@ -81,7 +88,7 @@ export default function MyScheduleList() {
   const own = (s: ScheduleVO) =>
     s.persons.find(
       (p) =>
-        p.userId === user?.id || (!p.userId && p.personName === user?.realName),
+        p.userId === user?.id,
     )
   return (
     <RoutineLayout>
@@ -89,7 +96,7 @@ export default function MyScheduleList() {
         title="我的排班"
         description={`${user?.realName ?? ''} · ${user?.deptName ?? '当前组织'}，查看自己的值班与活动安排。`}
         extra={
-          <Button onClick={() => navigate('/routine/attendance?scope=mine')}>
+          <Button disabled={!user?.permissions.includes('attendance:self:view')} onClick={() => navigate('/routine/attendance?scope=mine')}>
             查看我的考勤
           </Button>
         }
@@ -119,7 +126,7 @@ export default function MyScheduleList() {
               </span>
             </div>
           </div>
-          <Button onClick={() => setDetail(next)}>查看安排</Button>
+          <div><Button onClick={() => setDetail(next)}>查看安排</Button>{user?.permissions.includes('schedule:check') && next.status === 'PUBLISHED' && <Button type="primary" loading={checking} onClick={() => void checkIn(next)}>本人打卡</Button>}</div>
         </section>
       )}
       <RoutineSummary

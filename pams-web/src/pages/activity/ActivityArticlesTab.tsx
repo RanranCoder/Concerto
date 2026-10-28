@@ -81,7 +81,9 @@ export default function ActivityArticlesTab({
   const user = useAuthStore((s) => s.user)
   const { message, modal } = App.useApp()
   // 管理/审核权限对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
-  const canManage = (user?.permissions ?? []).includes('content:manage')
+  const permissions = user?.permissions ?? []
+  const canManage = permissions.includes('article:manage')
+  const canOperate = (code: string, authorId: number | null) => permissions.includes(code) && (canManage || authorId === user?.id)
 
   const [articles, setArticles] = useState<ArticleVO[]>([])
   const [users, setUsers] = useState<UserVO[]>([])
@@ -514,7 +516,7 @@ export default function ActivityArticlesTab({
         </div>
       </header>
       <Space style={{ marginBottom: 16 }} wrap>
-        {canManage && (
+        {permissions.includes('article:create') && (
           <>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建推文
@@ -637,23 +639,23 @@ export default function ActivityArticlesTab({
                     {(a.status === 'DRAFT' || a.status === 'REJECTED') &&
                       (canManage || a.authorId === user?.id) && (
                         <>
-                          <Button
+                          {canOperate('article:edit',a.authorId) && (<Button
                             type="link"
                             size="small"
                             icon={<EditOutlined />}
                             onClick={() => openEdit(a)}
                           >
                             编辑
-                          </Button>
-                          <Button
+                          </Button>)}
+                          {canOperate('article:submit',a.authorId) && (<Button
                             type="link"
                             size="small"
                             icon={<SendOutlined />}
                             onClick={() => handleSubmit(a)}
                           >
                             提交
-                          </Button>
-                          <Popconfirm
+                          </Button>)}
+                          {canOperate('article:delete',a.authorId) && (<Popconfirm
                             title="确认删除该推文？"
                             onConfirm={() => handleDelete(a.id)}
                             okText="删除"
@@ -667,10 +669,10 @@ export default function ActivityArticlesTab({
                             >
                               删除
                             </Button>
-                          </Popconfirm>
+                          </Popconfirm>)}
                         </>
                       )}
-                    {a.status === 'PENDING' && canManage && (
+                    {a.status === 'PENDING' && permissions.includes('article:review') && (
                       <Button
                         type="link"
                         size="small"
@@ -681,7 +683,7 @@ export default function ActivityArticlesTab({
                       </Button>
                     )}
                     {a.status === 'APPROVED' &&
-                      (canManage || a.authorId === user?.id) && (
+                      canOperate('article:publish',a.authorId) && (
                         <Button
                           type="link"
                           size="small"
@@ -692,7 +694,7 @@ export default function ActivityArticlesTab({
                         </Button>
                       )}
                     {a.status === 'PUBLISHED' &&
-                      (canManage || a.authorId === user?.id) && (
+                      canOperate('article:stats',a.authorId) && (
                         <Button
                           type="link"
                           size="small"
@@ -724,7 +726,7 @@ export default function ActivityArticlesTab({
             <Button onClick={() => setReading(null)}>关闭</Button>
             {reading &&
               ['DRAFT', 'REJECTED'].includes(reading.status) &&
-              (canManage || reading.authorId === user?.id) && (
+              canOperate('article:edit',reading.authorId) && (
                 <Button
                   type="primary"
                   onClick={() => {

@@ -42,6 +42,8 @@ export interface SigninToken {
 
 export const listSignins = (activityId: number, keyword?: string) =>
   get<SigninVO[]>('/signins', { activityId, keyword })
+export const exportSignins = (activityId: number, keyword?: string) =>
+  get<SigninVO[]>('/signins/export', { activityId, keyword })
 export const createSignin = (data: SigninSave) => post<SigninVO>('/signins', data)
 export const deleteSignin = (id: number) => del<void>(`/signins/${id}`)
 export const countSignins = (activityId: number) =>

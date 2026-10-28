@@ -53,6 +53,9 @@ public class QueryMyPendingWorkTool implements AgentTool {
     }
 
     @Override
+    public List<String> requiredPermissions() { return List.of("task:view"); }
+
+    @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }
 
     @Override

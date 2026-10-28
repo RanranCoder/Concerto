@@ -60,6 +60,9 @@ public class QueryActivityOverviewTool implements AgentTool {
     }
 
     @Override
+    public List<String> requiredPermissions() { return List.of("activity:view"); }
+
+    @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }
 
     @Override

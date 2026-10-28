@@ -21,7 +21,7 @@ import com.pams.module.notification.service.NotificationService;
 import com.pams.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
@@ -34,7 +34,7 @@ import java.util.Set;
 public class NotificationEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventListener.class);
-    private static final String WS_DESTINATION = "/queue/notifications";
+
     /** 链路1「通知所有部门（部长+主任）」的目标角色集合 */
     private static final Set<String> ALL_LEADER_ROLES = Set.of(
             "ORG_LEADER", "SECRETARY_LEADER", "MEDIA_LEADER", "TECH_LEADER", "TEACHER", "DIRECTOR");
@@ -42,39 +42,25 @@ public class NotificationEventListener {
     private static final Set<String> DEPT_LEADER_ROLES = Set.of(
             "ORG_LEADER", "SECRETARY_LEADER", "MEDIA_LEADER", "TECH_LEADER");
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
     private final NotificationService notificationService;
     private final UserRepository userRepo;
     private final ActivityRepository activityRepo;
-    private final SimpMessagingTemplate messagingTemplate;
+
 
     public NotificationEventListener(NotificationService notificationService,
                                      UserRepository userRepo,
-                                     ActivityRepository activityRepo,
-                                     SimpMessagingTemplate messagingTemplate) {
+                                     ActivityRepository activityRepo) {
         this.notificationService = notificationService;
         this.userRepo = userRepo;
         this.activityRepo = activityRepo;
-        this.messagingTemplate = messagingTemplate;
+
     }
 
-    /**
-     * 向指定用户发送 WebSocket 通知信号。
-     * payload 仅包含类型和未读计数，前端收到后调 REST API 刷新。
-     */
-    private void pushToUser(User user) {
-        try {
-            Long deptId = user.getDept() != null ? user.getDept().getId() : null;
-            long unread = notificationService.countUnreadForUser(
-                user.getId(), user.getRole().getCode(), deptId);
-            messagingTemplate.convertAndSendToUser(
-                user.getUsername(), WS_DESTINATION,
-                Map.of("type", "NEW_NOTIFICATION", "unreadCount", unread));
-        } catch (Exception e) {
-            log.warn("WebSocket 推送失败: username={}", user.getUsername(), e);
-        }
-    }
+    // BEFORE_COMMIT records facts and frozen recipients; the worker owns SSE delivery.
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleTaskAssigned(TaskAssignedEvent event) {
         String activityName = getActivityName(event.getActivityId());
         List<User> members = userRepo.findByOrgIdAndDeptId(com.pams.common.OrgContext.getOrDefault(), event.getDeptId());
@@ -87,35 +73,32 @@ public class NotificationEventListener {
                     "TASK", event.getTaskId(), event.getSenderId(),
                     member.getId(), null, null
                 );
-                pushToUser(member);
             }
         }
         log.info("TaskAssigned 通知已发送给部门 {} 的 {} 名成员", event.getDeptId(), members.size());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handlePlanSubmitted(PlanSubmittedEvent event) {
         for (Long uid:event.getReviewerIds()) {
             notificationService.createAndSave(NotificationType.PLAN_SUBMITTED,"策划书待审核",
                 "您被选为《"+event.getPlanTitle()+"》的审核人，请查看本次提交版本",
                 "PLAN",event.getPlanId(),event.getSubmitterId(),uid,null,null);
-            userRepo.findById(uid).ifPresent(this::pushToUser);
         }
     }
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handlePlanReviewed(PlanReviewedEvent event) {
         notificationService.createAndSave(event.isApproved()?NotificationType.PLAN_APPROVED:NotificationType.PLAN_REJECTED,
             event.isApproved()?"策划书审核通过":"策划书已退回",
             event.isApproved()?"所选审核人已全部通过《"+event.getPlanTitle()+"》":"修改意见："+event.getComment(),
             "PLAN",event.getPlanId(),event.getReviewerId(),event.getSubmitterId(),null,null);
-        userRepo.findById(event.getSubmitterId()).ifPresent(this::pushToUser);
     }
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handlePlanEdited(PlanEditedEvent event) {
         // Draft saves do not broadcast private versions. KnowledgeIndexListener still receives this event.
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleContentUploaded(ContentUploadedEvent event) {
         String activityName = getActivityName(event.getActivityId());
         String label = "NEWS".equals(event.getContentType()) ? "新闻稿" : "推文";
@@ -124,12 +107,12 @@ public class NotificationEventListener {
         broadcastToRoles(
             NotificationType.NEWS_UPLOADED,
             label + "已上传",
-            label + "「" + event.getTitle() + "」已上传（活动：" + activityName + "），请审核",
+            label + "「" + event.getTitle() + "」已上传（活动：" + activityName + "），请查看",
             event.getContentType(), event.getContentId(), event.getUploaderId(), roles);
         log.info("ContentUploaded 通知已发送给 {} 个角色", roles.size());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleSigninRosterUploaded(SigninRosterUploadedEvent event) {
         String activityName = getActivityName(event.getActivityId());
         // 通知活动创建者（排除上传者本人）
@@ -144,7 +127,6 @@ public class NotificationEventListener {
                     "SIGNIN", event.getActivityId(), event.getUploaderId(),
                     creatorId, null, null
                 );
-                userRepo.findById(creatorId).ifPresent(this::pushToUser);
             });
         // 通知各部长
         Set<String> roles = new java.util.LinkedHashSet<>(DEPT_LEADER_ROLES);
@@ -157,7 +139,7 @@ public class NotificationEventListener {
         log.info("SigninRosterUploaded 通知已发送，activityId={}", event.getActivityId());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleSigninCompleted(SigninCompletedEvent event) {
         String activityName = getActivityName(event.getActivityId());
         String content = "《" + activityName + "》签到已完成，共 " + event.getSigned() + "/" + event.getExpected() + " 人";
@@ -173,7 +155,6 @@ public class NotificationEventListener {
                     "SIGNIN", event.getActivityId(), null,
                     creatorId, null, null
                 );
-                userRepo.findById(creatorId).ifPresent(this::pushToUser);
             });
         // 通知各部长
         broadcastToRoles(
@@ -184,7 +165,7 @@ public class NotificationEventListener {
         log.info("SigninCompleted 通知已发送，activityId={}", event.getActivityId());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleArticleAssigned(ArticleAssignedEvent e) {
         String activityName = getActivityName(e.getActivityId());
         userRepo.findById(e.getAssigneeId()).ifPresent(u -> {
@@ -192,11 +173,10 @@ public class NotificationEventListener {
                 "推文任务已指派",
                 "你负责撰写推文《" + e.getTitle() + "》（活动：" + activityName + "），请按时完成",
                 "ARTICLE", e.getArticleId(), e.getCreatorId(), u.getId(), null, null);
-            pushToUser(u);
         });
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleArticleSubmitted(ArticleSubmittedEvent e) {
         String activityName = getActivityName(e.getActivityId());
         // 推文提交审核 → 通知审核人（新媒体部长 + 老师/主任），排除提交人本人
@@ -207,7 +187,7 @@ public class NotificationEventListener {
             "ARTICLE", e.getArticleId(), e.getSubmitterId(), roles);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleArticleReviewed(ArticleReviewedEvent e) {
         String activityName = getActivityName(e.getActivityId());
         NotificationType type = e.isApproved() ? NotificationType.ARTICLE_APPROVED : NotificationType.ARTICLE_REJECTED;
@@ -217,11 +197,10 @@ public class NotificationEventListener {
         userRepo.findById(e.getAuthorId()).ifPresent(u -> {
             notificationService.createAndSave(type, title, content, "ARTICLE", e.getArticleId(),
                 e.getReviewerId(), u.getId(), null, null);
-            pushToUser(u);
         });
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleArticlePublished(ArticlePublishedEvent e) {
         String activityName = getActivityName(e.getActivityId());
         broadcastToRoles(NotificationType.ARTICLE_PUBLISHED, "推文已发布",
@@ -229,7 +208,7 @@ public class NotificationEventListener {
             "ARTICLE", e.getArticleId(), e.getPublisherId(), ALL_LEADER_ROLES);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleArticleDeadlineReminder(ArticleDeadlineReminderEvent e) {
         String activityName = getActivityName(e.getActivityId());
         userRepo.findById(e.getAuthorId()).ifPresent(u -> {
@@ -237,12 +216,11 @@ public class NotificationEventListener {
                 "推文截止提醒",
                 "推文《" + e.getTitle() + "》截止时间 " + e.getDeadline() + "（活动：" + activityName + "），请尽快完成",
                 "ARTICLE", e.getArticleId(), null, u.getId(), null, null);
-            pushToUser(u);
         });
     }
 
     /** PRD-v5 F4：新公告发布 → 全员广播（含干事，通知中心可见） */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleAnnouncementPublished(AnnouncementPublishedEvent e) {
         Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
         roles.add("STAFF");
@@ -253,11 +231,25 @@ public class NotificationEventListener {
     }
 
     /**
-     * 按角色集合广播：每个角色写一条 recipientRole 通知，并向各角色下的用户推 WebSocket（排除发送者本人）。
+     * 按角色集合广播：发送时展开用户快照，异步生成个人收件箱（排除发送者本人）。
      */
     private void broadcastToRoles(NotificationType type, String title, String content,
                                   String entityType, Long entityId, Long senderId,
                                   Set<String> roles) {
+        if (authorization != null) {
+            String permission = switch(entityType) {
+                case "ARTICLE" -> type == NotificationType.ARTICLE_SUBMITTED ? "article:review" : "content:view";
+                case "SIGNIN" -> "checkin:view";
+                case "ANNOUNCEMENT" -> "notice:view";
+                default -> "activity:view";
+            };
+            for (User user:userRepo.findByOrgIdOrderByIdAsc(com.pams.common.OrgContext.getOrDefault())) {
+                if (!java.util.Objects.equals(user.getId(),senderId) && authorization.business(user.getId()).contains(permission)) {
+                    notificationService.createAndSave(type,title,content,entityType,entityId,senderId,user.getId(),null,null);
+                }
+            }
+            return;
+        }
         for (String role : roles) {
             notificationService.createAndSave(
                 type, title, content, entityType, entityId, senderId, null, role, null);
@@ -269,7 +261,6 @@ public class NotificationEventListener {
         for (String role : roles) {
             for (User u : userRepo.findByOrgIdAndRoleCode(com.pams.common.OrgContext.getOrDefault(), role)) {
                 if (!pushed.contains(u.getId())) {
-                    pushToUser(u);
                     pushed.add(u.getId());
                 }
             }

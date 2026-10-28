@@ -24,7 +24,8 @@ import java.util.List;
 @RequestMapping("/api/schedules")
 public class ScheduleController {
     private final RoutineService service;
-    public ScheduleController(RoutineService service) { this.service = service; }
+    private final com.pams.module.routine.service.ActivityScheduleService publication;
+    public ScheduleController(RoutineService service, com.pams.module.routine.service.ActivityScheduleService publication) { this.service = service; this.publication=publication; }
 
     @GetMapping
     public Result<List<Schedule>> list(@RequestParam(required = false) String type,
@@ -35,6 +36,7 @@ public class ScheduleController {
     }
 
     /** 我的排班：当前用户被排到的班次 */
+    @PreAuthorize("hasAuthority('schedule:self:view')")
     @GetMapping("/my")
     public Result<List<Schedule>> my(@AuthenticationPrincipal LoginUser user) {
         return Result.ok(service.listMySchedules(user.getId(), user.getRealName()));
@@ -61,8 +63,16 @@ public class ScheduleController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('schedule:publish')")
+    @PostMapping("/{id}/publish")
+    public Result<Void> publish(@PathVariable Long id) { publication.publish(id); return Result.ok(); }
+
+    @PreAuthorize("hasAuthority('schedule:publish')")
+    @PostMapping("/{id}/cancel")
+    public Result<Void> cancel(@PathVariable Long id) { publication.cancel(id); return Result.ok(); }
+
     /** 导出值班表 xlsx（POI 生成，Content-Disposition 下载） */
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:export')")
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) Integer weekNo,

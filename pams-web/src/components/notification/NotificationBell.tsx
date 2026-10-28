@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationVO } from '@/api/notification'
 import dayjs from 'dayjs'
+import { notificationRoute } from '@/utils/notificationRoute'
 
 const { Text } = Typography
 
@@ -36,20 +37,17 @@ export default function NotificationBell() {
   const handleClick = useCallback(
     async (n: NotificationVO) => {
       if (!n.read) {
-        await markAsRead(n.id)
+        try { await markAsRead(n.id) } catch { return }
       }
       setOpen(false)
-      if (n.entityType === 'TASK' && n.entityId) {
-        navigate('/activities')
-      } else if (n.entityType === 'PLAN' && n.entityId) {
-        navigate('/activities')
-      }
+      const route = notificationRoute(n)
+      if (route) navigate(route)
     },
     [markAsRead, navigate],
   )
 
   const handleMarkAll = useCallback(async () => {
-    await markAllAsRead()
+    try { await markAllAsRead() } catch { /* API interceptor reports the failure. */ }
   }, [markAllAsRead])
 
   const getNotificationIcon = (type: string) => {

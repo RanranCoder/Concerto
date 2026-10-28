@@ -131,7 +131,7 @@ public class AttendanceManageService {
     public List<AttendanceVO> my(Long userId, String realName) {
         return list(new HashMap<>()).stream()
                 .filter(vo -> (vo.getPersonId() != null && vo.getPersonId().equals(userId))
-                        || (realName != null && realName.equals(vo.getPersonName())))
+                        )
                 .toList();
     }
 

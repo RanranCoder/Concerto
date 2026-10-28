@@ -16,10 +16,13 @@ public class Task implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Version
+    private Long revision;
     private Long activityId;
     private String name;
     private Long deptId;
     private String assignee;
+    private Long assigneeUserId;
     private LocalDate startDate;
     private LocalDate endDate;
     private Long dependsOn;

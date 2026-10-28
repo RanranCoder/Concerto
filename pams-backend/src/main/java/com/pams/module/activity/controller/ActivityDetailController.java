@@ -20,6 +20,10 @@ public class ActivityDetailController {
     public Result<Map<String, Object>> detail(@PathVariable Long id) {
         var data = service.aggregate(id);
         var ctx = com.pams.module.agent.core.ToolContext.current(null,null);
+        if (!ctx.hasPermission("plan:view")) data.put("plan",Map.of());
+        if (!ctx.hasPermission("task:view")) data.put("tasks",java.util.List.of());
+        if (!ctx.hasPermission("agenda:view")) data.put("agendas",java.util.List.of());
+        if (!ctx.hasPermission("score:view")) data.put("score",Map.of());
         if (!ctx.hasPermission("seat:view")) data.put("seatZones",Map.of());
         if (!ctx.hasPermission("checkin:view")) data.put("signinCount",null);
         return Result.ok(data);

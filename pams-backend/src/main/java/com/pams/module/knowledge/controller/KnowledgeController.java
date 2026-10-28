@@ -21,7 +21,7 @@ import java.util.Map;
  *   <li>{@code kb:read} —— 查看内容台账与检索记录。**全部角色都有**（V27 种子），
  *       与 {@code /agent} 对所有登录用户开放一致：知识问答本身是人人都能用的能力，
  *       能看到哪些内容由各源的可见性决定，不由这个码决定。</li>
- *   <li>{@code kb:manage} —— 录入文档、重建索引。只给领导角色（V27 种子）。</li>
+ *   <li>{@code kb:document:manage} —— 录入文档、重建索引。只给领导角色（V27 种子）。</li>
  * </ul>
  *
  * <h3>两个 Tab 对应两组接口</h3>
@@ -121,14 +121,14 @@ public class KnowledgeController {
     }
 
     @PostMapping("/documents")
-    @PreAuthorize("hasAuthority('kb:manage')")
+    @PreAuthorize("hasAuthority('kb:document:manage')")
     public Result<Long> createDocument(@Valid @RequestBody KbDocumentRequest req,
                                       @AuthenticationPrincipal LoginUser user) {
         return Result.ok(service.createDocument(req, user == null ? null : user.getId()));
     }
 
     @PutMapping("/documents/{id}")
-    @PreAuthorize("hasAuthority('kb:manage')")
+    @PreAuthorize("hasAuthority('kb:document:manage')")
     public Result<Void> updateDocument(@PathVariable Long id,
                                       @Valid @RequestBody KbDocumentRequest req) {
         service.updateDocument(id, req);
@@ -136,7 +136,7 @@ public class KnowledgeController {
     }
 
     @DeleteMapping("/documents/{id}")
-    @PreAuthorize("hasAuthority('kb:manage')")
+    @PreAuthorize("hasAuthority('kb:document:manage')")
     public Result<Void> deleteDocument(@PathVariable Long id) {
         service.deleteDocument(id);
         return Result.ok();
@@ -146,7 +146,7 @@ public class KnowledgeController {
 
     /** 手动全量重建索引（运维入口；每日兜底任务也走同一逻辑） */
     @PostMapping("/reindex")
-    @PreAuthorize("hasAuthority('kb:manage')")
+    @PreAuthorize("hasAuthority('kb:index:manage')")
     public Result<Map<String, Object>> reindex() {
         return Result.ok(service.reindexAll());
     }
@@ -188,13 +188,13 @@ public class KnowledgeController {
     }
 
     /**
-     * 手工重算全部快照（kb:manage）。
+     * 手工重算全部快照（kb:document:manage）。
      *
      * <p>日常由定时任务按日生成；这里用于"刚录完一批人，想立刻能问到"的场景。
      * 生成完顺带跑保留策略清理，避免历史版本堆积后互相竞争检索配额。
      */
     @PostMapping("/snapshots/refresh")
-    @PreAuthorize("hasAuthority('kb:manage')")
+    @PreAuthorize("hasAuthority('kb:index:manage')")
     public Result<Map<String, Object>> refreshSnapshots() {
         return Result.ok(service.refreshSnapshots());
     }

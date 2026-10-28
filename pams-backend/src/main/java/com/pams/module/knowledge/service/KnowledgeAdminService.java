@@ -66,7 +66,7 @@ public class KnowledgeAdminService {
             String type=sourceType==null?row.get("source_type").toString():sourceType;
             long source=sourceType==null?((Number)row.get("source_id")).longValue():id;
             boolean accessible=cache.computeIfAbsent(type+":"+source,key -> accessResolver.canAccess(type,source,ctx));
-            if(table.equals("kb_document") && ctx.hasPermission("kb:manage") && java.util.Objects.equals(row.get("created_by"),ctx.getUserId())) accessible=true;
+            if(table.equals("kb_document") && ctx.hasPermission("kb:document:manage") && java.util.Objects.equals(row.get("created_by"),ctx.getUserId())) accessible=true;
             if(accessible) allowed.add(id);
         }
         return allowed;
@@ -235,7 +235,7 @@ public class KnowledgeAdminService {
         return m;
     }
 
-    /** 手工触发生成（kb:manage）。生成完顺带跑一次保留策略清理 */
+    /** 手工触发生成（kb:document:manage）。生成完顺带跑一次保留策略清理 */
     public Map<String, Object> refreshSnapshots() {
         Map<String, Object> report = snapshotGenerator.generateAll();
         int pruned = snapshotGenerator.pruneOldSnapshots();

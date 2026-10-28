@@ -64,7 +64,7 @@ class RoutineServiceTest {
         SchedulePerson p = new SchedulePerson(); p.setScheduleId(1L); p.setPersonName("张三");
         when(spRepo.findByScheduleIdIn(any())).thenReturn(List.of(p));
 
-        ScheduleController controller = new ScheduleController(service);
+        ScheduleController controller = new ScheduleController(service, mock(com.pams.module.routine.service.ActivityScheduleService.class));
         ResponseEntity<byte[]> resp = controller.export(null, null, null, null);
 
         assertThat(resp.getBody()).isNotEmpty();

@@ -31,6 +31,7 @@ import {
   createSignin,
   deleteSignin,
   listSignins,
+  exportSignins,
   type SigninSave,
   type SigninSummaryVO,
   type SigninVO,
@@ -392,8 +393,8 @@ export default function SigninPanel({
               <Space wrap>
                 <Button
                   icon={<DownloadOutlined />}
-                  onClick={() => exportCsv(list)}
-                  disabled={list.length === 0}
+                  onClick={() => { void exportSignins(activityId, query).then(exportCsv).catch(() => {}) }}
+                  disabled={list.length === 0 || !(useAuthStore.getState().user?.permissions ?? []).includes('checkin:export')}
                 >
                   导出 CSV
                 </Button>

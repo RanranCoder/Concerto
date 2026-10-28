@@ -1,12 +1,10 @@
 import { Button } from 'antd'
-import { useNavigate } from 'react-router-dom'
 import type { ActivityDetail } from '@/api/activity'
 import type { MaterialVO } from '@/api/material'
 import { ACTIVITY_TYPE_MAP } from '@/api/activityStatus'
 import GlassCard from '@/components/glass/GlassCard'
 import StatusTag from '@/components/glass/StatusTag'
-import GanttChart from '@/components/gantt/GanttChart'
-import type { GanttTask } from '@/components/gantt/gantt.utils'
+import { hasDependencyConflict, isOverdue, isScheduled, taskDateLabel, type GanttTask } from '@/components/gantt/gantt.utils'
 
 export default function ActivityOverview({
   detail,
@@ -15,6 +13,8 @@ export default function ActivityOverview({
   onTab,
   onEdit,
   canEdit,
+  canViewTasks,
+  onTaskPlan,
 }: {
   detail: ActivityDetail
   materials: MaterialVO[]
@@ -22,10 +22,26 @@ export default function ActivityOverview({
   onTab: (tab: string) => void
   onEdit: () => void
   canEdit: boolean
+  canViewTasks: boolean
+  onTaskPlan: (taskId?: number) => void
 }) {
   const a = detail.activity,
-    navigate = useNavigate(),
     done = tasks.filter((t) => (t.progress ?? 0) >= 100).length
+  const taskSummary = canViewTasks && <GlassCard>
+    <header className="activity-panel-head">
+      <div><h2>任务计划</h2><p>按部门分工，跟进活动前后各项准备</p></div>
+      <Button type="link" onClick={() => onTaskPlan()}>管理任务计划</Button>
+    </header>
+    <div className="activity-task-summary">
+      <div className="task-plan-completion"><strong>{done}<small> / {tasks.length} 项完成</small></strong><div className="task-mini-progress"><i style={{ width: `${tasks.length ? done / tasks.length * 100 : 0}%` }} /></div></div>
+      <p className="activity-task-risk">{tasks.filter(t => isOverdue(t)).length} 项逾期 · {tasks.filter(t => hasDependencyConflict(t, tasks)).length} 项前置冲突 · {tasks.filter(t => !isScheduled(t)).length} 项未排期</p>
+      <div className="activity-task-summary-list">
+        {(tasks.some(t => (t.progress ?? 0) < 100) ? tasks.filter(t => (t.progress ?? 0) < 100) : tasks).slice(0, 3).map(t => <button key={t.id} onClick={() => onTaskPlan(t.id)}><span>{t.name}<small>{t.deptName || (t.deptId == null ? '未分配部门' : '部门信息待补充')} / {t.assignee || '待分配'} · {taskDateLabel(t)}</small></span><b>{t.progress ?? 0}%</b></button>)}
+        {!tasks.length && <p>尚未安排任务，可在任务计划中创建第一项准备任务。</p>}
+      </div>
+      <small>任务完成不会自动推进活动阶段或完成策划审核。</small>
+    </div>
+  </GlassCard>
   return (
     <div className="activity-overview-v6">
       <div className="activity-stack">
@@ -124,25 +140,7 @@ export default function ActivityOverview({
             ))}
           </ul>
         </GlassCard>
-        <GlassCard>
-          <header className="activity-panel-head">
-            <div>
-              <h2>任务甘特图</h2>
-              <p>
-                {done} / {tasks.length} 项任务已完成
-              </p>
-            </div>
-            <Button
-              type="link"
-              onClick={() => navigate(`/activities/${a.id}/gantt`)}
-            >
-              查看完整任务
-            </Button>
-          </header>
-          <div className="activity-gantt-preview">
-            <GanttChart tasks={tasks} onUpdate={() => {}} onEdit={() => {}} />
-          </div>
-        </GlassCard>
+        {taskSummary}
       </div>
       <aside className="activity-stack">
         <GlassCard>

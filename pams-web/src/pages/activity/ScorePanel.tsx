@@ -66,7 +66,7 @@ function parseDims(json: string | null): Record<string, number> {
 export default function ScorePanel({ activityId }: { activityId: number }) {
   const { message } = App.useApp()
   const hasPerm = useHasPerm()
-  const canEdit = hasPerm('activity:edit')
+  const canEdit = hasPerm('score:manage')
   const [rules, setRules] = useState<ScoreRuleVO[]>([])
   const [records, setRecords] = useState<ScoreRecordVO[]>([])
   const [loading, setLoading] = useState(false)

@@ -25,7 +25,7 @@ public class DashboardController {
         result.put("recentArticles",ctx.hasPermission("content:view") ? service.recentArticles() : java.util.List.of());
         result.put("recentMaterials",ctx.hasPermission("material:view") ? service.recentMaterials() : java.util.List.of());
         result.put("recentAnnouncements",ctx.hasPermission("notice:view") ? service.recentAnnouncements() : java.util.List.of());
-        result.put("myTasks",ctx.hasPermission("activity:view") ? service.myTasks(current) : java.util.List.of());
+        result.put("myTasks",ctx.hasPermission("task:view") ? service.myTasks(current) : java.util.List.of());
         return Result.ok(result);
     }
 }

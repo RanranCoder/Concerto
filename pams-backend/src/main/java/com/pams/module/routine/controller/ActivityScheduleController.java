@@ -42,7 +42,7 @@ public class ActivityScheduleController {
     }
 
     /** 一键生成：需 schedule:manage 或 schedule:generate */
-    @PreAuthorize("hasAnyAuthority('schedule:generate','schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:generate')")
     @PostMapping("/generate")
     public Result<List<Map<String, Object>>> generate(@Valid @RequestBody ActivityScheduleGenerateRequest req) {
         return Result.ok(service.generate(req));
@@ -68,7 +68,7 @@ public class ActivityScheduleController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:publish')")
     @PostMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id) {
         service.publish(id);
@@ -76,20 +76,20 @@ public class ActivityScheduleController {
     }
 
     /** 一键发布：发布当前范围内全部草稿排班（可按活动过滤） */
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:publish')")
     @PostMapping("/publish-all")
     public Result<Integer> publishAll(@RequestParam(required = false) Long activityId) {
         return Result.ok(service.publishAll(activityId));
     }
 
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:publish')")
     @PostMapping("/{id}/cancel")
     public Result<Void> cancel(@PathVariable Long id) {
         service.cancel(id);
         return Result.ok();
     }
 
-    @PreAuthorize("hasAnyAuthority('schedule:generate','schedule:manage')")
+    @PreAuthorize("hasAuthority('schedule:generate')")
     @PostMapping("/{id}/re-generate")
     public Result<Integer> regenerate(@PathVariable Long id,
                                       @RequestParam(required = false) Long deptId,

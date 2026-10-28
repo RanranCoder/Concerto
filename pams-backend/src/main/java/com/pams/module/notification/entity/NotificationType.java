@@ -2,6 +2,13 @@ package com.pams.module.notification.entity;
 
 public enum NotificationType {
     TASK_ASSIGNED,
+    TASK_CHANGED,
+    TASK_COMPLETED,
+    SCHEDULE_PUBLISHED,
+    SCHEDULE_CHANGED,
+    SCHEDULE_CANCELLED,
+    PLAN_WITHDRAWN,
+    COLLABORATION,
     PLAN_SUBMITTED,
     PLAN_APPROVED,
     PLAN_REJECTED,

@@ -11,6 +11,9 @@ public class NotificationVO {
     private String content;
     private String entityType;
     private Long entityId;
+    private Long activityId;
+    private String actionState;
+    private boolean notify;
     private String senderName;
     private String priority;
     private boolean read;

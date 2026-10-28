@@ -30,7 +30,7 @@ import java.util.Map;
  * <p><b>只写"模型真的写了"的章节</b>：空章节不落库，避免把用户已编辑过的内容清空；
  * 未生成的章节以 skipped 呈现（必现，符合 §4.3），用户一眼看到还缺哪几章。
  *
- * <p>权限码 {@code activity:edit}；数据级 normal；可撤回（草稿可改可删）。
+ * <p>权限码 {@code plan:edit}；数据级 normal；可撤回（草稿可改可删）。
  */
 @Component
 public class DraftPlanSectionsTool implements WriteAgentTool {
@@ -103,7 +103,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
     }
 
     @Override
-    public List<String> requiredPermissions() { return List.of("activity:edit"); }
+    public List<String> requiredPermissions() { return List.of("plan:edit"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }

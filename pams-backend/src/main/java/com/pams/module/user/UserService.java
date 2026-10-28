@@ -49,7 +49,14 @@ public class UserService {
      * 不含用户名/手机号等敏感信息，登录即可用（排班选人、群聊负责人等场景）。
      */
     public java.util.List<Map<String, Object>> options() {
-        return userRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream()
+        return options(null);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Map<String, Object>> options(Long deptId) {
+        var users = deptId == null ? userRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))
+                : userRepository.findByOrgIdAndDeptIdAndStatusOrderByIdAsc(OrgContext.getOrDefault(), deptId, 1);
+        return users.stream()
                 .filter(u -> OrgContext.getOrDefault().equals(u.getOrgId())) // 显式按组织过滤（A3）
                 .map(u -> {
                     Map<String, Object> m = new HashMap<>();

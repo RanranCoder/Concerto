@@ -14,12 +14,27 @@ test.beforeAll(async () => {
 async function setup(page: Page, theme = 'light', readOnly = false) {
   page.setDefaultTimeout(20_000)
   const permissions = readOnly
-    ? ['activity:view', 'checkin:view']
+    ? ['activity:view', 'checkin:view', 'material:view', 'plan:view', 'agenda:view', 'seat:view', 'score:view', 'content:view']
     : [
         'activity:view',
         'activity:create',
         'activity:edit',
         'activity:review',
+        'activity:transition',
+        'plan:view',
+        'plan:edit',
+        'plan:submit',
+        'plan:review',
+        'agenda:view',
+        'agenda:manage',
+        'score:view',
+        'score:manage',
+        'article:manage',
+        'article:create',
+        'article:edit',
+        'article:submit',
+        'article:review',
+        'article:publish',
         'content:manage',
         'content:view',
         'checkin:view',
@@ -27,6 +42,7 @@ async function setup(page: Page, theme = 'light', readOnly = false) {
         'material:upload',
         'material:view',
         'seat:edit',
+        'seat:view',
       ]
   const user = {
     id: 1,

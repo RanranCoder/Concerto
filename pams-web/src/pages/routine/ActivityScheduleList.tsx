@@ -94,7 +94,8 @@ export default function ActivityScheduleList() {
     [params, setParams] = useSearchParams()
   const permissions = useAuthStore((s) => s.user?.permissions) ?? [],
     canManage = permissions.includes('schedule:manage'),
-    canGenerate = canManage || permissions.includes('schedule:generate'),
+    canGenerate = permissions.includes('schedule:generate'),
+    canPublish = permissions.includes('schedule:publish'),
     canReadSignin = permissions.includes('checkin:view'),
     canManageSignin = permissions.includes('checkin:manage')
   const [activityId, setActivityId] = useState<number | undefined>(
@@ -384,17 +385,17 @@ export default function ActivityScheduleList() {
           <Button type="link" onClick={() => setDetail(s)}>
             查看
           </Button>
-          {canManage && s.status === 'DRAFT' && (
+          {canPublish && s.status === 'DRAFT' && (
             <Button type="link" onClick={() => showPublish(s)}>
               发布
             </Button>
           )}
-          {canManage && s.status === 'PUBLISHED' && (
+          {canPublish && s.status === 'PUBLISHED' && (
             <Button type="link" onClick={() => setCancelTarget(s)}>
               取消
             </Button>
           )}
-          {canManage && ['DRAFT', 'PUBLISHED'].includes(s.status ?? '') && (
+          {canManage && (s.status !== 'PUBLISHED' || canPublish) && ['DRAFT', 'PUBLISHED'].includes(s.status ?? '') && (
             <Button type="link" onClick={() => edit(s)}>
               编辑
             </Button>
@@ -453,7 +454,7 @@ export default function ActivityScheduleList() {
           >
             查看考勤
           </Button>
-          {canManage && (
+          {canPublish && (
             <Button
               type="primary"
               disabled={!activityId || !drafts.length || loading}
@@ -700,6 +701,7 @@ export default function ActivityScheduleList() {
         onClose={() => setDetail(null)}
         onEdit={
           canManage &&
+          (detail?.status !== 'PUBLISHED' || canPublish) &&
           detail &&
           ['DRAFT', 'PUBLISHED'].includes(detail.status ?? '')
             ? edit
@@ -707,7 +709,7 @@ export default function ActivityScheduleList() {
         }
         extra={
           <>
-            {canGenerate &&
+            {canGenerate && (detail?.status !== 'PUBLISHED' || canPublish) &&
               detail?.source === 'AUTO' &&
               ['DRAFT', 'PUBLISHED'].includes(detail.status ?? '') && (
                 <Button

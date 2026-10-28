@@ -1,0 +1,39 @@
+import { test, expect } from '@playwright/test'
+
+test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined })
+test('SSE uses Bearer and read reconciliation preserves the plan action', async ({ page }) => {
+  page.on('pageerror', error => console.error('Notification browser error:', error.message))
+  page.on('console', message => { if (message.type() === 'error') console.error('Notification console:', message.text()) })
+  const user = { id: 1, username: 'reviewer', realName: '审核人', orgId: 1, roleCode: 'TEACHER', roleLevel: 5, permissions: ['activity:view', 'plan:view', 'plan:review'], managementCapabilities: [] }
+  await page.addInitScript(user => {
+    localStorage.setItem('pams_token', JSON.stringify({ state: { token: 'notification-e2e', user }, version: 1 }))
+  }, user)
+  let read = false, streamBearer = ''
+  const notice = () => ({ id: 101, type: 'PLAN_SUBMITTED', title: '策划书待审核', content: '您被选为审核人，请查看本次提交版本',
+    entityType: 'PLAN', entityId: 11, activityId: 7, actionState: 'open', priority: 'NORMAL', senderName: '提交人', read, createdAt: '2026-10-28T09:00:00', notify: true })
+  await page.route('**/ws/**', route => route.abort())
+  await page.route(url => url.pathname.startsWith('/api/'), async route => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/notifications/stream') {
+      streamBearer = route.request().headers().authorization
+      await route.fulfill({ contentType: 'text/event-stream', body: 'event: ready\ndata: {"protocolVersion":1}\n\n' })
+      return
+    }
+    let data: unknown = []
+    if (path === '/api/auth/me') data = user
+    else if (path === '/api/orgs/current') data = { id: 1, name: '通知验证组织', enabledPacks: null, themeJson: null }
+    else if (path === '/api/notifications/101/read') read = true
+    else if (path === '/api/notifications/read-all') read = true
+    else if (path === '/api/notifications') data = [notice()]
+    else if (path === '/api/notifications/page') data = { records: [notice()], total: 1, current: 1, size: 10 }
+    else if (path === '/api/notifications/unread-count') data = read ? 0 : 1
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 200, data }) })
+  })
+  await page.goto('/notifications')
+  await expect(page.getByRole('heading', { name: '通知中心' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '去审核' })).toBeVisible()
+  await expect.poll(() => streamBearer).toBe('Bearer notification-e2e')
+  await page.getByRole('button', { name: '标记已读', exact: true }).click()
+  await expect(page.getByRole('cell', { name: '去审核 已读' })).toBeVisible()
+  await expect(page.locator('.ant-badge-count')).toHaveCount(0)
+})

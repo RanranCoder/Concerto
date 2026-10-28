@@ -58,6 +58,8 @@ import ScorePanel from './ScorePanel'
 import SigninPanel from './SigninPanel'
 import ActivityArticlesTab from './ActivityArticlesTab'
 import PlanTab from './ActivityPlanTab'
+import TaskPlanTab from './TaskPlanTab'
+import type { TaskVO } from '@/api/task'
 import ActivityOverview from './ActivityOverview'
 import ActivityMaterialsTab from './ActivityMaterialsTab'
 import ActivityEditorDrawer from './ActivityEditorDrawer'
@@ -200,7 +202,7 @@ function AgendaTab({ activityId }: { activityId: number }) {
           type="primary"
           icon={<PlusOutlined />}
           onClick={openCreate}
-          disabled={!hasPerm('activity:edit')}
+          disabled={!hasPerm('agenda:manage')}
         >
           新增议程
         </Button>
@@ -231,20 +233,20 @@ function AgendaTab({ activityId }: { activityId: number }) {
                 <Space>
                   <Button
                     type="link"
-                    disabled={!hasPerm('activity:edit')}
+                    disabled={!hasPerm('agenda:manage')}
                     onClick={() => openEdit(item)}
                   >
                     编辑
                   </Button>
                   <Popconfirm
-                    disabled={!hasPerm('activity:edit')}
+                    disabled={!hasPerm('agenda:manage')}
                     title="删除该议程环节？"
                     onConfirm={() => handleDelete(item.id)}
                   >
                     <Button
                       type="link"
                       danger
-                      disabled={!hasPerm('activity:edit')}
+                      disabled={!hasPerm('agenda:manage')}
                     >
                       删除
                     </Button>
@@ -672,8 +674,9 @@ export default function ActivityDetail({
   const [materials, setMaterials] = useState<MaterialVO[]>([])
   const [materialsTotal, setMaterialsTotal] = useState(0)
   const [activeTab, setActiveTab] = useState(() => {
-    const key = new URLSearchParams(location.search).get('tab') || 'basic'
+    const key = new URLSearchParams(location.search).get('tab') || (hasPerm('task:view') ? 'gantt' : 'basic')
     return [
+      'gantt',
       'basic',
       'materials',
       'plan',
@@ -687,6 +690,7 @@ export default function ActivityDetail({
       : 'basic'
   })
   const [editorOpen, setEditorOpen] = useState(editOnOpen)
+  const [focusTaskId, setFocusTaskId] = useState<number>()
   const [failed, setFailed] = useState(false)
   const detailRequest = useRef(0),
     materialRequest = useRef(0)
@@ -761,6 +765,7 @@ export default function ActivityDetail({
           startDate: String(t.startDate ?? ''),
           endDate: String(t.endDate ?? ''),
           dependsOn: t.dependsOn != null ? Number(t.dependsOn) : null,
+          deptId,
           deptName:
             deptId != null
               ? (deptNameById.get(deptId) ?? undefined)
@@ -810,6 +815,11 @@ export default function ActivityDetail({
 
   const tabItems = [
     {
+      key: 'gantt',
+      label: <span className="activity-task-plan-tab">任务计划</span>,
+      children: detail ? <TaskPlanTab key={activityId} activity={detail.activity} active={activeTab === 'gantt'} onTab={changeTab} focusTaskId={focusTaskId} onTaskOpened={() => setFocusTaskId(undefined)} onChanged={(rows: TaskVO[]) => setDetail(current => current?.activity.id === activityId ? { ...current, tasks: rows } : current)} /> : null,
+    },
+    {
       key: 'basic',
       label: '基本信息',
       children: detail ? (
@@ -820,6 +830,8 @@ export default function ActivityDetail({
           onTab={changeTab}
           onEdit={() => setEditorOpen(true)}
           canEdit={canEditActivity}
+          canViewTasks={hasPerm('task:view')}
+          onTaskPlan={taskId => { setFocusTaskId(taskId); changeTab('gantt') }}
         />
       ) : null,
     },
@@ -879,7 +891,10 @@ export default function ActivityDetail({
         <ActivityArticlesTab activityId={activityId} activity={activity} />
       ),
     },
-  ]
+  ].filter(tab => {
+    const permissions: Record<string,string> = { gantt:'task:view',materials:'material:view',plan:'plan:view',agenda:'agenda:view',seats:'seat:view',score:'score:view',signin:'checkin:view',articles:'content:view' }
+    return !permissions[tab.key] || hasPerm(permissions[tab.key])
+  })
 
   return (
     <div className="activity-detail-v6">
@@ -936,7 +951,7 @@ export default function ActivityDetail({
                 编辑
               </Button>
             )}
-            {previousStatus && hasPerm('activity:edit') && (
+            {previousStatus && hasPerm('activity:transition') && (
               <Popconfirm
                 title={`回退到「${ACTIVITY_STATUS_LABEL[previousStatus]}」？`}
                 description="请确认当前活动的实际进度。"
@@ -945,7 +960,7 @@ export default function ActivityDetail({
                 <Button loading={changing}>回退阶段</Button>
               </Popconfirm>
             )}
-            {nextStatus && hasPerm('activity:edit') && (
+            {nextStatus && hasPerm('activity:transition') && (
               <Popconfirm
                 title={`推进到「${ACTIVITY_STATUS_LABEL[nextStatus]}」？`}
                 onConfirm={() => handleStatusChange(nextStatus)}
@@ -993,7 +1008,7 @@ export default function ActivityDetail({
         </p>
       )}
       <Spin spinning={loading}>
-        <Tabs items={tabItems} activeKey={activeTab} onChange={changeTab} />
+        <Tabs className="activity-detail-tabs" items={tabItems} activeKey={tabItems.some(tab => tab.key === activeTab) ? activeTab : 'basic'} onChange={changeTab} />
       </Spin>
       <ActivityEditorDrawer
         open={editorOpen}

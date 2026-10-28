@@ -2,6 +2,8 @@ package com.pams.module.activity;
 
 import com.pams.common.BizException;
 import com.pams.module.activity.entity.Task;
+import com.pams.module.activity.entity.Activity;
+import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.repository.TaskRepository;
 import com.pams.module.activity.service.TaskService;
@@ -25,6 +27,12 @@ class TaskServiceTest {
         repo = mock(TaskRepository.class);
         activityRepo = mock(ActivityRepository.class);
         service = new TaskService(repo, activityRepo);
+        Activity activity = new Activity();
+        activity.setId(7L);
+        activity.setStatus(ActivityStatus.PLANNING);
+        when(activityRepo.lockById(7L)).thenReturn(Optional.of(activity));
+        when(repo.activityIdOf(anyLong())).thenReturn(Optional.of(7L));
+        when(repo.saveAndFlush(any(Task.class))).thenAnswer(call -> call.getArgument(0));
     }
 
     @Test
@@ -65,7 +73,7 @@ class TaskServiceTest {
         service.updateProgress(3L, 60);
 
         assertThat(t.getProgress()).isEqualTo(60);
-        verify(repo).save(t);
+        verify(repo).saveAndFlush(t);
     }
 
     @Test
@@ -79,7 +87,7 @@ class TaskServiceTest {
         assertThat(t.getProgress()).isEqualTo(0);
         service.updateProgress(4L, 100);
         assertThat(t.getProgress()).isEqualTo(100);
-        verify(repo, times(2)).save(t);
+        verify(repo, times(2)).saveAndFlush(t);
     }
 
     @Test

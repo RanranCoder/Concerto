@@ -34,6 +34,8 @@ import {
 } from '@/components/routine/ScheduleViews'
 import {
   listSchedules,
+  publishRegularSchedule,
+  cancelRegularSchedule,
   createSchedule,
   updateSchedule,
   deleteSchedule,
@@ -63,7 +65,8 @@ export default function ScheduleList() {
   const { message } = App.useApp(),
     navigate = useNavigate()
   const permissions = useAuthStore((s) => s.user?.permissions) ?? [],
-    canManage = permissions.includes('schedule:manage')
+    canManage = permissions.includes('schedule:manage'),
+    canPublish = permissions.includes('schedule:publish')
   const [rows, setRows] = useState<ScheduleVO[]>([]),
     [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false)
@@ -185,7 +188,9 @@ export default function ScheduleList() {
       setWeekNo(v.weekNo ?? undefined)
       setType(v.scheduleType)
       setQuery('')
-      message.success('排班已保存')
+      message.success(
+        editing ? '排班已保存' : '排班草稿已保存，发布后才会出现在个人排班中',
+      )
       await load()
     } catch {
       /* 统一拦截器展示请求错误。 */
@@ -216,11 +221,13 @@ export default function ScheduleList() {
         title="排班"
         description="按教学周安排例行事务，明确每班责任人与协作人员。"
         extra={
-          canManage && (
-            <>
+          <>
+            {permissions.includes('schedule:export') && (
               <Button icon={<DownloadOutlined />} onClick={exportRows}>
                 导出值班表
               </Button>
+            )}
+            {canManage && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -228,8 +235,8 @@ export default function ScheduleList() {
               >
                 新建排班
               </Button>
-            </>
-          )
+            )}
+          </>
         }
       />
       <RoutineSummary
@@ -354,7 +361,17 @@ export default function ScheduleList() {
                       rows={unplaced}
                       activities={activities}
                       onOpen={setDetail}
-                      onEdit={canManage ? openEdit : undefined}
+                      onEdit={
+                        canManage
+                          ? (row) => {
+                              if (row.status === 'PUBLISHED' && !canPublish) {
+                                message.warning('修改已发布班次需要发布权限')
+                                return
+                              }
+                              openEdit(row)
+                            }
+                          : undefined
+                      }
                     />
                   </>
                 )}
@@ -444,7 +461,55 @@ export default function ScheduleList() {
         activities={activities}
         onClose={() => setDetail(null)}
         onEdit={canManage ? openEdit : undefined}
-        onDelete={canManage ? remove : undefined}
+        onDelete={
+          canManage && (detail?.status !== 'PUBLISHED' || canPublish)
+            ? remove
+            : undefined
+        }
+        extra={
+          detail && canPublish ? (
+            <Space>
+              {detail.status === 'DRAFT' && (
+                <Button
+                  type="primary"
+                  loading={saving}
+                  onClick={async () => {
+                    setSaving(true)
+                    try {
+                      await publishRegularSchedule(detail.id)
+                      setDetail(null)
+                      await load()
+                      message.success('班次已发布')
+                    } finally {
+                      setSaving(false)
+                    }
+                  }}
+                >
+                  发布班次
+                </Button>
+              )}
+              {detail.status === 'PUBLISHED' && (
+                <Button
+                  danger
+                  loading={saving}
+                  onClick={async () => {
+                    setSaving(true)
+                    try {
+                      await cancelRegularSchedule(detail.id)
+                      setDetail(null)
+                      await load()
+                      message.success('班次已取消')
+                    } finally {
+                      setSaving(false)
+                    }
+                  }}
+                >
+                  取消班次
+                </Button>
+              )}
+            </Space>
+          ) : undefined
+        }
       />
       <FormSurface
         mode="drawer"

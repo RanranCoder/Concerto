@@ -98,7 +98,10 @@ public class QueryPartyMemberProgressTool implements AgentTool {
      * （管理员为开放某功能勾了 party:view，顺带把干事放进了党务台账）。
      */
     @Override
-    public boolean requiresLeader() { return true; }
+    public boolean requiresLeader() { return false; }
+
+    @Override
+    public List<String> requiredPermissions() { return List.of("party:view"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.SENSITIVE; }

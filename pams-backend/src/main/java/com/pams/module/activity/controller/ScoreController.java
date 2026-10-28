@@ -28,40 +28,40 @@ public class ScoreController {
     }
 
     /** 评分规则与记录的增删改：activity:edit（V7 种子：部长级及以上） */
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @PostMapping("/rules")
     public Result<Long> createRule(@Valid @RequestBody ScoreRuleRequest req) {
         return Result.ok(service.createRule(req));
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @PostMapping("/records")
     public Result<Long> createRecord(@Valid @RequestBody ScoreRecordRequest req) {
         return Result.ok(service.createRecord(req));
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @PutMapping("/rules/{id}")
     public Result<Void> updateRule(@PathVariable Long id, @Valid @RequestBody ScoreRuleRequest req) {
         service.updateRule(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @PutMapping("/records/{id}")
     public Result<Void> updateRecord(@PathVariable Long id, @Valid @RequestBody ScoreRecordRequest req) {
         service.updateRecord(id, req);
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @DeleteMapping("/rules/{id}")
     public Result<Void> deleteRule(@PathVariable Long id) {
         service.deleteRule(id);
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('score:manage')")
     @DeleteMapping("/records/{id}")
     public Result<Void> deleteRecord(@PathVariable Long id) {
         service.deleteRecord(id);

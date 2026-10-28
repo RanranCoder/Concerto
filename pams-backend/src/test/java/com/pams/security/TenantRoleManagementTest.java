@@ -50,9 +50,18 @@ class TenantRoleManagementTest {
   }
 
   JsonNode call(String method, String path, Object body, int expected) throws Exception {
+    if (method.equals("PUT") && path.contains("/role-delegations/") && expected == 200) {
+      var preview = call("POST", path + "/change-previews", body, 200);
+      return call(
+          "POST",
+          "/api/orgs/current/authorization-changes/" + preview.path("id").asText() + "/apply",
+          Map.of(),
+          200);
+    }
     var request =
         switch (method) {
           case "PUT" -> put(path);
+          case "DELETE" -> delete(path);
           case "GET" -> get(path);
           default -> post(path);
         };
@@ -243,6 +252,81 @@ class TenantRoleManagementTest {
         java.sql.Timestamp.valueOf(java.time.LocalDateTime.now().minusMinutes(1)));
     token = loginAs(name);
     call("GET", "/api/roles", null, 403);
+  }
+
+  @Test
+  void draftDiscardAndDeletionCheckVersionsAndInvalidatePreviews() throws Exception {
+    long role = create();
+    draft(role, "member:view");
+    apply(publishPreview(role), 200);
+    draft(role, "member:view", "member:manage");
+    var detail = call("GET", "/api/roles/" + role, null, 200);
+    long version = detail.path("role").path("config_version").asLong(),
+        dv = detail.path("draft").path("version").asLong();
+    var preview =
+        call(
+            "POST",
+            "/api/roles/" + role + "/change-previews",
+            Map.of("action", "PUBLISH", "version", version),
+            200);
+    call(
+        "DELETE",
+        "/api/roles/" + role + "/draft?version=" + version + "&draftVersion=" + (dv + 1),
+        null,
+        409);
+    call(
+        "DELETE",
+        "/api/roles/" + role + "/draft?version=" + version + "&draftVersion=" + dv,
+        null,
+        200);
+    apply(preview.path("id").asText(), 409);
+    assertThat(auth.rolePermissions(1, role)).containsExactly("member:view");
+    assertThat(call("GET", "/api/roles/" + role, null, 200).path("draft").isNull()).isTrue();
+    assertThat(call("GET", "/api/roles/" + role + "/history", null, 200).path("total").asInt())
+        .isEqualTo(1);
+    long unpublished = create();
+    long user = fixture("disabled-ref-" + UUID.randomUUID(), 1);
+    db.update("UPDATE sys_user SET role_id=?,status=0 WHERE id=?", unpublished, user);
+    var refs = call("GET", "/api/roles/" + unpublished + "/references", null, 200);
+    assertThat(refs.path("items").get(0).path("blocking").asInt()).isZero();
+    call("DELETE", "/api/roles/" + unpublished + "?version=0&draftVersion=0", null, 409);
+    db.update("UPDATE sys_user SET role_id=? WHERE id=?", role, user);
+    call("DELETE", "/api/roles/" + unpublished + "?version=0&draftVersion=1", null, 409);
+    call("DELETE", "/api/roles/" + unpublished + "?version=0&draftVersion=0", null, 200);
+  }
+
+  @Test
+  void reasonsAreBoundToPreviewsAndDenialsSurviveBusinessRollback() throws Exception {
+    long role = create();
+    draft(role, "member:view");
+    var p =
+        call(
+            "POST",
+            "/api/roles/" + role + "/change-previews",
+            Map.of("action", "PUBLISH", "version", 0, "reason", "交接成员维护"),
+            200);
+    apply(p.path("id").asText(), 200);
+    var logs = call("GET", "/api/orgs/current/audit-log-page?size=100", null, 200);
+    assertThat(logs.path("items").toString()).contains("交接成员维护", p.path("id").asText());
+    assertThat(
+            call("GET", "/api/roles/" + role + "/history", null, 200)
+                .path("items")
+                .get(0)
+                .path("reason")
+                .asText())
+        .isEqualTo("交接成员维护");
+    long target = fixture("direct-put-" + UUID.randomUUID(), 1);
+    call(
+        "PUT",
+        "/api/orgs/current/role-delegations/" + target,
+        Map.of("active", true, "grantable", List.of(), "version", 0),
+        409);
+    assertThat(
+            call("GET", "/api/orgs/current/audit-log-page?action=REJECTED", null, 200)
+                .path("total")
+                .asInt())
+        .isGreaterThan(0);
+    assertThat(call("GET", "/api/roles/page?size=1", null, 200).path("items").size()).isEqualTo(1);
   }
 
   @Test

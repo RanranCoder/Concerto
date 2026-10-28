@@ -16,6 +16,9 @@ import java.util.*;
 @Service
 @Transactional(readOnly = true)
 public class PlanService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationBusinessEvents notifications;
+
     private final ActivityPlanRepository repository;
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -71,8 +74,8 @@ public class PlanService {
             return new Version(p.getId(),p.getVersion(),p.getStatus(),p.getUpdatedAt(),owner,
                     owner==null?"未记录作者":names.getOrDefault(owner,"已离开组织的成员"),note);
         }).toList());
-        result.put("canEdit",current==null ? context().hasPermission("activity:edit")
-                : Objects.equals(access.owner(current),context().getUserId()) && context().hasPermission("activity:edit"));
+        result.put("canEdit",current==null ? context().hasPermission("plan:edit")
+                : Objects.equals(access.owner(current),context().getUserId()) && context().hasPermission("plan:edit"));
         return result;
     }
     private Activity lockActivity(Long activityId,ToolContext ctx) {
@@ -82,6 +85,7 @@ public class PlanService {
         return a;
     }
     private ActivityPlan writable(Long id) {
+        if (!context().hasPermission("plan:edit")) throw new BizException(403,"没有策划编写权限");
         ActivityPlan p=raw(id);
         lockActivity(p.getActivityId(),context());
         // All mutations lock the activity before reloading the plan, serializing versions and decisions.
@@ -96,7 +100,7 @@ public class PlanService {
     public ActivityPlan create(PlanRequest req) { return create(req,context()); }
     @Transactional
     public ActivityPlan create(PlanRequest req,ToolContext ctx) {
-        if (ctx==null || !ctx.hasPermission("activity:edit") || ctx.getUserId()==null)
+        if (ctx==null || !ctx.hasPermission("plan:edit") || ctx.getUserId()==null)
             throw new BizException(403,"无权创建策划书");
         Activity a=lockActivity(req.getActivityId(),ctx);
         var previous=repository.findTopByActivityIdOrderByVersionDesc(req.getActivityId()).orElse(null);
@@ -140,7 +144,9 @@ public class PlanService {
     }
     @Transactional
     public void submit(Long id,Long submitterId,List<Long> reviewerIds) {
-        ActivityPlan p=writable(id);
+        ActivityPlan p=raw(id); lockActivity(p.getActivityId(),context()); entityManager.refresh(p);
+        access.requireOwner(p,context());
+        if (!context().hasPermission("plan:submit")) throw new BizException(403,"没有策划提交权限");
         if (p.getStatus()!=ActivityPlan.PlanStatus.DRAFT) throw new BizException(2005,"当前状态不可提交审核");
         if (reviewerIds==null || reviewerIds.isEmpty() || reviewerIds.size()>50
                 || new HashSet<>(reviewerIds).size()!=reviewerIds.size())
@@ -161,7 +167,7 @@ public class PlanService {
     @Transactional
     public void review(Long id,boolean approved,String comment,Long reviewerId) {
         var ctx=context(); ActivityPlan p=raw(id); lockActivity(p.getActivityId(),ctx); entityManager.refresh(p);
-        if (!access.canRead(p,ctx) || !ctx.hasPermission("activity:review")
+        if (!access.canRead(p,ctx) || !ctx.hasPermission("plan:review")
                 || !Objects.equals(ctx.getUserId(),reviewerId)) throw new BizException(403,"未被选为此版本审核人");
         if (!access.isCurrent(p) || p.getStatus()!=ActivityPlan.PlanStatus.PENDING)
             throw new BizException(2006,"仅待审核状态的当前策划书可审核");
@@ -176,6 +182,7 @@ public class PlanService {
         if (!approved) p.setStatus(ActivityPlan.PlanStatus.REJECTED);
         else if (complete) p.setStatus(ActivityPlan.PlanStatus.APPROVED);
         repository.save(p);
+        if (notifications != null) notifications.planStateChanged(p, false);
         if (complete || !approved) eventPublisher.publishEvent(new PlanReviewedEvent(p.getId(),p.getActivityId(),
                 p.getNameOverride(),reviewerId,approved,comment,p.getSubmitterId()));
     }
@@ -185,6 +192,7 @@ public class PlanService {
         if (p.getStatus()==ActivityPlan.PlanStatus.DRAFT) throw new BizException(2003,"已有草稿，请直接编辑");
         // Withdrawal preserves the original submission and decisions as a read-only snapshot.
         if (p.getStatus()==ActivityPlan.PlanStatus.PENDING) {
+            if (notifications != null) notifications.planStateChanged(p, true);
             p.setStatus(ActivityPlan.PlanStatus.WITHDRAWN); p.setReviewComment("作者已撤回");
             p.setUpdatedAt(LocalDateTime.now()); repository.saveAndFlush(p);
         }
@@ -226,6 +234,7 @@ public class PlanService {
      */
     private void syncActivityIfNeeded(Long activityId, PlanRequest req) {
         if (!req.isSyncActivity() || activityRepository == null) return;
+        if (!context().hasPermission("activity:edit")) throw new BizException(403,"同步活动基础信息需要活动编辑权限");
         Activity a = activityRepository.findById(activityId).orElse(null);
         if (a == null) return;
         boolean dirty = false;

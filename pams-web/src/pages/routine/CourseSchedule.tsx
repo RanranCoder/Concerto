@@ -61,8 +61,8 @@ export default function CourseSchedulePage() {
     navigate = useNavigate(),
     [params, setParams] = useSearchParams(),
     user = useAuthStore((s) => s.user)
-  const canManage = user?.permissions.includes('schedule:manage'),
-    canEditCourse = user?.permissions.includes('schedule:free_table')
+  const canManage = user?.permissions.includes('course:manage'),
+    canEditCourse = user?.permissions.includes('course:self:manage')
   const [tab, setTab] = useState(
       params.get('tab') || (canManage ? 'import' : 'edit'),
     ),

@@ -71,10 +71,10 @@ public class ToolRegistry {
     public boolean visibleTo(AgentTool tool, ToolContext ctx) {
         if (ctx == null) return false;
         if (tool.writeOperation() && (ctx.isReadonly() || ctx.isKb())) return false;
-        if (tool.requiresLeader() && !ctx.hasAnyPermission("content:manage","party:view")) return false;
+        if (tool.requiresLeader() && !ctx.hasAnyPermission("article:create","party:view")) return false;
         if (authorization != null && ctx.getUserId()!=null) {
             var live = authorization.business(ctx.getUserId());
-            if (tool.requiresLeader() && !live.contains(tool.name().equals("queryPartyMemberProgress") ? "party:view" : "content:manage")) return false;
+            if (tool.requiresLeader() && !live.contains(tool.name().equals("queryPartyMemberProgress") ? "party:view" : "article:create")) return false;
             var required = tool.requiredPermissions();
             if (required != null && !required.isEmpty() && !(tool.anyPermission() ? required.stream().anyMatch(live::contains) : live.containsAll(required))) return false;
         }

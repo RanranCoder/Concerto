@@ -56,7 +56,7 @@ public class QueryAttendanceTool implements AgentTool {
     }
 
     @Override
-    public List<String> requiredPermissions() { return List.of("schedule:check"); }
+    public List<String> requiredPermissions() { return List.of("attendance:view", "attendance:self:view"); }
 
     @Override
     public boolean anyPermission() { return true; }
@@ -68,7 +68,7 @@ public class QueryAttendanceTool implements AgentTool {
     public ToolResult execute(ToolContext ctx, Map<String, Object> args) {
         Long activityId = ToolArgs.lng(args, "activityId");
         boolean mineOnly = ToolArgs.bool(args, "mineOnly");
-        boolean canViewAll = ctx.hasPermission("schedule:check") || ctx.hasPermission("schedule:manage");
+        boolean canViewAll = ctx.hasPermission("attendance:view");
 
         try {
             // 无管理权限 → 强制只看自己

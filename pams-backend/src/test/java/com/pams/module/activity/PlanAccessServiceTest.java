@@ -22,7 +22,7 @@ class PlanAccessServiceTest {
     ActivityPlan current=new ActivityPlan(),history=new ActivityPlan();
     ToolContext ctx(long uid,long org) {
         return new ToolContext(new LoginUser(uid,"user","名字","TEACHER",6,null,null,org),
-                List.of(new SimpleGrantedAuthority("activity:view"),new SimpleGrantedAuthority("activity:edit")),null,null);
+                List.of(new SimpleGrantedAuthority("activity:view"),new SimpleGrantedAuthority("plan:view"),new SimpleGrantedAuthority("plan:edit")),null,null);
     }
     @BeforeEach void setup() {
         current.setId(2L); current.setActivityId(1L); current.setOrgId(1L); current.setOwnerId(10L);

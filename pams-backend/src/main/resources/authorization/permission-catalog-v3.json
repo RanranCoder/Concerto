@@ -1,0 +1,652 @@
+{
+  "version": 3,
+  "permissions": [
+    {"code":"party:sensitive:view","dependencies":["party:view"],"description":"读取本组织党务敏感字段，仍须持有当前领域包批次并通过来源记录权限。","risk":true},
+    {
+      "code": "activity:view",
+      "dependencies": [],
+      "description": "查看本组织活动基本信息，任务、策划、议程和评分另行授权。",
+      "risk": false
+    },
+    {
+      "code": "activity:create",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "创建本组织活动；不能因此编辑既有活动或推进阶段。",
+      "risk": false
+    },
+    {
+      "code": "activity:edit",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "仅编辑活动基础信息；任务、策划、议程、评分和阶段推进分别授权。",
+      "risk": false
+    },
+    {
+      "code": "activity:delete",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "删除满足业务条件的活动及其关联资料。",
+      "risk": true
+    },
+    {
+      "code": "checkin:view",
+      "dependencies": [],
+      "description": "查看本组织活动签到记录和签到配置。",
+      "risk": false
+    },
+    {
+      "code": "checkin:manage",
+      "dependencies": [
+        "checkin:view"
+      ],
+      "description": "维护活动签到配置及记录，操作仍受活动状态约束。",
+      "risk": true
+    },
+    {
+      "code": "checkin:export",
+      "dependencies": [
+        "checkin:view"
+      ],
+      "description": "导出本组织可见活动的签到名单和记录。",
+      "risk": true
+    },
+    {
+      "code": "material:view",
+      "dependencies": [],
+      "description": "查看本组织材料档案目录，附件读取仍检查文件来源权限。",
+      "risk": false
+    },
+    {
+      "code": "material:upload",
+      "dependencies": [
+        "material:view"
+      ],
+      "description": "上传材料并归档到本组织材料目录。",
+      "risk": false
+    },
+    {
+      "code": "material:download",
+      "dependencies": [
+        "material:view"
+      ],
+      "description": "下载可见材料附件，文件权限仍独立校验。",
+      "risk": false
+    },
+    {
+      "code": "material:delete",
+      "dependencies": [
+        "material:view"
+      ],
+      "description": "删除本组织材料档案，仍受关联与状态条件约束。",
+      "risk": true
+    },
+    {
+      "code": "material:preview",
+      "dependencies": [
+        "material:view"
+      ],
+      "description": "预览可见材料附件，文件权限仍独立校验。",
+      "risk": false
+    },
+    {
+      "code": "template:view",
+      "dependencies": [],
+      "description": "查看本组织可见的公共文档模板。",
+      "risk": false
+    },
+    {
+      "code": "template:use",
+      "dependencies": [
+        "template:view"
+      ],
+      "description": "使用可见文档模板生成业务文档。",
+      "risk": false
+    },
+    {
+      "code": "template:manage",
+      "dependencies": [
+        "template:view"
+      ],
+      "description": "创建、调整和删除组织公共模板。",
+      "risk": true
+    },
+    {
+      "code": "seat:view",
+      "dependencies": [],
+      "description": "查看本组织活动座位布局及人员安排。",
+      "risk": false
+    },
+    {
+      "code": "seat:edit",
+      "dependencies": [
+        "seat:view"
+      ],
+      "description": "调整活动座位布局和人员座位安排。",
+      "risk": false
+    },
+    {
+      "code": "seat:template",
+      "dependencies": [
+        "seat:view"
+      ],
+      "description": "维护活动座位模板。",
+      "risk": false
+    },
+    {
+      "code": "quality:view",
+      "dependencies": [],
+      "description": "查看本组织素拓加分项目及成员记录。",
+      "risk": false
+    },
+    {
+      "code": "quality:add",
+      "dependencies": [
+        "quality:view"
+      ],
+      "description": "为本组织成员人工登记素拓加分。",
+      "risk": true
+    },
+    {
+      "code": "quality:activity_add",
+      "dependencies": [
+        "quality:view"
+      ],
+      "description": "按活动参与情况批量登记素拓加分。",
+      "risk": true
+    },
+    {
+      "code": "quality:delete",
+      "dependencies": [
+        "quality:view"
+      ],
+      "description": "删除本组织素拓加分记录。",
+      "risk": true
+    },
+    {
+      "code": "chat:view",
+      "dependencies": [],
+      "description": "查看本组织群聊资料与分类。",
+      "risk": false
+    },
+    {
+      "code": "chat:manage",
+      "dependencies": [
+        "chat:view"
+      ],
+      "description": "维护本组织群聊资料及关联部门。",
+      "risk": false
+    },
+    {
+      "code": "chat:category",
+      "dependencies": [
+        "chat:view"
+      ],
+      "description": "维护本组织群聊资料分类。",
+      "risk": false
+    },
+    {
+      "code": "notice:view",
+      "dependencies": [],
+      "description": "查看本组织公告。",
+      "risk": false
+    },
+    {
+      "code": "notice:publish",
+      "dependencies": [
+        "notice:view"
+      ],
+      "description": "向本组织发布公告。",
+      "risk": true
+    },
+    {
+      "code": "notice:manage",
+      "dependencies": [
+        "notice:view"
+      ],
+      "description": "维护和删除本组织公告。",
+      "risk": true
+    },
+    {
+      "code": "schedule:view",
+      "dependencies": [],
+      "description": "查看本组织排班列表及班次详情。",
+      "risk": false
+    },
+    {
+      "code": "schedule:manage",
+      "dependencies": [
+        "schedule:view"
+      ],
+      "description": "维护排班草稿；操作已发布班次还需发布权限。",
+      "risk": false
+    },
+    {
+      "code": "schedule:generate",
+      "dependencies": [
+        "schedule:view"
+      ],
+      "description": "自动生成排班草稿，不授予发布权。",
+      "risk": false
+    },
+    {
+      "code": "schedule:check",
+      "dependencies": [],
+      "description": "登记本人合法班次的到岗打卡，不允许替他人补签或修正考勤。",
+      "risk": false
+    },
+    {
+      "code": "schedule:free_table",
+      "dependencies": [],
+      "description": "查看组织共同空闲结果，不开放他人完整原始课表。",
+      "risk": false
+    },
+    {
+      "code": "party:view",
+      "dependencies": [],
+      "description": "查看已启用党务领域包内的本组织党员发展台账。",
+      "risk": false
+    },
+    {
+      "code": "party:manage",
+      "dependencies": [
+        "party:view"
+      ],
+      "description": "维护本组织党员发展流程，须有当前领域包授权批次。",
+      "risk": true
+    },
+    {
+      "code": "party:letter",
+      "dependencies": [
+        "party:view"
+      ],
+      "description": "维护本组织党员发展函调资料，须有当前领域包授权批次。",
+      "risk": false
+    },
+    {
+      "code": "party:entry",
+      "dependencies": [
+        "party:view"
+      ],
+      "description": "录入本组织党务信息，须有当前领域包授权批次。",
+      "risk": false
+    },
+    {
+      "code": "member:view",
+      "dependencies": [],
+      "description": "查看本组织成员花名册及可见资料。",
+      "risk": false
+    },
+    {
+      "code": "member:manage",
+      "dependencies": [
+        "member:view"
+      ],
+      "description": "维护本组织成员资料，不包含创建系统账号或分配角色。",
+      "risk": false
+    },
+    {
+      "code": "member:export",
+      "dependencies": [
+        "member:view"
+      ],
+      "description": "导出本组织成员资料。",
+      "risk": true
+    },
+    {
+      "code": "content:view",
+      "dependencies": [],
+      "description": "查看本组织新闻稿、推文及其可见详情，编审操作另行授权。",
+      "risk": false
+    },
+    {
+      "code": "news:manage",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "创建、编辑和删除新闻稿草稿，发布另行授权。",
+      "risk": false
+    },
+    {
+      "code": "attendance:view",
+      "dependencies": [],
+      "description": "查看组织考勤中心及可见记录的修改轨迹。",
+      "risk": false
+    },
+    {
+      "code": "attendance:manage",
+      "dependencies": [
+        "attendance:view"
+      ],
+      "description": "人工修正、补签和删除考勤记录，需由组织明确授权。",
+      "risk": true
+    },
+    {
+      "code": "notification:send",
+      "dependencies": [],
+      "description": "向本组织指定对象发送业务通知，不包含查看他人通知。",
+      "risk": true
+    },
+    {
+      "code": "file:view",
+      "dependencies": [],
+      "description": "读取本人及同部门普通文件；业务附件还须通过来源对象权限。",
+      "risk": false
+    },
+    {
+      "code": "file:org:read",
+      "dependencies": [
+        "file:view"
+      ],
+      "description": "跨部门读取普通文件；业务附件仍受来源约束。",
+      "risk": true
+    },
+    {
+      "code": "file:sensitive:read",
+      "dependencies": [
+        "file:view"
+      ],
+      "description": "读取敏感文件，仍须通过来源对象权限。",
+      "risk": true
+    },
+    {
+      "code": "kb:read",
+      "dependencies": [],
+      "description": "检索并阅读可见知识资料，受限知识和业务来源仍单独校验。",
+      "risk": false
+    },
+    {
+      "code": "kb:restricted:read",
+      "dependencies": [
+        "kb:read"
+      ],
+      "description": "读取受限知识，仍须满足每个业务来源的权限。",
+      "risk": true
+    },
+    {
+      "code": "activity:transition",
+      "name": "推进活动阶段",
+      "module": "activity",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "推进活动阶段，仍需满足当前阶段的业务条件。",
+      "risk": true
+    },
+    {
+      "code": "task:view",
+      "name": "查看任务",
+      "module": "task",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "查看活动任务及甘特图。",
+      "risk": false
+    },
+    {
+      "code": "task:manage",
+      "name": "维护任务",
+      "module": "task",
+      "dependencies": [
+        "task:view"
+      ],
+      "description": "创建、调整和删除本组织活动任务；不包含活动基础信息修改。",
+      "risk": false
+    },
+    {
+      "code": "task:progress",
+      "name": "更新任务进度",
+      "module": "task",
+      "dependencies": [
+        "task:view"
+      ],
+      "description": "更新本组织任务进度；本期尚未开放仅本人指派任务范围。",
+      "risk": false
+    },
+    {
+      "code": "agenda:view",
+      "name": "查看议程",
+      "module": "agenda",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "查看活动执行议程。",
+      "risk": false
+    },
+    {
+      "code": "agenda:manage",
+      "name": "维护议程",
+      "module": "agenda",
+      "dependencies": [
+        "agenda:view"
+      ],
+      "description": "创建、调整和删除活动议程。",
+      "risk": false
+    },
+    {
+      "code": "score:view",
+      "name": "查看评分",
+      "module": "score",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "查看活动评分规则和成绩。",
+      "risk": false
+    },
+    {
+      "code": "score:manage",
+      "name": "维护评分",
+      "module": "score",
+      "dependencies": [
+        "score:view"
+      ],
+      "description": "维护评分规则与成绩。",
+      "risk": true
+    },
+    {
+      "code": "plan:view",
+      "name": "查看策划书",
+      "module": "plan",
+      "dependencies": [
+        "activity:view"
+      ],
+      "description": "当前版本仅作者和指定审核人可见；历史版本沿用组织内读取规则。",
+      "risk": false
+    },
+    {
+      "code": "plan:edit",
+      "name": "编写策划书",
+      "module": "plan",
+      "dependencies": [
+        "plan:view"
+      ],
+      "description": "作者创建、修改和修订自己的当前策划版本。",
+      "risk": false
+    },
+    {
+      "code": "plan:submit",
+      "name": "提交策划审核",
+      "module": "plan",
+      "dependencies": [
+        "plan:view"
+      ],
+      "description": "作者选择审核人并提交当前策划版本，不包含修改正文。",
+      "risk": false
+    },
+    {
+      "code": "plan:review",
+      "name": "审核策划书",
+      "module": "plan",
+      "dependencies": [
+        "plan:view"
+      ],
+      "description": "仅指定审核人可审核分配给自己的当前待审版本。",
+      "risk": true
+    },
+    {
+      "code": "schedule:self:view",
+      "name": "查看我的排班",
+      "module": "schedule",
+      "dependencies": [],
+      "description": "仅返回通过账号 ID 关联的本人班次。",
+      "risk": false
+    },
+    {
+      "code": "schedule:publish",
+      "name": "发布及取消排班",
+      "module": "schedule",
+      "dependencies": [
+        "schedule:view"
+      ],
+      "description": "发布、取消排班，以及修改已发布班次；不包含自动生成草稿。",
+      "risk": true
+    },
+    {
+      "code": "schedule:export",
+      "name": "导出组织排班",
+      "module": "schedule",
+      "dependencies": [
+        "schedule:view"
+      ],
+      "description": "导出当前可查看的组织排班。",
+      "risk": true
+    },
+    {
+      "code": "course:self:manage",
+      "name": "维护本人课表",
+      "module": "course",
+      "dependencies": [],
+      "description": "查看和录入本人的课程表。",
+      "risk": false
+    },
+    {
+      "code": "course:manage",
+      "name": "管理课表导入与学期参数",
+      "module": "course",
+      "dependencies": [],
+      "description": "批量导入课表和维护学期时间参数。",
+      "risk": true
+    },
+    {
+      "code": "attendance:self:view",
+      "name": "查看本人考勤",
+      "module": "attendance",
+      "dependencies": [],
+      "description": "仅返回通过账号 ID 关联的本人考勤记录。",
+      "risk": false
+    },
+    {
+      "code": "article:create",
+      "name": "创建推文",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "创建推文草稿并指定作者。",
+      "risk": false
+    },
+    {
+      "code": "article:edit",
+      "name": "编辑推文",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "编辑本人草稿或驳回稿；维护他人稿件另需对应管理权限。",
+      "risk": false
+    },
+    {
+      "code": "article:submit",
+      "name": "提交推文审核",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "作者提交可编辑状态的推文。",
+      "risk": false
+    },
+    {
+      "code": "article:review",
+      "name": "审核推文",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "审核待审推文，与编辑正文分开授权。",
+      "risk": true
+    },
+    {
+      "code": "article:publish",
+      "name": "标记推文发布",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "作者为审核通过的稿件登记发布链接。",
+      "risk": true
+    },
+    {
+      "code": "article:stats",
+      "name": "更新推文传播数据",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "作者更新已发布稿件的阅读及互动数据。",
+      "risk": false
+    },
+    {
+      "code": "article:delete",
+      "name": "删除推文草稿",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "作者删除本人草稿或驳回稿。",
+      "risk": true
+    },
+    {
+      "code": "article:manage",
+      "name": "维护他人推文",
+      "module": "article",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "解除推文操作的作者限制，仍须另有编辑、提交、发布等对应操作权限。",
+      "risk": true
+    },
+    {
+      "code": "news:publish",
+      "name": "发布新闻稿",
+      "module": "content",
+      "dependencies": [
+        "content:view"
+      ],
+      "description": "发布新闻稿，与维护草稿分开授权。",
+      "risk": true
+    },
+    {
+      "code": "kb:document:manage",
+      "name": "维护知识文档",
+      "module": "kb",
+      "dependencies": [
+        "kb:read"
+      ],
+      "description": "创建、修改和删除有权维护的知识文档；不自动获得受限资料读取权。",
+      "risk": false
+    },
+    {
+      "code": "kb:index:manage",
+      "name": "维护知识索引",
+      "module": "kb",
+      "dependencies": [
+        "kb:read"
+      ],
+      "description": "重建组织知识索引和刷新事实快照。",
+      "risk": true
+    }
+  ]
+}

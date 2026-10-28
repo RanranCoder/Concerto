@@ -49,7 +49,7 @@ public class SendNotificationTool implements WriteAgentTool {
     public String description() {
         return "向指定的用户、角色或部门定向发送一条站内通知。"
                 + "适用于'提醒一下 XX 部门的同学''通知负责人尽快处理'等指令。"
-                + "注意：通知发送后即时推送，无法撤回。";
+                + "通知确认后记录并异步投递，无法撤回。";
     }
 
     @Override
@@ -98,7 +98,7 @@ public class SendNotificationTool implements WriteAgentTool {
 
         List<String> detailLines = new ArrayList<>();
         detailLines.add("接收范围：" + describeAudience(recipientUserId, recipientRole, recipientDeptId));
-        detailLines.add("发送后即时推送，无法撤回。");
+        detailLines.add("确认后记录并异步投递，无法撤回。");
 
         Map<String, Object> exec = new LinkedHashMap<>();
         exec.put("title", title);
@@ -124,7 +124,7 @@ public class SendNotificationTool implements WriteAgentTool {
 
         try {
             var saved = notificationService.createAndSave(
-                    NotificationType.SYSTEM,
+                    NotificationType.COLLABORATION,
                     str(exec.get("title")),
                     htmlSanitizer.sanitize(str(exec.get("content"))),
                     str(exec.get("entityType")),
@@ -136,10 +136,10 @@ public class SendNotificationTool implements WriteAgentTool {
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "notification", "id", saved.getId(),
-                    "label", saved.getTitle(), "link", "/notification"));
+                    "label", saved.getTitle(), "link", "/notifications"));
 
             return new CommitResult("SUCCESS", 1, 0,
-                    "通知《" + saved.getTitle() + "》已发送。",
+                    "通知《" + saved.getTitle() + "》已受理，将进入接收人的通知中心。",
                     ToolArgs.map("notificationId", saved.getId()), refs);
         } catch (Exception e) {
             return CommitResult.failed("通知发送失败：" + e.getMessage());

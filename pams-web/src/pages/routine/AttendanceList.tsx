@@ -57,13 +57,13 @@ export default function AttendanceList() {
   const { message } = App.useApp(),
     permissions = useAuthStore((s) => s.user?.permissions) ?? []
   const canViewAll = permissions.some((p) =>
-      ['attendance:view', 'schedule:check'].includes(p),
+      ['attendance:view'].includes(p),
     ),
     canManage = permissions.some((p) =>
-      ['attendance:manage', 'checkin:manage', 'schedule:check'].includes(p),
+      ['attendance:manage'].includes(p),
     ),
     canAudit = permissions.some((p) =>
-      ['attendance:view', 'attendance:manage', 'schedule:check'].includes(p),
+      ['attendance:view'].includes(p),
     )
   const [params, setParams] = useSearchParams()
   const scope = !canViewAll || params.get('scope') === 'mine' ? 'mine' : 'all'

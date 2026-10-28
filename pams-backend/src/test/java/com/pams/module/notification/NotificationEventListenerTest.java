@@ -37,7 +37,7 @@ class NotificationEventListenerTest {
         messagingTemplate = mock(SimpMessagingTemplate.class);
         // 默认 countUnreadForUser 返回 0，避免 WebSocket 推送 NPE
         when(notificationService.countUnreadForUser(anyLong(), anyString(), anyLong())).thenReturn(0L);
-        listener = new NotificationEventListener(notificationService, userRepo, activityRepo, messagingTemplate);
+        listener = new NotificationEventListener(notificationService, userRepo, activityRepo);
     }
 
     private User userWithIdAndRole(Long id, String roleCode) {
@@ -128,7 +128,7 @@ class NotificationEventListenerTest {
             eq("PLAN"), eq(1L), eq(11L), eq(5L), isNull(), isNull()
         );
         // 验证 WebSocket 推送给提交人
-        verify(messagingTemplate).convertAndSendToUser(eq("user5"), eq("/queue/notifications"), any());
+        verifyNoInteractions(messagingTemplate); // NotificationPipeline owns durable SSE delivery.
     }
 
     @Test

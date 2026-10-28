@@ -11,4 +11,5 @@ public class ProgressRequest {
     @Min(value = 0, message = "进度不小于0")
     @Max(value = 100, message = "进度不超过100")
     private Integer progress;
+    private Long expectedRevision;
 }

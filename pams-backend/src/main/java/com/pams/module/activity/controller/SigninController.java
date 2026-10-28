@@ -39,6 +39,12 @@ public class SigninController {
         return Result.ok(service.listByActivity(activityId, keyword));
     }
 
+    @PreAuthorize("hasAuthority('checkin:export')")
+    @GetMapping("/export")
+    public Result<List<Signin>> export(@RequestParam Long activityId,@RequestParam(required=false) String keyword) {
+        return Result.ok(service.listByActivity(activityId,keyword));
+    }
+
     /** 手动补签/登记：checkin:manage */
     @PreAuthorize("hasAuthority('checkin:manage')")
     @PostMapping
@@ -163,6 +169,7 @@ public class SigninController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('checkin:view')")
     @GetMapping("/{activityId}/count")
     public Result<Long> count(@PathVariable Long activityId) {
         return Result.ok(service.count(activityId));

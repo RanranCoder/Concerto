@@ -63,7 +63,10 @@ public class SearchArticlesTool implements AgentTool {
      * {@code MediaLeader} 或 {@code Teacher/Director} 之一的<b>领导角色</b>专属。
      */
     @Override
-    public boolean requiresLeader() { return true; }
+    public boolean requiresLeader() { return false; }
+
+    @Override
+    public List<String> requiredPermissions() { return List.of("content:view"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }

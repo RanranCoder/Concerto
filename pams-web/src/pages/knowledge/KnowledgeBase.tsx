@@ -16,7 +16,8 @@ export type EntryTarget = Pick<KnowledgeEntryVO, 'sourceType' | 'sourceId'> & Pa
 
 export default function KnowledgeBase() {
   const { message, modal } = App.useApp()
-  const canManage = useAuthStore(s => s.user?.permissions.includes('kb:manage')) ?? false
+  const canManage = useAuthStore(s => s.user?.permissions.includes('kb:document:manage')) ?? false
+  const canIndex = useAuthStore(s => s.user?.permissions.includes('kb:index:manage')) ?? false
   const [tab, setTab] = useState('entries'), [source, setSource] = useState<string>()
   const [stats, setStats] = useState<KnowledgeStatsVO | null>(null), [sources, setSources] = useState<KnowledgeSourceVO[]>([])
   const [loading, setLoading] = useState(true), [overviewError, setOverviewError] = useState(''), [refresh, setRefresh] = useState(0)
@@ -64,7 +65,7 @@ export default function KnowledgeBase() {
   return <div className="admin-v6 knowledge-v6">
     <PageHeader title="知识库" description="管理灵思可引用的资料，核对内容来源、数据时效与检索结果。" extra={<>
       <Button icon={<ReloadOutlined aria-hidden="true" />} loading={loading} onClick={reload}>刷新</Button>
-      {canManage && <><Dropdown trigger={['click']} menu={{items: [{key: 'index', label: '重建全部检索索引'}, {key: 'snapshots', label: '刷新业务快照'}], onClick: ({key}) => maintain(key as 'index' | 'snapshots')}}><Button icon={<SettingOutlined aria-hidden="true" />} loading={maintenance}>维护工具</Button></Dropdown><Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setEditor({})}>录入文档</Button></>}
+      {canIndex && <Dropdown trigger={['click']} menu={{items: [{key: 'index', label: '重建全部检索索引'}, {key: 'snapshots', label: '刷新业务快照'}], onClick: ({key}) => maintain(key as 'index' | 'snapshots')}}><Button icon={<SettingOutlined aria-hidden="true" />} loading={maintenance}>维护工具</Button></Dropdown>}{canManage && <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setEditor({})}>录入文档</Button>}
     </>} />
     {overviewError && <LoadError message={overviewError} retry={reload} />}
     <div className={`admin-context ${stats && !stats.fulltextAvailable ? 'warning' : ''}`}>
@@ -83,7 +84,7 @@ export default function KnowledgeBase() {
       <p>来源权限同步生效。资料数量不包含当前账号无权访问的内容。</p><Button type="link" onClick={() => setSourceInfo(true)}>了解可见范围</Button>
     </aside><section className="admin-workspace"><Tabs activeKey={tab} onChange={setTab} items={[{key: 'entries', label: '内容台账'}, {key: 'snapshots', label: '事实快照'}, {key: 'retrievals', label: <>检索记录 <small>我的</small></>}]} />
       {tab === 'entries' && <KnowledgeEntries source={source} refresh={refresh} onOpen={setTarget} onResetSource={() => setSource(undefined)} canManage={canManage} onCreate={() => setEditor({})} />}
-      {tab === 'snapshots' && <SnapshotRecords refresh={refresh} canManage={canManage} onRefresh={() => maintain('snapshots')} />}
+      {tab === 'snapshots' && <SnapshotRecords refresh={refresh} canManage={canIndex} onRefresh={() => maintain('snapshots')} />}
       {tab === 'retrievals' && <RetrievalRecords refresh={refresh} onOpen={setTarget} sourceName={sourceName} />}
     </section></div>
     <FormSurface mode="drawer" title="知识来源与可见范围" description="来源决定收录内容、检索方式与访问边界。" open={sourceInfo} onCancel={() => setSourceInfo(false)} footer={<Button onClick={() => setSourceInfo(false)}>关闭</Button>}>

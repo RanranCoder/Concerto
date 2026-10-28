@@ -31,6 +31,9 @@ public class Notification implements OrgScoped {
     @Column(name = "entity_id")
     private Long entityId;
 
+    private Long activityId;
+    private String eventKey;
+
     @Column(name = "sender_id")
     private Long senderId;
 

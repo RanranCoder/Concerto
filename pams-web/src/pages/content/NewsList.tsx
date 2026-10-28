@@ -49,7 +49,7 @@ interface NewsFormValues {
 export default function NewsList() {
   const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
-  const isMinisterOrAbove = (user?.permissions ?? []).includes('content:manage')
+  const isMinisterOrAbove = (user?.permissions ?? []).includes('news:manage')
 
   const [data, setData] = useState<NewsRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -212,7 +212,7 @@ export default function NewsList() {
               编辑
             </Button>
           )}
-          {isMinisterOrAbove && r.status === 'DRAFT' && (
+          {user?.permissions.includes('news:publish') && r.status === 'DRAFT' && (
             <Popconfirm
               title="确认发布该新闻稿？"
               onConfirm={() => handlePublish(r.id)}

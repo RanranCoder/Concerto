@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * 无课表制作（PRD F08）
  * 权限（PRD-v5 S2 收敛为 V7 权限码）：个人课表读写 schedule:free_table（V7 种子：全部角色），
- * 时间格配置与批量导入 schedule:manage（V7 种子：部长级）
+ * 时间格配置与批量导入 course:manage（V7 种子：部长级）
  */
 @RestController
 @RequestMapping("/api/course-schedules")
@@ -50,7 +50,7 @@ public class CourseScheduleController {
         return Result.ok(service.getConfigs());
     }
 
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    @PreAuthorize("hasAuthority('course:manage')")
     @PutMapping("/configs")
     public Result<Void> saveConfigs(@RequestBody List<Map<String, Object>> configs) {
         service.saveConfigs(configs);
@@ -60,6 +60,7 @@ public class CourseScheduleController {
     // ===== 个人课程表 =====
 
     /** 查看自己的课程表 */
+    @PreAuthorize("hasAuthority('course:self:manage')")
     @GetMapping("/mine")
     public Result<Map<String, Object>> mine(@RequestParam(required = false) String semester,
                                             @AuthenticationPrincipal LoginUser current) {
@@ -67,6 +68,7 @@ public class CourseScheduleController {
     }
 
     /** 保存自己的课程表（覆盖式）：body {semester, cells:[{dayOfWeek, period, courseName}]} */
+    @PreAuthorize("hasAuthority('course:self:manage')")
     @PostMapping("/mine")
     public Result<Void> saveMine(@RequestBody Map<String, Object> body,
                                  @AuthenticationPrincipal LoginUser current) {
@@ -80,6 +82,7 @@ public class CourseScheduleController {
     // ===== 空闲统计 =====
 
     /** 生成共同空闲热力图：?semester=xxx&userIds=1,2,3（不传则全员） */
+    @PreAuthorize("hasAuthority('schedule:free_table')")
     @GetMapping("/analyze")
     public Result<Map<String, Object>> analyze(@RequestParam(required = false) String semester,
                                                @RequestParam(required = false) List<Long> userIds) {
@@ -88,8 +91,8 @@ public class CourseScheduleController {
 
     // ===== 批量导入课表生成无课表 =====
 
-    /** 批量上传班级课表 xlsx，生成无课表（含下载）。schedule:manage（V7 种子：部长级）。 */
-    @PreAuthorize("hasAuthority('schedule:manage')")
+    /** 批量上传班级课表 xlsx，生成无课表（含下载）。course:manage（V7 种子：部长级）。 */
+    @PreAuthorize("hasAuthority('course:manage')")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<NoClassScheduleImportVO> importTimetables(
             @RequestParam("files") MultipartFile[] files,
@@ -105,6 +108,7 @@ public class CourseScheduleController {
     }
 
     /** 下载生成的 xlsx 无课表。path 为上传目录下的相对路径。 */
+    @PreAuthorize("hasAuthority('schedule:free_table')")
     @GetMapping("/import/download")
     public ResponseEntity<Resource> download(@RequestParam String path) {
         Path target = importService.resolveDownload(path);
@@ -122,6 +126,7 @@ public class CourseScheduleController {
     }
 
     /** 读取某部门+学期最新生成的无课表（无记录 data=null）。 */
+    @PreAuthorize("hasAuthority('schedule:free_table')")
     @GetMapping("/generated")
     public Result<NoClassScheduleGeneratedVO> generated(@RequestParam(required = false) Long deptId,
                                                         @RequestParam(required = false) String semester) {
@@ -129,6 +134,7 @@ public class CourseScheduleController {
     }
 
     /** 最近一次导入无课表的部门+学期（供前端默认选中；无导入则 null）。 */
+    @PreAuthorize("hasAuthority('schedule:free_table')")
     @GetMapping("/generated/latest")
     public Result<Map<String, Object>> generatedLatest() {
         return Result.ok(importService.latestImport());

@@ -24,7 +24,7 @@ public class AgendaController {
     }
 
     /** 议程的增删改限干部（activity:edit），登录即可查询 */
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('agenda:manage')")
     @PostMapping
     public Result<ActivityAgenda> create(@Valid @RequestBody AgendaRequest req) {
         ActivityAgenda a = new ActivityAgenda();
@@ -36,7 +36,7 @@ public class AgendaController {
         return Result.ok(repository.save(a));
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('agenda:manage')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody AgendaRequest req) {
         ActivityAgenda a = repository.findById(id)
@@ -48,7 +48,7 @@ public class AgendaController {
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('activity:edit')")
+    @PreAuthorize("hasAuthority('agenda:manage')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         repository.findById(id).orElseThrow(() -> new BizException(2101, "议程不存在"));

@@ -66,8 +66,8 @@ class ArticleDeadlineTaskTest {
     }
 
     @Test
-    void remindOverdue_onFailure_notifiesTeacher_notSilent() {
-        // X2：定时任务异常不再静默——必须向指导老师发出 SYSTEM 告警通知
+    void remindOverdue_onFailure_logsIndependentlyWithoutFixedRoleNotification() {
+        // Pipeline failures cannot rely on the same pipeline or a fixed business role to report themselves.
         ArticleRepository repo = mock(ArticleRepository.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         NotificationService notificationService = mock(NotificationService.class);
@@ -76,8 +76,6 @@ class ArticleDeadlineTaskTest {
 
         task.remindOverdue();
 
-        verify(notificationService).createAndSave(
-                eq(com.pams.module.notification.entity.NotificationType.SYSTEM),
-                any(), any(), eq("TASK"), any(), any(), any(), eq("TEACHER"), any());
+        verifyNoInteractions(notificationService); // Failure is logged independently, never recursively sent to a fixed role.
     }
 }

@@ -57,7 +57,9 @@ class MultiAgentBaseTest {
         LoginUser lu = new LoginUser(uid, "u" + uid, "测试用户", "DIRECTOR", 4, null, null, 1L);
         var authorities = List.of(
                 new org.springframework.security.core.authority.SimpleGrantedAuthority("material:view"),
-                new org.springframework.security.core.authority.SimpleGrantedAuthority("content:manage"));
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("article:create"),
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("content:view"),
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("activity:view"));
         return new ToolContext(lu, authorities, null, streamId);
     }
 

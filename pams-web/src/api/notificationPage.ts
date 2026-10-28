@@ -8,6 +8,9 @@ export interface NotificationPageVO {
   content: string
   entityType: string | null
   entityId: number | null
+  activityId?: number | null
+  actionState?: string | null
+  notify?: boolean
   senderName: string | null
   priority: string
   read: boolean

@@ -31,10 +31,17 @@ public class TenantAuthorizationService {
           "org:audit:view",
           "member:import_account");
   private final JdbcTemplate db;
+  private final PermissionCatalog vocabulary;
+  private final org.springframework.context.ApplicationEventPublisher events;
   private final ObjectMapper json = new ObjectMapper();
 
-  public TenantAuthorizationService(JdbcTemplate db) {
+  public TenantAuthorizationService(
+      JdbcTemplate db,
+      PermissionCatalog vocabulary,
+      org.springframework.context.ApplicationEventPublisher events) {
     this.db = db;
+    this.vocabulary = vocabulary;
+    this.events = events;
   }
 
   private long number(Object n) {
@@ -73,6 +80,47 @@ public class TenantAuthorizationService {
                       result.put(
                           labels.getOrDefault(key.toLowerCase(Locale.ROOT), key),
                           value instanceof Timestamp t ? t.toLocalDateTime().toString() : value));
+              for (var alias :
+                  Map.of(
+                          "permissioncount",
+                          "permissionCount",
+                          "updatedat",
+                          "updatedAt",
+                          "sourcekind",
+                          "sourceKind",
+                          "actorname",
+                          "actorName",
+                          "targetname",
+                          "targetName",
+                          "rolename",
+                          "roleName")
+                      .entrySet())
+                if (result.containsKey(alias.getKey()))
+                  result.put(alias.getValue(), result.remove(alias.getKey()));
+              for (var a :
+                  Map.of(
+                          "deptname",
+                          "deptName",
+                          "managementsource",
+                          "managementSource",
+                          "updatedbyname",
+                          "updatedByName",
+                          "expiresat",
+                          "expiresAt")
+                      .entrySet())
+                if (result.containsKey(a.getKey()))
+                  result.put(a.getValue(), result.remove(a.getKey()));
+              for (var alias :
+                  Map.of(
+                          "catalogversion",
+                          "catalogVersion",
+                          "changeid",
+                          "changeId",
+                          "targettype",
+                          "targetType")
+                      .entrySet())
+                if (result.containsKey(alias.getKey()))
+                  result.put(alias.getValue(), result.remove(alias.getKey()));
               return result;
             })
         .toList();
@@ -94,6 +142,162 @@ public class TenantAuthorizationService {
         },
         keys);
     return Objects.requireNonNull(keys.getKey()).longValue();
+  }
+
+  private Map<String, Object> roleImpact(long org, long id) {
+    var role = role(org, id);
+    return Map.of(
+        "userCount",
+            db.queryForObject(
+                "SELECT COUNT(*) FROM sys_user WHERE org_id=? AND role_id=? AND deleted=0",
+                Long.class,
+                org,
+                id),
+        "activeUserCount",
+            db.queryForObject(
+                "SELECT COUNT(*) FROM sys_user WHERE org_id=? AND role_id=? AND deleted=0 AND"
+                    + " status=1",
+                Long.class,
+                org,
+                id),
+        "positions",
+            db.queryForList(
+                "SELECT id,name FROM org_position WHERE org_id=? AND role_code=?",
+                org,
+                role.get("code")),
+        "invitations",
+            db.queryForObject(
+                "SELECT COUNT(*) FROM org_invitation WHERE org_id=? AND role_code=? AND used_by IS"
+                    + " NULL AND (expire_at IS NULL OR expire_at>CURRENT_TIMESTAMP)",
+                Long.class,
+                org,
+                role.get("code")));
+  }
+
+  private Map<String, Object> roleActions(long uid, Map<String, Object> role) {
+    String reason = "";
+    try {
+      protectRole(uid, number(role.get("id")));
+    } catch (BizException e) {
+      reason = e.getMessage();
+    }
+    boolean archived = "ARCHIVED".equals(role.get("status"));
+    var caps = capabilities(uid);
+    return Map.of(
+        "canEdit",
+        !archived && reason.isEmpty() && caps.contains("role:manage"),
+        "canGrant",
+        !archived && reason.isEmpty() && caps.contains("role:grant"),
+        "reason",
+        archived ? "归档角色只可查看或复制" : reason);
+  }
+
+  public List<Map<String, Object>> migrationReviews() {
+    long uid = actor("role:view");
+    return clientRows(
+        db.queryForList(
+            "SELECT m.*,r.name AS roleName FROM authorization_migration_review m JOIN sys_role r ON"
+                + " r.id=m.role_id AND r.org_id=m.org_id WHERE m.org_id=? ORDER BY"
+                + " m.review_required DESC,m.role_id",
+            org(uid)));
+  }
+
+  public Map<String, Object> auditPage(
+      int page, int size, String keyword, String action, String from, String to) {
+    long uid = actor("org:audit:view");
+    page = Math.max(1, page);
+    size = Math.max(1, Math.min(100, size));
+    String filter =
+        " WHERE org_id=? AND (?='' OR action=?) AND (?='' OR actor_name LIKE ? OR target_name LIKE"
+            + " ?)";
+    String q = keyword == null ? "" : keyword.trim(), a = action == null ? "" : action;
+    var args = new ArrayList<Object>(List.of(org(uid), a, a, q, "%" + q + "%", "%" + q + "%"));
+    try {
+      if (from != null && !from.isBlank()) {
+        filter += " AND created_at>=?";
+        args.add(Timestamp.valueOf(LocalDate.parse(from).atStartOfDay()));
+      }
+      if (to != null && !to.isBlank()) {
+        filter += " AND created_at<?";
+        args.add(Timestamp.valueOf(LocalDate.parse(to).plusDays(1).atStartOfDay()));
+      }
+    } catch (java.time.format.DateTimeParseException invalid) {
+      throw new BizException(400, "日期须为 yyyy-MM-dd");
+    }
+    long total =
+        db.queryForObject(
+            "SELECT COUNT(*) FROM org_audit_log" + filter, Long.class, args.toArray());
+    args.add(size);
+    args.add((long) (page - 1) * size);
+    var rows =
+        db.queryForList(
+            "SELECT id,actor_id AS actorId,actor_name AS actorName,action,target_id AS"
+                + " targetId,target_name AS targetName,detail_json AS"
+                + " details,outcome,reason,target_type AS targetType,change_id AS"
+                + " changeId,created_at AS createdAt FROM org_audit_log"
+                + filter
+                + " ORDER BY id DESC LIMIT ? OFFSET ?",
+            args.toArray());
+    return Map.of("items", clientRows(rows), "total", total);
+  }
+
+  public Map<String, Object> managementSummary() {
+    long uid = actor("role:view");
+    var result = new LinkedHashMap<String, Object>();
+    result.put("isOwner", owner(uid));
+    result.put("capabilities", capabilities(uid));
+    result.put("grantable", grantable(uid));
+    result.put(
+        "administrators",
+        owner(uid)
+            ? clientRows(
+                db.queryForList(
+                    "SELECT d.user_id AS id,u.real_name AS realName,d.status,d.expires_at AS"
+                        + " expiresAt,d.version,d.updated_at AS updatedAt,a.real_name AS"
+                        + " updatedByName FROM org_role_delegation d LEFT JOIN sys_user a ON"
+                        + " a.id=d.updated_by AND a.org_id=d.org_id JOIN sys_user u ON"
+                        + " u.id=d.user_id AND u.org_id=d.org_id WHERE d.org_id=? AND u.deleted=0",
+                    org(uid)))
+            : List.of());
+    result.put("ownDelegation", delegationInfo(org(uid), uid));
+    return result;
+  }
+
+  @Transactional
+  public Map<String, Object> previewDelegation(
+      long target, boolean active, Set<String> allowed, LocalDateTime expires, long version) {
+    return previewDelegation(target, active, allowed, expires, version, null);
+  }
+
+  @Transactional
+  public Map<String, Object> previewDelegation(
+      long target,
+      boolean active,
+      Set<String> allowed,
+      LocalDateTime expires,
+      long version,
+      String reason) {
+    reason = normalizeReason(reason);
+    long uid = actor("role:grant");
+    long org = org(uid);
+    lockOrg(org);
+    if (!owner(uid)) throw new BizException(403, "仅所有者可维护管理员");
+    if (target == uid || org != number(identity(target).get("org_id")) || !valid(target))
+      throw new BizException(400, "请选择本组织其他有效账号");
+    var before = delegation(target);
+    if (number(before.get("version")) != version) throw new BizException(409, "管理员配置已变化，请重新读取");
+    if (allowed == null || !grantable(uid).containsAll(allowed))
+      throw new BizException(403, "包含不可授予操作");
+    if (expires != null && !expires.isAfter(LocalDateTime.now()))
+      throw new BizException(400, "有效期必须晚于当前时间");
+    var payload = new LinkedHashMap<String, Object>();
+    payload.put("active", active);
+    payload.put("grantable", allowed);
+    payload.put("expiresAt", expires == null ? null : expires.toString());
+    payload.put("version", version);
+    payload.put("delegationBefore", before);
+    payload.put("reason", reason);
+    return storePreview(uid, "DELEGATE", target, payload);
   }
 
   private String encode(Object v) {
@@ -120,15 +324,51 @@ public class TenantAuthorizationService {
     return v == null ? Set.of() : decode(v, new TypeReference<LinkedHashSet<String>>() {});
   }
 
+  private String normalizeReason(String reason) {
+    String value = reason == null ? "" : reason.trim();
+    if (value.length() > 500) throw new BizException(400, "变更原因最多 500 字");
+    return value;
+  }
+
   private void audit(long org, long actor, String action, long target, Object detail) {
+    long id =
+        insert(
+            "INSERT INTO org_audit_log(org_id,actor_id,action,target_id,detail_json,created_at)"
+                + " VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)",
+            org,
+            actor,
+            action,
+            target,
+            encode(detail));
+    String actorName =
+        db
+            .queryForList(
+                "SELECT COALESCE(real_name,username) FROM sys_user WHERE id=? AND org_id=?",
+                String.class,
+                actor,
+                org)
+            .stream()
+            .findFirst()
+            .orElse("系统迁移");
+    boolean userTarget = Set.of("ASSIGN", "DELEGATE").contains(action);
+    var names =
+        db.queryForList(
+            userTarget
+                ? "SELECT real_name FROM sys_user WHERE id=? AND org_id=?"
+                : "SELECT name FROM sys_role WHERE id=? AND org_id=?",
+            String.class,
+            target,
+            org);
     db.update(
-        "INSERT INTO org_audit_log(org_id,actor_id,action,target_id,detail_json,created_at)"
-            + " VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)",
-        org,
-        actor,
-        action,
-        target,
-        encode(detail));
+        "UPDATE org_audit_log SET actor_name=?,target_name=?,target_type=?,reason=?,change_id=?"
+            + " WHERE id=? AND org_id=?",
+        actorName,
+        names.isEmpty() ? "历史对象 #" + target : names.getFirst(),
+        userTarget ? "USER" : "ROLE",
+        detail instanceof Map<?, ?> m ? m.get("reason") : null,
+        detail instanceof Map<?, ?> m ? m.get("changeId") : null,
+        id,
+        org);
   }
 
   public Map<String, Object> identity(long uid) {
@@ -235,13 +475,17 @@ public class TenantAuthorizationService {
             (String) u.get("dept_name"),
             number(u.get("org_id")));
     return new com.pams.module.agent.core.ToolContext(
-        principal,
-        authorities(ctx.getUserId()).stream()
-            .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-            .toList(),
-        ctx.getConversationId(),
-        ctx.getStreamId(),
-        ctx.getMode()).withRunId(ctx.getRunId()).withWorkItem(ctx.getWorkItemId(), ctx.getWorkItemRevision()).withRequestId(ctx.getRequestId()).withAttempt(ctx.getAttempt());
+            principal,
+            authorities(ctx.getUserId()).stream()
+                .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                .toList(),
+            ctx.getConversationId(),
+            ctx.getStreamId(),
+            ctx.getMode())
+        .withRunId(ctx.getRunId())
+        .withWorkItem(ctx.getWorkItemId(), ctx.getWorkItemRevision())
+        .withRequestId(ctx.getRequestId())
+        .withAttempt(ctx.getAttempt());
   }
 
   public Set<String> grantable(long uid) {
@@ -305,6 +549,11 @@ public class TenantAuthorizationService {
 
   private void bump(long org) {
     db.update("UPDATE organization SET authz_version=authz_version+1 WHERE id=?", org);
+    events.publishEvent(
+        new AuthorizationChanged(
+            org,
+            db.queryForObject(
+                "SELECT authz_version FROM organization WHERE id=?", Long.class, org)));
   }
 
   private void protectRole(long uid, long role) {
@@ -329,14 +578,22 @@ public class TenantAuthorizationService {
     if (!owner(uid)
         && (target == uid
             || number(u.get("owner_user_id")) == target
-            || hasActiveDelegation(number(u.get("org_id")), target))) throw new BizException(403, "不能修改本人、所有者或其他管理员");
+            || hasActiveDelegation(number(u.get("org_id")), target)))
+      throw new BizException(403, "不能修改本人、所有者或其他管理员");
   }
 
-  // A disabled administrator retains a delegation. Ordinary account managers must not reactivate it.
+  // A disabled administrator retains a delegation. Ordinary account managers must not reactivate
+  // it.
   private boolean hasActiveDelegation(long organization, long target) {
-    return db.queryForList("SELECT capabilities_json FROM org_role_delegation WHERE org_id=? AND user_id=?"
-        + " AND status='ACTIVE' AND (expires_at IS NULL OR expires_at>CURRENT_TIMESTAMP)", organization, target)
-        .stream().anyMatch(row -> strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains));
+    return db
+        .queryForList(
+            "SELECT capabilities_json FROM org_role_delegation WHERE org_id=? AND user_id=?"
+                + " AND status='ACTIVE' AND (expires_at IS NULL OR expires_at>CURRENT_TIMESTAMP)",
+            organization,
+            target)
+        .stream()
+        .anyMatch(
+            row -> strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains));
   }
 
   public Map<String, Object> me(long uid) {
@@ -360,6 +617,33 @@ public class TenantAuthorizationService {
     if (org(uid) != number(identity.get("org_id")) || number(identity.get("deleted")) != 0)
       throw new BizException(404, "用户不存在");
     var result = new LinkedHashMap<>(me(target));
+    var role = role(org(uid), number(identity.get("role_id")));
+    var configured = published(role);
+    var effective = business(target);
+    result.put(
+        "configured",
+        configured.stream()
+            .map(
+                g -> {
+                  String code = g.get("permission").toString();
+                  return Map.of(
+                      "permission",
+                      code,
+                      "effective",
+                      effective.contains(code),
+                      "reason",
+                      effective.contains(code)
+                          ? ""
+                          : !valid(target)
+                              ? "账号或组织已停用"
+                              : !"ACTIVE".equals(role.get("status"))
+                                  ? "业务角色未启用"
+                                  : !packActive(org(uid), code, g.get("packVersion"))
+                                      ? "领域包未启用或授权批次已失效"
+                                      : "授权未生效");
+                })
+            .toList());
+    result.put("roleName", role.get("name"));
     result.put(
         "managementSource",
         owner(target) ? "OWNER" : capabilities(target).isEmpty() ? "NONE" : "DELEGATED");
@@ -399,27 +683,44 @@ public class TenantAuthorizationService {
   }
 
   public void invalidatePendingAccountCredentials(long userId) {
-    db.update("UPDATE member_account_credential SET token_hash=NULL,expires_at=NULL WHERE user_id=? AND consumed_at IS NULL", userId);
+    db.update(
+        "UPDATE member_account_credential SET token_hash=NULL,expires_at=NULL WHERE user_id=? AND"
+            + " consumed_at IS NULL",
+        userId);
   }
 
   public boolean pendingAccountSetup(long userId) {
-    return db.queryForObject("SELECT COUNT(*) FROM member_account_credential c JOIN sys_user u ON u.id=c.user_id"
-        + " AND u.org_id=c.org_id WHERE c.user_id=? AND c.consumed_at IS NULL AND u.status=0 AND u.deleted=0"
-        + " AND u.password=c.pending_password_hash", Integer.class, userId) > 0;
+    return db.queryForObject(
+            "SELECT COUNT(*) FROM member_account_credential c JOIN sys_user u ON u.id=c.user_id AND"
+                + " u.org_id=c.org_id WHERE c.user_id=? AND c.consumed_at IS NULL AND u.status=0"
+                + " AND u.deleted=0 AND u.password=c.pending_password_hash",
+            Integer.class,
+            userId)
+        > 0;
   }
 
-  /** Account directory metadata, scoped to the current organization; role names imply no governance. */
+  /**
+   * Account directory metadata, scoped to the current organization; role names imply no governance.
+   */
   public Map<Long, String> accountManagementSources() {
     Long organization = com.pams.common.OrgContext.get();
     if (organization == null) throw new BizException(403, "缺少组织上下文");
     Map<Long, String> result = new LinkedHashMap<>();
-    for (var row : db.queryForList("SELECT u.id,o.owner_user_id,u.status,d.capabilities_json FROM sys_user u"
-        + " JOIN organization o ON o.id=u.org_id LEFT JOIN org_role_delegation d ON d.org_id=u.org_id"
-        + " AND d.user_id=u.id AND d.status='ACTIVE' AND (d.expires_at IS NULL OR d.expires_at>CURRENT_TIMESTAMP)"
-        + " WHERE u.org_id=? AND u.deleted=0", organization)) {
+    for (var row :
+        db.queryForList(
+            "SELECT u.id,o.owner_user_id,u.status,d.capabilities_json FROM sys_user u JOIN"
+                + " organization o ON o.id=u.org_id LEFT JOIN org_role_delegation d ON"
+                + " d.org_id=u.org_id AND d.user_id=u.id AND d.status='ACTIVE' AND (d.expires_at IS"
+                + " NULL OR d.expires_at>CURRENT_TIMESTAMP) WHERE u.org_id=? AND u.deleted=0",
+            organization)) {
       long id = number(row.get("id"));
-      boolean delegated = strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains);
-      result.put(id, row.get("owner_user_id") != null && number(row.get("owner_user_id")) == id ? "OWNER" : delegated ? "DELEGATED" : "NONE");
+      boolean delegated =
+          strings(row.get("capabilities_json")).stream().anyMatch(GOVERNANCE::contains);
+      result.put(
+          id,
+          row.get("owner_user_id") != null && number(row.get("owner_user_id")) == id
+              ? "OWNER"
+              : delegated ? "DELEGATED" : "NONE");
     }
     return result;
   }
@@ -427,9 +728,13 @@ public class TenantAuthorizationService {
   public Set<Long> pendingAccountIds() {
     Long organization = com.pams.common.OrgContext.get();
     if (organization == null) throw new BizException(403, "缺少组织上下文");
-    return new LinkedHashSet<>(db.queryForList("SELECT DISTINCT u.id FROM member_account_credential c JOIN sys_user u"
-        + " ON u.id=c.user_id AND u.org_id=c.org_id WHERE u.org_id=? AND u.status=0 AND u.deleted=0"
-        + " AND c.consumed_at IS NULL AND u.password=c.pending_password_hash", Long.class, organization));
+    return new LinkedHashSet<>(
+        db.queryForList(
+            "SELECT DISTINCT u.id FROM member_account_credential c JOIN sys_user u ON"
+                + " u.id=c.user_id AND u.org_id=c.org_id WHERE u.org_id=? AND u.status=0 AND"
+                + " u.deleted=0 AND c.consumed_at IS NULL AND u.password=c.pending_password_hash",
+            Long.class,
+            organization));
   }
 
   public void verifyAssignableRole(long roleId) {
@@ -454,27 +759,37 @@ public class TenantAuthorizationService {
     actor("role:assign");
     if (!Objects.equals(com.pams.common.OrgContext.get(), organization))
       throw new BizException(403, "组织上下文不匹配");
-    return new AccountImportAuthority(uid, organization, number(identity(uid).get("authz_version")));
+    return new AccountImportAuthority(
+        uid, organization, number(identity(uid).get("authz_version")));
   }
 
-  public record AccountRolePreview(long id, String name, long version, List<String> permissions,
-                                   List<String> permissionNames) {}
+  public record AccountRolePreview(
+      long id, String name, long version, List<String> permissions, List<String> permissionNames) {}
 
   public AccountRolePreview accountRolePreview(long roleId) {
     verifyAssignableRole(roleId);
     long uid = actor("role:assign");
     var r = role(org(uid), roleId);
     var permissions = rolePermissions(org(uid), roleId).stream().sorted().toList();
-    var names = db.queryForList("SELECT code,name FROM permission").stream()
-        .collect(Collectors.toMap(p -> p.get("code").toString(), p -> p.get("name").toString()));
-    return new AccountRolePreview(roleId, r.get("name").toString(),
-        number(r.get("config_version")), permissions,
+    var names =
+        db.queryForList("SELECT code,name FROM permission").stream()
+            .collect(
+                Collectors.toMap(p -> p.get("code").toString(), p -> p.get("name").toString()));
+    return new AccountRolePreview(
+        roleId,
+        r.get("name").toString(),
+        number(r.get("config_version")),
+        permissions,
         permissions.stream().map(code -> names.getOrDefault(code, code)).toList());
   }
 
-  public void accountBatchAudit(AccountImportAuthority authority, String batchId,
-                                String action, List<Long> users) {
-    audit(authority.orgId(), authority.actorId(), action, 0,
+  public void accountBatchAudit(
+      AccountImportAuthority authority, String batchId, String action, List<Long> users) {
+    audit(
+        authority.orgId(),
+        authority.actorId(),
+        action,
+        0,
         Map.of("batchId", batchId, "userIds", users));
     if ("MEMBER_ACCOUNT_CREATE".equals(action)) bump(authority.orgId());
   }
@@ -487,6 +802,9 @@ public class TenantAuthorizationService {
   public List<Map<String, Object>> catalog() {
     long uid = actor("role:view");
     Set<String> allowed = grantable(uid);
+    Set<String> known =
+        new HashSet<>(
+            db.queryForList("SELECT code FROM permission WHERE category='BUSINESS'", String.class));
     return db
         .queryForList(
             "SELECT id,code,name,module FROM permission WHERE category='BUSINESS' ORDER BY"
@@ -495,10 +813,24 @@ public class TenantAuthorizationService {
         .map(
             p -> {
               p.put("supportedScopes", List.of("ORG"));
+              p.putAll(
+                  vocabulary.describe(p.get("code").toString(), p.get("module").toString(), known));
               if (p.get("code").toString().startsWith("party:"))
                 p.put("packVersion", currentPackVersion(org(uid)));
               p.put("grantable", allowed.contains(p.get("code")));
-              p.put("reason", allowed.contains(p.get("code")) ? "" : "未启用领域包或超出管理员可授权清单");
+              boolean packDisabled =
+                  p.get("code").toString().startsWith("party:")
+                      && currentPackVersion(org(uid)) == 0;
+              p.put(
+                  "reasonCode",
+                  allowed.contains(p.get("code"))
+                      ? ""
+                      : "" + (packDisabled ? "PACK_DISABLED" : "GRANT_CEILING"));
+              p.put(
+                  "reason",
+                  allowed.contains(p.get("code"))
+                      ? ""
+                      : packDisabled ? "党建领域包未启用" : "超出当前管理员可授权清单");
               return p;
             })
         .toList();
@@ -531,14 +863,16 @@ public class TenantAuthorizationService {
             id)
         > 0) throw new BizException(409, "本组织已存在同名角色");
     if (db.update(
-            "UPDATE sys_role SET name=?,description=?,config_version=config_version+1 WHERE"
-                + " org_id=? AND id=? AND config_version=?",
+            "UPDATE sys_role SET"
+                + " name=?,description=?,updated_at=CURRENT_TIMESTAMP,config_version=config_version+1"
+                + " WHERE org_id=? AND id=? AND config_version=?",
             name.trim(),
             description,
             org,
             id,
             version)
         != 1) throw new BizException(409, "角色已被其他管理员修改");
+    db.update("UPDATE sys_role SET updated_by=? WHERE org_id=? AND id=?", uid, org, id);
     bump(org);
     audit(org, uid, "UPDATE_ROLE", id, Map.of("name", name.trim()));
   }
@@ -551,6 +885,13 @@ public class TenantAuthorizationService {
     var r = role(org, id);
     if (!"DRAFT".equals(r.get("status")) || r.get("current_revision_id") != null)
       throw new BizException(409, "仅未发布草稿可删除");
+    protectRole(uid, id);
+    if (db.queryForObject(
+            "SELECT COUNT(*) FROM sys_user WHERE org_id=? AND role_id=? AND deleted=0",
+            Long.class,
+            org,
+            id)
+        > 0) throw new BizException(409, "角色仍有关联账号，请先替换其角色");
     noReferences(org, id);
     db.update("DELETE FROM role_revision WHERE org_id=? AND role_id=? AND state='DRAFT'", org, id);
     db.update("DELETE FROM sys_role WHERE org_id=? AND id=?", org, id);
@@ -558,16 +899,103 @@ public class TenantAuthorizationService {
     audit(org, uid, "DELETE_DRAFT", id, Map.of("name", r.get("name")));
   }
 
+  private void draftVersion(Map<String, Object> r, long version, long draftVersion) {
+    if (number(r.get("config_version")) != version) throw new BizException(409, "角色版本已变化");
+    long actual =
+        r.get("draft_revision_id") == null
+            ? 0
+            : db.queryForObject(
+                "SELECT draft_version FROM role_revision WHERE id=? AND org_id=?",
+                Long.class,
+                r.get("draft_revision_id"),
+                r.get("org_id"));
+    if (actual != draftVersion) throw new BizException(409, "工作稿版本已变化");
+  }
+
+  @Transactional
+  public void deleteDraft(long id, long version, long draftVersion) {
+    long uid = actor("role:manage");
+    lockOrg(org(uid));
+    draftVersion(role(org(uid), id), version, draftVersion);
+    deleteDraft(id);
+  }
+
+  @Transactional
+  public void discardDraft(long id, long version, long draftVersion) {
+    long uid = actor("role:manage"), org = org(uid);
+    lockOrg(org);
+    actor("role:manage");
+    var r = role(org, id);
+    protectRole(uid, id);
+    draftVersion(r, version, draftVersion);
+    if (r.get("current_revision_id") == null
+        || r.get("draft_revision_id") == null
+        || "ARCHIVED".equals(r.get("status"))) throw new BizException(409, "仅已发布角色可放弃工作稿");
+    db.update(
+        "DELETE FROM role_revision WHERE id=? AND org_id=? AND state='DRAFT'",
+        r.get("draft_revision_id"),
+        org);
+    db.update(
+        "UPDATE sys_role SET"
+            + " draft_revision_id=NULL,config_version=config_version+1,updated_at=CURRENT_TIMESTAMP,updated_by=?"
+            + " WHERE id=? AND org_id=?",
+        uid,
+        id,
+        org);
+    bump(org);
+    audit(org, uid, "DISCARD_DRAFT", id, Map.of("draftVersion", draftVersion));
+  }
+
   public List<Map<String, Object>> list() {
     long uid = actor("role:view");
-    return clientRows(
-        db.queryForList(
-            "SELECT r.id,r.code,r.name,r.description,r.status,r.config_version AS"
-                + " version,r.current_revision_id AS currentRevisionId,r.draft_revision_id AS"
-                + " draftRevisionId,(SELECT COUNT(*) FROM sys_user u WHERE u.org_id=r.org_id AND"
-                + " u.role_id=r.id AND u.deleted=0) AS userCount FROM sys_role r WHERE r.org_id=?"
-                + " ORDER BY r.id",
-            org(uid)));
+    var result =
+        clientRows(
+            db.queryForList(
+                "SELECT r.id,r.code,r.name,r.description,r.status,r.config_version AS"
+                    + " version,r.updated_at AS updatedAt,r.source_kind AS sourceKind,(SELECT"
+                    + " COUNT(*) FROM role_grant g JOIN permission p ON p.id=g.permission_id WHERE"
+                    + " g.role_id=r.id AND g.org_id=r.org_id AND p.category='BUSINESS') AS"
+                    + " permissionCount,r.current_revision_id AS"
+                    + " currentRevisionId,r.draft_revision_id AS draftRevisionId,(SELECT COUNT(*)"
+                    + " FROM sys_user u WHERE u.org_id=r.org_id AND u.role_id=r.id AND u.deleted=0)"
+                    + " AS userCount FROM sys_role r WHERE r.org_id=? ORDER BY r.id",
+                org(uid)));
+    for (var r : result)
+      r.put("permissionCount", rolePermissions(org(uid), number(r.get("id"))).size());
+    return result;
+  }
+
+  public Map<String, Object> rolePage(
+      int page, int size, String keyword, String status, boolean drafts) {
+    long uid = actor("role:view");
+    page = Math.max(1, page);
+    size = Math.max(1, Math.min(size, 100));
+    String filter =
+        " WHERE r.org_id=? AND (?='' OR r.name LIKE ? OR r.code LIKE ? OR r.description LIKE ?) AND"
+            + " (?='' OR r.status=?) AND (?=0 OR r.draft_revision_id IS NOT NULL)";
+    String q = keyword == null ? "" : keyword.trim(), st = status == null ? "" : status;
+    Object[] args = {
+      org(uid), q, "%" + q + "%", "%" + q + "%", "%" + q + "%", st, st, drafts ? 1 : 0
+    };
+    long total = db.queryForObject("SELECT COUNT(*) FROM sys_role r" + filter, Long.class, args);
+    var pagedArgs = new ArrayList<Object>(Arrays.asList(args));
+    pagedArgs.add(size);
+    pagedArgs.add((long) (page - 1) * size);
+    var items =
+        clientRows(
+            db.queryForList(
+                "SELECT r.id,r.code,r.name,r.description,r.status,r.config_version AS"
+                    + " version,r.draft_revision_id AS draftRevisionId,r.updated_at AS"
+                    + " updatedAt,r.source_kind AS sourceKind,u.real_name AS updatedByName,(SELECT"
+                    + " COUNT(*) FROM sys_user s WHERE s.org_id=r.org_id AND s.role_id=r.id AND"
+                    + " s.deleted=0) AS userCount FROM sys_role r LEFT JOIN sys_user u ON"
+                    + " u.id=r.updated_by AND u.org_id=r.org_id"
+                    + filter
+                    + " ORDER BY r.id LIMIT ? OFFSET ?",
+                pagedArgs.toArray()));
+    for (var item : items)
+      item.put("permissionCount", rolePermissions(org(uid), number(item.get("id"))).size());
+    return Map.of("items", items, "total", total);
   }
 
   public List<Map<String, Object>> assignable() {
@@ -590,6 +1018,16 @@ public class TenantAuthorizationService {
     var r = role(org(uid), id);
     var out = new LinkedHashMap<String, Object>();
     out.put("role", r);
+    out.put("impact", roleImpact(org(uid), id));
+    out.put("actions", roleActions(uid, r));
+    out.put(
+        "migrationReview",
+        clientRows(
+            db.queryForList(
+                "SELECT status,review_required AS reviewRequired FROM"
+                    + " authorization_migration_review WHERE org_id=? AND role_id=?",
+                org(uid),
+                id)));
     out.put(
         "published",
         r.get("current_revision_id") == null
@@ -613,17 +1051,24 @@ public class TenantAuthorizationService {
         "users",
         clientRows(
             db.queryForList(
-                "SELECT id,real_name AS realName,username,dept_id AS deptId FROM sys_user WHERE"
-                    + " org_id=? AND role_id=? AND deleted=0",
+                "SELECT u.id,u.real_name AS realName,u.username,u.status,u.dept_id AS deptId,d.name"
+                    + " AS deptName,CASE WHEN o.owner_user_id=u.id THEN 'OWNER' WHEN EXISTS(SELECT"
+                    + " 1 FROM org_role_delegation g WHERE g.user_id=u.id AND g.org_id=u.org_id AND"
+                    + " g.status='ACTIVE' AND (g.expires_at IS NULL OR"
+                    + " g.expires_at>CURRENT_TIMESTAMP)) THEN 'DELEGATED' ELSE 'NONE' END AS"
+                    + " managementSource FROM sys_user u JOIN organization o ON o.id=u.org_id LEFT"
+                    + " JOIN sys_department d ON d.id=u.dept_id AND d.org_id=u.org_id WHERE"
+                    + " u.org_id=? AND u.role_id=? AND u.deleted=0 ORDER BY u.id LIMIT 20",
                 org(uid),
                 id)));
     out.put(
         "history",
         clientRows(
             db.queryForList(
-                "SELECT id,created_by AS createdBy,published_at AS publishedAt,snapshot_json AS"
-                    + " grants FROM role_revision WHERE org_id=? AND role_id=? AND"
-                    + " state='PUBLISHED' ORDER BY id DESC",
+                "SELECT id,created_by AS createdBy,published_by_name AS actorName,publish_reason AS"
+                    + " reason,catalog_version AS catalogVersion,published_at AS"
+                    + " publishedAt,snapshot_json AS grants FROM role_revision WHERE org_id=? AND"
+                    + " role_id=? AND state='PUBLISHED' ORDER BY id DESC LIMIT 20",
                 org(uid),
                 id)));
     return out;
@@ -632,6 +1077,44 @@ public class TenantAuthorizationService {
   @Transactional
   public long create(String name, String description, Long sourceRole) {
     return create(name, description, sourceRole, null);
+  }
+
+  @Transactional
+  public long createCombined(
+      String name, String description, Long source, String template, List<String> templates) {
+    if (templates == null || templates.isEmpty())
+      return create(name, description, source, template);
+    if (source != null || template != null || templates.size() > 10)
+      throw new BizException(400, "复制来源和职责模板不能混用，最多组合十个模板");
+    long uid = actor("role:manage"), organization = org(uid);
+    var config = new LinkedHashMap<String, Map<String, Object>>();
+    for (String code : new LinkedHashSet<>(templates)) {
+      one("SELECT code FROM role_template WHERE code=?", code);
+      for (var p :
+          db.queryForList(
+              "SELECT p.code FROM role_template_grant t JOIN permission p ON p.id=t.permission_id"
+                  + " WHERE t.template_code=? AND p.category='BUSINESS'",
+              code)) {
+        String permission = p.get("code").toString();
+        if (!grantable(uid).contains(permission)) throw new BizException(403, "模板包含超出可授权清单的操作");
+        var grant = new LinkedHashMap<String, Object>();
+        grant.put("permission", permission);
+        grant.put("scope", "ORG");
+        if (permission.startsWith("party:"))
+          grant.put("packVersion", currentPackVersion(organization));
+        config.put(permission, grant);
+      }
+    }
+    long id = create(name, description, null, null);
+    db.update(
+        "UPDATE role_revision SET snapshot_json=? WHERE id=(SELECT draft_revision_id FROM sys_role"
+            + " WHERE id=? AND org_id=?)",
+        encode(new ArrayList<>(config.values())),
+        id,
+        organization);
+    db.update(
+        "UPDATE sys_role SET source_kind='TEMPLATE' WHERE id=? AND org_id=?", id, organization);
+    return id;
   }
 
   @Transactional
@@ -694,7 +1177,14 @@ public class TenantAuthorizationService {
             id,
             encode(config),
             uid);
-    db.update("UPDATE sys_role SET draft_revision_id=? WHERE id=? AND org_id=?", draft, id, org);
+    db.update(
+        "UPDATE sys_role SET draft_revision_id=?,source_kind=?,updated_at=CURRENT_TIMESTAMP WHERE"
+            + " id=? AND org_id=?",
+        draft,
+        sourceRole != null ? "COPY" : templateCode != null ? "TEMPLATE" : "BLANK",
+        id,
+        org);
+    db.update("UPDATE sys_role SET updated_by=? WHERE org_id=? AND id=?", uid, org, id);
     bump(org);
     audit(org, uid, "CREATE_ROLE", id, Map.of("name", name.trim()));
     return id;
@@ -729,17 +1219,12 @@ public class TenantAuthorizationService {
     for (String code : old.keySet())
       if (!seen.contains(code) && !allowed.contains(code))
         throw new BizException(403, "不能撤销只读权限：" + code);
-    for (String code : seen) {
-      int split = code.indexOf(':');
-      String action = code.substring(split + 1), view = code.substring(0, split) + ":view";
-      if (!action.equals("view")
-          && db.queryForObject(
-                  "SELECT COUNT(*) FROM permission WHERE code=? AND category='BUSINESS'",
-                  Integer.class,
-                  view)
-              > 0
-          && !seen.contains(view)) throw new BizException(400, "该操作依赖查看权限：" + view);
-    }
+    Set<String> known =
+        new HashSet<>(
+            db.queryForList("SELECT code FROM permission WHERE category='BUSINESS'", String.class));
+    for (String code : seen)
+      for (String dependency : vocabulary.dependencies(code, known))
+        if (!seen.contains(dependency)) throw new BizException(400, "该操作依赖权限：" + dependency);
     return result;
   }
 
@@ -822,6 +1307,11 @@ public class TenantAuthorizationService {
             org,
             version)
         != 1) throw new BizException(409, "工作稿已被其他管理员更新");
+    db.update(
+        "UPDATE sys_role SET updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE org_id=? AND id=?",
+        uid,
+        org,
+        id);
     bump(org);
     return draft;
   }
@@ -832,6 +1322,121 @@ public class TenantAuthorizationService {
         : grants(
             one("SELECT snapshot_json FROM role_revision WHERE id=?", r.get("current_revision_id"))
                 .get("snapshot_json"));
+  }
+
+  private Map<String, Object> paged(
+      String query, String count, List<Object> args, int page, int size) {
+    size = Math.max(1, Math.min(100, size));
+    page = Math.max(1, page);
+    long total = db.queryForObject(count, Long.class, args.toArray());
+    var params = new ArrayList<>(args);
+    params.add(size);
+    params.add((long) (page - 1) * size);
+    return Map.of(
+        "items",
+        clientRows(db.queryForList(query + " LIMIT ? OFFSET ?", params.toArray())),
+        "total",
+        total);
+  }
+
+  public Map<String, Object> members(long id, int page, int size) {
+    long uid = actor("role:view"), org = org(uid);
+    role(org, id);
+    String from =
+        " FROM sys_user u JOIN organization o ON o.id=u.org_id LEFT JOIN sys_department d ON"
+            + " d.id=u.dept_id AND d.org_id=u.org_id WHERE u.org_id=? AND u.role_id=? AND"
+            + " u.deleted=0";
+    return paged(
+        "SELECT u.id,u.real_name AS realName,u.username,u.status,d.name AS deptName,CASE WHEN"
+            + " o.owner_user_id=u.id THEN 'OWNER' WHEN EXISTS(SELECT 1 FROM org_role_delegation g"
+            + " WHERE g.org_id=u.org_id AND g.user_id=u.id AND g.status='ACTIVE' AND (g.expires_at"
+            + " IS NULL OR g.expires_at>CURRENT_TIMESTAMP)) THEN 'DELEGATED' ELSE 'NONE' END AS"
+            + " managementSource"
+            + from
+            + " ORDER BY u.id",
+        "SELECT COUNT(*)" + from,
+        List.of(org, id),
+        page,
+        size);
+  }
+
+  public Map<String, Object> history(long id, int page, int size) {
+    long uid = actor("role:view"), org = org(uid);
+    role(org, id);
+    String from = " FROM role_revision WHERE org_id=? AND role_id=? AND state='PUBLISHED'";
+    return paged(
+        "SELECT id,published_by_name AS actorName,publish_reason AS reason,catalog_version AS"
+            + " catalogVersion,published_at AS publishedAt,snapshot_json AS grants"
+            + from
+            + " ORDER BY id DESC",
+        "SELECT COUNT(*)" + from,
+        List.of(org, id),
+        page,
+        size);
+  }
+
+  public Map<String, Object> references(long id, int page, int size) {
+    long uid = actor("role:view"), org = org(uid);
+    var r = role(org, id);
+    // Union only IDs and constants: legacy tables can have different MySQL text collations.
+    String union =
+        "SELECT 'USER' AS kind,u.id,CASE WHEN u.status=1 THEN 1 ELSE 0 END AS blocking FROM"
+            + " sys_user u WHERE u.org_id=? AND u.role_id=? AND u.deleted=0 UNION ALL SELECT"
+            + " 'POSITION',p.id,1 FROM org_position p WHERE p.org_id=? AND p.role_code=? UNION ALL"
+            + " SELECT 'INVITATION',i.id,1 FROM org_invitation i WHERE i.org_id=? AND i.role_code=?"
+            + " AND i.used_by IS NULL AND (i.expire_at IS NULL OR i.expire_at>CURRENT_TIMESTAMP)";
+    var result =
+        paged(
+            "SELECT * FROM (" + union + ") refs ORDER BY kind,id",
+            "SELECT COUNT(*) FROM (" + union + ") refs",
+            List.of(org, id, org, r.get("code"), org, r.get("code")),
+            page,
+            size);
+    for (var ref : (List<Map<String, Object>>) result.get("items")) {
+      long refId = number(ref.get("id"));
+      String kind = ref.get("kind").toString();
+      var descriptions =
+          switch (kind) {
+            case "USER" ->
+                db.queryForList(
+                    "SELECT real_name AS name,username AS detail FROM sys_user WHERE org_id=? AND"
+                        + " id=?",
+                    org,
+                    refId);
+            case "POSITION" ->
+                db.queryForList(
+                    "SELECT name,'岗位默认角色' AS detail FROM org_position WHERE org_id=? AND id=?",
+                    org,
+                    refId);
+            default ->
+                db.queryForList(
+                    "SELECT d.name AS detail FROM org_invitation i LEFT JOIN sys_department d ON"
+                        + " d.id=i.org_unit_id AND d.org_id=i.org_id WHERE i.org_id=? AND i.id=?",
+                    org,
+                    refId);
+          };
+      if (!descriptions.isEmpty()) ref.putAll(clientRows(descriptions).getFirst());
+      if (ref.get("name") == null)
+        ref.put(
+            "name",
+            kind.equals("INVITATION")
+                ? "邀请 #" + refId
+                : Objects.toString(ref.get("detail"), "引用 #" + refId));
+      if (ref.get("detail") == null) ref.put("detail", "未指定部门");
+    }
+    var out = new LinkedHashMap<String, Object>(result);
+    out.put(
+        "blockingTotal",
+        db.queryForObject(
+            "SELECT COUNT(*) FROM (" + union + ") refs WHERE blocking=1",
+            Long.class,
+            org,
+            id,
+            org,
+            r.get("code"),
+            org,
+            r.get("code")));
+    return out;
   }
 
   private void noReferences(long org, long role) {
@@ -860,14 +1465,29 @@ public class TenantAuthorizationService {
 
   @Transactional
   public Map<String, Object> preview(long id, String action, long expectedVersion) {
+    return preview(id, action, expectedVersion, null);
+  }
+
+  @Transactional
+  public Map<String, Object> preview(long id, String action, long expectedVersion, String reason) {
+    reason = normalizeReason(reason);
     long uid = actor("role:grant"), org = org(uid);
     lockOrg(org);
     actor("role:grant");
     var r = role(org, id);
+    if (!owner(uid)
+        && db.queryForObject(
+                "SELECT COUNT(*) FROM authorization_migration_review WHERE org_id=? AND role_id=?"
+                    + " AND status='PENDING'",
+                Integer.class,
+                org,
+                id)
+            > 0) throw new BizException(403, "存量考勤授权须由所有者核对发布");
     if (number(r.get("config_version")) != expectedVersion) throw new BizException(409, "角色版本已变化");
     protectRole(uid, id);
     var payload = new LinkedHashMap<String, Object>();
     payload.put("roleVersion", expectedVersion);
+    payload.put("reason", reason);
     if (Set.of("PUBLISH", "ENABLE").contains(action)) {
       if ("ARCHIVED".equals(r.get("status"))) throw new BizException(409, "归档角色不可启用");
       List<Map<String, Object>> candidate;
@@ -887,6 +1507,12 @@ public class TenantAuthorizationService {
       noReferences(org, id);
     } else throw new BizException(400, "不支持的角色动作");
     payload.put("before", published(r));
+    payload.put("impact", roleImpact(org, id));
+    if (Set.of("PUBLISH", "ENABLE").contains(action)
+        && "ACTIVE".equals(r.get("status"))
+        && new HashSet<>(grants(encode(payload.get("grants"))))
+            .equals(new HashSet<>(grants(encode(payload.get("before"))))))
+      throw new BizException(409, "工作稿与生效配置一致，无需重复发布");
     return storePreview(uid, action, id, payload);
   }
 
@@ -894,6 +1520,8 @@ public class TenantAuthorizationService {
       long uid, String action, long target, Map<String, Object> payload) {
     var u = identity(uid);
     String id = UUID.randomUUID().toString();
+    payload = new LinkedHashMap<>(payload);
+    payload.put("changeId", id);
     db.update(
         "INSERT INTO"
             + " org_authorization_change(id,org_id,actor_id,action,target_id,payload_json,baseline_version,actor_version,expires_at,status,created_at)"
@@ -913,11 +1541,18 @@ public class TenantAuthorizationService {
     out.put("targetId", target);
     out.put("details", payload);
     out.put("expiresInSeconds", 300);
+    out.put("expiresAt", LocalDateTime.now().plusMinutes(5).toString());
     return out;
   }
 
   @Transactional
   public Map<String, Object> previewAssignment(long target, long roleId) {
+    return previewAssignment(target, roleId, null);
+  }
+
+  @Transactional
+  public Map<String, Object> previewAssignment(long target, long roleId, String reason) {
+    reason = normalizeReason(reason);
     long uid = actor("role:assign"), org = org(uid);
     lockOrg(org);
     actor("role:assign");
@@ -932,16 +1567,25 @@ public class TenantAuthorizationService {
         "ASSIGN",
         target,
         Map.of(
+            "reason",
+            reason,
             "roleId",
             roleId,
             "oldRoleId",
             u.get("role_id"),
             "before",
-            u.get("role_id") == null ? List.of() : published(role(org, number(u.get("role_id")))),
+            u.get("role_id") == null
+                ? List.of()
+                : effectiveRoleSnapshot(role(org, number(u.get("role_id")))),
             "grants",
-            published(r),
+            effectiveRoleSnapshot(r),
             "roleVersion",
             r.get("config_version")));
+  }
+
+  private List<Map<String, Object>> effectiveRoleSnapshot(Map<String, Object> r) {
+    var enabled = rolePermissions(number(r.get("org_id")), number(r.get("id")));
+    return published(r).stream().filter(g -> enabled.contains(g.get("permission"))).toList();
   }
 
   @Transactional
@@ -965,7 +1609,21 @@ public class TenantAuthorizationService {
     String action = c.get("action").toString();
     long target = number(c.get("target_id"));
     Map<String, Object> p = decode(c.get("payload_json"), new TypeReference<>() {});
-    if (action.equals("ASSIGN")) {
+    if (action.equals("DELEGATE")) {
+      delegate(
+          target,
+          Boolean.TRUE.equals(p.get("active")),
+          new HashSet<>((List<String>) p.get("grantable")),
+          p.get("expiresAt") == null ? null : LocalDateTime.parse(p.get("expiresAt").toString()),
+          number(p.get("version")));
+      audit(org, uid, "DELEGATE", target, p);
+      var result = Map.<String, Object>of("id", changeId, "status", "APPLIED");
+      db.update(
+          "UPDATE org_authorization_change SET status='APPLIED',result_json=? WHERE id=?",
+          encode(result),
+          changeId);
+      return result;
+    } else if (action.equals("ASSIGN")) {
       actor("role:assign");
       protectUser(uid, target);
       var r = role(org, number(p.get("roleId")));
@@ -997,6 +1655,13 @@ public class TenantAuthorizationService {
                 r.get("current_revision_id"),
                 encode(config),
                 uid);
+        db.update(
+            "UPDATE role_revision SET catalog_version=3,publish_reason=?,published_by_name=(SELECT"
+                + " real_name FROM sys_user WHERE id=? AND org_id=?) WHERE id=?",
+            p.get("reason"),
+            uid,
+            org,
+            revision);
         replaceGrants(org, target, config);
         db.update(
             "UPDATE sys_role SET"
@@ -1014,6 +1679,19 @@ public class TenantAuthorizationService {
             org);
       }
     }
+    db.update(
+        "UPDATE sys_role SET updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE org_id=? AND id=? AND"
+            + " ?<>'ASSIGN'",
+        uid,
+        org,
+        target,
+        action);
+    if (action.equals("PUBLISH") || action.equals("ENABLE"))
+      db.update(
+          "UPDATE authorization_migration_review SET"
+              + " status='RESOLVED',resolved_at=CURRENT_TIMESTAMP WHERE org_id=? AND role_id=?",
+          org,
+          target);
     bump(org);
     audit(org, uid, action, target, p);
     var result = Map.<String, Object>of("id", changeId, "status", "APPLIED");
@@ -1056,9 +1734,16 @@ public class TenantAuthorizationService {
     long uid = actor("role:view");
     if (!owner(uid)) throw new BizException(403, "仅所有者可查看管理员配置");
     if (org(uid) != number(identity(target).get("org_id"))) throw new BizException(404, "用户不存在");
+    return delegationInfo(org(uid), target);
+  }
+
+  private Map<String, Object> delegationInfo(long org, long target) {
     var rows =
         db.queryForList(
-            "SELECT * FROM org_role_delegation WHERE org_id=? AND user_id=?", org(uid), target);
+            "SELECT d.*,u.real_name AS updatedbyname FROM org_role_delegation d LEFT JOIN sys_user"
+                + " u ON u.id=d.updated_by AND u.org_id=d.org_id WHERE d.org_id=? AND d.user_id=?",
+            org,
+            target);
     if (rows.isEmpty()) return Map.of("active", false, "grantable", List.of(), "version", 0);
     var r = rows.getFirst();
     var out = new LinkedHashMap<String, Object>();
@@ -1070,6 +1755,9 @@ public class TenantAuthorizationService {
                     .toLocalDateTime()
                     .isAfter(LocalDateTime.now())));
     out.put("version", r.get("version"));
+    out.put("updatedAt", r.get("updated_at") == null ? null : r.get("updated_at").toString());
+    out.put("updatedByName", r.get("updatedbyname"));
+    out.put("status", r.get("status"));
     out.put(
         "grantable",
         grants(r.get("grantable_json")).stream().map(g -> g.get("permission")).toList());
@@ -1124,7 +1812,12 @@ public class TenantAuthorizationService {
         active ? "ACTIVE" : "DISABLED",
         version + 1);
     bump(org);
-    audit(org, uid, "DELEGATE", target, Map.of("active", active, "grantable", allowed));
+    db.update(
+        "UPDATE org_role_delegation SET updated_at=CURRENT_TIMESTAMP,updated_by=? WHERE org_id=?"
+            + " AND user_id=?",
+        uid,
+        org,
+        target);
   }
 
   /** Called only from startup/provisioning, never exposed to clients. */
@@ -1138,7 +1831,8 @@ public class TenantAuthorizationService {
             Integer.class,
             org)
         == 0) db.update("INSERT INTO org_domain_pack VALUES(?,'party',?,1)", org, enabled);
-    for (var template : db.queryForList("SELECT code,name FROM role_template")) {
+    for (var template :
+        db.queryForList("SELECT code,name FROM role_template WHERE code NOT LIKE 'DUTY_%'")) {
       String code = template.get("code").toString();
       if (db.queryForObject(
               "SELECT COUNT(*) FROM sys_role WHERE org_id=? AND code=?", Integer.class, org, code)

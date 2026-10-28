@@ -38,13 +38,14 @@ public class ArticleController {
         return Result.ok(service.detail(id));
     }
 
-    @PreAuthorize("hasAuthority('content:manage')")
+    @PreAuthorize("hasAuthority('article:create')")
     @PostMapping
     public Result<Article> create(@Valid @RequestBody ArticleRequest req,
                                   @AuthenticationPrincipal LoginUser current) {
         return Result.ok(service.create(current.getId(), req));
     }
 
+    @PreAuthorize("hasAuthority('article:edit')")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ArticleRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -52,13 +53,14 @@ public class ArticleController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('article:submit')")
     @PutMapping("/{id}/submit")
     public Result<Void> submit(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
         service.submit(id, current.getId(), ArticleService.isLeader(current.getRoleCode()));
         return Result.ok();
     }
 
-    @PreAuthorize("hasAuthority('content:manage')")
+    @PreAuthorize("hasAuthority('article:review')")
     @PutMapping("/{id}/review")
     public Result<Void> review(@PathVariable Long id, @Valid @RequestBody ReviewRequest req,
                                @AuthenticationPrincipal LoginUser current) {
@@ -67,6 +69,7 @@ public class ArticleController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('article:publish')")
     @PutMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id, @Valid @RequestBody PublishRequest req,
                                 @AuthenticationPrincipal LoginUser current) {
@@ -74,6 +77,7 @@ public class ArticleController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('article:stats')")
     @PutMapping("/{id}/stats")
     public Result<Void> updateStats(@PathVariable Long id, @Valid @RequestBody StatsRequest req,
                                     @AuthenticationPrincipal LoginUser current) {
@@ -81,6 +85,7 @@ public class ArticleController {
         return Result.ok();
     }
 
+    @PreAuthorize("hasAuthority('article:delete')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id, @AuthenticationPrincipal LoginUser current) {
         service.delete(id, current.getId(), ArticleService.isLeader(current.getRoleCode()));

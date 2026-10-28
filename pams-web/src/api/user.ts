@@ -63,7 +63,7 @@ export interface UserOptionVO {
   roleName: string | null
 }
 
-export const listUserOptions = () => get<UserOptionVO[]>('/users/options')
+export const listUserOptions = (params?: { deptId?: number }) => get<UserOptionVO[]>('/users/options', params)
 
 export const createUser = (data: UserSave) => post<number>('/users', data)
 export const updateUser = (id: number, data: UserSave) => put<void>(`/users/${id}`, data)

@@ -5,13 +5,14 @@ import { useAuthStore } from '@/stores/auth'
 export default function RoutineLayout({ children }: { children: ReactNode }) {
   const permissions = useAuthStore((s) => s.user?.permissions) ?? []
   const pages = [
-    ['/routine/schedules', '排班'],
-    ['/routine/my-schedules', '我的排班'],
-    ['/routine/activity-schedules', '活动排班'],
-    ['/routine/attendance', '考勤'],
+    ...(permissions.includes('course:self:manage') || permissions.includes('course:manage') ? [['/routine/course-schedule','课表制作']] : []),
+    ...(permissions.includes('schedule:view') ? [['/routine/schedules', '排班'], ['/routine/activity-schedules', '活动排班']] : []),
+    ...(permissions.includes('schedule:self:view') ? [['/routine/my-schedules', '我的排班']] : []),
+
+    ...(permissions.includes('attendance:view') || permissions.includes('attendance:self:view') ? [['/routine/attendance', '考勤']] : []),
     ...(permissions.includes('schedule:free_table')
       ? [
-          ['/routine/course-schedule', '无课表制作'],
+
           ['/routine/free-schedules', '无课表'],
         ]
       : []),

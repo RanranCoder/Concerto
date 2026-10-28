@@ -23,7 +23,7 @@ import java.util.Map;
  * 规则模板的产出<b>稳定且可解释</b>；LLM 自由生成的清单常常漏项或离谱。
  * 这里 LLM 的价值在于"理解用户想给哪个活动建清单"，不在于编任务名。
  *
- * <p>权限码 {@code activity:edit}；数据级 normal。
+ * <p>权限码 {@code task:manage}；数据级 normal。
  */
 @Component
 public class GenerateActivityTasksTool implements WriteAgentTool {
@@ -79,7 +79,7 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
     }
 
     @Override
-    public List<String> requiredPermissions() { return List.of("activity:edit"); }
+    public List<String> requiredPermissions() { return List.of("task:manage"); }
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }

@@ -75,7 +75,10 @@ export default function ArticleList() {
   const { message } = App.useApp()
   const user = useAuthStore((s) => s.user)
   // 审核按钮对齐后端 @PreAuthorize("hasRole('MEDIA_LEADER') or hasAnyRole('TEACHER','DIRECTOR')")
-  const canReview = (user?.permissions ?? []).includes('content:manage')
+  const permissions = user?.permissions ?? []
+  const canReview = permissions.includes('article:review')
+  const canCreate = permissions.includes('article:create')
+  const canManageOthers = permissions.includes('article:manage')
 
   const [data, setData] = useState<ArticleRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -381,7 +384,7 @@ export default function ArticleList() {
             预览
           </Button>
           {(r.status === 'DRAFT' || r.status === 'REJECTED') &&
-            (canReview || r.authorId === user?.id) && (
+            permissions.includes('article:edit') && (canManageOthers || r.authorId === user?.id) && (
               <Button
                 type="link"
                 size="small"
@@ -392,7 +395,7 @@ export default function ArticleList() {
               </Button>
             )}
           {(r.status === 'DRAFT' || r.status === 'REJECTED') &&
-            (canReview || r.authorId === user?.id) && (
+            permissions.includes('article:submit') && (canManageOthers || r.authorId === user?.id) && (
               <Button
                 type="link"
                 size="small"
@@ -413,7 +416,7 @@ export default function ArticleList() {
             </Button>
           )}
           {r.status === 'APPROVED' &&
-            (canReview || r.authorId === user?.id) && (
+            permissions.includes('article:publish') && (canManageOthers || r.authorId === user?.id) && (
               <Button
                 type="link"
                 size="small"
@@ -424,7 +427,7 @@ export default function ArticleList() {
               </Button>
             )}
           {r.status === 'PUBLISHED' &&
-            (canReview || r.authorId === user?.id) && (
+            permissions.includes('article:stats') && (canManageOthers || r.authorId === user?.id) && (
               <Button
                 type="link"
                 size="small"
@@ -435,7 +438,7 @@ export default function ArticleList() {
               </Button>
             )}
           {(r.status === 'DRAFT' || r.status === 'REJECTED') &&
-            (canReview || r.authorId === user?.id) && (
+            permissions.includes('article:delete') && (canManageOthers || r.authorId === user?.id) && (
               <Popconfirm
                 title="确认删除该推文？"
                 onConfirm={() => handleDelete(r.id)}
@@ -541,7 +544,7 @@ export default function ArticleList() {
                 optionFilterProp="label"
                 options={users.map((u) => ({ value: u.id, label: u.realName }))}
                 placeholder="选择负责人"
-                disabled={!!editing && !canReview}
+                disabled={!!editing && !canManageOthers}
               />
             </Form.Item>
             <Form.Item
@@ -663,7 +666,7 @@ export default function ArticleList() {
         title="内容宣传"
         description="围绕活动准备宣传内容，跟进审稿、发布与传播记录。"
         extra={
-          canReview ? (
+          canCreate ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               撰写推文
             </Button>

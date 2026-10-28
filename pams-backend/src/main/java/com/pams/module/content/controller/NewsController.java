@@ -44,7 +44,7 @@ public class NewsController {
     }
 
     /** 发布新闻稿（DRAFT → PUBLISHED，记录发布日期）。与增删改同权限口径。 */
-    @PreAuthorize("hasAuthority('news:manage')")
+    @PreAuthorize("hasAuthority('news:publish')")
     @PostMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id) {
         service.publish(id);
