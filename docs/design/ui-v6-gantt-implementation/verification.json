@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-26",
+  "productionBuild": "passed",
+  "typeScript": "passed",
+  "antdLint": "passed",
+  "frontendRuleTests": 7,
+  "taskPlanBrowserTests": 11,
+  "activityRegressionBrowserTests": 7,
+  "backendTests": {
+    "TaskServiceTest": 5,
+    "TaskPlanServiceTest": 13,
+    "TaskPlanControllerTest": 2,
+    "ActivitySummaryRepositoryTest": 2,
+    "BusinessPermissionV2Test": 11,
+    "total": 33
+  },
+  "browserApi": "controlled fixtures",
+  "backendApiAndPersistence": "real Spring MVC and Hibernate on H2 MySQL compatibility mode",
+  "themes": ["light", "dark"],
+  "viewportWidths": [1440, 390],
+  "existingBackendRestarted": false,
+  "liveMysqlMigrated": false,
+  "migration": "V49__task_plan_revision.sql",
+  "assigneeFollowUp": {
+    "date": "2026-10-27",
+    "productionBuild": "passed",
+    "typeScript": "passed",
+    "antdLint": "passed",
+    "taskPlanBrowserTests": 13,
+    "TaskPlanControllerTest": 3,
+    "UserServiceTest": 10,
+    "checks": ["department member dropdown", "partial name search", "department change clears assignee", "department clearing", "load retry", "stale response protection", "department and tenant scope", "disabled and deleted account exclusion", "legacy assignee preservation"]
+  },
+  "zoomFollowUp": {
+    "date": "2026-10-27",
+    "productionBuild": "passed",
+    "typeScript": "passed",
+    "antdLint": "passed",
+    "frontendRuleTests": 15,
+    "taskPlanBrowserTests": 15,
+    "pixelsPerDay": { "day": 42, "week": 16, "month": 5 },
+    "checks": ["short project distinct scales", "calendar weeks and months", "shared ruler bar dependency and marker coordinates", "full long project range", "month navigation", "fit ignores stale anchor", "fit responds to viewport resize", "today exits fit", "mobile layout"],
+    "screenshots": ["zoom-week.png", "zoom-month.png"]
+  },
+  "ctrlWheelFollowUp": {
+    "date": "2026-10-27",
+    "productionBuild": "passed",
+    "typeScript": "passed",
+    "antdLint": "passed",
+    "frontendRuleTests": 17,
+    "taskPlanBrowserTests": 17,
+    "pixelsPerDayLimits": [0.5, 126],
+    "checks": ["native Ctrl wheel input", "continuous zoom both directions", "pointer date retention", "vertical scroll retention", "browser zoom prevented inside chart", "ordinary wheel scroll", "all preset entry points", "custom mode and preset restore", "zoom bounds", "wheel input units", "no interception outside chart"]
+  }
+}

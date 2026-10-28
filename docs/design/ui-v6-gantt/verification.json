@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-10-26T13:40:41.880Z",
+  "passed": true,
+  "errors": [],
+  "externalRequests": [],
+  "checks": [
+    "summary navigation",
+    "risk and department filters",
+    "no-results recovery",
+    "progress save and undo",
+    "unscheduled create",
+    "milestone create",
+    "cycle prevention",
+    "dependent deletion protection",
+    "dirty close protection",
+    "reschedule cascade and undo",
+    "drag preview cancellation",
+    "related module navigation",
+    "executor and viewer permissions",
+    "group collapse",
+    "time navigation",
+    "light and dark",
+    "1440/1024/768/390/375 layouts",
+    "mobile list and chart",
+    "loading/empty/error/retry",
+    "default and alternate entry"
+  ]
+}

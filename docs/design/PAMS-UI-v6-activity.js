@@ -6,7 +6,7 @@
   listHost.classList.add('ev-scope'); detailHost.classList.add('ev-scope');
   const phases = ['已下达','排期中','策划审核','执行中','已完成','已归档'];
   const types = ['党课','主题团日','主题党日','竞赛','志愿服务','讲座','会议','其他'];
-  const tabs = [['basic','基本信息'],['materials','材料'],['plan','策划书'],['agenda','议程'],['seat','座位表'],['score','评分'],['signin','签到'],['articles','推文']];
+  const tabs = [['gantt','任务计划'],['basic','基本信息'],['materials','材料'],['plan','策划书'],['agenda','议程'],['seat','座位表'],['score','评分'],['signin','签到'],['articles','推文']];
   const I = (name) => name === 'edit' ? '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 4 5 5M4 16 16 4a2 2 0 0 1 4 4L8 20H4z"/></svg>' : icon(name);
   const tag = (text, tone = '') => `<span class="ev-tag ${tone}">${E(text)}</span>`;
   const statusTag = text => tag(text, ({'已下达':'amber','排期中':'blue','策划审核':'amber','执行中':'blue','已完成':'green','已通过':'green','待审核':'amber','待签到':'amber','已签到':'green','草稿':'','已驳回':'red','已发布':'green'})[text] || '');
@@ -118,7 +118,7 @@
   function basic(){
     const a=active,d=a.data;
     const fields=[['活动类型',E(a.type)],['活动主题',E(a.theme||'未填写')],['活动状态',statusTag(a.status)],['组织单位',E(a.organizer||a.department)],['负责人',E(a.owner)],['主持人',E(a.host||'未填写')],['活动日期',E(a.date)],['活动时间',E(a.time)],['面向对象',E(a.audience||'未填写')]];
-    return `<div class="ev-columns"><div class="ev-stack">${panel('活动信息','组织安排与基本资料',`<dl class="ev-info ev-pad">${fields.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}<div class="wide"><dt>活动描述</dt><dd>${E(a.description||'暂无描述')}</dd></div></dl>`,L('编辑信息','edit-activity',a.id))}${panel('执行准备','按活动流程检查准备情况',`<ul class="ev-checklist">${[['活动策划书',d.plan.status==='已通过',d.plan.status==='待审核'?'策划已提交，等待负责人审核':'确认活动目标、分工及应急安排','plan'],['会场与议程',d.agenda.length>0,`${d.agenda.length} 个环节，核对主持人与会务安排`,'agenda'],['参会与签到',d.roster.length>0,`${d.roster.length} 人在应签名单中，活动前核对人员`,'signin'],['宣传与归档',d.articles.every(x=>x.status==='已发布')&&d.articles.length>0,'跟进预热、报道及相关材料','articles']].map(([title,done,note,tab])=>`<li><span class="ev-check ${done?'':'pending'}">${done?'✓':'!'}</span><div><strong>${title}</strong><p>${E(note)}</p></div>${L('查看','tab',tab)}</li>`).join('')}</ul>`)}${panel('任务甘特图','准备任务摘要，完整任务在独立甘特图中管理',`<div class="ev-scroll"><div class="ev-gantt"><div class="ev-gantt-date">准备事项</div>${['10/10','10/11','10/12','10/13','10/14'].map(x=>`<div class="ev-gantt-date">${x}</div>`).join('')}<div>策划与议程</div><div class="ev-gantt-bar complete" style="grid-column:2/5">已完成</div><div style="grid-column:5/7"></div><div>场地与名单</div><div style="grid-column:2/3"></div><div class="ev-gantt-bar" style="grid-column:3/6">准备中</div><div></div><div>宣传与材料</div><div style="grid-column:2/4"></div><div class="ev-gantt-bar" style="grid-column:4/7">跟进中</div></div></div>`,L('查看完整任务','gantt'))}</div><aside class="ev-stack">${panel('准备进度','',`<div class="ev-pad">${info([['任务完成',`${a.done} / ${a.total} 项`],['关联材料',`${d.materials.length} 份`],['策划书',statusTag(d.plan.status)],['活动负责人',E(a.owner)]])}</div>`)}<div class="ev-note ${a.status==='策划审核'?'amber':'neutral'}">${a.status==='策划审核'?'策划待审核。请先核对活动安排、预算与应急预案，再推进到执行阶段。':'活动阶段与各模块数据分别维护。推进阶段前，请核对相应准备事项。'}</div>${panel('近期动态','',`<ul class="ev-audit ev-pad">${d.logs.slice(0,5).map(([title,name,date])=>`<li>${E(title)}<small>${E(name)} / ${E(date)}</small></li>`).join('')}</ul>`)}</aside></div>`;
+    return `<div class="ev-columns"><div class="ev-stack">${panel('活动信息','组织安排与基本资料',`<dl class="ev-info ev-pad">${fields.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}<div class="wide"><dt>活动描述</dt><dd>${E(a.description||'暂无描述')}</dd></div></dl>`,L('编辑信息','edit-activity',a.id))}${panel('执行准备','按活动流程检查准备情况',`<ul class="ev-checklist">${[['活动策划书',d.plan.status==='已通过',d.plan.status==='待审核'?'策划已提交，等待负责人审核':'确认活动目标、分工及应急安排','plan'],['会场与议程',d.agenda.length>0,`${d.agenda.length} 个环节，核对主持人与会务安排`,'agenda'],['参会与签到',d.roster.length>0,`${d.roster.length} 人在应签名单中，活动前核对人员`,'signin'],['宣传与归档',d.articles.every(x=>x.status==='已发布')&&d.articles.length>0,'跟进预热、报道及相关材料','articles']].map(([title,done,note,tab])=>`<li><span class="ev-check ${done?'':'pending'}">${done?'✓':'!'}</span><div><strong>${title}</strong><p>${E(note)}</p></div>${L('查看','tab',tab)}</li>`).join('')}</ul>`)}${window.ActivityGantt.summary(a)}</div><aside class="ev-stack">${panel('准备进度','',`<div class="ev-pad">${info([['任务完成',`${a.done} / ${a.total} 项`],['关联材料',`${d.materials.length} 份`],['策划书',statusTag(d.plan.status)],['活动负责人',E(a.owner)]])}</div>`)}<div class="ev-note ${a.status==='策划审核'?'amber':'neutral'}">${a.status==='策划审核'?'策划待审核。请先核对活动安排、预算与应急预案，再推进到执行阶段。':'活动阶段与各模块数据分别维护。推进阶段前，请核对相应准备事项。'}</div>${panel('近期动态','',`<ul class="ev-audit ev-pad">${d.logs.slice(0,5).map(([title,name,date])=>`<li>${E(title)}<small>${E(name)} / ${E(date)}</small></li>`).join('')}</ul>`)}</aside></div>`;
   }
   function materials(){
     const d=active.data;
@@ -153,15 +153,17 @@
     const d=active.data;
     return `<div class="ev-columns">${panel('活动推文','从预热到报道，跟进撰写、审核与发布',d.articles.length?d.articles.map(x=>`<article class="ev-article-row"><div class="ev-article-cover">${I('file')}<small>${E(x.type)}<br>图文稿件</small></div><div>${statusTag(x.status)}<h3>${E(x.title)}</h3><p>负责人 ${E(x.author)}　截止 ${E(x.deadline)}</p><p style="margin-top:7px">${E(x.status==='已发布'?'已完成发布，保留稿件与发布记录':x.status==='待审核'?'正文已提交，等待审核意见':'补充正文与配图后提交审核')}</p></div><div class="ev-actions">${L('查看稿件','article',x.id)}${x.status!=='已发布'?L(x.status==='待审核'?'审核':'编辑','edit-article',x.id):''}</div></article>`).join(''):empty('还没有推文任务','为本次活动创建预热或报道任务，明确撰写人和截止时间。',B('创建推文任务','new-article','',true)),B(I('plus')+'创建推文任务','new-article','',true))}<aside class="ev-stack">${panel('宣传进度','',`<div class="ev-pad">${info([['推文任务',d.articles.length+' 项'],['待审核',d.articles.filter(x=>x.status==='待审核').length+' 项'],['已发布',d.articles.filter(x=>x.status==='已发布').length+' 项']])}</div>`)}${panel('快捷创建','',`<div class="ev-pad ev-stack"><p class="ev-muted">按活动阶段建立任务，再填写负责人和截止时间。</p>${B('创建预热','new-article','预热')}${B('创建活动报道','new-article','报道')}</div>`)}<div class="ev-note neutral">任务状态与稿件内容同屏呈现。发布前核对正文、配图、审核意见和发布地址。</div></aside></div>`;
   }
-  const renderers={basic,materials,plan,agenda,seat:seats,score,signin,articles};
+  const renderers={gantt:()=>'<div id="ev-gantt-host"></div>',basic,materials,plan,agenda,seat:seats,score,signin,articles};
   function renderPane(){
     const host=$('#ev-detail-panel');if(!host)return;
+    window.ActivityGantt.unmount();
     detailHost.classList.toggle('ps-detail',s.tab==='plan'&&s.scenario==='正常'&&!!window.PlanStudio);
     host.setAttribute('aria-labelledby','ev-tab-'+s.tab);
     const exceptional=scenarioBody('retry-detail');
     host.innerHTML=exceptional||(s.scenario==='空数据'?`<section class="ev-panel">${empty('暂无'+tabs.find(t=>t[0]===s.tab)[1]+'数据','当前为设计评审的空状态示例，可返回查看完整业务内容。',B('查看示例数据','retry-detail','',true))}</section>`:renderers[s.tab]());
     $$('.ev-detail-nav [role="tab"]').forEach(b=>{const selected=b.dataset.evTab===s.tab;b.setAttribute('aria-selected',String(selected));b.tabIndex=selected?0:-1;});
     if(s.tab==='plan'&&s.scenario==='正常'){if(window.PlanStudio)window.PlanStudio.mount();else window.ActivityWord?.mount();}
+    if(s.tab==='gantt'&&s.scenario==='正常')window.ActivityGantt.mount(active,$('#ev-gantt-host'));
   }
   function $$(selector){return [...document.querySelectorAll(selector)];}
   function switchTab(tab,focus=false){
@@ -219,7 +221,7 @@
       confirm('推进活动阶段',`将「${E(active.title)}」从 ${statusTag(active.status)} 推进至 ${statusTag(phases[idx+1])}。各模块资料保留，请确认准备事项已完成。`,()=>{active.status=phases[idx+1];log('活动推进至'+active.status);detailShell();},'确认推进');return;
     }
     if(action==='go-plan'){dialog.close();switchTab('plan');return;}
-    if(action==='gantt'){openDialog('活动任务甘特图','正式落地连接现有独立甘特图页面。',`<div class="ev-note neutral">本活动共 ${active.total} 项任务，已完成 ${active.done} 项。任务编辑、负责人分配与依赖关系沿用现有甘特图能力。</div><div style="margin-top:20px">${scrollTable(['任务','负责人','状态'],[['策划与议程',active.owner,'已完成'],['场地与名单','周同学','进行中'],['宣传与材料','林同学','待处理']].map(([n,o,t])=>`<tr><td>${n}</td><td>${E(o)}</td><td>${tag(t,t==='已完成'?'green':'blue')}</td></tr>`).join(''))}</div>`);return;}
+    if(action==='gantt'){window.ActivityGantt.open(active);return;}
     if(action==='upload'){
       openDialog('上传活动材料','选择本地文件，原型仅展示名称与大小；文件不会上传。',`<div class="ev-form"><label class="wide">选择文件 *<input type="file" name="file" required></label>${selectField('材料类型','type',['策划书','名单','其他','照片','新闻稿'],'其他')}${field('上传人','owner',active.owner)}<div class="wide ev-note neutral">关联活动：${E(active.title)}。原型不读取文件内容。</div></div>`,f=>{const file=f.get('file');if(!file?.size)throw Error('请选择一个非空文件');d.materials.push({id:nextId++,name:file.name,type:String(f.get('type')),owner:String(f.get('owner'))||active.owner,ext:(file.name.split('.').pop()||'FILE').toUpperCase().slice(0,5),size:Math.max(1,Math.round(file.size/1024))+' KB',date:'2026-10-20 14:30',body:'这是原型中选取的本地文件。原型仅记录文件名与大小，没有读取或上传文件内容。'});log('添加材料关联（原型）');detailShell();},'添加到原型');return;
     }
@@ -263,7 +265,7 @@
     if(action==='article'){const x=d.articles.find(x=>x.id===Number(value));openDialog(x.title,'活动推文 / '+x.type,`<div class="ev-actions" style="margin-bottom:18px">${statusTag(x.status)}<span class="ev-muted">负责人 ${E(x.author)} / 截止 ${E(x.deadline)}</span></div><article class="ev-paper" style="padding:0"><h2>${E(x.title)}</h2><p>活动稿件示例</p><p style="margin-top:20px">${E(x.body||'尚未填写正文')}</p></article>${x.status!=='已发布'?`<div style="margin-top:20px">${B('编辑任务与稿件','edit-article',x.id,true)}</div>`:''}`,null,'',false,'drawer');return;}
   }
   document.addEventListener('click',e=>{const b=e.target.closest('[data-ev]');if(b){handle(b.dataset.ev,b.dataset.value);return;}const tab=e.target.closest('[data-ev-tab]');if(tab)switchTab(tab.dataset.evTab);});
-  document.addEventListener('keydown',e=>{const button=e.target.closest('[data-ev-tab]');if(!button)return;const index=tabs.findIndex(x=>x[0]===button.dataset.evTab);const next=({'ArrowRight':(index+1)%8,'ArrowLeft':(index+7)%8,'Home':0,'End':7})[e.key];if(next!==undefined){e.preventDefault();switchTab(tabs[next][0],true);}});
+  document.addEventListener('keydown',e=>{const button=e.target.closest('[data-ev-tab]');if(!button)return;const index=tabs.findIndex(x=>x[0]===button.dataset.evTab);const next=({'ArrowRight':(index+1)%tabs.length,'ArrowLeft':(index+tabs.length-1)%tabs.length,'Home':0,'End':tabs.length-1})[e.key];if(next!==undefined){e.preventDefault();switchTab(tabs[next][0],true);}});
   function preserveInput(id,render){const input=$('#'+id),position=input?.selectionStart;render();const replacement=$('#'+id);replacement?.focus();if(replacement&&position!==null&&position!==undefined&&replacement.type!=='search')replacement.setSelectionRange(position,position);}
   document.addEventListener('input',e=>{
     if(e.target.id==='ev-query'){s.query=e.target.value;s.page=1;renderRows();}
@@ -280,6 +282,7 @@
     if(e.target.id==='ev-signin-filter'){s.signinFilter=value;renderPane();}
     if(e.target.id==='ev-scenario'){s.scenario=value;if(detailHost.hidden)renderRows();else renderPane();}
   });
+  window.ActivityPrototype={get:id=>sample.find(a=>a.id===id)||sample[1],open:(id,tab)=>openActivity(id,tab)};
   renderList();detailShell();
   const url=new URLSearchParams(location.search),view=url.get('view');
   if(view==='detail')openActivity(url.get('activity')||1,url.get('tab')||'basic');
