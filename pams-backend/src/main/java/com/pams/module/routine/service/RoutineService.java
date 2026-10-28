@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class RoutineService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationBusinessEvents notifications;
     private final ScheduleRepository scheduleRepository;
     private final SchedulePersonRepository schedulePersonRepository;
     private final AttendanceRepository attendanceRepository;
@@ -88,19 +90,24 @@ public class RoutineService {
     public void updateSchedule(Long id, ScheduleRequest req) {
         Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
         requirePublishedMutation(s);
+        var notificationBefore=notifications==null?null:notifications.snapshot(s);
         applySchedule(s, req);
         scheduleRepository.save(s);
         schedulePersonRepository.deleteByScheduleId(id);
         savePersons(id, req.getPersons());
+        if(notifications!=null)notifications.scheduleChanged(notificationBefore,s);
     }
 
     @Transactional
     public void deleteSchedule(Long id) {
-        requirePublishedMutation(scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在")));
+        Schedule s=scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        requirePublishedMutation(s);
+        var notificationBefore=notifications==null?null:notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
         // attendance.schedule_id 有 FK 约束，先清掉该排班的考勤记录再删排班
         attendanceRepository.deleteByScheduleId(id);
         scheduleRepository.deleteById(id);
+        if(notifications!=null)notifications.scheduleChanged(notificationBefore,null);
     }
 
     /** 按 type/weekNo/weekday/activityId 过滤排班列表，并组装每个排班的人员数组 */

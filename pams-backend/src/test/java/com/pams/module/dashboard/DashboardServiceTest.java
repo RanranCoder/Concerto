@@ -132,11 +132,11 @@ class DashboardServiceTest {
     }
 
     @Test
-    void myTasks_delegatesToAssigneeMatchQuery() {
+    void myTasks_delegatesToStableAccountQuery() {
         Task mine = task(1L, "张三");
         Task spaced = task(3L, "  张三  ");
-        // 数据库端 TRIM+LOWER 等值过滤；服务再按 endDate 升序排序
-        when(taskRepository.findByAssigneeMatching("张三")).thenReturn(List.of(mine, spaced));
+        // Stable account identity avoids assigning another person's same-name tasks.
+        when(taskRepository.findByAssigneeUserIdOrderByEndDateAsc(9L)).thenReturn(List.of(mine, spaced));
 
         LoginUser current = new LoginUser(9L, "zhangsan", "张三", "STAFF", 1, 1L, "文秘部", 1L);
         List<Task> tasks = service.myTasks(current);

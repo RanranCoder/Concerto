@@ -131,12 +131,12 @@ public class DashboardService {
                 .toList();
     }
 
-    /** 当前用户负责的任务（task.assignee 与当前用户 realName 匹配，忽略大小写与首尾空格），按截止日期升序 */
+    /** 当前账号明确负责的未完成任务，不从姓名推断归属。 */
     public List<Task> myTasks(LoginUser current) {
-        String me = current == null ? null : current.getRealName();
-        if (me == null || me.isBlank()) return List.of();
-        // 数据库端等值过滤（TRIM+LOWER），替代 findAll 后内存匹配；截止日期排序保留在内存（结果集小）
-        return taskRepository.findByAssigneeMatching(me).stream()
+        Long me = current == null ? null : current.getId();
+        if (me == null) return List.of();
+        // Account identity is shared with PendingWorkService; legacy unbound names are not personal work.
+        return taskRepository.findByAssigneeUserIdOrderByEndDateAsc(me).stream()
                 .sorted(Comparator.comparing(Task::getEndDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }

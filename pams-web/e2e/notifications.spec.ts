@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 
 test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined })
 test('SSE uses Bearer and read reconciliation preserves the plan action', async ({ page }) => {
@@ -9,6 +11,7 @@ test('SSE uses Bearer and read reconciliation preserves the plan action', async 
     localStorage.setItem('pams_token', JSON.stringify({ state: { token: 'notification-e2e', user }, version: 1 }))
   }, user)
   let read = false, streamBearer = ''
+  const pending = { total: 1, overdue: 0, counts: { PLAN_REVIEW: 1 }, items: [{ key: 'PLAN:11', type: 'PLAN_REVIEW', entityType: 'PLAN', entityId: 11, activityId: 7, title: '活动策划书审核', action: '审核策划书', dueAt: null, overdue: false, progress: null, assignee: null }] }
   const notice = () => ({ id: 101, type: 'PLAN_SUBMITTED', title: '策划书待审核', content: '您被选为审核人，请查看本次提交版本',
     entityType: 'PLAN', entityId: 11, activityId: 7, actionState: 'open', priority: 'NORMAL', senderName: '提交人', read, createdAt: '2026-10-28T09:00:00', notify: true })
   await page.route('**/ws/**', route => route.abort())
@@ -27,6 +30,8 @@ test('SSE uses Bearer and read reconciliation preserves the plan action', async 
     else if (path === '/api/notifications') data = [notice()]
     else if (path === '/api/notifications/page') data = { records: [notice()], total: 1, current: 1, size: 10 }
     else if (path === '/api/notifications/unread-count') data = read ? 0 : 1
+    else if (path === '/api/notifications/pending') data = pending
+    else if (path === '/api/dashboard') data = { activityStats: {}, weekSchedules: 0, myTasks: [], recentArticles: [], recentMaterials: [], recentAnnouncements: [], pendingWork: pending }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 200, data }) })
   })
   await page.goto('/notifications')
@@ -36,4 +41,14 @@ test('SSE uses Bearer and read reconciliation preserves the plan action', async 
   await page.getByRole('button', { name: '标记已读', exact: true }).click()
   await expect(page.getByRole('cell', { name: '去审核 已读' })).toBeVisible()
   await expect(page.locator('.ant-badge-count')).toHaveCount(0)
+  await page.getByRole('radiogroup', { name: '通知视图' }).getByText('待我处理', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: '待我处理' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '审核策划书' })).toBeVisible()
+  const evidence = path.resolve('../docs/design/notification-s2')
+  await mkdir(evidence, { recursive: true })
+  await page.screenshot({ path: path.join(evidence, 'notification-pending.png'), fullPage: true })
+  await page.goto('/')
+  await expect(page.locator('.business-metric').filter({ hasText: '我的待办' })).toContainText('1')
+  await expect(page.getByRole('button', { name: '审核策划书' })).toBeVisible()
+  await page.screenshot({ path: path.join(evidence, 'dashboard-pending.png'), fullPage: true })
 })

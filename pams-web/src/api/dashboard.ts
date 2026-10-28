@@ -1,4 +1,5 @@
 import { get } from './http'
+import type { PendingWorkSummary } from './pendingWork'
 
 /** 活动按状态计数（6 态，未出现的状态补 0） */
 export interface ActivityStats {
@@ -52,6 +53,7 @@ export interface DashboardData {
   recentMaterials: DashboardMaterialVO[]
   recentAnnouncements: DashboardAnnouncementVO[]
   myTasks: DashboardTaskVO[]
+  pendingWork?: PendingWorkSummary
 }
 
 export const getDashboard = () => get<DashboardData>('/dashboard')

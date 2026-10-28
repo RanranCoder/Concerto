@@ -11,6 +11,8 @@ import { useAuthStore } from '@/stores/auth'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { listSchedules, SCHEDULE_TYPE_MAP, WEEKDAY_NAMES, type ScheduleVO } from '@/api/schedule'
+import PendingWorkList from '@/components/notification/PendingWorkList'
+import { useNotificationStore } from '@/stores/notification'
 
 interface WorkEvent {
   key: string
@@ -36,6 +38,9 @@ async function calendarActivities(): Promise<ActivityVO[]> {
 }
 
 export default function Dashboard() {
+  const notificationRevision = useNotificationStore(s => s.revision)
+  const accountToken = useAuthStore(s => s.token)
+  const [dataIdentity, setDataIdentity] = useState(accountToken)
   const navigate = useNavigate()
   const hasPerm = useHasPerm()
   const canReadContent = useAuthStore(state => state.user?.permissions?.includes('content:view') ?? false)
@@ -55,6 +60,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     let alive = true
+    const token = useAuthStore.getState().token
+    const refresh = () => {
+      if (document.hidden) return
+      void getDashboard().then(result => { if (alive && token === useAuthStore.getState().token) {setData(result);setDataIdentity(token)} }).catch(() => {})
+    }
+    if (notificationRevision > 0) refresh()
+    const timer = setInterval(refresh, 60_000)
+    return () => { alive = false; clearInterval(timer) }
+  }, [notificationRevision, accountToken])
+
+  useEffect(() => {
+    let alive = true
     setLoading(true)
     setFailed(false)
     Promise.all([
@@ -64,11 +81,12 @@ export default function Dashboard() {
     ]).then(([dashboard, activityRows, scheduleRows]) => {
       if (!alive) return
       setData(dashboard)
+      setDataIdentity(accountToken)
       setActivities(activityRows)
       setSchedules(scheduleRows)
     }).catch(() => { if (alive) setFailed(true) }).finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [reload, canReadActivities, canReadSchedules])
+  }, [reload, canReadActivities, canReadSchedules, accountToken])
 
   const tasks = useMemo(() => [...(data?.myTasks ?? [])]
     .filter(task => task.status !== 'DONE')
@@ -110,8 +128,8 @@ export default function Dashboard() {
     .sort((a, b) => (a.startDate ?? '9999').localeCompare(b.startDate ?? '9999')).slice(0, 5), [activities])
   const total = data?.activityStats ? Object.values(data.activityStats).reduce((sum, value) => sum + (Number(value) || 0), 0) : activities.length
 
-  if (loading) return <div aria-busy="true"><PageHeader title="工作台" description="正在加载工作安排…" /><Skeleton active paragraph={{ rows: 12 }} /></div>
-  if (failed) return <Result status="error" title="工作台暂时无法加载" subTitle="请检查网络或服务状态后重试。" extra={<Button type="primary" onClick={() => setReload(value => value + 1)}>重试</Button>} />
+  if (!loading && failed) return <Result status="error" title="工作台暂时无法加载" subTitle="请检查网络或服务状态后重试。" extra={<Button type="primary" onClick={() => setReload(value => value + 1)}>重试</Button>} />
+  if (loading || dataIdentity !== accountToken) return <div aria-busy="true"><PageHeader title="工作台" description="正在加载工作安排…" /><Skeleton active paragraph={{ rows: 12 }} /></div>
 
   return <div className="workbench-v6">
     <PageHeader title="工作台" description="查看本周安排，跟进活动与待处理事项" extra={hasPerm('activity:create') && <Button aria-label="新增活动" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/activities', { state: { create: true } })}>新增活动</Button>} />
@@ -121,7 +139,7 @@ export default function Dashboard() {
       <div className="workbench-today-events">{currentEvents.slice(0, 2).map(event => <button key={event.key} onClick={() => navigate(event.path)}><strong>{event.title}</strong><small>{event.time} / {event.meta}</small></button>)}</div>
     </section>
     <section className="business-summary" aria-label="工作摘要">
-      {[['活动总数', total, '全部活动'], ['执行中', data?.activityStats?.EXECUTING ?? 0, '持续跟进'], ['本周排班', data?.weekSchedules ?? 0, '本周时段'], ['我的待办', tasks.length, '待处理任务']].map(([label, value, note], index) => <div key={label} className={index === 3 ? 'business-metric attention' : 'business-metric'}><span>{label}</span><div><strong>{value}</strong><small>{note}</small></div></div>)}
+      {[['活动总数', total, '全部活动'], ['执行中', data?.activityStats?.EXECUTING ?? 0, '持续跟进'], ['本周排班', data?.weekSchedules ?? 0, '本周时段'], ['我的待办', data?.pendingWork?.total ?? tasks.length, '待处理事项']].map(([label, value, note], index) => <div key={label} className={index === 3 ? 'business-metric attention' : 'business-metric'}><span>{label}</span><div><strong>{value}</strong><small>{note}</small></div></div>)}
     </section>
     <div className="workbench-grid"><div>
       <GlassCard className="workbench-calendar"><div className="business-section-head"><div><h3>本周安排</h3><small>{week[0].date.format('YYYY年MM月DD日')} — {week[6].date.format('MM月DD日')}</small></div><Segmented size="small" aria-label="日历范围" options={[{ label: '工作日', value: 5 }, { label: '全周', value: 7 }]} value={range} onChange={value => { const days = Number(value); setRange(days); if (selectedDay >= days) setSelectedDay(0) }} /></div>
@@ -131,7 +149,7 @@ export default function Dashboard() {
       </GlassCard>
       {canReadActivities && <GlassCard className="workbench-upcoming"><div className="business-section-head"><h3>近期活动</h3><Button type="link" size="small" onClick={() => navigate('/activities')}>查看全部活动</Button></div>{!upcoming.length ? <Empty description="暂无待推进的活动" /> : upcoming.map(activity => <div key={activity.id} className="workbench-activity"><span className="workbench-activity-icon"><CalendarOutlined /></span><div><strong>{activity.name}</strong><small>{activity.startDate || '日期待定'} / {activity.location || activity.organizer || '地点待确认'}</small></div><StatusTag status={activity.status} /><Button type="link" size="small" onClick={() => navigate('/activities/' + activity.id)}>查看</Button></div>)}</GlassCard>}
     </div><div>
-      <GlassCard><div className="business-section-head"><h3>待处理</h3><span className="tone-tag tone-warning">{tasks.length} 项</span></div>{!tasks.length ? <Empty description="暂无待处理任务" /> : <div className="workbench-tasks">{tasks.slice(0, 6).map(task => <div key={task.id} className="workbench-task"><div><strong>{task.name}</strong><span className={'tone-tag tone-' + (task.status === 'DELAYED' ? 'danger' : task.status === 'DOING' ? 'processing' : 'warning')}>{task.status === 'DELAYED' ? '已延期' : task.status === 'DOING' ? '执行中' : '待办'}</span></div><small>{task.assignee || '待确认负责人'} / 截止 {task.endDate ? dayjs(task.endDate).format('MM-DD') : '未设置'}</small><Button type="link" size="small" onClick={() => navigate('/activities/' + task.activityId + '/gantt')}>查看任务</Button></div>)}</div>}</GlassCard>
+      <GlassCard>{data?.pendingWork ? <PendingWorkList initial={data.pendingWork} /> : <><div className="business-section-head"><h3>待处理</h3><span className="tone-tag tone-warning">{tasks.length} 项</span></div>{!tasks.length ? <Empty description="暂无待处理任务" /> : <div className="workbench-tasks">{tasks.slice(0, 6).map(task => <div key={task.id} className="workbench-task"><div><strong>{task.name}</strong><span className={'tone-tag tone-' + (task.status === 'DELAYED' ? 'danger' : task.status === 'DOING' ? 'processing' : 'warning')}>{task.status === 'DELAYED' ? '已延期' : task.status === 'DOING' ? '执行中' : '待办'}</span></div><small>{task.assignee || '待确认负责人'} / 截止 {task.endDate ? dayjs(task.endDate).format('MM-DD') : '未设置'}</small><Button type="link" size="small" onClick={() => navigate('/activities/' + task.activityId + '?tab=gantt')}>查看任务</Button></div>)}</div>}</>}</GlassCard>
       <GlassCard className="workbench-shortcuts"><div className="business-section-head"><h3>工作入口</h3></div>{hasPerm('material:view') && <button className="workbench-shortcut" onClick={() => navigate('/archive/materials')}><span className="document"><FolderOpenOutlined /></span><div><strong>材料与档案</strong><small>查看策划、议程与名单</small></div></button>}<button className="workbench-shortcut" onClick={() => navigate('/agent')}><span className="assistant"><RobotOutlined /></span><div><strong>灵思</strong><small>根据已有资料准备工作</small></div></button>{hasPerm('notice:view') && <button className="workbench-shortcut" onClick={() => navigate('/archive/announcements')}><span className="activity"><FileTextOutlined /></span><div><strong>通知公告</strong><small>跟进组织发布的工作安排</small></div></button>}</GlassCard>
     </div></div>
     <div className="workbench-resources">{[

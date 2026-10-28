@@ -13,8 +13,9 @@ import java.util.Map;
 @RequestMapping("/api/dashboard")
 public class DashboardController {
     private final DashboardService service;
+    private final com.pams.module.notification.service.PendingWorkService pending;
 
-    public DashboardController(DashboardService service) { this.service = service; }
+    public DashboardController(DashboardService service,com.pams.module.notification.service.PendingWorkService pending) { this.service = service;this.pending=pending; }
 
     @GetMapping
     public Result<Map<String, Object>> dashboard(@AuthenticationPrincipal LoginUser current) {
@@ -26,6 +27,7 @@ public class DashboardController {
         result.put("recentMaterials",ctx.hasPermission("material:view") ? service.recentMaterials() : java.util.List.of());
         result.put("recentAnnouncements",ctx.hasPermission("notice:view") ? service.recentAnnouncements() : java.util.List.of());
         result.put("myTasks",ctx.hasPermission("task:view") ? service.myTasks(current) : java.util.List.of());
+        result.put("pendingWork",pending.summary(ctx));
         return Result.ok(result);
     }
 }

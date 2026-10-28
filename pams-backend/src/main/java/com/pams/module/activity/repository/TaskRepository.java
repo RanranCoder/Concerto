@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByActivityIdOrderByStartDateAsc(Long activityId);
+    @Query("SELECT t FROM Task t JOIN Activity a ON a.id=t.activityId WHERE t.assigneeUserId=:userId AND a.status<>'ARCHIVED' AND t.status<>'DONE' AND COALESCE(t.progress,0)<100 ORDER BY t.endDate ASC")
+    List<Task> findByAssigneeUserIdOrderByEndDateAsc(@Param("userId") Long userId);
 
     @Query("SELECT t.activityId FROM Task t WHERE t.id = :id")
     Optional<Long> activityIdOf(@Param("id") Long id);

@@ -15,12 +15,14 @@ public class NotificationVisibility {
   private final TenantAuthorizationService auth;
   private final PlanAccessService plans;
   private final UserRepository users;
+  private final org.springframework.jdbc.core.JdbcTemplate db;
 
   public NotificationVisibility(
-      TenantAuthorizationService auth, PlanAccessService plans, UserRepository users) {
+      TenantAuthorizationService auth, PlanAccessService plans, UserRepository users,org.springframework.jdbc.core.JdbcTemplate db) {
     this.auth = auth;
     this.plans = plans;
     this.users = users;
+    this.db = db;
   }
 
   public boolean canRead(long uid, Notification notification) {
@@ -30,9 +32,12 @@ public class NotificationVisibility {
     String type = Objects.toString(notification.getEntityType(), "");
     if (type.isBlank()) return true; // personal messages without a business source
     var permissions = auth.business(uid);
+    if(type.equalsIgnoreCase("SCHEDULE") && !permissions.contains("schedule:view") && permissions.contains("schedule:self:view")) {
+      return notification.getId()!=null && db.queryForObject("SELECT COUNT(*) FROM notification_outbox o JOIN notification_outbox_recipient r ON r.outbox_id=o.id WHERE o.org_id=? AND o.message_id=? AND r.user_id=?",Long.class,notification.getOrgId(),notification.getId(),uid)>0;
+    }
     String permission =
         switch (type.toUpperCase(Locale.ROOT)) {
-          case "TASK" -> "task:view";
+          case "TASK", "PENDING_TASKS" -> "task:view";
           case "ACTIVITY" -> "activity:view";
           case "PLAN" -> "plan:view";
           case "ARTICLE", "NEWS" -> "content:view";

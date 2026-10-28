@@ -61,7 +61,7 @@ public class NotificationService {
         +"WHERE p.org_id=? AND p.id=? AND r.reviewer_id=?",NotificationPipeline.org(),n.getEntityId(),uid);
       boolean open=!rows.isEmpty() && "PENDING".equals(rows.getFirst().get("status")) && rows.getFirst().get("approved")==null;
       v.setActionState(open?"open":!rows.isEmpty() && ("WITHDRAWN".equals(rows.getFirst().get("status")) || "REJECTED".equals(rows.getFirst().get("status")))?"cancelled":"completed");
-    } else if(n.getType()==NotificationType.TASK_ASSIGNED || n.getType()==NotificationType.TASK_CHANGED) {
+    } else if(n.getType()==NotificationType.TASK_ASSIGNED || n.getType()==NotificationType.TASK_CHANGED || n.getType()==NotificationType.TASK_DUE_REMINDER || n.getType()==NotificationType.TASK_OVERDUE_REMINDER) {
       var tasks=db.queryForList("SELECT status,assignee_user_id FROM task WHERE id=? AND org_id=? AND deleted=0",n.getEntityId(),NotificationPipeline.org());
       if(tasks.isEmpty())v.setActionState("cancelled");
       else if("DONE".equals(tasks.getFirst().get("status")))v.setActionState("completed");
@@ -71,6 +71,11 @@ public class NotificationService {
       }
     }
     if((n.getType()==NotificationType.PLAN_SUBMITTED || n.getType()==NotificationType.TASK_ASSIGNED) && !"open".equals(v.getActionState())) v.setNotify(false);
+    if(Set.of(NotificationType.TASK_DUE_REMINDER,NotificationType.TASK_OVERDUE_REMINDER,NotificationType.TASK_OVERDUE_DIGEST,NotificationType.SCHEDULE_START_REMINDER,NotificationType.ARTICLE_DEADLINE_REMINDER).contains(n.getType())) {
+      long current=db.queryForObject("SELECT COUNT(*) FROM notification_reminder r JOIN notification_reminder_source s ON s.org_id=r.org_id AND s.resource_type=r.resource_type AND s.resource_id=r.resource_id "
+        +"WHERE r.org_id=? AND r.message_id=? AND r.user_id=? AND r.generation=s.generation AND s.active=TRUE AND (r.expires_at IS NULL OR r.expires_at>CURRENT_TIMESTAMP)",Long.class,NotificationPipeline.org(),n.getId(),uid);
+      if(current==0 || "completed".equals(v.getActionState()) || "cancelled".equals(v.getActionState()))v.setNotify(false);
+    }
     return v;
   }
   @Transactional

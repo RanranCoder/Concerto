@@ -25,6 +25,8 @@ import static org.assertj.core.api.Assertions.*;
 @ActiveProfiles("test")
 @Transactional
 class TaskPlanServiceTest {
+    @org.junit.jupiter.api.BeforeEach void tenantScope() { com.pams.common.OrgContext.set(1L); }
+    @org.junit.jupiter.api.AfterEach void clearTenantScope() { com.pams.common.OrgContext.clear(); }
     @Autowired TaskService service;
     @Autowired ActivityRepository activities;
     @Autowired TaskRepository tasks;

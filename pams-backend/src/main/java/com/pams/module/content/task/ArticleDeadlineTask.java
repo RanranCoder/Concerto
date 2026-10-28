@@ -35,7 +35,7 @@ public class ArticleDeadlineTask {
     }
 
     /** 每天 8:30 扫描：未发布且 3 天内到期的推文，向负责人发截止提醒（每天一次，去重） */
-    @Scheduled(cron = "0 30 8 * * ?", zone = "Asia/Shanghai")
+    // Compatibility entry point only. Automatic reminders are owned by NotificationReminderScheduler.
     public void remindOverdue() {
         if (db != null) {
             for (Long org : db.queryForList("SELECT id FROM organization WHERE status=1 AND deleted=0", Long.class)) {

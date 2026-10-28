@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Empty, Select, Space, Spin, Switch, Tag } from 'antd'
+import { App, Button, Empty, Select, Segmented, Space, Spin, Switch, Tag } from 'antd'
+import PendingWorkList from '@/components/notification/PendingWorkList'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useNotificationStore } from '@/stores/notification'
 import { useAuthStore } from '@/stores/auth'
 import { notificationRoute } from '@/utils/notificationRoute'
@@ -20,6 +21,10 @@ const TYPE_LABEL: Record<string, string> = {
   TASK_ASSIGNED: '任务',
   TASK_CHANGED: '任务变更',
   TASK_COMPLETED: '任务完成',
+  TASK_DUE_REMINDER: '任务临期',
+  TASK_OVERDUE_REMINDER: '任务逾期',
+  TASK_OVERDUE_DIGEST: '逾期摘要',
+  SCHEDULE_START_REMINDER: '班前提醒',
   SCHEDULE_PUBLISHED: '排班发布',
   SCHEDULE_CHANGED: '排班调整',
   SCHEDULE_CANCELLED: '排班取消',
@@ -59,6 +64,9 @@ interface NotificationRow {
 }
 
 export default function NotificationList() {
+  const [searchParams] = useSearchParams()
+  const [view, setView] = useState(searchParams.get('view') === 'pending' ? 'pending' : 'messages')
+  useEffect(() => { if (searchParams.get('view') === 'pending') setView('pending') }, [searchParams])
   const navigate = useNavigate()
   const revision = useNotificationStore(s => s.revision)
   const { message } = App.useApp()
@@ -196,6 +204,10 @@ export default function NotificationList() {
         }
       />
 
+      <Segmented aria-label="通知视图" value={view} onChange={value => setView(String(value))} options={[{ label: '消息记录', value: 'messages' }, { label: '待我处理', value: 'pending' }]} style={{ marginBottom: 16 }} />
+      {view === 'pending' && <GlassCard style={{ padding: 16 }}><PendingWorkList /></GlassCard>}
+      <div hidden={view !== 'messages'}>
+
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <Space wrap>
           <Select
@@ -253,6 +265,7 @@ export default function NotificationList() {
           </div>
         </Spin>
       </GlassCard>
+      </div>
     </div>
   )
 }

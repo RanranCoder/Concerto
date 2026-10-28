@@ -20,9 +20,10 @@ public class NotificationBusinessEvents {
   private final NotificationPipeline pipeline;
   private final JdbcTemplate db;
   private final TenantAuthorizationService auth;
-  public record ScheduleSnapshot(Long id,Long activity,String status,String details,Set<Long> users) {}
-  public NotificationBusinessEvents(SchedulePersonRepository people,NotificationService notifications,NotificationPipeline pipeline,JdbcTemplate db,TenantAuthorizationService auth) {
-    this.people=people;this.notifications=notifications;this.pipeline=pipeline;this.db=db;this.auth=auth;
+  private final NotificationReminderService reminders;
+  public record ScheduleSnapshot(Long id,Long activity,String status,String details,Set<Long> users,String type) {}
+  public NotificationBusinessEvents(SchedulePersonRepository people,NotificationService notifications,NotificationPipeline pipeline,JdbcTemplate db,TenantAuthorizationService auth,NotificationReminderService reminders) {
+    this.people=people;this.notifications=notifications;this.pipeline=pipeline;this.db=db;this.auth=auth;this.reminders=reminders;
   }
   public String taskAssignee(long uid,Long dept) {
     var names=db.queryForList("SELECT real_name FROM sys_user WHERE id=? AND org_id=? AND dept_id=? AND status=1 AND deleted=0",String.class,uid,NotificationPipeline.org(),dept);
@@ -31,6 +32,7 @@ public class NotificationBusinessEvents {
   }
   @Transactional
   public void taskChanged(TaskRequest before,Task after) {
+    reminders.reconcile("TASK",after.getId(),java.time.LocalDateTime.now(PendingWorkService.ZONE));
     boolean deleted=Objects.equals(after.getDeleted(),1);
     if(before!=null && !deleted && Objects.equals(before.getName(),after.getName())
       && Objects.equals(before.getAssigneeUserId(),after.getAssigneeUserId()) && Objects.equals(before.getDeptId(),after.getDeptId())
@@ -52,19 +54,21 @@ public class NotificationBusinessEvents {
   public ScheduleSnapshot snapshot(Schedule s) {
     Set<Long> users=new LinkedHashSet<>();
     for(var p:people.findByScheduleId(s.getId()))if(p.getUserId()!=null)users.add(p.getUserId());
-    return new ScheduleSnapshot(s.getId(),s.getActivityId(),s.getStatus(),
-      Objects.toString(s.getScheduleDate(),"")+" "+Objects.toString(s.getStartTime(),"")+"—"+Objects.toString(s.getEndTime(),"")+" "+Objects.toString(s.getLocation(),""),users);
+    String date=s.getScheduleDate()!=null?s.getScheduleDate().toString():"第"+Objects.toString(s.getWeekNo(),"待定")+"周 / 星期"+Objects.toString(s.getWeekday(),"待定");
+    String time=s.getStartTime()!=null?s.getStartTime()+"—"+Objects.toString(s.getEndTime(),""):Objects.toString(s.getSessionName(),"具体时间待定");
+    return new ScheduleSnapshot(s.getId(),s.getActivityId(),s.getStatus(),date+" "+time+" "+Objects.toString(s.getLocation(),""),users,s.getScheduleType());
   }
   @Transactional
   public void scheduleChanged(ScheduleSnapshot before,Schedule after) {
+    reminders.reconcile("SCHEDULE",after==null?before.id():after.getId(),java.time.LocalDateTime.now(PendingWorkService.ZONE));
     boolean was=before!=null && Schedule.STATUS_PUBLISHED.equals(before.status());
     boolean now=after!=null && Schedule.STATUS_PUBLISHED.equals(after.getStatus());
     if(!was && !now)return;
     var next=after==null?null:snapshot(after);
-    if(was && now && before.details().equals(next.details()) && before.users().equals(next.users()))return;
+    if(was && now && before.details().equals(next.details()) && before.users().equals(next.users()) && Objects.equals(before.type(),next.type()))return;
     NotificationType type=!now?NotificationType.SCHEDULE_CANCELLED:was?NotificationType.SCHEDULE_CHANGED:NotificationType.SCHEDULE_PUBLISHED;
     Set<Long> users=new LinkedHashSet<>();if(was)users.addAll(before.users());if(now)users.addAll(next.users());
-    String title=switch(type){case SCHEDULE_CANCELLED->"活动排班已取消";case SCHEDULE_CHANGED->"活动排班已调整";default->"活动排班已发布";};
+    String title=switch(type){case SCHEDULE_CANCELLED->"排班已取消";case SCHEDULE_CHANGED->"排班已调整";default->"排班已发布";};
     String content=(was?"原安排："+before.details()+"；":"")+(now?"当前安排："+next.details():"原安排已失效，请核对最新排班");
     for(Long uid:users)notifications.createAndSave(type,title,content,"SCHEDULE",after==null?before.id():after.getId(),null,uid,null,null);
   }

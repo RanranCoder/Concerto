@@ -30,6 +30,8 @@ import java.util.Map;
 
 @Service
 public class ArticleService {
+    @Autowired
+    private com.pams.module.notification.service.NotificationReminderService reminders;
     private final ArticleRepository repository;
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -173,6 +175,7 @@ public class ArticleService {
         a.setActivityId(req.getActivityId() != null ? req.getActivityId() : a.getActivityId());
         apply(a, req);
         repository.save(a);
+        if (reminders != null) reminders.reconcile("ARTICLE",a.getId(),LocalDateTime.now(com.pams.module.notification.service.PendingWorkService.ZONE));
     }
 
     @Transactional
@@ -259,6 +262,7 @@ public class ArticleService {
         a.setDeleted(1);
         a.setUpdatedAt(LocalDateTime.now());
         repository.save(a);
+        if (reminders != null) reminders.reconcile("ARTICLE",a.getId(),LocalDateTime.now(com.pams.module.notification.service.PendingWorkService.ZONE));
     }
 
     private void apply(Article a, ArticleRequest req) {
