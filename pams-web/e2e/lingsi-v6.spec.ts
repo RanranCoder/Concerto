@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 test.use({channel:process.platform==='win32'?'msedge':undefined,viewport:{width:1600,height:1000},timezoneId:'Asia/Shanghai'})
 const output=resolve('..','docs','ui-v6-lingsi-implementation',process.env.PAMS_E2E_ARTIFACT_SUBDIR ?? '')
-const user={id:1,username:'teacher',realName:'林老师',roleCode:'TEACHER',roleLevel:5,deptId:1,deptName:'文秘部',orgId:1,permissions:['activity:view','activity:edit','schedule:view','schedule:generate','material:view','member:view','kb:read','quality:activity_add']}
+const user={id:1,username:'teacher',realName:'林老师',roleCode:'TEACHER',roleLevel:5,deptId:1,deptName:'文秘部',orgId:1,permissions:['activity:view','activity:edit','plan:edit','content:view','notice:view','schedule:view','schedule:generate','material:view','member:view','kb:read','quality:activity_add']}
 const skipped=[{label:'10月16日 16:00–17:40',sub:'未分配',reason:'空闲人员不足，尚缺 2 人'}]
 const plan={planId:10,summary:'培训班 · 保存策划草稿',total:2,items:[{id:null,label:'活动目的',sub:'专题学习与交流'},{id:null,label:'准备事项',sub:'场地、名单与会务'}],skipped,detailLines:['关联活动：第四十期培训班','__args__:{"internal":"hidden"}'],reversible:true,confirmToken:'test-one-time-token',needsConfirm:true,preview:'## 第四十期培训班策划初稿\n\n### 活动目的\n专题学习与交流。\n\n### 准备事项\n核对场地、名单与会务。'}
 const form={taskId:30,formKey:'generateSchedule',toolName:'generateActivitySchedule',title:'补充排班条件',description:'请选择日期、时段和参与部门',fields:[{name:'startDate',label:'开始日期',type:'date',required:true},{name:'endDate',label:'结束日期',type:'date',required:true},{name:'department',label:'参与部门',type:'text',required:true}],values:{startDate:'2026-10-15',endDate:'2026-10-16',department:'文秘部'}}
@@ -59,6 +59,174 @@ async function setup(page:Page) {
 const task=(page:Page,title:string)=>page.locator('.lingsi-conv-select').filter({hasText:title})
 /** 运行模式是自建下拉（非原生 select）：点触发器展开，再点选项 */
 const pickMode=async(page:Page,label:string)=>{await page.getByRole('combobox',{name:'运行模式'}).click();await page.getByRole('option',{name:label,exact:true}).click()}
+
+for (const dark of [false, true]) test(`输入区交互配色跟随系统主题（${dark ? '深色' : '浅色'}）`, async ({page}) => {
+  const {agentModule, errors} = await setup(page)
+  if (dark) await page.getByRole('button', {name:'切换深色'}).click()
+  const capture = async (state:string) => {
+    const bounds = (await page.locator('.lingsi-composer').boundingBox())!
+    const y = Math.max(0, bounds.y - 130)
+    await page.screenshot({path:resolve(output, `hover-${state}-${dark ? 'dark' : 'light'}.png`), animations:'disabled',
+      clip:{x:bounds.x, y, width:bounds.width, height:bounds.y + bounds.height - y}})
+  }
+  const palette = await page.evaluate(() => {
+    const probe = document.createElement('span')
+    document.body.appendChild(probe)
+    const values = Object.fromEntries(['soft-strong', 'canvas-elevated', 'text-primary', 'text-tertiary', 'brand-hover'].map(name => {
+      probe.style.backgroundColor = `var(--${name})`
+      return [name, getComputedStyle(probe).backgroundColor]
+    }))
+    probe.remove()
+    return values
+  })
+  const contrast = async (selector:string) => page.locator(selector).evaluate(el => {
+    const luminance = (color:string) => {
+      const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(value => {
+        const channel = value / 255
+        return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4
+      })
+      return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722
+    }
+    const style = getComputedStyle(el)
+    const a = luminance(style.color), b = luminance(style.backgroundColor)
+    return (Math.max(a, b) + .05) / (Math.min(a, b) + .05)
+  })
+  const tools = page.getByRole('button', {name:'查看能力', exact:true})
+  await tools.hover()
+  await expect(page.getByRole('tooltip')).toBeVisible()
+  expect(await contrast('.ant-tooltip-inner:visible')).toBeGreaterThanOrEqual(4.5)
+  await expect(page.getByRole('tooltip')).toHaveCSS('background-color', palette['canvas-elevated'])
+  await expect(page.getByRole('tooltip')).toHaveCSS('color', palette['text-primary'])
+  await expect(tools).toHaveCSS('background-color', palette['soft-strong'])
+  await capture('tooltip')
+  const mode = page.getByRole('combobox', {name:'运行模式'})
+  await mode.hover()
+  await expect(mode).toHaveCSS('background-color', palette['soft-strong'])
+  await mode.click()
+  await page.getByRole('option', {name:'只读模式', exact:true}).hover()
+  await expect(page.getByRole('option', {name:'只读模式', exact:true})).toHaveCSS('background-color', palette['soft-strong'])
+  await capture('mode')
+  await mode.press('Escape')
+  await page.locator('.lingsi-v6-collab').hover()
+  await expect(page.locator('.lingsi-v6-collab')).toHaveCSS('background-color', palette['soft-strong'])
+  await expect(page.locator('.lingsi-collab-switch')).toHaveCSS('background-color', palette['brand-hover'])
+  await capture('collab')
+  await page.getByRole('checkbox', {name:'自动协作'}).uncheck()
+  await expect(page.locator('.lingsi-collab-switch')).toHaveCSS('background-color', palette['text-tertiary'])
+  await page.getByRole('checkbox', {name:'自动协作'}).check()
+  await page.evaluate(async source => {
+    const {useAgentStore} = await import(source)
+    useAgentStore.setState({pendingRefs:[{type:'activity', id:1, label:'培训班'}]})
+  }, agentModule())
+  const remove = page.locator('.lingsi-ref-chip-x')
+  await remove.hover()
+  await expect(remove).toHaveCSS('background-color', palette['soft-strong'])
+  await expect(remove).toHaveCSS('color', palette['text-primary'])
+  await remove.click()
+  await page.getByRole('textbox', {name:'任务内容'}).fill('检查发送状态')
+  await page.getByRole('button', {name:'发送任务', exact:true}).hover()
+  await expect(page.getByRole('button', {name:'发送任务', exact:true})).toHaveCSS('background-color', palette['brand-hover'])
+  await page.evaluate(async source => {
+    const {useAgentStore} = await import(source)
+    useAgentStore.setState({thinking:true, activeRequestId:'hover-state-request'})
+  }, agentModule())
+  const stop = page.getByRole('button', {name:'停止任务', exact:true})
+  await stop.hover()
+  expect(await contrast('.lingsi-send-stop')).toBeGreaterThanOrEqual(4.5)
+  await expect(stop).toHaveCSS('background-color', palette['soft-strong'])
+  await expect(stop).toHaveCSS('color', palette['text-primary'])
+  await capture('stop')
+  await mode.hover()
+  await expect(mode).toBeDisabled()
+  await expect(mode).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await page.locator('.lingsi-v6-collab').hover()
+  await expect(page.getByRole('checkbox', {name:'自动协作'})).toBeDisabled()
+  await expect(page.locator('.lingsi-v6-collab')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  expect(errors).toEqual([])
+})
+
+for (const phone of [false, true]) for (const dark of [false, true]) test(`输入区改版：模式、协作与上下文可用（${phone ? '手机' : '桌面'}${dark ? '深色' : '浅色'}）`, async ({page}) => {
+  await page.setViewportSize(phone ? {width:390, height:844} : {width:1600, height:1000})
+  const {requests, errors} = await setup(page)
+  if (dark) await page.getByRole('button', {name:'切换深色'}).click()
+  if (phone) await page.getByRole('button', {name:'打开任务列表'}).click()
+  await task(page, '查询归档要求').click()
+  const composer = page.locator('.lingsi-composer')
+  const input = page.getByRole('textbox', {name:'任务内容'})
+  const collab = page.getByRole('checkbox', {name:'自动协作'})
+  await expect(page.getByRole('button', {name:'发送任务', exact:true})).toBeDisabled()
+  await expect(collab).toBeChecked()
+  await collab.uncheck()
+  await pickMode(page, '只读模式')
+  await expect(collab).toBeDisabled()
+  await pickMode(page, '资料问答')
+  await expect(input).toHaveAttribute('placeholder', /资料问题/)
+  await pickMode(page, '标准模式')
+  await expect(collab).not.toBeChecked()
+  await collab.check()
+  const theme = dark ? 'dark' : 'light'
+  const device = phone ? 'phone' : 'desktop'
+  await page.getByRole('heading', {name:'查询归档要求', exact:true}).click()
+  await composer.screenshot({path:resolve(output, `composer-${device}-${theme}-empty.png`), animations:'disabled'})
+  await page.getByRole('button', {name:'附加上下文', exact:true}).click()
+  await page.locator('.lingsi-ref-picker .ant-select').click()
+  await page.getByText('第四十期培训班（ID 1）', {exact:true}).click()
+  await page.getByRole('button', {name:'附加上下文', exact:true}).click()
+  await input.click()
+  await input.fill('参考培训班的已有资料，整理活动筹备清单。')
+  await input.press('Shift+Enter')
+  await input.pressSequentially('时间和人员信息请保留待补，先让我核对。')
+  await expect(input).toHaveValue(/清单。\n时间/)
+  expect(requests.filter(r => r.path === '/api/agent/chat')).toHaveLength(0)
+  await expect(page.locator('.lingsi-ref-chip')).toContainText('第四十期培训班')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await composer.screenshot({path:resolve(output, `composer-${device}-${theme}-filled.png`), animations:'disabled'})
+  await page.screenshot({path:resolve(output, `composer-${device}-${theme}-page.png`), animations:'disabled'})
+  await input.press('Enter')
+  await expect(page.getByRole('button', {name:'发送任务', exact:true})).toBeVisible()
+  const body = requests.find(r => r.path === '/api/agent/chat')?.body
+  expect(body).toMatchObject({mode:'standard', collab:true, refs:[{type:'activity', id:1, label:'第四十期培训班'}]})
+  await expect(page.locator('.lingsi-ref-chip')).toHaveCount(0)
+  await expect(input).toHaveValue('')
+  if (phone) {
+    await page.setViewportSize({width:320, height:720})
+    expect(await composer.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await expect(page.getByRole('button', {name:'发送任务', exact:true})).toBeInViewport()
+  } else {
+    await page.setViewportSize({width:1280, height:900})
+    await task(page, '准备培训班策划初稿').click()
+    await page.getByRole('button', {name:'预览工作成果', exact:true}).click()
+    await expect(page.locator('.lingsi-v6-panel')).toBeVisible()
+    expect(await composer.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await expect(page.getByRole('button', {name:'发送任务', exact:true})).toBeInViewport()
+    await composer.screenshot({path:resolve(output, `composer-preview-${theme}.png`), animations:'disabled'})
+  }
+  expect(errors).toEqual([])
+})
+
+for (const trigger of ['button', 'enter'] as const) test(`普通 HTTP 环境下通过${trigger === 'button' ? '按钮' : '回车'}连续发送消息`, async ({page}) => {
+  // HTTP LAN deployments expose getRandomValues, but not randomUUID.
+  await page.addInitScript(() => {
+    Object.defineProperty(window.crypto, 'randomUUID', { configurable: true, value: undefined })
+  })
+  const {requests, errors} = await setup(page)
+  const input = page.locator('.lingsi-composer-ta')
+  for (const text of ['查询近期活动', '继续查询活动材料']) {
+    await input.fill(text)
+    if (trigger === 'button') await page.getByRole('button', {name:'发送任务', exact:true}).click()
+    else await input.press('Enter')
+    await expect(page.locator('.lingsi-user-bubble').filter({hasText:text})).toBeVisible()
+    await expect(page.getByRole('button', {name:'发送任务', exact:true})).toBeVisible()
+    await expect(input).toHaveValue('')
+  }
+  const chats = requests.filter(r => r.path === '/api/agent/chat')
+  expect(chats).toHaveLength(2)
+  expect(chats.map(r => r.body.message)).toEqual(['查询近期活动', '继续查询活动材料'])
+  for (const {body} of chats) expect(body.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  expect(chats[0].body.requestId).not.toBe(chats[1].body.requestId)
+  expect(chats[1].body.conversationId).toBe(1)
+  expect(errors).toEqual([])
+})
 
 for(const compact of [false,true])test(`协作清单独立确认、续跑及刷新恢复（${compact?'手机深色':'桌面浅色'}）`,async({page})=>{
   const {errors}=await setup(page)

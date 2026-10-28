@@ -1,0 +1,246 @@
+/* Composer: one writing surface, grouped settings, a single primary action. */
+.lingsi-v6 .lingsi-composer-inner {
+  container-type: inline-size;
+  container-name: composer;
+}
+.lingsi-v6 .lingsi-composer-box {
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  border-radius: var(--r-2xl);
+  background: var(--canvas-elevated);
+  box-shadow: 0 3px 14px color-mix(in srgb, var(--text-primary) 4%, transparent);
+  transition: box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+.lingsi-v6 .lingsi-composer-ta.ant-input {
+  display: block;
+  padding: 19px 20px 12px;
+  border: 0;
+  border-radius: var(--r-2xl);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.lingsi-v6 .lingsi-composer-ta.ant-input::placeholder {
+  color: var(--text-secondary);
+  opacity: .8;
+}
+.lingsi-v6 .lingsi-composer-bar {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0 12px 12px;
+}
+.lingsi-composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.lingsi-composer-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r-xl);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+.lingsi-composer-tool:hover:not(:disabled) {
+  background: var(--soft-strong);
+  color: var(--text-primary);
+}
+.lingsi-composer-tool:disabled { opacity: .45; cursor: not-allowed; }
+.lingsi-composer-tool:focus-visible,
+.lingsi-v6 .lingsi-send:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.lingsi-composer-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--r-xl);
+  background: var(--soft);
+}
+.lingsi-v6-mode {
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  color: var(--text-primary);
+}
+.lingsi-v6-mode .glass-select-trigger {
+  min-height: 30px;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  font-size: var(--fs-caption);
+}
+.lingsi-v6-mode .glass-select-trigger:is(:hover, [aria-expanded='true']):not(:disabled) {
+  background: var(--soft-strong);
+}
+.lingsi-v6-collab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px 0 11px;
+  border-left: 1px solid color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  border-radius: var(--r-lg);
+  background: transparent;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+.lingsi-v6-collab:hover:has(input:not(:disabled)) {
+  background: var(--soft-strong);
+  color: var(--text-primary);
+}
+.lingsi-v6-collab input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.lingsi-collab-switch {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 16px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+  transition: background-color 150ms var(--ease);
+}
+.lingsi-collab-switch::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--on-brand);
+  box-shadow: var(--shadow-1);
+  transition: transform 150ms var(--ease);
+}
+.lingsi-v6-collab input:checked ~ .lingsi-collab-switch { background: var(--brand); }
+.lingsi-v6-collab input:checked ~ .lingsi-collab-switch::after { transform: translateX(10px); }
+.lingsi-v6-collab:hover input:checked:not(:disabled) ~ .lingsi-collab-switch { background: var(--brand-hover); }
+.lingsi-v6-collab:hover input:not(:checked):not(:disabled) ~ .lingsi-collab-switch { background: var(--text-tertiary); }
+.lingsi-v6-collab:has(input:focus-visible) { border-radius: var(--r-lg); outline: 2px solid var(--focus); outline-offset: 1px; }
+.lingsi-v6-collab:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.lingsi-v6 .lingsi-composer-bar .lingsi-send {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  margin: 0;
+  border-radius: 50%;
+  color: var(--on-brand);
+}
+.lingsi-v6 .lingsi-send:disabled:not(.lingsi-send-stop) {
+  background: var(--soft-strong);
+  color: var(--text-disabled);
+  opacity: 1;
+}
+.lingsi-v6 .lingsi-send:not(.lingsi-send-stop):active:not(:disabled) { background: var(--brand-active); }
+.lingsi-v6 .lingsi-composer-bar .lingsi-send-stop {
+  background: var(--soft);
+  color: var(--text-primary);
+}
+.lingsi-v6 .lingsi-composer-bar .lingsi-send-stop:hover:not(:disabled) { background: var(--soft-strong); }
+.lingsi-v6 .lingsi-composer-hint {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  padding: 0 5px;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  opacity: 1;
+}
+.lingsi-composer-meta,
+.lingsi-composer-policy,
+.lingsi-composer-keys,
+.lingsi-composer-keys > span { display: inline-flex; align-items: center; }
+.lingsi-composer-meta { gap: 12px; min-width: 0; }
+.lingsi-composer-policy { gap: 5px; font-size: var(--fs-micro); }
+.lingsi-composer-policy svg { flex-shrink: 0; }
+.lingsi-v6 .lingsi-model-pill {
+  display: inline-flex;
+  gap: 5px;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--fs-micro);
+  line-height: 20px;
+}
+.lingsi-v6 .lingsi-model-pill-warn { color: var(--warn); }
+.lingsi-composer-keys { gap: 12px; font-size: var(--fs-micro); }
+.lingsi-composer-keys > span { gap: 4px; white-space: nowrap; }
+.lingsi-composer-keys kbd {
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 15%, transparent);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--fs-micro);
+  line-height: 17px;
+}
+.lingsi-v6 .lingsi-ref-chips { gap: 6px; padding: 14px 16px 0; }
+.lingsi-v6 .lingsi-ref-chip { height: 28px; max-width: 100%; border-radius: var(--r-lg); }
+.lingsi-v6 .lingsi-ref-chip-x { width: 22px; height: 22px; }
+.lingsi-v6 .lingsi-ref-chip-x:is(:hover, :focus-visible) {
+  background: var(--soft-strong);
+  color: var(--text-primary);
+}
+.lingsi-ref-picker { width: min(320px, calc(100vw - 56px)); }
+
+/* Respond to the actual writing column, including when the preview panel opens. */
+@container composer (max-width: 560px) {
+  .lingsi-v6 .lingsi-composer-bar { grid-template-columns: 1fr auto; gap: 9px 12px; }
+  .lingsi-composer-settings { grid-column: 1 / -1; grid-row: 1; justify-self: start; }
+  .lingsi-composer-tools { grid-row: 2; }
+  .lingsi-v6 .lingsi-send { grid-row: 2; }
+  .lingsi-v6 .lingsi-composer-ta.ant-input { padding: 16px 16px 12px; }
+  .lingsi-composer-tool { min-height: 38px; }
+  .lingsi-v6-mode .glass-select-trigger, .lingsi-v6-collab { min-height: 34px; }
+  .lingsi-composer-policy { display: none; }
+  .lingsi-composer-keys { gap: 8px; }
+}
+@media (max-width: 767px) {
+  .lingsi-composer-keys { display: none; }
+  .lingsi-composer-policy { display: inline-flex; }
+  .lingsi-v6 .lingsi-composer-box { border-radius: var(--r-2xl); }
+  .lingsi-v6 .lingsi-composer-hint { margin-top: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lingsi-v6 .lingsi-composer-box,
+  .lingsi-composer-tool,
+  .lingsi-v6-collab,
+  .lingsi-collab-switch,
+  .lingsi-collab-switch::after { transition: none; }
+}

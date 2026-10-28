@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { AgentChatRef, AgentMode } from '@/api/agent'
 import { listActivities } from '@/api/activity'
 import type { ActivityVO } from '@/api/activity'
-import { Close, Plus, Rules, Send, Stop, Toolbox } from './LingsiIcons'
+import { ArrowUp, Close, Plan, Plus, Rules, Sparkles, Stop, Toolbox } from './LingsiIcons'
 import GlassSelect from '@/components/glass/GlassSelect'
 import type { GlassSelectOption } from '@/components/glass/GlassSelect'
 
@@ -157,8 +157,8 @@ export default function LingsiComposer({
       </span>
     </Tooltip>
   ) : (
-    <Tooltip title="模型由后端配置决定（pams.agent.provider / pams.agent.model）">
-      <span className="lingsi-model-pill">{provider || '待命'}</span>
+    <Tooltip title={provider ? `当前使用 ${provider === 'deepseek' ? 'DeepSeek' : provider}` : '发送消息，开始与灵思协作'}>
+      <span className="lingsi-model-pill"><Sparkles size={12} />{provider === 'deepseek' ? 'DeepSeek' : provider || '灵思就绪'}</span>
     </Tooltip>
   )
 
@@ -167,7 +167,7 @@ export default function LingsiComposer({
       <Select<ActivityOption>
         showSearch
         allowClear
-        style={{ width: 320 }}
+        style={{ width: '100%' }}
         placeholder="输入活动名称搜索，选中即附加"
         filterOption={false}
         value={picked as unknown as ActivityOption}
@@ -216,6 +216,7 @@ export default function LingsiComposer({
 
           <Input.TextArea
             ref={ref}
+            aria-label="任务内容"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={
@@ -223,7 +224,7 @@ export default function LingsiComposer({
                 ? '正在加载会话…'
                 : kb
                   ? '问一个资料问题，例如：活动结束后要归档哪些材料？'
-                  : '说说你要准备什么，或补充当前任务的要求…'
+                  : '把你想推进的事，交给灵思…'
             }
             autoSize={{ minRows: 2, maxRows: 6 }}
             disabled={disabled}
@@ -238,45 +239,54 @@ export default function LingsiComposer({
           />
 
           <div className="lingsi-composer-bar">
-            <Popover
-              open={pickerOpen}
-              onOpenChange={setPickerOpen}
-              trigger="click"
-              placement="topLeft"
-              title="附加活动作为上下文"
-              content={pickerContent}
-            >
-              <Tooltip title="附加活动作为上下文">
-                <button type="button" className="lingsi-icon-btn" aria-label="附加上下文">
-                  <Plus size={15} />
+            <div className="lingsi-composer-tools">
+              <Popover
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                trigger="click"
+                placement="topLeft"
+                title="附加活动作为上下文"
+                content={pickerContent}
+              >
+                <Tooltip title="附加活动作为上下文">
+                  <button type="button" className="lingsi-composer-tool" aria-label="附加上下文" disabled={busy || disabled}>
+                    <Plus size={16} /><span>添加上下文</span>
+                  </button>
+                </Tooltip>
+              </Popover>
+
+              <Tooltip title="我当前会做什么">
+                <button type="button" className="lingsi-composer-tool" aria-label="查看能力" onClick={onOpenTools}>
+                  <Toolbox size={16} /><span>工具</span>
                 </button>
               </Tooltip>
-            </Popover>
+            </div>
 
-            <Tooltip title="我当前会做什么">
-              <button type="button" className="lingsi-icon-btn" onClick={onOpenTools}>
-                <Toolbox size={15} />
-              </button>
-            </Tooltip>
-
-            <GlassSelect
-              className="lingsi-v6-mode"
-              ariaLabel="运行模式"
-              value={mode}
-              options={MODE_OPTIONS}
-              disabled={busy || disabled}
-              onChange={onModeChange}
-            />
-            <label className="lingsi-v6-collab" title="标准模式下按任务需要自动使用专家协作">
-              <input type="checkbox" checked={mode === 'standard' && autoCollab} disabled={mode !== 'standard' || busy || disabled} onChange={e => onAutoCollabChange(e.target.checked)}/>自动协作
-            </label>
-
-            {modelNode}
+            <div className="lingsi-composer-settings">
+              <GlassSelect
+                className="lingsi-v6-mode"
+                ariaLabel="运行模式"
+                value={mode}
+                options={MODE_OPTIONS}
+                disabled={busy || disabled}
+                onChange={onModeChange}
+              />
+              <label className="lingsi-v6-collab" title="标准模式下按任务需要自动使用专家协作">
+                <input
+                  type="checkbox"
+                  aria-label="自动协作"
+                  checked={mode === 'standard' && autoCollab}
+                  disabled={mode !== 'standard' || busy || disabled}
+                  onChange={e => onAutoCollabChange(e.target.checked)}
+                />
+                <span>自动协作</span><span className="lingsi-collab-switch" aria-hidden="true" />
+              </label>
+            </div>
 
             {busy ? (
               <Tooltip title={canStop ? '停止本次回答' : '正在停止，等待执行状态确认'}>
                 <button type="button" className="lingsi-send lingsi-send-stop" aria-label="停止任务" disabled={!canStop} onClick={onStop}>
-                  <Stop size={13} />
+                  <Stop size={18} />
                 </button>
               </Tooltip>
             ) : (
@@ -288,7 +298,7 @@ export default function LingsiComposer({
                   onClick={submit}
                   disabled={disabled || !value.trim()}
                 >
-                  <Send size={14} />
+                  <ArrowUp size={19} />
                 </button>
               </Tooltip>
             )}
@@ -296,13 +306,18 @@ export default function LingsiComposer({
         </div>
 
         <div className="lingsi-composer-hint">
-          <span>Enter 发送 · Shift+Enter 换行</span>
-          <span className="lingsi-composer-hint-r">
-            {kb
-              ? '资料问答 · 只检索资料，回答附带出处'
-              : readonly
-                ? '只读模式 · 本次会话不会改动任何数据'
-                : '涉及变更的操作会先生成清单，你确认后才执行'}
+          <div className="lingsi-composer-meta">
+            {modelNode}
+            <span className="lingsi-composer-policy"><Plan size={12} />
+              {kb
+                ? '回答附带资料出处'
+                : readonly
+                  ? '仅查询，不修改数据'
+                  : '变更前会请你确认'}
+            </span>
+          </div>
+          <span className="lingsi-composer-keys">
+            <span><kbd>Enter</kbd> 发送</span><span><kbd>Shift ↵</kbd> 换行</span>
           </span>
         </div>
       </div>

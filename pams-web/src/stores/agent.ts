@@ -17,6 +17,7 @@ import type {
 } from '@/api/agent'
 import * as api from '@/api/agent'
 import { thinkingHeadline, timelineFromMessage } from '@/utils/thinking'
+import { createRequestId } from '@/utils/requestId'
 
 /** 协作过程事件：需要按会话归属过滤的那几类（见 applyStreamEvent） */
 const COLLAB_EVENT_TYPES = new Set([
@@ -815,7 +816,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (!content) return
     if (get().thinking) return
     const version = ++requestVersion
-    const requestId = crypto.randomUUID()
+    const requestId = createRequestId()
     receivedSeqs.clear(); streamCursor = 0
     if (requestTimer) clearTimeout(requestTimer)
 

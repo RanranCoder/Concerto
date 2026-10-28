@@ -175,7 +175,10 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
         trackBg: t.soft,
       },
       Tooltip: {
-        colorBgSpotlight: t.textPrimary,
+        // Use the same surface and text pair as other floating panels. In dark
+        // mode textPrimary is light, so it cannot be a background for white text.
+        colorBgSpotlight: t.canvasElevated,
+        colorTextLightSolid: t.textPrimary,
       },
       Descriptions: {
         labelBg: t.soft,

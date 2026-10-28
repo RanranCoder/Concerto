@@ -136,6 +136,15 @@ export function Send({ size = 16 }: IconProps) {
   )
 }
 
+/** 向上发送 */
+export function ArrowUp({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden>
+      <path d="M8 13V3M3.8 7.2L8 3l4.2 4.2" />
+    </svg>
+  )
+}
+
 /** 停止 */
 export function Stop({ size = 16 }: IconProps) {
   return (
