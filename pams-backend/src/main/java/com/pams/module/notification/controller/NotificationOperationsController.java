@@ -15,6 +15,23 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/notifications/operations")
 public class NotificationOperationsController {
   @org.springframework.beans.factory.annotation.Autowired
+  private com.pams.module.notification.service.NotificationPolicyService policies;
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.pams.module.notification.service.NotificationMetricsService metrics;
+  @GetMapping("/policy")
+  public Result<com.pams.module.notification.service.NotificationPolicyService.Policy> policy(@AuthenticationPrincipal LoginUser user) {
+    authorize(user);return Result.ok(policies.get());
+  }
+  @PutMapping("/policy")
+  public Result<com.pams.module.notification.service.NotificationPolicyService.Policy> savePolicy(@AuthenticationPrincipal LoginUser user,@RequestBody com.pams.module.notification.service.NotificationPolicyService.Policy request) {
+    authorize(user);if(!auth.capabilities(user.getId()).contains("org:manage"))throw new BizException(403,"需要组织配置管理权限");
+    return Result.ok(policies.save(request,user.getId()));
+  }
+  @GetMapping("/metrics")
+  public Result<Map<String,Object>> metrics(@AuthenticationPrincipal LoginUser user) {
+    authorize(user);return Result.ok(metrics.snapshot());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
   private com.pams.module.notification.service.MaintenanceNoticeService maintenance;
   public record SubscriptionRequest(boolean enabled) {}
   @GetMapping("/subscription")
@@ -52,7 +69,7 @@ public class NotificationOperationsController {
   public Result<Void> retry(@PathVariable String kind,@PathVariable long id,@AuthenticationPrincipal LoginUser user) {
     long org=authorize(user);
     String table=switch(kind){case "outbox"->"notification_outbox";case "delivery"->"notification_delivery";case "reminder"->"notification_reminder";default->throw new BizException(400,"无效管线类型");};
-    String lease=kind.equals("reminder")?"":",lease_token=NULL,lease_until=NULL";
+    String lease=kind.equals("reminder")?"":",lease_token=NULL,lease_until=NULL,completed_at=NULL";
     var previous=db.queryForList("SELECT attempts FROM "+table+" WHERE org_id=? AND id=? AND status='FAILED' FOR UPDATE",org,id);
     if(previous.isEmpty())throw new BizException(409,"记录不存在或无需重试");
     if(db.update("UPDATE "+table+" SET status='PENDING',attempts=0,next_attempt_at=CURRENT_TIMESTAMP,last_error=NULL"+lease+" WHERE org_id=? AND id=? AND status='FAILED'",org,id)!=1)throw new BizException(409,"记录不存在或无需重试");

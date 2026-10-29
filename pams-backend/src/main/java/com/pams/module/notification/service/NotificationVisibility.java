@@ -31,6 +31,17 @@ public class NotificationVisibility {
     if (user == null || !Objects.equals(user.getOrgId(), notification.getOrgId())) return false;
     String type = Objects.toString(notification.getEntityType(), "");
     if (type.isBlank()) return true; // personal messages without a business source
+    if(type.equals("ORG_DIGEST")) {
+      if(notification.getId()==null)return false;
+      var sources=db.queryForList("SELECT n.id,n.org_id,n.entity_type,n.entity_id,n.deleted FROM notification_digest_item d JOIN notification n ON n.id=d.source_message_id AND n.org_id=d.org_id WHERE d.org_id=? AND d.digest_message_id=? AND d.user_id=?",notification.getOrgId(),notification.getId(),uid);
+      if(sources.isEmpty() || sources.size()!=db.queryForObject("SELECT COUNT(*) FROM notification_digest_item WHERE org_id=? AND digest_message_id=? AND user_id=?",Integer.class,notification.getOrgId(),notification.getId(),uid))return false;
+      for(var row:sources) {
+        if("ORG_DIGEST".equals(row.get("entity_type")) || ((Number)row.get("deleted")).intValue()!=0)return false;
+        var source=new Notification();source.setId(((Number)row.get("id")).longValue());source.setOrgId(notification.getOrgId());source.setEntityType((String)row.get("entity_type"));source.setEntityId(row.get("entity_id")==null?null:((Number)row.get("entity_id")).longValue());
+        if(!canRead(uid,source))return false;
+      }
+      return true;
+    }
     if(Set.of("MAINTENANCE","ACCOUNT_IMPORT").contains(type)) {
       var capabilities=auth.capabilities(uid);
       boolean allowed=type.equals("MAINTENANCE")?capabilities.contains("org:audit:view"):

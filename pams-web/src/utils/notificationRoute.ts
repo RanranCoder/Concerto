@@ -2,6 +2,7 @@ import { useAuthStore } from '@/stores/auth'
 
 export function notificationRoute(n: { entityType: string | null; entityId: number | null; activityId?: number | null }): string | null {
   if (!n.entityId || !n.entityType) return null
+  if (n.entityType === 'ORG_DIGEST') return '/notifications'
   if (n.entityType === 'MAINTENANCE') return '/notifications?view=operations'
   if (n.entityType === 'ACCOUNT_IMPORT') return useAuthStore.getState().user?.permissions?.includes('member:view') ? '/members' : null
   if (['QUALITY', 'QUALITY_DELETE'].includes(n.entityType)) return '/archive/credits'

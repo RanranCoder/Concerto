@@ -82,4 +82,5 @@ public class NotificationStreamRegistry {
   @jakarta.annotation.PreDestroy
   public void stopWriters(){writers.shutdownNow();}
   public int size(){return connections.size();}
+  public long size(long org){return connections.values().stream().filter(c->c.org==org).count();}
 }

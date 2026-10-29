@@ -4,6 +4,7 @@ import GlassCard from '@/components/glass/GlassCard'
 import GlassTable from '@/components/glass/GlassTable'
 import { get, post, put } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import NotificationPolicyPanel from './NotificationPolicyPanel'
 
 interface Metrics { states: { status: string; count: number }[]; oldestPendingAt: string | null; retried: number; failures: { id: number; status: string; attempts: number; last_error: string | null; created_at: string }[] }
 export default function NotificationOperations() {
@@ -25,6 +26,7 @@ export default function NotificationOperations() {
     return () => { active = false }
   }, [token, revision])
   return <>
+    <NotificationPolicyPanel />
     <Space style={{ display: 'flex', marginBottom: 16 }}><Button onClick={() => setRevision(n => n + 1)} loading={loading}>刷新管线状态</Button><span>仅显示当前组织的处理状态与错误类别</span></Space>
     <GlassCard style={{ padding: 16, marginBottom: 16 }}><Space><span>订阅本人维护告警</span><Switch aria-label="订阅本人维护告警" checked={identity === token && subscribed} disabled={loading || identity !== token} loading={savingSubscription} onChange={async enabled => {
       setSavingSubscription(true)

@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly=true)
 public class NotificationService {
+  @org.springframework.beans.factory.annotation.Autowired
+  private NotificationPolicyService policies;
   private final JdbcTemplate db;
   private final NotificationPipeline pipeline;
   private final NotificationVisibility visibility;
@@ -39,11 +41,12 @@ public class NotificationService {
     PageResult<NotificationVO> result=new PageResult<>();result.setCurrent(current);result.setSize(limit);
     result.setTotal(db.queryForObject("SELECT COUNT(*)"+where,Long.class,args.toArray()));
     args.add(limit);args.add((long)(current-1)*limit);
-    result.setRecords(db.query("SELECT n.*,i.read_at AS personal_read_at,u.real_name AS sender_name"+where
-      +" ORDER BY i.created_at DESC,i.id DESC LIMIT ? OFFSET ?",(rs,row)->toVO(rs,uid),args.toArray()));
+    var policy=policies==null?null:policies.get();var now=java.time.LocalDateTime.now(PendingWorkService.ZONE);
+    result.setRecords(db.query("SELECT n.*,i.read_at AS personal_read_at,i.silent_at_materialization AS personal_silent,u.real_name AS sender_name"+where
+      +" ORDER BY i.created_at DESC,i.id DESC LIMIT ? OFFSET ?",(rs,row)->toVO(rs,uid,policy,now),args.toArray()));
     return result;
   }
-  private NotificationVO toVO(ResultSet rs,long uid) throws SQLException {
+  private NotificationVO toVO(ResultSet rs,long uid,NotificationPolicyService.Policy policy,java.time.LocalDateTime now) throws SQLException {
     Notification n=new Notification();n.setId(rs.getLong("id"));n.setOrgId(rs.getLong("org_id"));
     n.setType(NotificationType.valueOf(rs.getString("type")));n.setEntityType(rs.getString("entity_type"));
     n.setEntityId(rs.getObject("entity_id",Long.class));n.setActivityId(rs.getObject("activity_id",Long.class));
@@ -81,6 +84,8 @@ public class NotificationService {
         +"WHERE r.org_id=? AND r.message_id=? AND r.user_id=? AND r.generation=s.generation AND s.active=TRUE AND (r.expires_at IS NULL OR r.expires_at>CURRENT_TIMESTAMP)",Long.class,NotificationPipeline.org(),n.getId(),uid);
       if(current==0 || "completed".equals(v.getActionState()) || "cancelled".equals(v.getActionState()))v.setNotify(false);
     }
+    if(policy!=null && !NotificationPolicyService.allowImmediate(policy,n.getType(),v.getCreatedAt(),now))v.setNotify(false);
+    if(rs.getBoolean("personal_silent"))v.setNotify(false);
     return v;
   }
   @Transactional

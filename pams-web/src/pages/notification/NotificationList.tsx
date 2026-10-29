@@ -41,6 +41,7 @@ const TYPE_LABEL: Record<string, string> = {
   PARTY_SUMMARY: '党务处理摘要',
   IMPORT_RESULT: '导入结果',
   MAINTENANCE_ALERT: '维护告警',
+  ORG_DIGEST: '每日资讯摘要',
   NEWS_UPLOADED: '新媒体',
   SIGNIN_ROSTER_UPLOADED: '签到',
   SIGNIN_COMPLETED: '签到',

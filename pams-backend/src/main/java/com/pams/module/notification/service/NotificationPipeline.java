@@ -66,7 +66,10 @@ public class NotificationPipeline {
       n.setActivityId(activityId(n.getEntityType(),entityId));
       n=messages.saveAndFlush(n);
       db.update("INSERT INTO notification_outbox(org_id,message_id,status,next_attempt_at,created_at) VALUES(?,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",org,n.getId());
-    } else n=messages.findById(existing.getFirst()).orElseThrow();
+    } else {
+      n=messages.findById(existing.getFirst()).orElseThrow();
+      db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'fact_merge_hits',1) ON DUPLICATE KEY UPDATE total_value=total_value+1",org);
+    }
     Long outbox=db.queryForObject("SELECT id FROM notification_outbox WHERE org_id=? AND message_id=?",Long.class,org,n.getId());
     for(Long user:audience) db.update("INSERT INTO notification_outbox_recipient(outbox_id,user_id) VALUES(?,?) ON DUPLICATE KEY UPDATE user_id=?",outbox,user,user);
     return n;
@@ -87,6 +90,6 @@ public class NotificationPipeline {
   }
   public void invalidate(long user) {
     db.update("INSERT INTO notification_delivery(org_id,message_id,user_id,status,next_attempt_at,created_at) "
-      +"VALUES(?,0,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE status='PENDING',next_attempt_at=CURRENT_TIMESTAMP,lease_token=NULL,lease_until=NULL",org(),user);
+      +"VALUES(?,0,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE status='PENDING',next_attempt_at=CURRENT_TIMESTAMP,lease_token=NULL,lease_until=NULL,attempts=0,completed_at=NULL,created_at=CURRENT_TIMESTAMP",org(),user);
   }
 }

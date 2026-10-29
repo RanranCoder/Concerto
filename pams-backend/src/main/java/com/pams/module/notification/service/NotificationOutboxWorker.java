@@ -15,6 +15,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class NotificationOutboxWorker {
+  @org.springframework.beans.factory.annotation.Autowired
+  private NotificationPolicyService policies;
   private static final Logger log=LoggerFactory.getLogger(NotificationOutboxWorker.class);
   private final JdbcTemplate db;private final NotificationRepository messages;
   private final NotificationVisibility visibility;private final NotificationStreamRegistry streams;
@@ -34,8 +36,12 @@ public class NotificationOutboxWorker {
     for(var row:rows) {
       long id=((Number)row.get("id")).longValue(),org=((Number)row.get("org_id")).longValue();
       String lease=UUID.randomUUID().toString();
-      int claimed=tx.execute(s->db.update("UPDATE "+table+" SET status='PROCESSING',lease_token=?,lease_until=?,attempts=attempts+1 "
-        +"WHERE id=? AND org_id=? AND status IN ('PENDING','PROCESSING') AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP)",lease,LocalDateTime.now().plusSeconds(60),id,org));
+      int claimed=tx.execute(s->{
+        int changed=db.update("UPDATE "+table+" SET status='PROCESSING',lease_token=?,lease_until=?,attempts=attempts+1 "
+          +"WHERE id=? AND org_id=? AND status IN ('PENDING','PROCESSING') AND next_attempt_at<=CURRENT_TIMESTAMP AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP)",lease,LocalDateTime.now().plusSeconds(60),id,org);
+        if(changed>0 && db.queryForObject("SELECT attempts FROM "+table+" WHERE id=? AND org_id=?",Integer.class,id,org)>1)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,?,1) ON DUPLICATE KEY UPDATE total_value=total_value+1",org,delivery?"delivery_retry_claims":"outbox_retry_claims");
+        return changed;
+      });
       if(claimed==0)continue;
       Long previous=OrgContext.get();OrgContext.set(org);
       try {
@@ -56,15 +62,20 @@ public class NotificationOutboxWorker {
     long message=((Number)rows.getFirst().get("message_id")).longValue();
     var n=messages.findById(message).orElseThrow();
     if(!Objects.equals(n.getOrgId(),org))throw new IllegalStateException("notification tenant mismatch");
-    for(Long uid:db.queryForList("SELECT r.user_id FROM notification_outbox_recipient r JOIN sys_user u ON u.id=r.user_id "
-        +"WHERE r.outbox_id=? AND u.org_id=? AND u.deleted=0 AND u.status=1",Long.class,id,org)) {
-      if(!visibility.canRead(uid,n))continue;
-      db.update("INSERT INTO notification_inbox(org_id,message_id,user_id,created_at) VALUES(?,?,?,?) "
-        +"ON DUPLICATE KEY UPDATE user_id=?",org,message,uid,n.getCreatedAt(),uid);
+    var recipients=db.queryForList("SELECT user_id FROM notification_outbox_recipient WHERE outbox_id=?",Long.class,id);
+    int skipped=0,duplicate=0;
+    var policy=policies==null?null:policies.get();
+    boolean silent=policy!=null && NotificationPolicyService.INFORMATION.contains(n.getType()) && !NotificationPolicyService.allowImmediate(policy,n.getType(),n.getCreatedAt(),LocalDateTime.now(PendingWorkService.ZONE));
+    for(Long uid:recipients) {
+      if(!visibility.canRead(uid,n)){skipped++;continue;}
+      if(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE org_id=? AND message_id=? AND user_id=?",Long.class,org,message,uid)>0)duplicate++;
+      db.update("INSERT INTO notification_inbox(org_id,message_id,user_id,created_at,silent_at_materialization) VALUES(?,?,?,?,?) "
+        +"ON DUPLICATE KEY UPDATE user_id=?",org,message,uid,n.getCreatedAt(),silent,uid);
       db.update("INSERT INTO notification_delivery(org_id,message_id,user_id,status,next_attempt_at,created_at) VALUES(?,?,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) "
         +"ON DUPLICATE KEY UPDATE user_id=?",org,message,uid,uid);
     }
-    db.update("UPDATE notification_outbox SET status='COMPLETED',lease_token=NULL,lease_until=NULL,last_error=NULL WHERE id=? AND org_id=? AND lease_token=?",id,org,lease);
+    if(duplicate>0)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'inbox_duplicate_hits',?) ON DUPLICATE KEY UPDATE total_value=total_value+?",org,duplicate,duplicate);
+    db.update("UPDATE notification_outbox SET status='COMPLETED',lease_token=NULL,lease_until=NULL,last_error=NULL,completed_at=CURRENT_TIMESTAMP,recipient_count=?,skipped_count=? WHERE id=? AND org_id=? AND lease_token=?",recipients.size(),skipped,id,org,lease);
   }
   private void deliver(long id,long org,String lease) {
     var rows=db.queryForList("SELECT user_id FROM notification_delivery WHERE id=? AND org_id=? AND lease_token=?",id,org,lease);
@@ -72,6 +83,6 @@ public class NotificationOutboxWorker {
     long uid=((Number)rows.getFirst().get("user_id")).longValue();
     // Network writes occur outside a database transaction. A failed/disconnected stream recovers through REST.
     String status=streams.changed(org,uid)?"SIGNAL_QUEUED":"OFFLINE_SKIPPED";
-    tx.executeWithoutResult(s->db.update("UPDATE notification_delivery SET status=?,lease_token=NULL,lease_until=NULL WHERE id=? AND org_id=? AND lease_token=?",status,id,org,lease));
+    tx.executeWithoutResult(s->db.update("UPDATE notification_delivery SET status=?,lease_token=NULL,lease_until=NULL,completed_at=CURRENT_TIMESTAMP WHERE id=? AND org_id=? AND lease_token=?",status,id,org,lease));
   }
 }
