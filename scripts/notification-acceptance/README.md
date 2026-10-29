@@ -63,3 +63,10 @@ approval gate, never runs `repair`, and rejects production schema URLs.
 Snapshot restoration, production migration and live cutover must use a reviewed
 maintenance plan. Do not treat an isolated success as approval to modify the live
 database, and do not roll back only the application image after changing the schema.
+
+Before a production snapshot or permission report, run `production-preflight.sh`
+on the deployment host with `PAMS_EXPECTED_SCHEMA` set to the reviewed database.
+It reads the running backend's explicit datasource URL, rejects a mismatched
+schema or separate Flyway target, and queries that schema. A database named by
+`MYSQL_DATABASE` or a repository default is not evidence of the application's
+actual target. Credentials and full runtime URLs are never printed.
