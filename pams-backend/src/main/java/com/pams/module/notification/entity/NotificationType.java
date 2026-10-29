@@ -1,6 +1,9 @@
 package com.pams.module.notification.entity;
 
 public enum NotificationType {
+    QUALITY_SUMMARY,
+    PARTY_SUMMARY,
+    IMPORT_RESULT,
     GOVERNANCE_CHANGED,
     TASK_ASSIGNED,
     TASK_CHANGED,

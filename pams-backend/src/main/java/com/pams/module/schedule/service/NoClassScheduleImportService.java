@@ -43,6 +43,8 @@ import java.util.regex.Pattern;
 /** 批量导入班级课表生成无课表：解析 -> 计算 -> 写 xlsx/markdown 到统一输出目录 -> 组装结果 VO。 */
 @Service
 public class NoClassScheduleImportService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.BusinessNoticeService notices;
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     /** 学期参数格式：如 2025-2026-2。用于阻断把非法 semester 拼进输出文件名造成的路径穿越写入。 */
@@ -130,6 +132,10 @@ public class NoClassScheduleImportService {
             downloadUrl = "无课表/" + xlsxPath.getFileName().toString();
         }
 
+        if(notices!=null) {
+            notices.add(com.pams.module.notification.service.BusinessNoticeService.Domain.SCHEDULE_IMPORT,com.pams.module.notification.service.BusinessNoticeService.Action.IMPORTED,people.size(),null);
+            notices.add(com.pams.module.notification.service.BusinessNoticeService.Domain.SCHEDULE_IMPORT,com.pams.module.notification.service.BusinessNoticeService.Action.FAILED,failed.size(),null);
+        }
         return toVO(deptName, semester, rows, markdown, downloadUrl, files.size(), people.size(), failed, warnings);
     }
 

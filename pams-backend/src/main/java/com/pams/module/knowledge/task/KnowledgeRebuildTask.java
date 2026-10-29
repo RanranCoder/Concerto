@@ -38,6 +38,10 @@ import java.util.Map;
 public class KnowledgeRebuildTask {
 
     private final KnowledgeIndexer indexer;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate db;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationIncidentService incidents;
 
     /** 关闭开关：需要人工控制重建时机（如排查期）时设 false */
     @Value("${pams.agent.kb.daily-rebuild-enabled:true}")
@@ -53,13 +57,20 @@ public class KnowledgeRebuildTask {
             log.info("知识库每日兜底重建已关闭（pams.agent.kb.daily-rebuild-enabled=false）");
             return;
         }
+        for(Long org:db.queryForList("SELECT id FROM organization WHERE status=1 AND deleted=0 ORDER BY id",Long.class)) {
+        Long previous=com.pams.common.OrgContext.get();com.pams.common.OrgContext.set(org);
         long t0 = System.currentTimeMillis();
         try {
             Map<String, Integer> report = indexer.reindexAll();
             log.info("知识库每日兜底重建完成：{}（耗时 {}ms）", report, System.currentTimeMillis() - t0);
         } catch (Exception e) {
             // 定时任务抛出会把异常吞进调度器日志，显式记录并保持任务存活
-            log.error("知识库每日兜底重建失败", e);
+            log.error("知识库每日兜底重建失败 org={}",org,e);
+            try { incidents.record(org,com.pams.module.notification.service.NotificationIncidentService.Category.KB_DAILY_REBUILD_FAILURE); }
+            catch(RuntimeException failure) { log.warn("知识库故障台账写入失败 org={}",org,failure); }
+        } finally {
+            if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
+        }
         }
     }
 }

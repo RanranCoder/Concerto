@@ -1,6 +1,9 @@
 package com.pams.module.member.service;
 
 import com.pams.common.BizException;
+import com.pams.module.notification.service.BusinessNoticeService;
+import com.pams.module.notification.service.BusinessNoticeService.Domain;
+import com.pams.module.notification.service.BusinessNoticeService.Action;
 import com.pams.common.ExcelGuard;
 import com.pams.common.PageResult;
 import com.pams.entity.Department;
@@ -24,6 +27,9 @@ import java.util.*;
 
 @Service
 public class MemberImportService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private BusinessNoticeService notices;
+    private void notice(Domain domain,Action action,int count,Long actor) { if(notices!=null)notices.add(domain,action,count,actor); }
     private final MemberRepository memberRepo;
     private final DepartmentRepository deptRepo;
     private final MemberService memberService;
@@ -110,6 +116,8 @@ public class MemberImportService {
         // 不逐条发事件：几百人会往执行队列塞几百个任务。见 MemberService#publishBulkChanged
         if (memberService != null) memberService.publishBulkChanged();
         int total = toSave.size() + failed.size();
+        notice(Domain.MEMBER_IMPORT,Action.IMPORTED,toSave.size(),null);
+        notice(Domain.MEMBER_IMPORT,Action.FAILED,failed.size(),null);
         return new MemberImportResultVO(total, toSave.size(), 0, failed);
     }
 

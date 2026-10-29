@@ -42,7 +42,18 @@ public class NotificationOperationsController {
     long org=authorize(user);
     String table=switch(kind){case "outbox"->"notification_outbox";case "delivery"->"notification_delivery";case "reminder"->"notification_reminder";default->throw new BizException(400,"无效管线类型");};
     String lease=kind.equals("reminder")?"":",lease_token=NULL,lease_until=NULL";
+    var previous=db.queryForList("SELECT attempts FROM "+table+" WHERE org_id=? AND id=? AND status='FAILED' FOR UPDATE",org,id);
+    if(previous.isEmpty())throw new BizException(409,"记录不存在或无需重试");
     if(db.update("UPDATE "+table+" SET status='PENDING',attempts=0,next_attempt_at=CURRENT_TIMESTAMP,last_error=NULL"+lease+" WHERE org_id=? AND id=? AND status='FAILED'",org,id)!=1)throw new BizException(409,"记录不存在或无需重试");
+    db.update("INSERT INTO notification_operation_audit(org_id,actor_id,pipeline_kind,record_id,previous_attempts) VALUES(?,?,?,?,?)",org,user.getId(),kind,id,previous.getFirst().get("attempts"));
     return Result.ok();
+  }
+  @GetMapping("/audit")
+  public Result<List<Map<String,Object>>> audit(@AuthenticationPrincipal LoginUser user) {
+    return Result.ok(db.queryForList("SELECT id,actor_id,pipeline_kind,record_id,previous_attempts,created_at FROM notification_operation_audit WHERE org_id=? ORDER BY id DESC LIMIT 100",authorize(user)));
+  }
+  @GetMapping("/incidents")
+  public Result<List<Map<String,Object>>> incidents(@AuthenticationPrincipal LoginUser user) {
+    return Result.ok(db.queryForList("SELECT id,category,window_date,occurrences,first_seen_at,last_seen_at FROM notification_incident WHERE org_id=? ORDER BY id DESC LIMIT 100",authorize(user)));
   }
 }

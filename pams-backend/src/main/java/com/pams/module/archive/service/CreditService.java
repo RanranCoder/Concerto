@@ -1,6 +1,9 @@
 package com.pams.module.archive.service;
 
 import com.pams.common.BizException;
+import com.pams.module.notification.service.BusinessNoticeService;
+import com.pams.module.notification.service.BusinessNoticeService.Domain;
+import com.pams.module.notification.service.BusinessNoticeService.Action;
 import com.pams.common.PageResult;
 import com.pams.module.archive.dto.CreditRequest;
 import com.pams.module.archive.entity.CreditRecord;
@@ -24,6 +27,9 @@ import java.util.UUID;
 
 @Service
 public class CreditService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private BusinessNoticeService notices;
+    private void notice(Domain domain,Action action,int count,Long actor) { if(notices!=null)notices.add(domain,action,count,actor); }
     private final CreditRecordRepository repository;
     public CreditService(CreditRecordRepository repository) { this.repository = repository; }
 
@@ -76,18 +82,22 @@ public class CreditService {
         c.setRecordBy(recordBy);
         c.setCreatedAt(LocalDateTime.now());
         apply(c, req);
-        return repository.save(c);
+        CreditRecord saved=repository.save(c);
+        notice(Domain.QUALITY,Action.ADD,1,recordBy);
+        return saved;
     }
 
     @Transactional
     public void update(Long id, CreditRequest req) {
         apply(getEntity(id), req);
+        notice(Domain.QUALITY,Action.UPDATE,1,null);
     }
 
     /** 素拓加分记录为流水账，无逻辑删除列，删除即物理删除 */
     @Transactional
     public void delete(Long id) {
         repository.delete(getEntity(id));
+        notice(Domain.QUALITY_DELETE,Action.DELETE,1,null);
     }
 
     private void apply(CreditRecord c, CreditRequest req) {
@@ -140,6 +150,8 @@ public class CreditService {
         Map<String, Integer> res = new LinkedHashMap<>();
         res.put("added", added);
         res.put("skipped", skipped);
+        notice(Domain.QUALITY,Action.ADD,added,operatorId);
+        notice(Domain.QUALITY,Action.SKIPPED,skipped,operatorId);
         return res;
     }
 
@@ -147,6 +159,7 @@ public class CreditService {
     public int batchRollback(String batchId) {
         List<CreditRecord> rows = repository.findByBatchId(batchId);
         repository.deleteAll(rows);
+        notice(Domain.QUALITY_DELETE,Action.ROLLBACK,rows.size(),null);
         return rows.size();
     }
 }

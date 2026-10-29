@@ -110,6 +110,7 @@ class NotificationStageThreeTest {
     operations.retry("outbox",id,principal(owner));
     assertThat(db.queryForObject("SELECT status FROM notification_outbox WHERE id=?",String.class,id)).isEqualTo("PENDING");
     assertThat(db.queryForObject("SELECT attempts FROM notification_outbox WHERE id=?",Integer.class,id)).isZero();
+    assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_operation_audit WHERE org_id=1 AND actor_id=? AND pipeline_kind='outbox' AND record_id=? AND previous_attempts=6",Long.class,owner,id)).isEqualTo(1);
   }
   @Test void ordinaryAnnouncementIsSilentAndConfirmationRemainsAnExplicitAction() {
     var a=announcements.create(owner,request(false));

@@ -1,6 +1,9 @@
 package com.pams.module.party.service;
 
 import com.pams.common.BizException;
+import com.pams.module.notification.service.BusinessNoticeService;
+import com.pams.module.notification.service.BusinessNoticeService.Domain;
+import com.pams.module.notification.service.BusinessNoticeService.Action;
 import com.pams.module.party.dto.PartyInvestigationRequest;
 import com.pams.module.party.dto.PartyRegisterRequest;
 import com.pams.module.party.dto.PartyRosterRequest;
@@ -25,6 +28,9 @@ import java.util.List;
  */
 @Service
 public class PartyRecordService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private BusinessNoticeService notices;
+    private void notice(Domain domain,Action action,int count,Long actor) { if(notices!=null)notices.add(domain,action,count,actor); }
     private final PartyMemberRepository memberRepo;
     private final PartyRosterRepository rosterRepo;
     private final PartyInvestigationRepository investigationRepo;
@@ -69,7 +75,9 @@ public class PartyRecordService {
         PartyRoster r = new PartyRoster();
         applyRoster(r, req);
         r.setCreatedAt(LocalDateTime.now());
-        return rosterRepo.save(r).getId();
+        Long saved=rosterRepo.save(r).getId();
+        notice(Domain.PARTY_RECORD,Action.ADD,1,null);
+        return saved;
     }
 
     @Transactional
@@ -77,6 +85,7 @@ public class PartyRecordService {
         PartyRoster r = rosterRepo.findById(id).orElseThrow(() -> new BizException(3004, "名单记录不存在"));
         applyRoster(r, req);
         rosterRepo.save(r);
+        notice(Domain.PARTY_RECORD,Action.UPDATE,1,null);
     }
 
     @Transactional
@@ -85,6 +94,7 @@ public class PartyRecordService {
             throw new BizException(3004, "名单记录不存在");
         }
         rosterRepo.deleteById(id);
+        notice(Domain.PARTY_RECORD,Action.DELETE,1,null);
     }
 
     private void applyRoster(PartyRoster r, PartyRosterRequest req) {
@@ -113,7 +123,9 @@ public class PartyRecordService {
         PartyInvestigation e = new PartyInvestigation();
         applyInvestigation(e, req);
         e.setCreatedAt(LocalDateTime.now());
-        return investigationRepo.save(e).getId();
+        Long saved=investigationRepo.save(e).getId();
+        notice(Domain.PARTY_LETTER,Action.ADD,1,null);
+        return saved;
     }
 
     @Transactional
@@ -123,6 +135,7 @@ public class PartyRecordService {
         requireMember(req.getMemberId());
         applyInvestigation(e, req);
         investigationRepo.save(e);
+        notice(Domain.PARTY_LETTER,Action.UPDATE,1,null);
     }
 
     @Transactional
@@ -131,6 +144,7 @@ public class PartyRecordService {
             throw new BizException(3005, "函调记录不存在");
         }
         investigationRepo.deleteById(id);
+        notice(Domain.PARTY_LETTER,Action.DELETE,1,null);
     }
 
     private void applyInvestigation(PartyInvestigation e, PartyInvestigationRequest req) {
@@ -161,7 +175,9 @@ public class PartyRecordService {
         PartyRegister e = new PartyRegister();
         applyRegister(e, req);
         e.setCreatedAt(LocalDateTime.now());
-        return registerRepo.save(e).getId();
+        Long saved=registerRepo.save(e).getId();
+        notice(Domain.PARTY_RECORD,Action.ADD,1,null);
+        return saved;
     }
 
     @Transactional
@@ -170,6 +186,7 @@ public class PartyRecordService {
         requireMember(req.getMemberId());
         applyRegister(e, req);
         registerRepo.save(e);
+        notice(Domain.PARTY_RECORD,Action.UPDATE,1,null);
     }
 
     @Transactional
@@ -178,6 +195,7 @@ public class PartyRecordService {
             throw new BizException(3006, "登记记录不存在");
         }
         registerRepo.deleteById(id);
+        notice(Domain.PARTY_RECORD,Action.DELETE,1,null);
     }
 
     private void applyRegister(PartyRegister e, PartyRegisterRequest req) {
@@ -215,7 +233,9 @@ public class PartyRecordService {
         PartyTransfer e = new PartyTransfer();
         applyTransfer(e, req);
         e.setCreatedAt(LocalDateTime.now());
-        return transferRepo.save(e).getId();
+        Long saved=transferRepo.save(e).getId();
+        notice(Domain.PARTY_RECORD,Action.ADD,1,null);
+        return saved;
     }
 
     @Transactional
@@ -224,6 +244,7 @@ public class PartyRecordService {
         requireMember(req.getMemberId());
         applyTransfer(e, req);
         transferRepo.save(e);
+        notice(Domain.PARTY_RECORD,Action.UPDATE,1,null);
     }
 
     @Transactional
@@ -232,6 +253,7 @@ public class PartyRecordService {
             throw new BizException(3007, "转移记录不存在");
         }
         transferRepo.deleteById(id);
+        notice(Domain.PARTY_RECORD,Action.DELETE,1,null);
     }
 
     private void applyTransfer(PartyTransfer e, PartyTransferRequest req) {

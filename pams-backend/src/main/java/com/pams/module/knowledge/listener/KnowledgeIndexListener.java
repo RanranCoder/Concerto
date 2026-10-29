@@ -60,6 +60,8 @@ import java.util.concurrent.RejectedExecutionException;
 @Slf4j
 @Component
 public class KnowledgeIndexListener {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationIncidentService incidents;
 
     private final KnowledgeIndexer indexer;
     private final Executor executor;
@@ -140,18 +142,29 @@ public class KnowledgeIndexListener {
     }
 
     private void submit(Runnable task, String what) {
+        Long org=com.pams.common.OrgContext.get();
+        if(org==null) { log.warn("知识库增量重建缺少组织上下文，跳过提交");return; }
         try {
             executor.execute(() -> {
+                Long previous=com.pams.common.OrgContext.get();com.pams.common.OrgContext.set(org);
                 try {
                     task.run();
                 } catch (Exception e) {
                     // 索引失败绝不影响业务（业务事务早已提交），只留日志；每日兜底会补齐
                     log.warn("知识库增量重建失败（将由每日兜底重建补齐）：{}", what, e);
+                    incident(org,com.pams.module.notification.service.NotificationIncidentService.Category.KB_INDEX_FAILURE);
+                } finally {
+                    if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
                 }
             });
         } catch (RejectedExecutionException e) {
             log.warn("知识库增量重建被丢弃（执行队列已满）：{} —— 每日兜底重建会补齐", what);
+            incident(org,com.pams.module.notification.service.NotificationIncidentService.Category.KB_QUEUE_REJECTED);
         }
+    }
+    private void incident(long org,com.pams.module.notification.service.NotificationIncidentService.Category category) {
+        try { if(incidents!=null)incidents.record(org,category); }
+        catch(RuntimeException e) { log.warn("知识库故障台账写入失败 org={} category={}",org,category,e); }
     }
 
     /** 供测试与排障：把事件类型映射成源类型，避免各处硬编码字符串 */

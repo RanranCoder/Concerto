@@ -13,10 +13,13 @@ export default function NotificationOperations() {
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
+  const [audit, setAudit] = useState<Record<string, unknown>[]>([])
+  const [incidents, setIncidents] = useState<Record<string, unknown>[]>([])
   useEffect(() => {
     let active = true
-    setData({}); setLoading(true); setError(false)
-    void get<Record<string, Metrics>>('/notifications/operations').then(result => { if(active) { setData(result); setIdentity(token) } }).catch(() => { if(active) setError(true) }).finally(() => { if(active) setLoading(false) })
+    setData({}); setAudit([]); setIncidents([]); setLoading(true); setError(false)
+    void Promise.all([get<Record<string, Metrics>>('/notifications/operations'), get<Record<string, unknown>[]>('/notifications/operations/audit'), get<Record<string, unknown>[]>('/notifications/operations/incidents')])
+      .then(([result, auditRows, incidentRows]) => { if(active) { setData(result); setAudit(auditRows); setIncidents(incidentRows); setIdentity(token) } }).catch(() => { if(active) setError(true) }).finally(() => { if(active) setLoading(false) })
     return () => { active = false }
   }, [token, revision])
   return <>
@@ -34,5 +37,13 @@ export default function NotificationOperations() {
         }}>重新入队</Button> },
       ]} />
     </GlassCard>)}
+    {identity === token && <>
+      <GlassCard style={{ padding: 16, marginBottom: 16 }}><h3>知识库维护故障</h3><GlassTable rowKey="id" dataSource={incidents} pagination={false} columns={[
+        { title: '类别', dataIndex: 'category' }, { title: '日期', dataIndex: 'window_date' }, { title: '发生次数', dataIndex: 'occurrences' }, { title: '最近发生', dataIndex: 'last_seen_at' },
+      ]} locale={{ emptyText: '暂无维护故障' }} /></GlassCard>
+      <GlassCard style={{ padding: 16 }}><h3>重新入队操作记录</h3><GlassTable rowKey="id" dataSource={audit} pagination={false} columns={[
+        { title: '操作账号 ID', dataIndex: 'actor_id' }, { title: '管线', dataIndex: 'pipeline_kind' }, { title: '记录 ID', dataIndex: 'record_id' }, { title: '原尝试次数', dataIndex: 'previous_attempts' }, { title: '操作时间', dataIndex: 'created_at' },
+      ]} locale={{ emptyText: '暂无重新入队操作' }} /></GlassCard>
+    </>}
   </>
 }

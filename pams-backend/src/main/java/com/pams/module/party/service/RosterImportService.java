@@ -1,6 +1,9 @@
 package com.pams.module.party.service;
 
 import com.pams.common.BizException;
+import com.pams.module.notification.service.BusinessNoticeService;
+import com.pams.module.notification.service.BusinessNoticeService.Domain;
+import com.pams.module.notification.service.BusinessNoticeService.Action;
 import com.pams.common.ExcelGuard;
 import com.pams.module.party.entity.PartyRoster;
 import com.pams.module.party.repository.PartyRosterRepository;
@@ -32,6 +35,9 @@ import java.util.Set;
  */
 @Service
 public class RosterImportService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private BusinessNoticeService notices;
+    private void notice(Domain domain,Action action,int count,Long actor) { if(notices!=null)notices.add(domain,action,count,actor); }
     private final PartyRosterRepository rosterRepo;
 
     public RosterImportService(PartyRosterRepository rosterRepo) {
@@ -101,6 +107,8 @@ public class RosterImportService {
         if (!toSave.isEmpty()) {
             rosterRepo.saveAll(toSave);
         }
+        notice(Domain.PARTY_IMPORT,Action.IMPORTED,toSave.size(),null);
+        notice(Domain.PARTY_IMPORT,Action.SKIPPED,skipped,null);
         return new RosterImportResult(toSave.size(), skipped);
     }
 

@@ -1,6 +1,9 @@
 package com.pams.module.party.service;
 
 import com.pams.common.BizException;
+import com.pams.module.notification.service.BusinessNoticeService;
+import com.pams.module.notification.service.BusinessNoticeService.Domain;
+import com.pams.module.notification.service.BusinessNoticeService.Action;
 import com.pams.common.PageResult;
 import com.pams.module.party.dto.PartyMemberRequest;
 import com.pams.module.party.dto.PartyStageRequest;
@@ -23,6 +26,9 @@ import java.util.Map;
 
 @Service
 public class PartyMemberService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private BusinessNoticeService notices;
+    private void notice(Domain domain,Action action,int count,Long actor) { if(notices!=null)notices.add(domain,action,count,actor); }
     private final PartyMemberRepository memberRepo;
     private final PartyStageRepository stageRepo;
 
@@ -79,6 +85,7 @@ public class PartyMemberService {
         m.setPoliticalStatus(target.label());
         m.setUpdatedAt(LocalDateTime.now());
         memberRepo.save(m);
+        notice(Domain.PARTY_STAGE,Action.STAGE,1,null);
     }
 
     /**

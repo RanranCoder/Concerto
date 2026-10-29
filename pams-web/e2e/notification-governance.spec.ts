@@ -23,6 +23,8 @@ test('announcement reading and confirmation are separate, and pipeline failures 
     else if (pathname === '/api/notifications/page') data = { records: [], total: 0, current: 1, size: 10 }
     else if (pathname === '/api/notifications/unread-count') data = 0
     else if (pathname === '/api/notifications/operations/outbox/7/retry') retried = true
+    else if (pathname === '/api/notifications/operations/incidents') data = [{ id: 1, category: 'KB_INDEX_FAILURE', window_date: '2026-10-29', occurrences: 4, last_seen_at: '2026-10-29T10:00:00' }]
+    else if (pathname === '/api/notifications/operations/audit') data = retried ? [{ id: 1, actor_id: 1, pipeline_kind: 'outbox', record_id: 7, previous_attempts: 6, created_at: '2026-10-29T10:00:00' }] : []
     else if (pathname === '/api/notifications/operations') data = { notification_outbox: { states: [{ status: retried ? 'PENDING' : 'FAILED', count: 1 }], oldestPendingAt: null, retried: 1, failures: retried ? [] : [{ id: 7, status: 'FAILED', attempts: 6, last_error: 'TransientDataAccessException', created_at: '2026-10-29T09:00:00' }] } }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 200, data }) })
   })
@@ -33,14 +35,19 @@ test('announcement reading and confirmation are separate, and pipeline failures 
   await page.getByRole('button', { name: '我已阅读并确认', exact: true }).click()
   await expect(page.getByText('已确认', { exact: true })).toBeVisible()
   expect(confirmed).toBe(true)
-  const evidence = path.resolve('../docs/design/notification-s3')
+  const evidence = path.resolve('../docs/design/notification-s3b')
   await mkdir(evidence, { recursive: true })
   await page.screenshot({ path: path.join(evidence, 'announcement-confirmation.png'), fullPage: true })
   await page.goto('/notifications')
   await page.getByRole('radiogroup', { name: '通知视图' }).getByText('管线运维', { exact: true }).click()
   await expect(page.getByText('TransientDataAccessException', { exact: true })).toBeVisible()
+  await expect(page.getByText('KB_INDEX_FAILURE', { exact: true })).toBeVisible()
   await page.screenshot({ path: path.join(evidence, 'operations.png'), fullPage: true })
   await page.getByRole('button', { name: '重新入队', exact: true }).click()
   await expect(page.getByText('暂无失败记录', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '重新入队操作记录' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'outbox', exact: true })).toBeVisible()
+  await page.getByRole('heading', { name: '重新入队操作记录' }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: path.join(evidence, 'operations-audit.png'), fullPage: true })
   expect(retried).toBe(true)
 })

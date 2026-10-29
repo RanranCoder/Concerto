@@ -35,6 +35,10 @@ public class NotificationVisibility {
         "SELECT COUNT(*) FROM notification_outbox o JOIN notification_outbox_recipient r ON r.outbox_id=o.id WHERE o.org_id=? AND o.message_id=? AND r.user_id=?",
         Long.class,notification.getOrgId(),notification.getId(),uid)>0;
     var permissions = auth.business(uid);
+    try {
+      var domain=BusinessNoticeService.Domain.valueOf(type);
+      return permissions.contains(domain.view) && permissions.contains(domain.operate);
+    } catch(IllegalArgumentException ignored) { /* Not a controlled business summary. */ }
     if(type.equalsIgnoreCase("SCHEDULE") && !permissions.contains("schedule:view") && permissions.contains("schedule:self:view")) {
       return notification.getId()!=null && db.queryForObject("SELECT COUNT(*) FROM notification_outbox o JOIN notification_outbox_recipient r ON r.outbox_id=o.id WHERE o.org_id=? AND o.message_id=? AND r.user_id=?",Long.class,notification.getOrgId(),notification.getId(),uid)>0;
     }
