@@ -281,9 +281,7 @@ public class AgentOrchestrator {
                     collaborationRouter.route(message, ctx.getMode(), collabEnabled);
             if (decision.upgrade()) {
                 collabMode = true;
-                String context = buildContext(convId,message,ctx,attached.note()).stream()
-                        .filter(m -> !SYSTEM_PROMPT.equals(m.content()))
-                        .map(m -> m.role()+": "+m.content()).collect(java.util.stream.Collectors.joining("\n"));
+                String context = attached.note();
                 CollaborationOutcome collaboration = runCollaboration(decision, message, convId, ctx, streamId, context);
                 reply = collaboration.reply();
                 collaborationState = collaboration.state();
@@ -545,43 +543,8 @@ public class AgentOrchestrator {
      */
     private List<LlmProvider.ChatMessage> buildContext(Long convId, String currentMessage, ToolContext ctx,
                                                        String refsNote) {
-        List<LlmProvider.ChatMessage> out = new ArrayList<>();
-        out.add(LlmProvider.ChatMessage.text("system", SYSTEM_PROMPT));
-
-        // 多轮「接续」上下文（用户反馈 item 3）：告诉模型"上一轮已经有一张待确认清单"，
-        // 用户在纠正时它才会按新说法重出清单去替换，而不是只做口头说明
-        //（不注入这段时模型把纠正当成全新任务，表现为"上下文偏移"）。
-        String pendingNote = taskGate.pendingPlanNote(convId, ctx.getUserId());
-        if (pendingNote != null) out.add(LlmProvider.ChatMessage.text("system", pendingNote));
-
-        List<AgentMessage> history = conversations.context(convId, props.getContextRounds());
-        for (AgentMessage m : history) {
-            // 最后一条必然是本轮用户消息（已在 run() 里落库），跳过，避免重复
-            if (isLastUserMessage(m, history, currentMessage)) continue;
-            if (AgentMessage.ROLE_SYSTEM.equals(m.getRole())) continue;
-            // 历史工具结果不回灌（见上方 javadoc）
-            if (AgentMessage.ROLE_TOOL.equals(m.getRole())) continue;
-
-            String role = AgentMessage.ROLE_ASSISTANT.equals(m.getRole()) ? "assistant" : "user";
-            String content = conversations.contextText(m, ctx);
-            if (content == null || content.isBlank()) continue;
-            out.add(LlmProvider.ChatMessage.text(role, content));
-        }
-        // 附加上下文放在**紧贴本轮 user 消息之前**：距离越近模型越不容易忽略，
-        // 且它只对这一轮有意义——历史轮次的附加引用不重复注入（历史里已有当时的文字语境）
-        if (refsNote != null && !refsNote.isBlank()) {
-            out.add(LlmProvider.ChatMessage.text("system", refsNote));
-        }
-        out.add(LlmProvider.ChatMessage.text("user", currentMessage));
-        return out;
-    }
-
-    private boolean isLastUserMessage(AgentMessage m, List<AgentMessage> all, String current) {
-        if (!AgentMessage.ROLE_USER.equals(m.getRole())) return false;
-        if (all.isEmpty()) return false;
-        AgentMessage last = all.get(all.size() - 1);
-        if (last != m) return false;
-        return current != null && current.equals(m.getContent());
+        return new ContextAssembler(conversations, props, taskGate)
+                .assemble(SYSTEM_PROMPT, convId, currentMessage, ctx, refsNote);
     }
 
     private List<LlmProvider.ToolSpec> toSpecs(List<AgentTool> tools) {

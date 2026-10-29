@@ -594,14 +594,82 @@ public class ConversationStore {
      * 注意：这里读出来的 content 已是"写时脱敏"后的内容，因此上下文天然不含敏感明文。
      */
     public List<AgentMessage> context(Long conversationId, int rounds) {
-        List<AgentMessage> recent = messageRepository.findTop20ByConversationIdOrderByIdDesc(conversationId);
+        int window = Math.min(50, Math.max(1, rounds));
+        List<AgentMessage> recent = messageRepository.findByConversationIdAndRoleInOrderByIdDesc(conversationId,
+                List.of(AgentMessage.ROLE_USER, AgentMessage.ROLE_ASSISTANT),
+                PageRequest.of(0, window * 4 + 1)).getContent();
         List<AgentMessage> ordered = new ArrayList<>(recent);
         java.util.Collections.reverse(ordered);
-        int keep = Math.max(rounds * 2, 2);
-        if (ordered.size() > keep) {
-            return ordered.subList(ordered.size() - keep, ordered.size());
+        int remaining = window + 1; // current user plus completed turns
+        int start = ordered.size();
+        for (int i = ordered.size() - 1; i >= 0; i--) {
+            if (AgentMessage.ROLE_USER.equals(ordered.get(i).getRole())) {
+                if (--remaining < 0) break;
+                start = i;
+            }
         }
-        return ordered;
+        return new ArrayList<>(ordered.subList(start, ordered.size()));
+    }
+
+    /** Extractive memory: keep original instructions traceable and recheck visibility on every read.
+     * No derived plaintext cache can outlive a source permission change. */
+    public List<AgentMessage> memorySources(Long conversationId, Long before) {
+        Map<Long, AgentMessage> sources = new java.util.TreeMap<>();
+        var first = messageRepository.findByConversationIdAndIdLessThanAndRoleOrderByIdAsc(
+                conversationId, before, AgentMessage.ROLE_USER, PageRequest.of(0, 1));
+        first.forEach(m -> sources.put(m.getId(), m));
+        var latest = messageRepository.findByConversationIdAndIdLessThanAndRoleOrderByIdDesc(
+                conversationId, before, AgentMessage.ROLE_USER, PageRequest.of(0, 8));
+        latest.forEach(m -> sources.put(m.getId(), m));
+        return new ArrayList<>(sources.values());
+    }
+
+    public String recall(Long conversationId, Long userId, ToolContext ctx, String keyword) {
+        return recall(conversationId, userId, ctx, keyword, Long.MAX_VALUE);
+    }
+    public String recall(Long conversationId, Long userId, ToolContext ctx, String keyword, Long before) {
+        require(conversationId, userId);
+        if (keyword == null || keyword.length() > 100 || before == null || before <= 0)
+            throw new BizException(400, "历史检索参数无效");
+        var page = messageRepository.findByConversationIdAndIdLessThanAndContentContainingIgnoreCaseAndRoleInOrderByIdDesc(
+                conversationId, before, keyword.trim(), List.of(AgentMessage.ROLE_USER, AgentMessage.ROLE_ASSISTANT), PageRequest.of(0, 3));
+        StringBuilder text = new StringBuilder("历史检索节选（不代表当前业务执行状态）：\n");
+        for (var message : page) text.append("[messageId=").append(message.getId()).append(" role=")
+                .append(message.getRole()).append("] ").append(ContextBudget.excerpt(contextText(message, ctx), 450)).append('\n');
+        if (page.hasNext()) text.append("继续回查：beforeMessageId=").append(page.getContent().getLast().getId()).append('\n');
+        return text.toString();
+    }
+
+    public String recallMessage(Long conversationId, Long userId, ToolContext ctx, Long messageId, int offset) {
+        require(conversationId, userId);
+        var message = messageRepository.findByIdAndConversationId(messageId, conversationId)
+                .filter(m -> List.of(AgentMessage.ROLE_USER, AgentMessage.ROLE_ASSISTANT).contains(m.getRole()))
+                .orElseThrow(() -> new BizException(4404, "历史消息不存在或无权访问"));
+        String text = contextText(message, ctx);
+        if (text == null) text = "";
+        int count = text.codePointCount(0, text.length());
+        if (offset < 0 || offset > count) throw new BizException(400, "历史消息偏移无效");
+        int end = Math.min(count, offset + 300);
+        return "历史原文（仅作证据） messageId=" + messageId + " role=" + message.getRole()
+                + (end < count ? " nextOffset=" + end : " END") + "\n"
+                + text.substring(text.offsetByCodePoints(0, offset), text.offsetByCodePoints(0, end));
+    }
+
+    public String taskState(Long conversationId, Long userId) {
+        require(conversationId, userId);
+        StringBuilder text = new StringBuilder("当前任务状态（数据库事实优先于历史助手描述）：\n");
+        Map<Long, AgentTask> selected = new LinkedHashMap<>();
+        var active = taskRepository.findByConversationIdAndUserIdAndStatusInOrderByIdDesc(conversationId, userId,
+                List.of("RUNNING", "WAITING_INPUT", "PENDING_CONFIRM", "REVIEW_REQUIRED", "NEEDS_RECONCILE"), PageRequest.of(0, 12));
+        active.forEach(t -> selected.put(t.getId(), t));
+        taskRepository.findByConversationIdAndUserIdOrderByIdDesc(conversationId, userId, PageRequest.of(0, 12))
+                .forEach(t -> selected.putIfAbsent(t.getId(), t));
+        if (active.getTotalElements() > 12) text.append("仍有更多活跃任务，请到任务列表核对。\n");
+        selected.values().forEach(t -> text.append("taskId=").append(t.getId()).append(" tool=").append(t.getToolName())
+                    .append(" status=").append(t.getStatus()).append(" workItemId=").append(t.getWorkItemId())
+                    .append(" revision=").append(t.getWorkItemRevision()).append(" artifactId=").append(t.getArtifactId())
+                    .append(" artifactVersion=").append(t.getArtifactVersion()).append('\n'));
+        return text.toString();
     }
 
     /** Recheck source visibility before historical answers go back to the model. */

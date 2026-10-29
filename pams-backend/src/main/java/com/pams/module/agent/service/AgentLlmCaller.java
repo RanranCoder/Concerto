@@ -66,7 +66,7 @@ public class AgentLlmCaller {
                                            ToolContext ctx, String streamId, int round) {
         if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
         LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
-                messages, specs, props.getTemperature(), props.getMaxTokens());
+                new ContextBudget(props).fit(messages, specs), specs, props.getTemperature(), props.getMaxTokens());
 
         // 已经是 stub（未配 Key 或显式配置）→ 直连规则模式
         if ("stub".equals(primaryProvider.name())) {
@@ -108,7 +108,7 @@ public class AgentLlmCaller {
     /** Specialist output is task-local and must not enter the shared final-answer delta channel. */
     public LlmProvider.ChatResponse callIsolated(List<LlmProvider.ChatMessage> messages,
                                                List<LlmProvider.ToolSpec> specs, String streamId) {
-        LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(messages,specs,props.getTemperature(),props.getMaxTokens());
+        LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,specs),specs,props.getTemperature(),props.getMaxTokens());
         for (int attempt=0; attempt<2; attempt++) {
             if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
             try {

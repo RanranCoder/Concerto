@@ -10,6 +10,12 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface AgentMessageRepository extends JpaRepository<AgentMessage, Long> {
+    java.util.Optional<AgentMessage> findByIdAndConversationId(Long id, Long conversationId);
+    Page<AgentMessage> findByConversationIdAndRoleInOrderByIdDesc(Long conversationId, List<String> roles, Pageable page);
+    Page<AgentMessage> findByConversationIdAndIdLessThanAndRoleOrderByIdAsc(Long conversationId, Long before, String role, Pageable page);
+    Page<AgentMessage> findByConversationIdAndIdLessThanAndRoleOrderByIdDesc(Long conversationId, Long before, String role, Pageable page);
+    Page<AgentMessage> findByConversationIdAndIdLessThanAndContentContainingIgnoreCaseAndRoleInOrderByIdDesc(
+            Long conversationId, Long before, String keyword, List<String> roles, Pageable page);
     List<AgentMessage> findByStreamIdAndRole(String streamId, String role);
 
     List<AgentMessage> findByConversationIdOrderByIdAsc(Long conversationId);

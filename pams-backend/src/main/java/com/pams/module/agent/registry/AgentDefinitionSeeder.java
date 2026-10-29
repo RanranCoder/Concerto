@@ -69,17 +69,19 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
 
     /** Upgrade only known old defaults. Custom scopes and disabled definitions are preserved. */
     private void upgradeUnmodifiedScope(AgentDefinition existing, AgentCatalog.Def current) {
+        var previous = current.toolScope() == null ? null : current.toolScope().stream().filter(n -> !n.equals("recallConversation")).toList();
         var legacy = switch (current.name()) {
-            case AgentCatalog.RETRIEVAL -> current.toolScope().stream().filter(n -> !n.equals("queryPartyMemberProgress")).toList();
+            case AgentCatalog.RETRIEVAL -> previous.stream().filter(n -> !n.equals("queryPartyMemberProgress")).toList();
             case AgentCatalog.PLANNING -> java.util.List.of("createActivity","draftPlanSections","generateAgendaFromPlan");
             case AgentCatalog.WRITING -> java.util.List.of("draftArticleFromActivity","draftNewsFromActivity","draftAnnouncement","publishAnnouncement");
             default -> null;
         };
-        if (legacy == null) return;
+        if (legacy == null && previous == null) return;
         try {
             var old = new com.fasterxml.jackson.databind.ObjectMapper().readTree(existing.getToolScope());
-            var expected = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(legacy));
-            if (expected.equals(old)) {
+            var expected = legacy == null ? com.fasterxml.jackson.databind.node.NullNode.instance : new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(legacy));
+            var prior = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(previous));
+            if ((expected.equals(old) || prior.equals(old)) && !toJson(current.toolScope()).equals(existing.getToolScope())) {
                 existing.setToolScope(toJson(current.toolScope()));
                 existing.setUpdatedAt(LocalDateTime.now());
                 repository.save(existing);

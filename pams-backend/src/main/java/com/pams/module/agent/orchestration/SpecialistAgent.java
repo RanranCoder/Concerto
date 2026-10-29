@@ -13,6 +13,8 @@ import java.util.*;
 /** Bounded specialist loop. Writes prepare actions through the same gate as the ordinary loop. */
 @Service
 public class SpecialistAgent {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.service.ContextAssembler contextAssembler;
     public record ToolInvocation(String name,String label,String status,String summary,long durationMs) {}
     public record Result(String agent,String text,List<ToolInvocation> invocations,String state,
                          String provider,boolean degraded,Sensitivity sensitivity,
@@ -44,8 +46,12 @@ public class SpecialistAgent {
         Set<String> allowed=new HashSet<>(scoped.stream().map(AgentTool::name).toList());
         List<LlmProvider.ToolSpec> specs=scoped.stream().map(t->new LlmProvider.ToolSpec(t.name(),t.description(),t.parametersSchema())).toList();
         List<LlmProvider.ChatMessage> messages=new ArrayList<>();
-        messages.add(LlmProvider.ChatMessage.text("system",rolePrompt(agent)+"\n依据工具事实完成子任务。写入先生成预览，等待系统确认，不自行提交。"));
-        messages.add(LlmProvider.ChatMessage.text("user",task==null?"":task));
+        String system = rolePrompt(agent)+"\n依据工具事实完成当前分配的子任务。历史中其他专家的任务不属于你的作用域。写入先生成预览，等待系统确认，不自行提交。";
+        if (contextAssembler != null) messages.addAll(contextAssembler.specialist(system, ctx.getConversationId(), task==null?"":task, ctx));
+        else {
+            messages.add(LlmProvider.ChatMessage.text("system",system));
+            messages.add(LlmProvider.ChatMessage.text("user",task==null?"":task));
+        }
         List<ToolInvocation> invocations=new ArrayList<>();
         List<Map<String,Object>> refs=new ArrayList<>(), rows=new ArrayList<>();
         String provider="", text="", state="SUCCESS";

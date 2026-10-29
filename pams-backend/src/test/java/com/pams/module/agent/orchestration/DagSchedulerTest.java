@@ -103,7 +103,7 @@ class DagSchedulerTest {
         var run=initialize(node(1,"create-first"),node(2,"write-after",1));
         var prompts=new ArrayList<String>();
         when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->{
-            List<LlmProvider.ChatMessage> messages=i.getArgument(0); String prompt=messages.get(1).content();
+            List<LlmProvider.ChatMessage> messages=i.getArgument(0); String prompt=messages.stream().filter(m -> "user".equals(m.role())).reduce((a,b) -> b).orElseThrow().content();
             if(messages.getFirst().content().contains("独立内容审查员")) return LlmProvider.ChatResponse.text("{\"issues\":[]}","test");
             prompts.add(prompt);
             if(prompt.startsWith("create-first")) return create("-chain");
@@ -133,7 +133,7 @@ class DagSchedulerTest {
         var started=new java.util.concurrent.CountDownLatch(2);
         when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->{
             started.countDown(); assertThat(started.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-            List<LlmProvider.ChatMessage> m=i.getArgument(0); return create(m.get(1).content().startsWith("left")?"-left":"-right");
+            List<LlmProvider.ChatMessage> m=i.getArgument(0); return create(m.stream().filter(v -> "user".equals(v.role())).reduce((a,b) -> b).orElseThrow().content().startsWith("left")?"-left":"-right");
         });
         scheduler.drive(run.getId(),1L);
         var actions=tasks.findByRunIdOrderByIdAsc(run.getId());
@@ -152,7 +152,7 @@ class DagSchedulerTest {
         var attempts=new AtomicInteger();
         when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->{
             List<LlmProvider.ChatMessage> m=i.getArgument(0);
-            if(m.get(1).content().startsWith("unstable") && attempts.getAndIncrement()==0) throw new IllegalStateException("offline");
+            if(m.stream().filter(v -> "user".equals(v.role())).reduce((a,b) -> b).orElseThrow().content().startsWith("unstable") && attempts.getAndIncrement()==0) throw new IllegalStateException("offline");
             return LlmProvider.ChatResponse.text("已核对的事实","test");
         });
         scheduler.drive(run.getId(),1L);

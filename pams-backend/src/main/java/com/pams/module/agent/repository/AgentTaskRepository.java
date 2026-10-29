@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
+    Page<AgentTask> findByConversationIdAndUserIdOrderByIdDesc(Long conversationId, Long userId, Pageable page);
+    Page<AgentTask> findByConversationIdAndUserIdAndStatusInOrderByIdDesc(Long conversationId, Long userId, List<String> statuses, Pageable page);
     @Transactional @Modifying(clearAutomatically=true,flushAutomatically=true)
     @Query("update AgentTask t set t.status=:to,t.confirmedAt=:ts,t.executionOwner=:owner,t.rowVersion=t.rowVersion+1 where t.id=:id and t.status=:from")
     int claimOwned(@Param("id")Long id,@Param("from")String from,@Param("to")String to,@Param("ts")LocalDateTime ts,@Param("owner")String owner);

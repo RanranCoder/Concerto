@@ -98,6 +98,12 @@ public class AgentProperties {
     /** 上下文保留的最近轮数（D5 成本控制） */
     private int contextRounds = 6;
 
+    /** Application budget, independent of the provider's advertised window. Includes output reserve. */
+    private int contextWindowTokens = 32768;
+    private int contextSafetyTokens = 1024;
+    private int contextToolResultTokens = 2048;
+    private int contextSummaryTokens = 3072;
+
     /** Agent 独立线程池大小（D1：不用 @Async 默认池，便于限流与指标采集） */
     private int executorCoreSize = 4;
     private int executorMaxSize = 8;

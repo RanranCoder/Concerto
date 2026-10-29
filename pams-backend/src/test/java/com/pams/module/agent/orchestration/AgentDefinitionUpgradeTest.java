@@ -14,7 +14,7 @@ class AgentDefinitionUpgradeTest {
         definition.setToolScope("[\"draftArticleFromActivity\",\"draftNewsFromActivity\",\"draftAnnouncement\",\"publishAnnouncement\"]");
         when(repo.findByName("writing")).thenReturn(Optional.of(definition));
         new AgentDefinitionSeeder(repo).run(null);
-        assertThat(definition.getToolScope()).isEqualTo("[\"draftArticleFromActivity\",\"publishAnnouncement\"]");
+        assertThat(definition.getToolScope()).isEqualTo("[\"draftArticleFromActivity\",\"publishAnnouncement\",\"recallConversation\"]");
         assertThat(definition.getEnabled()).isZero(); assertThat(definition.getRolePrompt()).isEqualTo("自定义语气");
         verify(repo).save(definition);
     }
