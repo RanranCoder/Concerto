@@ -14,6 +14,17 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/notifications/operations")
 public class NotificationOperationsController {
+  @org.springframework.beans.factory.annotation.Autowired
+  private com.pams.module.notification.service.MaintenanceNoticeService maintenance;
+  public record SubscriptionRequest(boolean enabled) {}
+  @GetMapping("/subscription")
+  public Result<com.pams.module.notification.service.MaintenanceNoticeService.Subscription> subscription(@AuthenticationPrincipal LoginUser user) {
+    authorize(user);return Result.ok(maintenance.subscription(user.getId()));
+  }
+  @PutMapping("/subscription")
+  public Result<com.pams.module.notification.service.MaintenanceNoticeService.Subscription> subscribe(@AuthenticationPrincipal LoginUser user,@RequestBody SubscriptionRequest request) {
+    authorize(user);return Result.ok(maintenance.subscribe(user.getId(),request.enabled()));
+  }
   private final JdbcTemplate db;private final TenantAuthorizationService auth;
   public NotificationOperationsController(JdbcTemplate db,TenantAuthorizationService auth){this.db=db;this.auth=auth;}
   private long authorize(LoginUser user) {

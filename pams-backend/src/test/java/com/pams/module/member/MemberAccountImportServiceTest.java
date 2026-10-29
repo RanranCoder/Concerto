@@ -103,6 +103,8 @@ class MemberAccountImportServiceTest {
         var retry = call("POST", "/api/members/account-batches/" + id + "/apply", Map.of(), 200);
         assertThat(first).isEqualTo(retry);
         assertThat(first.path("created").asInt()).isEqualTo(2);
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM notification WHERE entity_type='ACCOUNT_IMPORT' AND content LIKE ?",Integer.class,"%"+id+"%")).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT content FROM notification WHERE entity_type='ACCOUNT_IMPORT' AND content LIKE ?",String.class,"%"+id+"%")).contains("2 个待激活账号").doesNotContain("batch_student_1","batch_student_2","password","token");
         assertThat(db.queryForObject("SELECT COUNT(*) FROM sys_user WHERE username LIKE 'batch_student_%' AND org_id=1 AND status=0 AND role_id=?", Integer.class, role)).isEqualTo(2);
         assertThat(db.queryForObject("SELECT COUNT(*) FROM org_role_delegation WHERE user_id IN (SELECT user_id FROM member_account_credential WHERE batch_id=?)", Integer.class, id)).isZero();
         assertThat(call("GET", "/api/members/account-batches", null, 200).size()).isEqualTo(1);

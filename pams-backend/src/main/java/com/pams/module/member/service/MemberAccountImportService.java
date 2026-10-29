@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Isolation;
 /** Preview-bound tenant account creation. Raw setup tokens are never persisted. */
 @Service
 public class MemberAccountImportService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.notification.service.NotificationPipeline notifications;
     private final MemberRepository members;
     private final UserRepository users;
     private final RoleRepository roles;
@@ -121,6 +123,9 @@ public class MemberAccountImportService {
         }
         db.update("UPDATE member_account_batch SET status='APPLIED',applied_at=CURRENT_TIMESTAMP WHERE id=?", id);
         authorization.accountBatchAudit(authority, id, "MEMBER_ACCOUNT_CREATE", ids);
+        if(notifications!=null)notifications.record(com.pams.module.notification.entity.NotificationType.IMPORT_RESULT,
+            "成员账号批次已创建","批次 "+id+" 已创建 "+ids.size()+" 个待激活账号，请在成员开户批次中核对结果。",
+            "ACCOUNT_IMPORT",authority.orgId(),authority.actorId(),authority.actorId(),null,null);
         return result(id, authority.orgId());
     }
 

@@ -40,6 +40,7 @@ const TYPE_LABEL: Record<string, string> = {
   QUALITY_SUMMARY: '素拓处理摘要',
   PARTY_SUMMARY: '党务处理摘要',
   IMPORT_RESULT: '导入结果',
+  MAINTENANCE_ALERT: '维护告警',
   NEWS_UPLOADED: '新媒体',
   SIGNIN_ROSTER_UPLOADED: '签到',
   SIGNIN_COMPLETED: '签到',
@@ -71,8 +72,8 @@ interface NotificationRow {
 export default function NotificationList() {
   const canOperate = useAuthStore(s => s.user?.managementCapabilities?.includes('org:audit:view') ?? false)
   const [searchParams] = useSearchParams()
-  const [view, setView] = useState(searchParams.get('view') === 'pending' ? 'pending' : 'messages')
-  useEffect(() => { if (searchParams.get('view') === 'pending') setView('pending') }, [searchParams])
+  const [view, setView] = useState(['pending', 'operations'].includes(searchParams.get('view') ?? '') ? searchParams.get('view')! : 'messages')
+  useEffect(() => { if (['pending', 'operations'].includes(searchParams.get('view') ?? '')) setView(searchParams.get('view')!) }, [searchParams])
   const navigate = useNavigate()
   const revision = useNotificationStore(s => s.revision)
   const { message } = App.useApp()

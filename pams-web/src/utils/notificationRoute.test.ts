@@ -10,4 +10,5 @@ it('opens the plan tab of its activity and denies unknown destinations', () => {
   expect(notificationRoute({ entityType: 'QUALITY', entityId: 1 })).toBe('/archive/credits')
   expect(notificationRoute({ entityType: 'PARTY_STAGE', entityId: 1 })).toBe('/party/members')
   expect(notificationRoute({ entityType: 'SCHEDULE_IMPORT', entityId: 1 })).toBe('/routine/free-schedules')
+  expect(notificationRoute({ entityType: 'MAINTENANCE', entityId: 1 })).toBe('/notifications?view=operations')
 })

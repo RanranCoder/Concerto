@@ -31,6 +31,14 @@ public class NotificationVisibility {
     if (user == null || !Objects.equals(user.getOrgId(), notification.getOrgId())) return false;
     String type = Objects.toString(notification.getEntityType(), "");
     if (type.isBlank()) return true; // personal messages without a business source
+    if(Set.of("MAINTENANCE","ACCOUNT_IMPORT").contains(type)) {
+      var capabilities=auth.capabilities(uid);
+      boolean allowed=type.equals("MAINTENANCE")?capabilities.contains("org:audit:view"):
+          capabilities.containsAll(Set.of("member:import_account","user:manage","role:assign"));
+      return allowed && notification.getId()!=null && db.queryForObject(
+          "SELECT COUNT(*) FROM notification_outbox o JOIN notification_outbox_recipient r ON r.outbox_id=o.id WHERE o.org_id=? AND o.message_id=? AND r.user_id=?",
+          Long.class,notification.getOrgId(),notification.getId(),uid)>0;
+    }
     if (type.equals("GOVERNANCE")) return notification.getId()!=null && db.queryForObject(
         "SELECT COUNT(*) FROM notification_outbox o JOIN notification_outbox_recipient r ON r.outbox_id=o.id WHERE o.org_id=? AND o.message_id=? AND r.user_id=?",
         Long.class,notification.getOrgId(),notification.getId(),uid)>0;

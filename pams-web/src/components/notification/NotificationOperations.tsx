@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Space } from 'antd'
+import { Alert, Button, Space, Switch } from 'antd'
 import GlassCard from '@/components/glass/GlassCard'
 import GlassTable from '@/components/glass/GlassTable'
-import { get, post } from '@/api/http'
+import { get, post, put } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 
 interface Metrics { states: { status: string; count: number }[]; oldestPendingAt: string | null; retried: number; failures: { id: number; status: string; attempts: number; last_error: string | null; created_at: string }[] }
@@ -15,15 +15,23 @@ export default function NotificationOperations() {
   const [revision, setRevision] = useState(0)
   const [audit, setAudit] = useState<Record<string, unknown>[]>([])
   const [incidents, setIncidents] = useState<Record<string, unknown>[]>([])
+  const [subscribed, setSubscribed] = useState(false)
+  const [savingSubscription, setSavingSubscription] = useState(false)
   useEffect(() => {
     let active = true
-    setData({}); setAudit([]); setIncidents([]); setLoading(true); setError(false)
-    void Promise.all([get<Record<string, Metrics>>('/notifications/operations'), get<Record<string, unknown>[]>('/notifications/operations/audit'), get<Record<string, unknown>[]>('/notifications/operations/incidents')])
-      .then(([result, auditRows, incidentRows]) => { if(active) { setData(result); setAudit(auditRows); setIncidents(incidentRows); setIdentity(token) } }).catch(() => { if(active) setError(true) }).finally(() => { if(active) setLoading(false) })
+    setData({}); setAudit([]); setIncidents([]); setSubscribed(false); setLoading(true); setError(false)
+    void Promise.all([get<Record<string, Metrics>>('/notifications/operations'), get<Record<string, unknown>[]>('/notifications/operations/audit'), get<Record<string, unknown>[]>('/notifications/operations/incidents'), get<{ enabled: boolean }>('/notifications/operations/subscription')])
+      .then(([result, auditRows, incidentRows, subscription]) => { if(active) { setData(result); setAudit(auditRows); setIncidents(incidentRows); setSubscribed(subscription.enabled === true); setIdentity(token) } }).catch(() => { if(active) setError(true) }).finally(() => { if(active) setLoading(false) })
     return () => { active = false }
   }, [token, revision])
   return <>
     <Space style={{ display: 'flex', marginBottom: 16 }}><Button onClick={() => setRevision(n => n + 1)} loading={loading}>刷新管线状态</Button><span>仅显示当前组织的处理状态与错误类别</span></Space>
+    <GlassCard style={{ padding: 16, marginBottom: 16 }}><Space><span>订阅本人维护告警</span><Switch aria-label="订阅本人维护告警" checked={identity === token && subscribed} disabled={loading || identity !== token} loading={savingSubscription} onChange={async enabled => {
+      setSavingSubscription(true)
+      try { const result = await put<{ enabled: boolean }>('/notifications/operations/subscription', { enabled }); if(token === useAuthStore.getState().token) setSubscribed(result.enabled) }
+      catch { if(token === useAuthStore.getState().token) setError(true) }
+      finally { setSavingSubscription(false) }
+    }} /></Space><p>默认关闭。开启后，同类故障每天最多通知一次；后续次数继续在台账中更新。即时提醒遵循通知偏好。</p></GlassCard>
     {error && <Alert type="error" message="管线状态加载失败，请刷新重试" />}
     {Object.entries(identity === token ? data : {}).map(([table, metrics]) => <GlassCard key={table} style={{ padding: 16, marginBottom: 16 }}>
       <h3>{{ notification_outbox: '收件箱生成', notification_delivery: '在线唤醒', notification_reminder: '定时提醒' }[table] ?? table}</h3>

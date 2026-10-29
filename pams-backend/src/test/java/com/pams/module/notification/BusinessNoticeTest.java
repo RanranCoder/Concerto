@@ -30,8 +30,9 @@ class BusinessNoticeTest {
   @Autowired NotificationIncidentService incidents;
   TransactionTemplate tx;long owner;
   final List<Long> creditIds=new ArrayList<>(),rosterIds=new ArrayList<>();
+  final List<Long> incidentIds=new ArrayList<>();
   @BeforeEach void setup(){OrgContext.set(1L);org.springframework.security.core.context.SecurityContextHolder.clearContext();tx=new TransactionTemplate(manager);owner=db.queryForObject("SELECT id FROM sys_user WHERE username='teacher'",Long.class);}
-  @AfterEach void clear(){for(long id:creditIds)db.update("DELETE FROM credit_record WHERE org_id=1 AND id=?",id);for(long id:rosterIds)db.update("DELETE FROM party_roster WHERE org_id=1 AND id=?",id);OrgContext.clear();}
+  @AfterEach void clear(){for(long id:creditIds)db.update("DELETE FROM credit_record WHERE org_id=1 AND id=?",id);for(long id:rosterIds)db.update("DELETE FROM party_roster WHERE org_id=1 AND id=?",id);for(long id:incidentIds)db.update("DELETE FROM notification_incident WHERE id=?",id);OrgContext.clear();}
   long count(){return db.queryForObject("SELECT COUNT(*) FROM notification WHERE org_id=1",Long.class);}
   @Test void hundredsOfChangesProduceOneFrozenSummaryWithQualifiedAudience() {
     long before=count();
@@ -78,5 +79,6 @@ class BusinessNoticeTest {
     assertThat(db.queryForObject("SELECT SUM(occurrences) FROM notification_incident WHERE org_id=1 AND category='KB_INDEX_FAILURE'",Long.class)).isEqualTo(initial+2);
     assertThat(count()).isEqualTo(before);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_incident WHERE org_id=2 AND category='KB_INDEX_FAILURE'",Long.class)).isZero();
+    if(initial==0)incidentIds.add(db.queryForObject("SELECT id FROM notification_incident WHERE org_id=1 AND category='KB_INDEX_FAILURE'",Long.class));
   }
 }
