@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Empty, Select, Segmented, Space, Spin, Switch, Tag } from 'antd'
 import PendingWorkList from '@/components/notification/PendingWorkList'
+import NotificationOperations from '@/components/notification/NotificationOperations'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -35,6 +36,7 @@ const TYPE_LABEL: Record<string, string> = {
   PLAN_REJECTED: '策划书',
   PLAN_MODIFIED: '策划书',
   SYSTEM: '系统',
+  GOVERNANCE_CHANGED: '授权变更',
   NEWS_UPLOADED: '新媒体',
   SIGNIN_ROSTER_UPLOADED: '签到',
   SIGNIN_COMPLETED: '签到',
@@ -64,6 +66,7 @@ interface NotificationRow {
 }
 
 export default function NotificationList() {
+  const canOperate = useAuthStore(s => s.user?.managementCapabilities?.includes('org:audit:view') ?? false)
   const [searchParams] = useSearchParams()
   const [view, setView] = useState(searchParams.get('view') === 'pending' ? 'pending' : 'messages')
   useEffect(() => { if (searchParams.get('view') === 'pending') setView('pending') }, [searchParams])
@@ -204,7 +207,8 @@ export default function NotificationList() {
         }
       />
 
-      <Segmented aria-label="通知视图" value={view} onChange={value => setView(String(value))} options={[{ label: '消息记录', value: 'messages' }, { label: '待我处理', value: 'pending' }]} style={{ marginBottom: 16 }} />
+      <Segmented aria-label="通知视图" value={view} onChange={value => setView(String(value))} options={[{ label: '消息记录', value: 'messages' }, { label: '待我处理', value: 'pending' }, ...(canOperate ? [{ label: '管线运维', value: 'operations' }] : [])]} style={{ marginBottom: 16 }} />
+      {view === 'operations' && canOperate && <NotificationOperations />}
       {view === 'pending' && <GlassCard style={{ padding: 16 }}><PendingWorkList /></GlassCard>}
       <div hidden={view !== 'messages'}>
 

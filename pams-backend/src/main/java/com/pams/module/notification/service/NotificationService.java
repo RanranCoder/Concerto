@@ -55,6 +55,11 @@ public class NotificationService {
     }
     v.setTitle(rs.getString("title"));v.setContent(rs.getString("content"));v.setSenderName(rs.getString("sender_name"));
     v.setNotify(db.queryForObject("SELECT COUNT(*) FROM notification_preference WHERE org_id=? AND user_id=? AND event_type=? AND enabled=FALSE",Long.class,NotificationPipeline.org(),uid,n.getType().name())==0);
+    if(n.getType()==NotificationType.GOVERNANCE_CHANGED)v.setNotify(true);
+    if(n.getType()==NotificationType.ANNOUNCEMENT) {
+      long immediate=db.queryForObject("SELECT COUNT(*) FROM announcement WHERE org_id=? AND id=? AND deleted=0 AND (important=TRUE OR require_confirmation=TRUE)",Long.class,NotificationPipeline.org(),n.getEntityId());
+      if(immediate==0)v.setNotify(false);
+    }
     v.setEntityType(n.getEntityType());v.setEntityId(n.getEntityId());v.setActivityId(n.getActivityId());
     if(n.getType()==NotificationType.PLAN_SUBMITTED) {
       var rows=db.queryForList("SELECT p.status,r.approved FROM activity_plan p JOIN activity_plan_review r ON r.plan_id=p.id "
@@ -94,7 +99,7 @@ public class NotificationService {
   public List<NotificationPreferenceVO> getPreferences(Long uid) {
     Map<String,Boolean> prefs=new HashMap<>();
     db.query("SELECT event_type,enabled FROM notification_preference WHERE org_id=? AND user_id=?",rs->{prefs.put(rs.getString(1),rs.getBoolean(2));},NotificationPipeline.org(),uid);
-    return Arrays.stream(NotificationType.values()).map(t->NotificationPreferenceVO.of(t.name(),t==NotificationType.SYSTEM || prefs.getOrDefault(t.name(),true),t==NotificationType.SYSTEM)).toList();
+    return Arrays.stream(NotificationType.values()).map(t->NotificationPreferenceVO.of(t.name(),t==NotificationType.SYSTEM || t==NotificationType.GOVERNANCE_CHANGED || prefs.getOrDefault(t.name(),true),t==NotificationType.SYSTEM || t==NotificationType.GOVERNANCE_CHANGED)).toList();
   }
   @Transactional
   public void savePreferences(Long uid,List<NotificationPreferenceVO> prefs) {
@@ -102,7 +107,7 @@ public class NotificationService {
     for(var p:prefs) {
       if(p==null || p.getType()==null)continue;
       NotificationType t;try{t=NotificationType.valueOf(p.getType());}catch(IllegalArgumentException e){continue;}
-      if(t==NotificationType.SYSTEM)continue;
+      if(t==NotificationType.SYSTEM || t==NotificationType.GOVERNANCE_CHANGED)continue;
       db.update("INSERT INTO notification_preference(org_id,user_id,event_type,enabled) VALUES(?,?,?,?) "
         +"ON DUPLICATE KEY UPDATE enabled=?",NotificationPipeline.org(),uid,t.name(),p.isEnabled(),p.isEnabled());
     }

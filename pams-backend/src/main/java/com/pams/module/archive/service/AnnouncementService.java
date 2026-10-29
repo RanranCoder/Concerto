@@ -18,6 +18,8 @@ import java.util.List;
 
 @Service
 public class AnnouncementService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private AnnouncementDeliveryService delivery;
     private final AnnouncementRepository repository;
     private final AnnouncementReadRepository readRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -47,16 +49,27 @@ public class AnnouncementService {
         apply(a, req);
         Announcement saved = repository.save(a);
         // PRD-v5 F4：发布公告触发通知中心广播（发布者本人除外）
+        if (delivery != null) delivery.publish(saved,req,publisherId);
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new AnnouncementPublishedEvent(
-                    saved.getId(), saved.getTitle(), publisherId));
+                    saved.getId(), saved.getTitle(), publisherId,delivery!=null));
         }
         return saved;
     }
 
     @Transactional
     public void update(Long id, AnnouncementRequest req) {
-        apply(getEntity(id), req);
+        Announcement a=repository.lockById(id).orElseThrow(()->new BizException(2404,"公告不存在"));
+        if(!req.isImportantCorrection() && (a.isRequireConfirmation()!=req.isRequireConfirmation() || (a.isRequireConfirmation()
+            && (!java.util.Objects.equals(a.getTitle(),req.getTitle()) || !java.util.Objects.equals(a.getContent(),req.getContent())))))
+            throw new BizException(409,"需确认的公告修改正文须作为重要更正重新发布");
+        apply(a, req);
+        if(req.isImportantCorrection()) {
+            a.setConfirmationVersion(a.getConfirmationVersion()+1);
+            repository.saveAndFlush(a);
+            if(delivery!=null)delivery.publish(a,req,a.getPublisherId());
+            if(eventPublisher!=null)eventPublisher.publishEvent(new AnnouncementPublishedEvent(a.getId(),a.getTitle(),a.getPublisherId(),delivery!=null));
+        }
     }
 
     @Transactional
@@ -86,6 +99,8 @@ public class AnnouncementService {
     }
 
     private void apply(Announcement a, AnnouncementRequest req) {
+        a.setImportant(req.isImportant());
+        a.setRequireConfirmation(req.isRequireConfirmation());
         a.setTitle(req.getTitle());
         a.setContent(req.getContent());
         a.setPublishTime(req.getPublishTime() == null ? LocalDateTime.now() : req.getPublishTime());

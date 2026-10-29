@@ -222,6 +222,7 @@ public class NotificationEventListener {
     /** PRD-v5 F4：新公告发布 → 全员广播（含干事，通知中心可见） */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleAnnouncementPublished(AnnouncementPublishedEvent e) {
+        if(e.isNotificationsHandled())return;
         Set<String> roles = new java.util.LinkedHashSet<>(ALL_LEADER_ROLES);
         roles.add("STAFF");
         broadcastToRoles(NotificationType.ANNOUNCEMENT, "新公告",

@@ -2,6 +2,7 @@ import { useAuthStore } from '@/stores/auth'
 
 export function notificationRoute(n: { entityType: string | null; entityId: number | null; activityId?: number | null }): string | null {
   if (!n.entityId || !n.entityType) return null
+  if (n.entityType === 'ANNOUNCEMENT') return `/archive/announcements?id=${n.entityId}`
   if (n.entityType === 'PENDING_TASKS') return '/notifications?view=pending'
   if (n.entityType === 'SCHEDULE' && !useAuthStore.getState().user?.permissions?.includes('schedule:view')) return '/routine/my-schedules'
   if (n.activityId) {

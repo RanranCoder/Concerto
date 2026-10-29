@@ -340,6 +340,8 @@ public class TenantAuthorizationService {
             action,
             target,
             encode(detail));
+    if (Set.of("ASSIGN", "DELEGATE", "PUBLISH", "ENABLE", "DISABLE", "ARCHIVE").contains(action))
+      events.publishEvent(new com.pams.module.notification.event.GovernanceNoticeEvent(org,id,actor,action,target));
     String actorName =
         db
             .queryForList(

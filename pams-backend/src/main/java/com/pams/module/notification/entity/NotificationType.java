@@ -1,6 +1,7 @@
 package com.pams.module.notification.entity;
 
 public enum NotificationType {
+    GOVERNANCE_CHANGED,
     TASK_ASSIGNED,
     TASK_CHANGED,
     TASK_COMPLETED,

@@ -5,6 +5,11 @@ public class AnnouncementPublishedEvent {
     private final Long announcementId;
     private final String title;
     private final Long publisherId;
+    private boolean notificationsHandled;
+    public AnnouncementPublishedEvent(Long id,String title,Long publisher,boolean handled) {
+        this(id,title,publisher);this.notificationsHandled=handled;
+    }
+    public boolean isNotificationsHandled(){return notificationsHandled;}
 
     public AnnouncementPublishedEvent(Long announcementId, String title, Long publisherId) {
         this.announcementId = announcementId;

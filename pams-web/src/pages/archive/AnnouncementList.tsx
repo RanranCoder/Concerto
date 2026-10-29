@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   App,
   Button,
+  Checkbox,
+  Select,
   Form,
   Input,
   Popconfirm,
@@ -25,6 +27,8 @@ import {
   listAnnouncements,
   listAnnouncementReadIds,
   markAnnouncementRead,
+  announcementConfirmation,
+  confirmAnnouncement,
   type AnnouncementVO,
 } from '@/api/announcement'
 import { listUsers, type UserVO } from '@/api/user'
@@ -34,6 +38,10 @@ import { useHasPerm } from '@/components/glass/RequireRole'
 interface AnnouncementFormValues {
   title: string
   content: string
+  important: boolean
+  requireConfirmation: boolean
+  audienceAll: boolean
+  audienceUserIds?: number[]
 }
 
 export default function AnnouncementList() {
@@ -50,6 +58,15 @@ export default function AnnouncementList() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<AnnouncementFormValues>()
   const [detail, setDetail] = useState<AnnouncementVO | null>(null)
+  const [confirmation, setConfirmation] = useState<{ version: number; confirmed_at: string | null } | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const audienceAll = Form.useWatch('audienceAll', form)
+  useEffect(() => {
+    let active = true
+    setConfirmation(null)
+    if (detail?.requireConfirmation) void announcementConfirmation(detail.id).then(rows => { if(active) setConfirmation(rows[0] ?? null) }).catch(() => {})
+    return () => { active=false }
+  }, [detail?.id, detail?.confirmationVersion, detail?.requireConfirmation])
   const [params] = useSearchParams()
   const targetId = Number(params.get('id')) || undefined
   useEffect(() => {
@@ -101,6 +118,7 @@ export default function AnnouncementList() {
 
   const openPublish = () => {
     form.resetFields()
+    form.setFieldsValue({ audienceAll: true, important: false, requireConfirmation: false })
     setPublishOpen(true)
   }
 
@@ -111,6 +129,10 @@ export default function AnnouncementList() {
       await createAnnouncement({
         title: values.title.trim(),
         content: values.content.trim(),
+        important: values.important,
+        requireConfirmation: values.requireConfirmation,
+        audienceAll: values.audienceAll,
+        audienceUserIds: values.audienceAll ? [] : values.audienceUserIds,
       })
       message.success('公告已发布')
       setPublishOpen(false)
@@ -274,7 +296,7 @@ export default function AnnouncementList() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={{ audienceAll: true, important: false, requireConfirmation: false }}>
           <Form.Item
             name="title"
             label="标题"
@@ -293,6 +315,13 @@ export default function AnnouncementList() {
               placeholder="公告正文（支持换行）"
             />
           </Form.Item>
+          <Form.Item name="audienceAll" valuePropName="checked"><Checkbox>通知组织内所有可查看公告的账号</Checkbox></Form.Item>
+          {!audienceAll && <Form.Item name="audienceUserIds" label="通知接收人" rules={[{ required: true, message: '请选择接收人' }]}>
+            <Select mode="multiple" showSearch optionFilterProp="label" options={users.map(u => ({ value: u.id, label: `${u.realName} (${u.username})` }))} placeholder="选择账号" />
+          </Form.Item>}
+          <Typography.Paragraph type="secondary">这里选择通知接收人；公告正文仍按当前公告查看权限开放。</Typography.Paragraph>
+          <Form.Item name="important" valuePropName="checked"><Checkbox>重要公告，启用即时提醒</Checkbox></Form.Item>
+          <Form.Item name="requireConfirmation" valuePropName="checked"><Checkbox>要求接收人单独确认</Checkbox></Form.Item>
         </Form>
       </FormSurface>
 
@@ -301,7 +330,14 @@ export default function AnnouncementList() {
         title={detail?.title ?? '公告详情'}
         open={!!detail}
         onCancel={() => setDetail(null)}
-        footer={<Button onClick={() => setDetail(null)}>关闭</Button>}
+        footer={<Space>{confirmation && (confirmation.confirmed_at ? <Tag color="success">已确认</Tag> :
+          <Button type="primary" loading={confirming} onClick={async () => {
+            if(!detail) return
+            setConfirming(true)
+            try { await confirmAnnouncement(detail.id, confirmation.version); setConfirmation({ ...confirmation, confirmed_at: new Date().toISOString() }); message.success('公告已确认') }
+            catch { /* 保持未确认；接口拦截器会提示失败，用户可刷新公告后重试。 */ }
+            finally { setConfirming(false) }
+          }}>我已阅读并确认</Button>)}<Button onClick={() => setDetail(null)}>关闭</Button></Space>}
       >
         {detail && (
           <>

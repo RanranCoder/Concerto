@@ -60,6 +60,8 @@ public class PendingWorkService {
         return new Item("SCHEDULE:"+r.getLong("id"),"SCHEDULE","SCHEDULE",r.getLong("id"),r.getObject("activity_id",Long.class),
           "值班安排 · "+date+" "+Objects.toString(r.getString("location"),"地点待定"),"查看排班",start==null?null:date.atTime(start),false,null,null);
       },org,uid).stream().filter(Objects::nonNull).toList());
+    if(can.test("notice:view"))items.addAll(db.query("SELECT a.id,a.title FROM announcement a JOIN announcement_receipt r ON r.announcement_id=a.id AND r.org_id=a.org_id AND r.version=a.confirmation_version WHERE a.org_id=? AND a.deleted=0 AND a.require_confirmation=TRUE AND r.user_id=? AND r.confirmed_at IS NULL",
+      (r,n)->new Item("ANNOUNCEMENT:"+r.getLong("id"),"ANNOUNCEMENT_CONFIRM","ANNOUNCEMENT",r.getLong("id"),null,r.getString("title"),"确认公告",null,false,null,null),org,uid));
     items.sort(Comparator.comparing(Item::overdue).reversed().thenComparing(Item::dueAt,Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(Item::key));
     Map<String,Long> counts=new LinkedHashMap<>();items.forEach(i->counts.merge(i.type(),1L,Long::sum));
     return new Summary(items.size(),items.stream().filter(Item::overdue).count(),counts,List.copyOf(items));

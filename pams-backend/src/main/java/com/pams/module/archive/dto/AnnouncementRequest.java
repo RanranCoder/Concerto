@@ -12,4 +12,11 @@ public class AnnouncementRequest {
     @NotBlank(message = "公告内容不能为空")
     private String content;
     private LocalDateTime publishTime;
+    private boolean important;
+    private boolean requireConfirmation;
+    private boolean importantCorrection;
+    // Legacy callers retain organization-wide notification audience; new UI makes it explicit.
+    private boolean audienceAll = true;
+    private java.util.List<Long> audienceUserIds = java.util.List.of();
+    private java.util.List<Long> audienceDeptIds = java.util.List.of();
 }

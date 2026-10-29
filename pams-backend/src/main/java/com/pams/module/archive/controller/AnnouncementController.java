@@ -15,6 +15,17 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/announcements")
 public class AnnouncementController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.archive.service.AnnouncementDeliveryService delivery;
+    @GetMapping("/{id}/confirmation")
+    public Result<java.util.List<java.util.Map<String,Object>>> confirmation(@PathVariable long id,@AuthenticationPrincipal LoginUser user) {
+        return Result.ok(delivery.receipts(id,user.getId()));
+    }
+    public record Confirmation(int version) {}
+    @PostMapping("/{id}/confirm")
+    public Result<Void> confirm(@PathVariable long id,@RequestBody Confirmation request,@AuthenticationPrincipal LoginUser user) {
+        delivery.confirm(id,request.version(),user.getId());return Result.ok();
+    }
     private final AnnouncementService service;
     public AnnouncementController(AnnouncementService service) { this.service = service; }
 

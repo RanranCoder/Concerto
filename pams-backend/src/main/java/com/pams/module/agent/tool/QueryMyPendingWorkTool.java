@@ -14,7 +14,7 @@ public class QueryMyPendingWorkTool implements AgentTool {
   @Override public String runningLabel(){return "正在汇总待你处理的事项…";}
   @Override public String description(){return "汇总本人任务、选定审核人的策划书、可办理推文和本人已发布排班；按当前权限和业务状态查询，与工作台及通知中心一致。";}
   @Override public Map<String,Object> parametersSchema(){return ToolArgs.schema("object",Map.of(),List.of());}
-  @Override public List<String> requiredPermissions(){return List.of("task:view","plan:review","content:view","schedule:view","schedule:self:view");}
+  @Override public List<String> requiredPermissions(){return List.of("task:view","plan:review","content:view","schedule:view","schedule:self:view","notice:view");}
   @Override public boolean anyPermission(){return true;}
   @Override public Sensitivity sensitivity(){return Sensitivity.NORMAL;}
   @Override public ToolResult execute(ToolContext ctx,Map<String,Object> args) {
@@ -24,7 +24,7 @@ public class QueryMyPendingWorkTool implements AgentTool {
       var row=new LinkedHashMap<String,Object>();row.put("id",item.entityId());row.put("name",item.title());row.put("type",item.type());
       row.put("action",item.action());row.put("endDate",item.dueAt()==null?null:item.dueAt().toString());row.put("overdue",item.overdue());row.put("progress",item.progress());
       rows.add(row);
-      String link=item.entityType().equals("SCHEDULE")?(ctx.hasPermission("schedule:view")?"/routine/activity-schedules":"/routine/my-schedules"):
+      String link=item.entityType().equals("ANNOUNCEMENT")?"/archive/announcements?id="+item.entityId():item.entityType().equals("SCHEDULE")?(ctx.hasPermission("schedule:view")?"/routine/activity-schedules":"/routine/my-schedules"):
         item.activityId()!=null?"/activities/"+item.activityId()+"?tab="+switch(item.entityType()){case "PLAN"->"plan";case "ARTICLE"->"articles";default->"gantt";}:"/content/articles";
       refs.add(ToolArgs.map("type",item.entityType().toLowerCase(Locale.ROOT),"id",item.entityId(),"label",item.title(),"link",link));
     }

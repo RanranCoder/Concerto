@@ -21,6 +21,9 @@ public class Announcement implements OrgScoped {
     private LocalDateTime publishTime;
     private LocalDateTime createdAt;
     private Integer deleted;
+    private boolean important;
+    private boolean requireConfirmation;
+    private int confirmationVersion = 1;
     @org.hibernate.annotations.TenantId
     private Long orgId;
 }

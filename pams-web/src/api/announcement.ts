@@ -7,12 +7,21 @@ export interface AnnouncementVO {
   publisherId: number | null
   publishTime: string | null
   createdAt: string
+  important: boolean
+  requireConfirmation: boolean
+  confirmationVersion: number
 }
 
 export interface AnnouncementSave {
   title: string
   content: string
   publishTime?: string | null
+  important?: boolean
+  requireConfirmation?: boolean
+  audienceAll?: boolean
+  audienceUserIds?: number[]
+  audienceDeptIds?: number[]
+  importantCorrection?: boolean
 }
 
 export const listAnnouncements = () => get<AnnouncementVO[]>('/announcements')
@@ -23,3 +32,5 @@ export const deleteAnnouncement = (id: number) => del<void>(`/announcements/${id
 export const listAnnouncementReadIds = () => get<number[]>('/announcements/read-ids')
 /** 标记公告已读（幂等） */
 export const markAnnouncementRead = (id: number) => post<void>(`/announcements/${id}/read`)
+export const announcementConfirmation = (id: number) => get<{ version: number; confirmed_at: string | null }[]>(`/announcements/${id}/confirmation`)
+export const confirmAnnouncement = (id: number, version: number) => post<void>(`/announcements/${id}/confirm`, { version })
