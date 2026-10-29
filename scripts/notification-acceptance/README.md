@@ -70,3 +70,9 @@ It reads the running backend's explicit datasource URL, rejects a mismatched
 schema or separate Flyway target, and queries that schema. A database named by
 `MYSQL_DATABASE` or a repository default is not evidence of the application's
 actual target. Credentials and full runtime URLs are never printed.
+
+The internal hostname is `concerto.yuanlab.work`. Install `concerto-domain.conf`
+as the host Nginx vhost forwarding port 80 to the existing 8081 service; both
+proxy layers explicitly disable buffering/compression for SSE. Internal DNS
+must publish `concerto.yuanlab.work A 172.18.38.131`. This private address is
+for the LAN; the HTTP binding does not provision DNS or an HTTPS certificate.
