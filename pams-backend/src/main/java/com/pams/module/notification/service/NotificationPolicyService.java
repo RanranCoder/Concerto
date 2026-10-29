@@ -21,7 +21,7 @@ public class NotificationPolicyService {
   public Policy get(boolean lock) {
     var rows=db.queryForList("SELECT * FROM notification_org_policy WHERE org_id=?"+(lock?" FOR UPDATE":""),NotificationPipeline.org());
     if(rows.isEmpty())return defaults();var r=rows.getFirst();
-    return new Policy(bool(r.get("quiet_enabled")),time(r.get("quiet_start")),time(r.get("quiet_end")),bool(r.get("digest_enabled")),time(r.get("digest_time")),((Number)r.get("version")).longValue(),((java.sql.Timestamp)r.get("digest_since")).toLocalDateTime());
+    return new Policy(bool(r.get("quiet_enabled")),time(r.get("quiet_start")),time(r.get("quiet_end")),bool(r.get("digest_enabled")),time(r.get("digest_time")),((Number)r.get("version")).longValue(),com.pams.common.JdbcDateTimes.local(r.get("digest_since")));
   }
   static boolean bool(Object v){return v instanceof Boolean b?b:((Number)v).intValue()!=0;}
   static LocalTime time(Object v){return v instanceof LocalTime t?t:((java.sql.Time)v).toLocalTime();}

@@ -95,7 +95,7 @@ public class MemberAccountImportService {
         var authority = authorization.verifyAccountImport();
         var batch = batch(id, authority);
         if ("APPLIED".equals(batch.get("status"))) return result(id, authority.orgId());
-        if (!((Timestamp) batch.get("expires_at")).toLocalDateTime().isAfter(LocalDateTime.now()))
+        if (!com.pams.common.JdbcDateTimes.local(batch.get("expires_at")).isAfter(LocalDateTime.now()))
             throw new BizException(409, "开户预览已过期，请重新预览");
         if (((Number) batch.get("authz_version")).longValue() != authority.version())
             throw new BizException(409, "组织授权已变化，请重新预览");
@@ -147,7 +147,7 @@ public class MemberAccountImportService {
                 + "d.name AS dept_name FROM member_account_credential c JOIN sys_user u ON u.id=c.user_id"
                 + " JOIN sys_role r ON r.id=u.role_id LEFT JOIN sys_department d ON d.id=u.dept_id"
                 + " WHERE c.batch_id=? AND c.org_id=? AND u.org_id=c.org_id AND c.consumed_at IS NULL"
-                + " AND u.deleted=0 AND u.status=0 AND u.password=c.pending_password_hash ORDER BY c.user_id", id, authority.orgId());
+                + " AND u.deleted=0 AND u.status=0 AND CAST(u.password AS BINARY(255))=CAST(c.pending_password_hash AS BINARY(255)) ORDER BY c.user_id", id, authority.orgId());
         // A delegation or role may have changed since account creation.
         for (long roleId : pending.stream().map(r -> ((Number) r.get("role_id")).longValue()).distinct().toList())
             authorization.verifyAssignableRole(roleId);
@@ -182,7 +182,7 @@ public class MemberAccountImportService {
         if (credentials.isEmpty()) throw invalidCredential();
         var credential = credentials.getFirst();
         if (credential.get("consumed_at") != null || credential.get("expires_at") == null
-                || !((Timestamp) credential.get("expires_at")).toLocalDateTime().isAfter(LocalDateTime.now()))
+                || !com.pams.common.JdbcDateTimes.local(credential.get("expires_at")).isAfter(LocalDateTime.now()))
             throw invalidCredential();
         long uid = ((Number) credential.get("user_id")).longValue();
         var eligible = db.queryForList("SELECT u.id FROM sys_user u JOIN organization o ON o.id=u.org_id"

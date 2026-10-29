@@ -63,6 +63,11 @@ SELECT n.org_id,n.id,u.id,
   CASE WHEN n.recipient_id IS NULL THEN CURRENT_TIMESTAMP ELSE NULL END,
   COALESCE(n.created_at,CURRENT_TIMESTAMP)
 FROM notification n JOIN sys_user u ON u.org_id=n.org_id AND u.deleted=0
-WHERE n.deleted=0 AND (u.id=n.recipient_id OR (n.recipient_id IS NULL AND
-  (u.dept_id=n.recipient_dept_id OR EXISTS
-    (SELECT 1 FROM sys_role r WHERE r.id=u.role_id AND r.code=n.recipient_role))));
+WHERE n.deleted=0 AND (
+  u.id=n.recipient_id OR (n.recipient_id IS NULL AND (
+    u.dept_id=n.recipient_dept_id OR EXISTS (
+      SELECT 1 FROM sys_role r WHERE r.id=u.role_id
+        AND CAST(r.code AS CHAR(255))=CAST(n.recipient_role AS CHAR(255))
+    )
+  ))
+);

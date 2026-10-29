@@ -24,7 +24,7 @@ public class MaintenanceNoticeService {
     var rows=db.queryForList("SELECT enabled,enabled_at FROM notification_maintenance_subscription WHERE org_id=? AND user_id=?",NotificationPipeline.org(),uid);
     if(rows.isEmpty())return new Subscription(false,null);
     Object enabled=rows.getFirst().get("enabled");
-    return new Subscription(enabled instanceof Boolean b?b:((Number)enabled).intValue()!=0,((java.sql.Timestamp)rows.getFirst().get("enabled_at")).toLocalDateTime());
+    return new Subscription(enabled instanceof Boolean b?b:((Number)enabled).intValue()!=0,com.pams.common.JdbcDateTimes.local(rows.getFirst().get("enabled_at")));
   }
   @Transactional
   public Subscription subscribe(long uid,boolean enabled) {

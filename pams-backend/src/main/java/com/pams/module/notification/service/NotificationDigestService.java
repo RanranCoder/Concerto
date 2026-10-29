@@ -25,7 +25,7 @@ public class NotificationDigestService {
     LocalDateTime earliest=now.toLocalDate().minusDays(1).atStartOfDay();
     LocalDateTime since=policy.digestSince().isAfter(earliest)?policy.digestSince():earliest;
     List<Long> sources=new ArrayList<>();Map<String,Integer> counts=new LinkedHashMap<>();
-    for(var row:db.queryForList("SELECT n.* FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id WHERE i.org_id=? AND i.user_id=? AND i.id>? AND i.id<=? AND i.read_at IS NULL AND i.archived_at IS NULL AND n.deleted=0 AND i.created_at>=? AND i.created_at<=? AND NOT EXISTS(SELECT 1 FROM notification_preference p WHERE p.org_id=i.org_id AND p.user_id=i.user_id AND p.event_type=n.type AND p.enabled=FALSE) ORDER BY i.id",org,uid,previous,end,since,now)) {
+    for(var row:db.queryForList("SELECT n.* FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id WHERE i.org_id=? AND i.user_id=? AND i.id>? AND i.id<=? AND i.read_at IS NULL AND i.archived_at IS NULL AND n.deleted=0 AND i.created_at>=? AND i.created_at<=? AND NOT EXISTS(SELECT 1 FROM notification_preference p WHERE p.org_id=i.org_id AND p.user_id=i.user_id AND CAST(p.event_type AS CHAR(255))=CAST(n.type AS CHAR(255)) AND p.enabled=FALSE) ORDER BY i.id",org,uid,previous,end,since,now)) {
       NotificationType type=NotificationType.valueOf((String)row.get("type"));
       boolean ordinaryAnnouncement=type==NotificationType.ANNOUNCEMENT && db.queryForObject("SELECT COUNT(*) FROM announcement WHERE org_id=? AND id=? AND deleted=0 AND important=FALSE AND require_confirmation=FALSE",Long.class,org,row.get("entity_id"))>0;
       if(!NotificationPolicyService.INFORMATION.contains(type) && !ordinaryAnnouncement)continue;

@@ -24,7 +24,7 @@ export default defineConfig({
     channel: process.env.PAMS_E2E_CHROME_CHANNEL as 'chrome' | undefined,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
+  webServer: process.env.PAMS_NOTIFICATION_ACCEPTANCE_LIVE === '1' ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,

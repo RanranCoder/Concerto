@@ -32,14 +32,14 @@ public class AuthorizationBootstrap implements ApplicationRunner {
       var admins =
           db.queryForList(
               "SELECT DISTINCT u.id,r.code FROM sys_user u JOIN sys_role r ON r.id=u.role_id JOIN"
-                  + " role_template_grant t ON t.template_code=r.code JOIN permission p ON"
+                  + " role_template_grant t ON CAST(t.template_code AS CHAR(255))=CAST(r.code AS CHAR(255)) JOIN permission p ON"
                   + " p.id=t.permission_id WHERE u.org_id=? AND u.deleted=0 AND u.status=1 AND"
                   + " p.code IN ('user:permission','user:manage')",
               org);
       var candidates =
           db.queryForList(
               "SELECT DISTINCT u.id FROM sys_user u JOIN sys_role r ON r.id=u.role_id JOIN"
-                  + " role_template_grant t ON t.template_code=r.code JOIN permission p ON"
+                  + " role_template_grant t ON CAST(t.template_code AS CHAR(255))=CAST(r.code AS CHAR(255)) JOIN permission p ON"
                   + " p.id=t.permission_id WHERE u.org_id=? AND u.deleted=0 AND u.status=1 AND"
                   + " p.code='user:permission'",
               Long.class,

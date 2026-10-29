@@ -1,0 +1,48 @@
+name: pams-notify-acceptance
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ACCEPTANCE_DB_PASSWORD:?run prepare first}
+      MYSQL_DATABASE: notification_acceptance
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:13316:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h127.0.0.1 -uroot notification_acceptance -Nse 'SELECT 1'"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+  backend:
+    image: eclipse-temurin:21-jre
+    working_dir: /app
+    command: ["java", "-jar", "/app/app.jar"]
+    environment:
+      SPRING_PROFILES_ACTIVE: notification-acceptance
+      SPRING_CONFIG_IMPORT: optional:file:/app/acceptance-empty.properties
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/notification_acceptance?serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${ACCEPTANCE_DB_PASSWORD}
+      PAMS_JWT_SECRET: ${ACCEPTANCE_JWT_SECRET}
+      PAMS_AGENT_PROVIDER: stub
+      PAMS_AGENT_KB_DAILY_REBUILD_ENABLED: "false"
+      TZ: Asia/Shanghai
+    volumes:
+      - ../../pams-backend/target/pams-backend-1.0.0.jar:/app/app.jar:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18085:8080"
+  web:
+    image: nginx:1.27-alpine
+    volumes:
+      - ../../pams-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../pams-web/dist:/usr/share/nginx/html:ro
+    ports:
+      - "127.0.0.1:18086:80"
+    depends_on: [backend]
+volumes:
+  mysql-data:

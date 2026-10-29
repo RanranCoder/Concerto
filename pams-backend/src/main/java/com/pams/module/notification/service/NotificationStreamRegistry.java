@@ -44,7 +44,7 @@ public class NotificationStreamRegistry {
     var rows=db.queryForList("SELECT token_invalid_before FROM sys_user WHERE id=? AND org_id=? AND status=1 AND deleted=0",c.user,c.org);
     if(rows.isEmpty() || !auth.valid(c.user))return false;
     Object watermark=rows.getFirst().get("token_invalid_before");
-    return watermark==null || c.issuedAt>=JwtUtil.epochSecond(((java.sql.Timestamp)watermark).toLocalDateTime());
+    return watermark==null || c.issuedAt>=JwtUtil.epochSecond(com.pams.common.JdbcDateTimes.local(watermark));
   }
   private boolean send(String id,Connection c,String event) {
     try {writers.execute(()->write(id,c,event));return true;}

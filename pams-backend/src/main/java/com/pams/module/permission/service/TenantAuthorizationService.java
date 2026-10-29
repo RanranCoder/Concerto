@@ -663,7 +663,7 @@ public class TenantAuthorizationService {
     var result = new LinkedHashMap<String, Object>();
     result.put("id", id);
     result.put("status", row.get("status"));
-    result.put("expiresAt", ((Timestamp) row.get("expires_at")).toLocalDateTime().toString());
+    result.put("expiresAt", com.pams.common.JdbcDateTimes.local(row.get("expires_at")).toString());
     if (row.get("result_json") != null)
       result.put(
           "result", decode(row.get("result_json"), new TypeReference<Map<String, Object>>() {}));
@@ -1604,7 +1604,7 @@ public class TenantAuthorizationService {
             uid);
     if ("APPLIED".equals(c.get("status")))
       return decode(c.get("result_json"), new TypeReference<>() {});
-    if (((Timestamp) c.get("expires_at")).toLocalDateTime().isBefore(LocalDateTime.now()))
+    if (com.pams.common.JdbcDateTimes.local(c.get("expires_at")).isBefore(LocalDateTime.now()))
       throw new BizException(409, "预览已过期，请重新预览");
     if (number(c.get("baseline_version")) != number(identity(uid).get("authz_version")))
       throw new BizException(409, "人员或授权已变化，请重新预览");
@@ -1753,8 +1753,7 @@ public class TenantAuthorizationService {
         "active",
         "ACTIVE".equals(r.get("status"))
             && (r.get("expires_at") == null
-                || ((Timestamp) r.get("expires_at"))
-                    .toLocalDateTime()
+                || com.pams.common.JdbcDateTimes.local(r.get("expires_at"))
                     .isAfter(LocalDateTime.now())));
     out.put("version", r.get("version"));
     out.put("updatedAt", r.get("updated_at") == null ? null : r.get("updated_at").toString());
@@ -1767,7 +1766,7 @@ public class TenantAuthorizationService {
         "expiresAt",
         r.get("expires_at") == null
             ? null
-            : ((Timestamp) r.get("expires_at")).toLocalDateTime().toString());
+            : com.pams.common.JdbcDateTimes.local(r.get("expires_at")).toString());
     return out;
   }
 
