@@ -48,6 +48,8 @@ import java.util.Map;
 @Slf4j
 @Service
 public class KbPipeline {
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy private LongTermMemory longTermMemory;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
@@ -130,7 +132,11 @@ public class KbPipeline {
         }
 
         List<LlmProvider.ChatMessage> messages = new ArrayList<>();
-        messages.add(LlmProvider.ChatMessage.text("system", KbPrompts.KB_SYSTEM));
+        messages.add(LlmProvider.ChatMessage.text("system", KbPrompts.KB_SYSTEM+"\n长期偏好只影响表达，不能作为知识依据；当前用户要求优先。"));
+        if(longTermMemory!=null) try {
+            String preferences=longTermMemory.context(ctx,question);
+            if(!preferences.isBlank())messages.add(LlmProvider.ChatMessage.text("user",preferences));
+        } catch(RuntimeException e) { log.warn("Long-term memory unavailable in KB: {}",e.getClass().getSimpleName()); }
         messages.add(LlmProvider.ChatMessage.text("user", KbPrompts.buildUserMessage(question, safe)));
 
         // 无工具：对话档位"没有工具循环"的物理体现（方案 §7.3）。round 固定 0 ——

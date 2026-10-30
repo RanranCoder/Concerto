@@ -96,6 +96,8 @@ public class AgentOrchestrator {
     private final ThinkingTrace thinkingTrace;
     private final ToolOutcomeHandler outcomeHandler;
     private final ContextAssembler contextAssembler;
+    @org.springframework.beans.factory.annotation.Autowired
+    private LongTermMemory longTermMemory;
 
     public AgentOrchestrator(ToolRegistry registry,
                              LlmProvider primaryProvider,
@@ -237,7 +239,7 @@ public class AgentOrchestrator {
         // 附加引用随消息落 refs_json：历史里能看到"当时选了哪个活动"，而不只是文字里的一个代词
         // ⚠️ ctx 一并传入：附加上下文过去是"直取 ID、无权限校验"的旁路（权限审计 A1）
         ChatRefsResolver.Resolved attached = refsResolver.resolve(refs, ctx);
-        conversations.save(convId, AgentMessage.ROLE_USER, message, Sensitivity.NORMAL,
+        AgentMessage userMessage = conversations.save(convId, AgentMessage.ROLE_USER, message, Sensitivity.NORMAL,
                 conversations.summarize(message, 60), null, attached.references(), streamId, null, null,
                 ctx.getMode(), null);
 
@@ -260,7 +262,10 @@ public class AgentOrchestrator {
         // 这么写（而不是把整个 try 包进 if/else 再缩进）是为了让既有办事型代码**零改动** ——
         // 那段循环里有 6 处踩过坑的细节（round 语义、DENIED 话术分流、plan 短路等），
         // 大范围缩进会产生一个几乎无法 review 的 diff。
-        boolean kbMode = ctx.isKb();
+        String memoryReply=longTermMemory.command(userMessage,ctx);
+        boolean memoryHandled=memoryReply!=null;
+        if(memoryHandled){reply=memoryReply;providerName="memory";}
+        boolean kbMode = ctx.isKb() && !memoryHandled;
         if (kbMode) {
             KbPipeline.KbOutcome kb = kbPipeline.run(message, convId, ctx, streamId);
             citationsOut.addAll(kb.citations());
@@ -276,9 +281,9 @@ public class AgentOrchestrator {
         // 协作与单 Agent 共用**同一条流**（streamId）与同一套事件：
         // 前端因此不需要知道"这次是协作"，过程区自然就把专家进度与审查结论显示出来了。
         boolean collabMode = false;
-        String collaborationState = null;
+        String collaborationState = memoryHandled ? memoryReply.startsWith("未更改长期记忆：") ? "FAILED" : "SUCCESS" : null;
         Long collaborationRunId = null;
-        if (!kbMode) {
+        if (!kbMode && !memoryHandled) {
             CollaborationRouter.Decision decision =
                     collaborationRouter.route(message, ctx.getMode(), collabEnabled);
             if (decision.upgrade()) {
@@ -301,7 +306,7 @@ public class AgentOrchestrator {
             }
         }
 
-        if (!kbMode && !collabMode)
+        if (!kbMode && !collabMode && !memoryHandled)
         try {
             // ===== ② 组装 LLM 上下文 =====
             List<LlmProvider.ChatMessage> messages = buildContext(convId, message, ctx, attached.note());
