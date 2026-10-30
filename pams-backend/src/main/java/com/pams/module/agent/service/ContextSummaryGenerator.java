@@ -10,6 +10,7 @@ import java.util.Map;
 /** Isolated call: no tools, no shared answer deltas, no recursive context assembly. */
 @Service
 public class ContextSummaryGenerator {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentContextMetrics metrics;
     private final AgentLlmCaller caller;
     private final ObjectMapper json = new ObjectMapper();
     public ContextSummaryGenerator(@Lazy AgentLlmCaller caller) { this.caller = caller; }
@@ -27,6 +28,7 @@ public class ContextSummaryGenerator {
                 每条必须引用输入中真实的原始 messageId，不能引用摘要序号。用户要求必须引用用户消息。
                 无有效事项可返回空 items。最多 48 条；包含必要实体定位；不超出 outputByteBudget。
                 """), LlmProvider.ChatMessage.text("user", payload)), streamId);
+        if(metrics!=null)metrics.usage(response.usage());
         if (response.degraded() || "length".equals(response.finishReason()) || response.content() == null
                 || (response.toolCalls() != null && !response.toolCalls().isEmpty()))
             throw new IllegalStateException("摘要模型未返回完整结果");

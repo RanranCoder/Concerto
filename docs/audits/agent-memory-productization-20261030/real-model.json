@@ -1,0 +1,19 @@
+{
+  "summaryRetainsGoal": true,
+  "latestCorrectionWins": true,
+  "summaryWithinBudget": true,
+  "summaryHasRealSourceIds": true,
+  "crossSessionStyle": true,
+  "currentRequestOverridesPreference": true,
+  "userIsolation": true,
+  "organizationIsolation": true,
+  "projectIsolation": true,
+  "deletedMemoryNotUsed": true,
+  "disabledMemoryNotRead": true,
+  "status": "PASS",
+  "elapsedMs": 13636,
+  "inputTokens": 1591,
+  "outputTokens": 1444,
+  "productionDataUsed": false,
+  "productionBusinessWrites": false
+}

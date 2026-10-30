@@ -16,6 +16,7 @@ import java.util.*;
 /** Model work happens outside transactions. Checkpoint and document are committed with one CAS. */
 @Service
 public class ConversationMemory {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentContextMetrics metrics;
     public record Item(String kind, String text, List<Long> sourceMessageIds) {}
     public record Source(Long messageId, String role, String content) {}
     public record Document(int schemaVersion, List<Item> items, Map<Long,String> sourceHashes) {}
@@ -45,11 +46,13 @@ public class ConversationMemory {
             prior = new State(prior.revision()+1,0,null);
         }
         Document old=prior.document();
+        boolean generated=false;
+        boolean rejected=false;
         try {
             var page=messages.findByConversationIdAndIdGreaterThanAndIdLessThanAndRoleInOrderByIdAsc(
                     conversationId,prior.covered(),beforeMessageId,List.of("USER","ASSISTANT"),
                     PageRequest.of(0,Math.max(1,Math.min(100,props.getContextSummaryBatchSize()))));
-            if (page.isEmpty()) return render(old,prior.covered());
+            if (page.isEmpty()) {if(metrics!=null&&old!=null)metrics.cacheHit(ctx);return render(old,prior.covered());}
             Map<Long,String> hashes = new LinkedHashMap<>();
             if (old!=null) hashes.putAll(old.sourceHashes());
             List<Source> added=new ArrayList<>();
@@ -65,16 +68,22 @@ public class ConversationMemory {
                 hashes.put(message.getId(),fingerprint(message,safe));
             }
             if(added.isEmpty()) return render(old,prior.covered());
-            String result=generator.generate(old==null?List.of():old.items(),added,ctx.getStreamId(),props.getContextSummaryTokens());
+            java.util.function.Supplier<String> generate=()->generator.generate(old==null?List.of():old.items(),added,ctx.getStreamId(),props.getContextSummaryTokens());
+            String result=metrics==null?generate.get():metrics.summary(ctx,size,generate);
+            generated=true;
             Document candidate=parse(result,hashes,old,added);
             if(!validShape(candidate,covered)) throw new IllegalArgumentException("摘要结构或预算无效");
             // Recheck after the slow model call; revocation/edit during generation discards its result.
-            if(!validSources(conversationId,candidate,ctx)) return winner(conversationId,ctx);
-            if(write(conversationId,ctx,prior.revision(),json.writeValueAsString(candidate),covered)==0)
+            if(!validSources(conversationId,candidate,ctx)) {if(metrics!=null)metrics.rejected(ctx);rejected=true;return winner(conversationId,ctx);}
+            if(write(conversationId,ctx,prior.revision(),json.writeValueAsString(candidate),covered)==0) {
+                if(metrics!=null)metrics.discarded(ctx);
                 return winner(conversationId,ctx);
+            }
+            if(metrics!=null)metrics.written(ctx);
             return render(candidate,covered);
         } catch(java.util.concurrent.CancellationException e) { throw e;
         } catch(Exception e) {
+            if(metrics!=null&&generated&&!rejected)metrics.rejected(ctx);
             LOG.warn("Agent summary update deferred: conversation={} reason={}",conversationId,e.getClass().getSimpleName());
             // Recheck even on failure: permissions can change while the model is unavailable.
             return old!=null && validSources(conversationId,old,ctx) ? render(old,prior.covered()) : "";

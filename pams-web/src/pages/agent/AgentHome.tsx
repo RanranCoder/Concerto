@@ -11,6 +11,7 @@ import LingsiMessageBody from '@/components/agent/LingsiMessageBody'
 import LingsiUserBubble from '@/components/agent/LingsiUserBubble'
 import LingsiScrollToBottom from '@/components/agent/LingsiScrollToBottom'
 import LingsiToolDrawer from '@/components/agent/LingsiToolDrawer'
+import LingsiMemoryDrawer from '@/components/agent/LingsiMemoryDrawer'
 import LingsiEntityPanel from '@/components/agent/LingsiEntityPanel'
 import { Menu, PanelRight, Toolbox } from '@/components/agent/LingsiIcons'
 import { agentStatusLabels, conversationStatus } from '@/utils/agentTask'
@@ -72,6 +73,7 @@ export default function AgentHome() {
   const isPhone = useMediaQuery('(max-width: 960px)')
 
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [memoryOpen, setMemoryOpen] = useState(false)
   const [siderOpen, setSiderOpen] = useState(false)
   const [planBusy, setPlanBusy] = useState(false)
   const [formBusy, setFormBusy] = useState(false)
@@ -360,6 +362,7 @@ export default function AgentHome() {
           )}
           <div className="lingsi-main-title"><h1>{conversation?.title || (currentConversationId ? userTexts[0]?.slice(0,22) || '当前任务' : '新任务')}</h1><small>{currentConversationId ? '当前组织资料与关联活动' : '组织工作，从一句话开始'}</small></div>
           <span className="lingsi-main-head-actions">
+            <button type="button" className="lingsi-icon-btn" onClick={() => setMemoryOpen(true)}>长期记忆</button>
             {currentConversationId && <button type="button" className={`lingsi-status-chip status-${currentStatus}`} onClick={() => scrollRef.current?.querySelector('.lingsi-plan, .lingsi-form')?.scrollIntoView({ behavior:'smooth', block:'center' })}>{agentStatusLabels[currentStatus]}</button>}
             {showPanelToggle && (
               <Tooltip title={panelCollapsed ? '展开产物面板' : '收起产物面板'}>
@@ -444,6 +447,7 @@ export default function AgentHome() {
       <LingsiEntityPanel />
 
       <LingsiToolDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} />
+      <LingsiMemoryDrawer open={memoryOpen} onClose={() => setMemoryOpen(false)} />
     </div>
   )
 }

@@ -13,11 +13,13 @@ import java.util.*;
 @RequestMapping("/api/agent/memories")
 @PreAuthorize("isAuthenticated()")
 public class AgentMemoryController {
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.AgentContextMetrics metrics;
     private final LongTermMemory memory;
     public AgentMemoryController(LongTermMemory memory){this.memory=memory;}
     private ToolContext ctx(LoginUser user){return new ToolContext(user,List.of(),null,null);}
     public record Save(String scope,String key,String content,boolean consent,Long revision,Integer days) {}
     public record Setting(boolean enabled) {}
+    @GetMapping("/metrics") public Result<Map<String,Object>> metrics(@AuthenticationPrincipal LoginUser user){return Result.ok(metrics.snapshot(ctx(user)));}
     @GetMapping public Result<Map<String,Object>> list(@AuthenticationPrincipal LoginUser user) {
         var c=ctx(user);return Result.ok(Map.of("enabled",memory.enabled(c),"records",memory.list(c)));
     }
