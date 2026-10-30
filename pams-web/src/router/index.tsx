@@ -87,7 +87,7 @@ function RouteError() {
   </div>
 }
 
-export const router = createBrowserRouter([
+export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter([
   {
     element: <RootLayout />,
     errorElement: <RouteError />,
