@@ -37,3 +37,9 @@ GET `/api/agent/memories/metrics` 仅返回认证身份对应组织与用户的�
 干净源码验证：后端 76 项、前端全量 222 项、浏览器 9 项全部通过。前端字号、圆角使用现有设计 token；生产包沿用部署环境现有文档编辑器许可证配置，不因本次记忆页面重建而改变授权配置。用户工作区中的其他未提交改动没有进入发布包。
 
 设计源码 lint 无违规；从实际浏览器生成的静态抽屉快照执行 app inspector，结果 0 FAIL、0 WARN。静态检查不替代上述交互测试，也不表示对全站既有页面进行了设计改版。
+
+## 最终发布
+
+运行代码 `f064ee5` 已推送 Concerto，前后端均已切换为 `20261030-product-f064ee5` 镜像。此阶段没有新增数据库迁移。后端包与前端 AgentHome 静态资源 SHA-256 和本地发布产物一致；健康接口、灵思路由及前端资源返回 200，未登录访问记忆和统计接口返回 401，Nginx 配置检查通过，两个容器重启次数均为 0。
+
+发布目录 `/home/gzccc/pams-releases/20261030-product-f064ee5` 保存源码包、校验值、发布审计和 `rollback.sh`；数据库及旧应用配置备份在对应的 `/home/gzccc/pams-backups/20261030-product-f064ee5`。临时真实模型验收凭据文件已清理。部署审计见 [deployment.json](../audits/agent-memory-productization-20261030/deployment.json)。

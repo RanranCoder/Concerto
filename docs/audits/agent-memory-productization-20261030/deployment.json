@@ -1,0 +1,17 @@
+{
+  "commit": "f064ee5571f76ba4f4d97bb78e264b5b700f9776",
+  "backendSourceTree": "aa45ad7d5df09e6e22f501888a116cd9b2cf9566",
+  "jarSha256": "784b5080f8a56a6061208b3d253978dd55e510416f14d0b23f889762fd6aed6a",
+  "webTarSha256": "d1ca838027a771d0c019235b8e57b4c13a5677b7bd5bc0647d6bf4a3e42e36ce",
+  "backendTests": 76,
+  "frontendUnitTests": 222,
+  "browserTests": 9,
+  "realModelAssertions": 11,
+  "additionalMigration": false,
+  "backup": "/home/gzccc/pams-backups/20261030-product-f064ee5",
+  "healthVerified": true,
+  "frontendAssetChecksumVerified": true,
+  "unauthenticatedMemoryStatus": 401,
+  "unauthenticatedMetricsStatus": 401,
+  "nginxConfigurationVerified": true
+}
