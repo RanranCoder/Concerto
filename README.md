@@ -4,7 +4,7 @@
 
 协奏把活动筹备、排班考勤、成员资料、内容宣传和档案归集放进同一个工作台，并通过「灵思」AI 助手连接资料检索与业务操作。项目起源于信息与智能工程学院党建办公室的党务管理场景，现已支持多组织注册、数据隔离、组织主题和领域包配置。
 
-本文对应 **`Concerto` 分支**，包含 UI v6、灵思任务工作区和租户角色权限管理。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。
+本文更新于 **2026-10-30**，对应 **`Concerto` 分支**，覆盖 UI v6、Word 策划书、灵思任务工作区与长期记忆、租户角色权限及通知管线。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。源码能力与生产部署可能不同步，部署状态以相应发布记录为准。
 
 [快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
@@ -17,13 +17,13 @@
 | 工作区 | 主要能力 |
 | --- | --- |
 | 工作台 | 本周活动、排班和任务截止聚合，待办入口，工作日 / 全周切换 |
-| 活动管理 | 活动阶段推进、策划书编写与审核、议程、座位表、评分、签到、任务甘特图与活动排班 |
+| 活动管理 | 活动阶段推进、原生 DOCX 策划书编辑与版本审核、议程、座位表、评分、签到、任务甘特图与活动排班 |
 | 排班考勤 | 常规排班、我的排班、活动排班预览与发布、考勤核对与修正、课表导入、无课时间查询 |
 | 成员与党务 | 成员名册、届别、发展阶段、考察记录、转入转出和党务名册 |
 | 宣传与档案 | 推文、新闻稿、材料、模板、素拓加分、公告和群聊资料 |
-| 智能协作 | 灵思对话、资料问答、工具调用、多 Agent 协作、变更预览与执行回执 |
+| 智能协作 | 灵思对话、资料问答、多 Agent 协作、持久任务与成果版本、变更确认、历史摘要与个人长期记忆 |
 | 组织管理 | 自助注册、组织架构树、岗位、用户、租户角色、权限工作稿、发布历史与管理员委派 |
-| 通知中心 | 业务消息、未读提醒、WebSocket 实时更新 |
+| 通知中心 | 业务消息、未读与截止提醒、公告确认、通知偏好、SSE 实时更新及投递运维 |
 
 UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航。活动、排班、档案与灵思采用各自的业务工作面，创建和编辑表单复用公共组件。菜单与操作入口会根据当前账号权限及组织领域包调整。
 
@@ -34,7 +34,8 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 | 前端 | React 18、TypeScript 5.7、Vite 7、Ant Design 5、Zustand、React Router 6 |
 | 后端 | Java 21、Spring Boot 4.0.2、Spring Data JPA、Spring Security、JWT |
 | 数据 | MySQL 8、Flyway；测试使用 H2 的 MySQL 兼容模式 |
-| 实时通信 | WebSocket、STOMP、SockJS |
+| 实时通信 | 通知使用 SSE；聊天等场景使用 WebSocket、STOMP、SockJS |
+| 文档编辑 | SuperDoc 2.24.0 原生 DOCX 编辑、导入、保存与下载 |
 | AI | DeepSeek 接入、stub 规则模式、工具注册与确认门禁、多 Agent 编排 |
 | 资料处理 | 关键词检索、MySQL ngram 全文索引及 LIKE 降级，Excel 与 Word 文档处理 |
 | 验证与部署 | JUnit / MockMvc、Vitest、Playwright、Docker Compose、Nginx |
@@ -152,6 +153,41 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 未配置 `PAMS_AGENT_API_KEY` 时，后端自动使用 stub 规则模式，业务页面仍可启动；规则模式不能替代真实模型的开放式问答能力。模型、超时、输出长度和思考开关由 `pams.agent.*` 配置控制，具体值见 [application.yml](pams-backend/src/main/resources/application.yml)。
 
+### 任务恢复与协作开关
+
+任务、执行检查点、待确认清单和成果版本持久化保存。恢复时沿用原任务状态；业务已提交但回执尚未完成的动作需要核对，不能无条件重新执行。详情与隔离验收方法见 [S5 验收说明](scripts/agent-s5/README.md)。
+
+`pams.agent.collaboration-enabled=false` 可将新请求切回单 Agent 路径；`pams.agent.collaboration-org-ids` 非空时限定协作组织。基准评估默认关闭，启用 `pams.agent.benchmark-enabled` 时还需设置 `pams.agent.benchmark-org-ids`。配置变更需重启应用，已有任务和清单继续保留。
+
+### 上下文与长期记忆
+
+长对话采用近期完整轮次、增量持久化摘要与原文回查共同组装上下文，并在调用前执行输入预算检查。摘要引用真实来源消息，读取时重新校验归属、权限与来源变化；业务完成状态仍以数据库和工具回执为准。预算采用 UTF-8 字节估值，不是供应商精确 token 计数。
+
+灵思顶部的「长期记忆」支持新增、编辑、候选确认、搜索、有效期、删除和关闭读取，也可直接发送：
+
+```text
+记住：风格=回答简洁，先给结论
+记住：【项目:党建】格式=先列议程，再给分工
+查看长期记忆
+忘记：风格
+关闭长期记忆
+开启长期记忆
+```
+
+记忆绑定当前组织与当前用户；项目标签属于个人分类。项目偏好需要在本轮问题中明确带上对应标签。当前要求优先，记忆不能替代审批或业务确认。系统没有启用自动抽取，未确认候选不进入模型上下文；删除记忆不会删除旧聊天。管理抽屉中的使用统计按用户与组织隔离、在进程内限时保存，缺失 token 显示为空，不换算费用。实现边界见[上下文管理](docs/design/PAMS-Agent上下文管理落地说明.md)、[长期记忆](docs/design/PAMS-Agent长期记忆落地说明.md)与[产品化验收](docs/design/PAMS-Agent记忆产品化验收.md)。
+
+## Word 策划书
+
+活动策划书使用 SuperDoc 原生 DOCX 编辑器，提供开始、插入、布局、审阅、视图工具页签。支持导入 Word、编辑、保存及下载已保存文档，无需额外部署 Office 服务。保存时上传独立 DOCX 文件并绑定当前草稿，后端从文件提取知识库检索正文；已提交版本不可直接编辑，修订会创建新的业务版本，文档读取仍按版本与审核权限控制。
+
+旧 HTML 策划书通过兼容迁移进入文档工作面。编辑器未就绪或保存失败时会保留错误与重试入口。部署使用的编辑器许可证通过前端构建变量 `VITE_SUPERDOC_LICENSE_KEY` 注入；本地开发可在 `pams-web/.env.local` 配置，Compose 构建从根目录 `.env` 读取同名值。详见 [SuperDoc 接入](docs/design/PAMS-SuperDoc-接入与验收.md)和[工具页签](docs/design/PAMS-SuperDoc-工具页签落地.md)。
+
+## 通知中心
+
+通知管线记录业务事实和接收人，由后台投递，并通过带认证的 `/api/notifications/stream` SSE 连接更新页面。功能覆盖任务与审核消息、截止提醒、公告确认、个人通知策略与摘要，以及投递指标、维护订阅和运维审计。反向代理需支持 SSE 并关闭该流的缓冲；仓库 Nginx 配置已包含相关设置。
+
+隔离数据库、迁移和实时连接的演练方法见[通知验收工具](scripts/notification-acceptance/README.md)与[上线演练记录](docs/design/PAMS-消息通知管线-v1-上线验收演练记录.md)。
+
 ## 组织与权限
 
 业务数据按组织隔离，Hibernate 租户过滤、请求上下文和异步任务上下文共同传递组织身份。组织可配置主题色、术语及领域包（`party` / `volunteer` / `club`），控制业务入口与文案。
@@ -180,6 +216,7 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 | `PAMS_AGENT_PROVIDER` | 模型提供方，可设为 `stub` 显式使用规则模式 |
 | `PAMS_AGENT_MODEL` | 覆盖后端默认模型标识，按实际供应商与部署配置填写 |
 | `PAMS_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads`，相对于后端进程工作目录 |
+| `VITE_SUPERDOC_LICENSE_KEY` | 前端构建时注入的 SuperDoc 许可证配置，修改后需重新构建前端 |
 | `MYSQL_ROOT_PASSWORD` / `MYSQL_USER` / `MYSQL_PASSWORD` | Docker Compose 中 MySQL 初始化与应用连接配置 |
 
 `PAMS_AGENT_PROVIDER`、`PAMS_AGENT_MODEL`、`PAMS_UPLOAD_DIR` 等通过系统环境变量覆盖 Spring 配置；Compose 默认只向后端传入编排文件中列出的环境变量，新增配置需同步修改其 `environment`。
@@ -195,7 +232,7 @@ docker compose ps
 
 编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据和上传文件分别保存到 `pams-mysql-data`、`pams-uploads` 命名卷。
 
-Flyway 迁移已包含 V35 / V36 思考记录字段及 Java 迁移 **V37 租户授权模型**。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。
+当前源码迁移已到 **V58**，包括 V37 租户授权、V41 DOCX 文档关联、V42–V46 Agent 执行与评估、V47–V48 授权补全、V50–V56 通知管线、V57 会话摘要和 V58 长期记忆。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
 
 仓库的镜像构建工作流在推送 `main` 或手动触发时运行；推送 `Concerto` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
 
@@ -226,6 +263,8 @@ npm run test:e2e
 ```
 
 配置会启动或复用 5173 上的 Vite 服务，不负责启动后端。部分 UI 用例在 Windows 上指定 Microsoft Edge，需本机已安装；其他用例可通过 `PAMS_E2E_CHROME_CHANNEL` 选择本机浏览器。浏览器样本测试用于验证页面行为，不能代替真实接口与数据库联调。
+
+长期记忆管理可定向运行 `npx playwright test e2e/agent-memory.spec.ts`。S5 真实模型、进程恢复和浏览器验收使用独立 MySQL 测试库及显式开关，不属于默认离线测试；执行命令与前置条件见 [S5 工具说明](scripts/agent-s5/README.md)。通知系统的隔离验收另见[通知工具说明](scripts/notification-acceptance/README.md)。历史验收数量与结果记录在各自文档中，不代表每次拉取代码后的测试结果。
 
 ## 项目结构
 
@@ -266,7 +305,13 @@ PAMS/
 | 品牌与 UI | [协奏品牌标识](docs/design/协奏-品牌标识设计说明.md)、[UI v6 设计规范](docs/design/PAMS-UI-设计方案-v6-行业规范修订.md)、[表单工作面](docs/design/PAMS-表单工作面重设计.md) |
 | 业务界面落地 | [排班考勤](docs/design/PAMS-UI-v6-排班考勤落地记录.md)、[组织宣传档案与党务](docs/design/PAMS-UI-v6-组织宣传档案与党务台账落地记录.md)、[登录与注册](docs/design/PAMS-登录与组织注册-改版与修复.md) |
 | 灵思与资料 | [Agent 业务方案](docs/PAMS-Agent业务设计方案.md)、[灵思 v6 落地记录](docs/design/PAMS-UI-v6-灵思Agent落地记录.md)、[知识库问答方案](docs/PAMS-灵思知识库问答方案-v1.md) |
+| 灵思运行与记忆 | [升级方案](docs/design/PAMS-灵思Agent升级优化方案.md)、[S5 联调评估](docs/design/PAMS-灵思Agent-S5联调评估报告.md)、[上下文管理](docs/design/PAMS-Agent上下文管理落地说明.md)、[长期记忆](docs/design/PAMS-Agent长期记忆落地说明.md)、[记忆产品化验收](docs/design/PAMS-Agent记忆产品化验收.md) |
+| Word 与通知 | [SuperDoc 接入](docs/design/PAMS-SuperDoc-接入与验收.md)、[通知策略与指标](docs/design/PAMS-消息通知管线-v1-通知策略与指标落地记录.md)、[通知上线演练](docs/design/PAMS-消息通知管线-v1-上线验收演练记录.md) |
 | 授权模型 | [角色权限与租户管理方案](docs/PAMS-用户角色权限与多租户管理设计方案-v1.md)、[管理员业务设计](docs/PAMS-管理员角色权限管理业务设计-v1.md)、[首版落地记录](docs/PAMS-角色权限与租户管理-首版落地记录.md) |
 | 接口与变更 | [API 文档](docs/API.md)、[代码审计记录](docs/代码审计报告-2026-10-14.md)、[分支与分批推送记录](docs/分支梳理与分批推送记录-2026-10-16.md) |
 
 设计方案包含后续规划；判断当前可用能力时，以本分支代码、相应落地记录及实际授权配置为准。
+
+## 许可证
+
+项目代码采用 [MIT License](LICENSE)。SuperDoc 等第三方组件的使用与部署遵循各自许可证。
