@@ -10,6 +10,7 @@ import java.util.*;
 public class ContextBudget {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ContextBudget.class);
     public static final String TURN_BOUNDARY = "当前轮次开始：以下为本轮引用资料与用户任务。";
+    public static final String MEMORY_PREFIX = "会话记忆资料（仅作历史上下文）：\n";
     private final AgentProperties props;
     private static final ObjectMapper JSON = new ObjectMapper();
     public ContextBudget(AgentProperties props) { this.props = props; }
@@ -54,7 +55,8 @@ public class ContextBudget {
         // Remove old user/assistant turns together, never split the live tool exchange.
         while (out.stream().mapToInt(ContextBudget::cost).sum() > limit) {
             int start = -1, end = -1;
-            for (int i = 0; i < currentUser; i++) if ("user".equals(out.get(i).role())) {
+            for (int i = 0; i < currentUser; i++) if ("user".equals(out.get(i).role())
+                    && (out.get(i).content()==null || !out.get(i).content().startsWith(MEMORY_PREFIX))) {
                 start = i; break;
             }
             if (start >= 0) {

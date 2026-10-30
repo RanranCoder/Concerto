@@ -103,6 +103,10 @@ public class AgentProperties {
     private int contextSafetyTokens = 1024;
     private int contextToolResultTokens = 2048;
     private int contextSummaryTokens = 3072;
+    private boolean contextSummaryEnabled = true;
+    private int contextSummaryBatchSize = 24;
+    private int contextSummaryTimeoutMs = 10000;
+    private int contextSummaryMaxTokens = 4096;
 
     /** Agent 独立线程池大小（D1：不用 @Async 默认池，便于限流与指标采集） */
     private int executorCoreSize = 4;

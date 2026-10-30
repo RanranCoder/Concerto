@@ -172,10 +172,8 @@ public class ConversationStore {
 
     @Transactional
     public void delete(Long id, Long userId) {
-        AgentConversation c = require(id, userId);
-        c.setDeleted(1);
-        c.setUpdatedAt(LocalDateTime.now());
-        conversationRepository.save(c);
+        require(id, userId);
+        conversationRepository.deleteWithMemory(id, userId, LocalDateTime.now());
     }
 
     @Transactional

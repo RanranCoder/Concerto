@@ -95,6 +95,7 @@ public class AgentOrchestrator {
     /** 思维链暂存：推理是流式片段，落库发生在收官段，中间靠它按 streamId 攒起来（V35） */
     private final ThinkingTrace thinkingTrace;
     private final ToolOutcomeHandler outcomeHandler;
+    private final ContextAssembler contextAssembler;
 
     public AgentOrchestrator(ToolRegistry registry,
                              LlmProvider primaryProvider,
@@ -110,7 +111,7 @@ public class AgentOrchestrator {
                              KbPipeline kbPipeline,
                              CollaborationRouter collaborationRouter,
                              CoordinatorAgent coordinatorAgent,
-                             ThinkingTrace thinkingTrace) {
+                             ThinkingTrace thinkingTrace, ContextAssembler contextAssembler) {
         this.registry = registry;
         this.primaryProvider = primaryProvider;
         this.conversations = conversations;
@@ -126,6 +127,7 @@ public class AgentOrchestrator {
         this.collaborationRouter = collaborationRouter;
         this.coordinatorAgent = coordinatorAgent;
         this.thinkingTrace = thinkingTrace;
+        this.contextAssembler = contextAssembler;
         this.outcomeHandler = new ToolOutcomeHandler(taskGate, publisher);
     }
 
@@ -543,8 +545,7 @@ public class AgentOrchestrator {
      */
     private List<LlmProvider.ChatMessage> buildContext(Long convId, String currentMessage, ToolContext ctx,
                                                        String refsNote) {
-        return new ContextAssembler(conversations, props, taskGate)
-                .assemble(SYSTEM_PROMPT, convId, currentMessage, ctx, refsNote);
+        return contextAssembler.assemble(SYSTEM_PROMPT, convId, currentMessage, ctx, refsNote);
     }
 
     private List<LlmProvider.ToolSpec> toSpecs(List<AgentTool> tools) {

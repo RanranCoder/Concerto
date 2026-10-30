@@ -29,6 +29,15 @@ public class AgentConversation implements OrgScoped {
 
     @Column(nullable = false)
     private Integer deleted = 0;
+    @Column(name = "context_summary_json", columnDefinition = "MEDIUMTEXT")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String contextSummaryJson;
+    @Column(name = "covered_through_message_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private long coveredThroughMessageId;
+    @Column(name = "context_summary_revision", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private long contextSummaryRevision;
     @org.hibernate.annotations.TenantId
     private Long orgId;
 }

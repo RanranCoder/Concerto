@@ -50,4 +50,12 @@ class ContextBudgetTest {
         assertThat(excerpt).doesNotContain("�").contains("节选");
         assertThat(ContextBudget.tokens(excerpt)).isLessThanOrEqualTo(100);
     }
+    @Test void protectedSummarySurvivesTrimmingOfOldTurns() {
+        var summary=LlmProvider.ChatMessage.text("user",ContextBudget.MEMORY_PREFIX+"原始目标：安排活动，预算两千");
+        var result=new ContextBudget(properties(1600)).fit(List.of(
+                LlmProvider.ChatMessage.text("system","规则"),summary,
+                LlmProvider.ChatMessage.text("user","无关历史".repeat(500)),LlmProvider.ChatMessage.text("assistant","旧回答"),
+                LlmProvider.ChatMessage.text("system",ContextBudget.TURN_BOUNDARY),LlmProvider.ChatMessage.text("user","继续")),List.of());
+        assertThat(result).contains(summary).noneMatch(m->"旧回答".equals(m.content()));
+    }
 }

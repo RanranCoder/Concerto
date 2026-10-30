@@ -12,6 +12,24 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface AgentConversationRepository extends JpaRepository<AgentConversation, Long> {
+    interface MemorySnapshot {
+        String getSummary();
+        long getCovered();
+        long getRevision();
+    }
+    @Query("select c.contextSummaryJson as summary, c.coveredThroughMessageId as covered, c.contextSummaryRevision as revision from AgentConversation c where c.id=:id and c.userId=:userId and c.orgId=:orgId and c.deleted=0")
+    Optional<MemorySnapshot> memory(@Param("id") Long id, @Param("userId") Long userId, @Param("orgId") Long orgId);
+
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update AgentConversation c set c.contextSummaryJson=:summary, c.coveredThroughMessageId=:covered, c.contextSummaryRevision=c.contextSummaryRevision+1 where c.id=:id and c.userId=:userId and c.orgId=:orgId and c.deleted=0 and c.contextSummaryRevision=:revision")
+    int compareAndSetMemory(@Param("id") Long id, @Param("userId") Long userId, @Param("orgId") Long orgId,
+                           @Param("revision") long revision, @Param("summary") String summary, @Param("covered") long covered);
+
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update AgentConversation c set c.deleted=1, c.updatedAt=:ts, c.contextSummaryJson=null, c.coveredThroughMessageId=0, c.contextSummaryRevision=c.contextSummaryRevision+1 where c.id=:id and c.userId=:userId and c.deleted=0")
+    int deleteWithMemory(@Param("id") Long id, @Param("userId") Long userId, @Param("ts") LocalDateTime ts);
 
     Page<AgentConversation> findByUserIdAndDeletedOrderByUpdatedAtDesc(Long userId, Integer deleted, Pageable pageable);
 

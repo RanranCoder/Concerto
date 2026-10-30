@@ -10,6 +10,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface AgentMessageRepository extends JpaRepository<AgentMessage, Long> {
+    interface SourceSnapshot {
+        Long getId(); String getRole(); String getContent(); String getCitations(); String getSensitivity();
+    }
+    @Query("select m.id as id,m.role as role,m.content as content,m.citationsJson as citations,m.sensitivity as sensitivity from AgentMessage m where m.conversationId=:conversationId and m.id in :ids")
+    List<SourceSnapshot> sourceSnapshots(@Param("conversationId") Long conversationId,@Param("ids") List<Long> ids);
+    org.springframework.data.domain.Slice<AgentMessage> findByConversationIdAndIdGreaterThanAndIdLessThanAndRoleInOrderByIdAsc(
+            Long conversationId, Long after, Long before, List<String> roles, Pageable page);
     java.util.Optional<AgentMessage> findByIdAndConversationId(Long id, Long conversationId);
     Page<AgentMessage> findByConversationIdAndRoleInOrderByIdDesc(Long conversationId, List<String> roles, Pageable page);
     Page<AgentMessage> findByConversationIdAndIdLessThanAndRoleOrderByIdAsc(Long conversationId, Long before, String role, Pageable page);

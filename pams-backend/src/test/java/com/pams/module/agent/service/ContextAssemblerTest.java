@@ -42,7 +42,7 @@ class ContextAssemblerTest {
         assertThat(actual).anyMatch(m->m.content()!=null && m.content().contains("messageId=1"));
         assertThat(actual).anyMatch(m->m.content()!=null && m.content().contains("status=CANCELLED"));
         assertThat(actual).anyMatch(m->"user".equals(m.role()) && m.content().contains("附件证据"));
-        verify(store).require(3L,1L);
+        verify(store,times(2)).require(3L,1L);
     }
     @Test void recallRechecksRevokedEvidenceAndRejectsForeignConversation() {
         var conversations=mock(AgentConversationRepository.class); var messages=mock(AgentMessageRepository.class);
@@ -82,5 +82,19 @@ class ContextAssemblerTest {
         assertThat(actual).noneMatch(m->"其他专家的完整草稿".equals(m.content()));
         assertThat(actual.getLast().content()).isEqualTo("只核对排班");
         verify(store,never()).contextText(eq(answer),any());
+    }
+    @Test void persistentSummaryIsProtectedAndVerificationOutageFallsBackToSourceExcerpts() {
+        var store=mock(ConversationStore.class);var gate=mock(TaskGate.class);var memory=mock(ConversationMemory.class);
+        var now=message(9,"USER","继续");var old=message(1,"USER","原始目标");
+        when(store.context(3L,6)).thenReturn(List.of(now));when(store.memorySources(3L,9L)).thenReturn(List.of(old));
+        when(store.contextText(eq(old),any())).thenReturn("原始目标");when(store.taskState(3L,1L)).thenReturn("当前任务状态");
+        when(memory.context(eq(3L),eq(9L),any())).thenReturn("已持久化的预算约束");
+        var assembler=new ContextAssembler(store,new AgentProperties(),gate,memory);
+        var result=assembler.assemble("规则",3L,"继续",ctx(),null);
+        assertThat(result).anyMatch(m->m.content()!=null&&m.content().startsWith(ContextBudget.MEMORY_PREFIX));
+        doThrow(new IllegalStateException("验证暂不可用")).when(memory).context(eq(3L),eq(9L),any());
+        var fallback=assembler.assemble("规则",3L,"继续",ctx(),null);
+        assertThat(fallback).noneMatch(m->m.content()!=null&&m.content().contains("已持久化的预算约束"));
+        assertThat(fallback).anyMatch(m->m.content()!=null&&m.content().contains("原始目标"));
     }
 }

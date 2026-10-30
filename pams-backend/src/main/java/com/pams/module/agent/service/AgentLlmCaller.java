@@ -123,6 +123,17 @@ public class AgentLlmCaller {
         return observed(streamId,req,this::safeStub);
     }
 
+    /** Optional compaction gets one bounded attempt, never delays chat through retry + fallback. */
+    public LlmProvider.ChatResponse callSummary(List<LlmProvider.ChatMessage> messages, String streamId) {
+        if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+        var req=new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,List.of()),List.of(),props.getTemperature(),
+                Math.max(1,Math.min(props.getMaxTokens(),props.getContextSummaryMaxTokens())));
+        if("stub".equals(primaryProvider.name())) return observed(streamId,req,this::safeStub);
+        return cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),
+                Math.max(1,Math.min(props.getTimeoutMs(),props.getContextSummaryTimeoutMs())),
+                ()->observed(streamId,req,primaryProvider::chat));
+    }
+
     private LlmProvider.ChatResponse observed(String stream,LlmProvider.ChatRequest req,java.util.function.Function<LlmProvider.ChatRequest,LlmProvider.ChatResponse> call) {
         int cap=evaluation==null?req.maxTokens():evaluation.before(stream,req.maxTokens());
         var limited=new LlmProvider.ChatRequest(req.messages(),req.tools(),req.temperature(),cap);

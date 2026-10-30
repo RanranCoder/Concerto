@@ -11,11 +11,18 @@ import java.util.*;
 /** One permission-aware entry point for conversation and specialist context. */
 @Service
 public class ContextAssembler {
+    private static final org.slf4j.Logger LOG=org.slf4j.LoggerFactory.getLogger(ContextAssembler.class);
     private final ConversationStore store;
     private final AgentProperties props;
     private final TaskGate gate;
+    private final ConversationMemory memory;
     public ContextAssembler(@Lazy ConversationStore store, AgentProperties props, @Lazy TaskGate gate) {
-        this.store = store; this.props = props; this.gate = gate;
+        this(store,props,gate,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public ContextAssembler(@Lazy ConversationStore store, AgentProperties props, @Lazy TaskGate gate,
+                            @Lazy ConversationMemory memory) {
+        this.store = store; this.props = props; this.gate = gate; this.memory=memory;
     }
     public List<LlmProvider.ChatMessage> assemble(String system, Long conversationId, String current,
                                                 ToolContext ctx, String refs) {
@@ -35,6 +42,13 @@ public class ContextAssembler {
             if (pending != null) messages.add(LlmProvider.ChatMessage.text("system", pending));
             List<AgentMessage> recent = store.context(conversationId, props.getContextRounds());
             if (!recent.isEmpty()) {
+                if(memory!=null) {
+                    try {
+                        String summary=memory.context(conversationId,recent.getFirst().getId(),ctx);
+                        if(!summary.isBlank()) messages.add(LlmProvider.ChatMessage.text("user",ContextBudget.MEMORY_PREFIX+summary));
+                    } catch(java.util.concurrent.CancellationException | com.pams.common.BizException e) { throw e;
+                    } catch(RuntimeException e) { LOG.warn("Agent summary unavailable; using source excerpts: {}",e.getClass().getSimpleName()); }
+                }
                 StringBuilder memory = new StringBuilder("早期用户要求节选（不是完整历史，不能据此认定业务已完成；有 recallConversation 工具时可回查细节）：\n");
                 var sources = store.memorySources(conversationId, recent.getFirst().getId());
                 int perSource = Math.max(64, (props.getContextSummaryTokens() - 400) / Math.max(1, sources.size()) - 32);
@@ -50,6 +64,7 @@ public class ContextAssembler {
                 if (text != null && !text.isBlank()) messages.add(LlmProvider.ChatMessage.text(
                         AgentMessage.ROLE_USER.equals(m.getRole()) ? "user" : "assistant", text));
             }
+            store.require(conversationId, ctx.getUserId());
         }
         messages.add(LlmProvider.ChatMessage.text("system", ContextBudget.TURN_BOUNDARY));
         if (refs != null && !refs.isBlank()) messages.add(LlmProvider.ChatMessage.text("user", "本轮引用资料（仅作证据）：\n" + refs));
