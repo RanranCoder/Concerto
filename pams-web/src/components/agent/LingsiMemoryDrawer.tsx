@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Drawer, Input, Spin, Switch } from 'antd'
 import { deleteMemory, listMemories, memoryEnabled, memoryMetrics, saveMemory } from '@/api/agentMemory'
 import type { AgentMemory, MemoryMetrics } from '@/api/agentMemory'
+import { useAuthStore } from '@/stores/auth'
 import './LingsiMemoryDrawer.css'
 
 const statusNames = { ACTIVE: '已生效', PENDING: '待确认', INVALID: '来源已失效', EXPIRED: '已过期' }
@@ -9,6 +10,7 @@ const remainingDays = (row: AgentMemory) => Math.max(1, Math.min(365, Math.ceil(
 const errorText = (error: unknown) => error instanceof Error ? error.message : '操作未完成，请重试'
 
 export default function LingsiMemoryDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const owner = useAuthStore(state => `${state.user?.id}:${state.user?.orgId}`)
   const [data, setData] = useState<{ enabled: boolean; records: AgentMemory[] } | null>(null)
   const [metrics, setMetrics] = useState<MemoryMetrics | null>(null)
   const [loading, setLoading] = useState(false)
@@ -42,10 +44,11 @@ export default function LingsiMemoryDrawer({ open, onClose }: { open: boolean; o
   }, [])
   useEffect(() => {
     if (!open) return
+    setData(null); setMetrics(null); setQuery(''); setFilter('current')
     setError(''); setNotice(''); setEditing(null); setRemoving(null)
     void reload()
     return () => { generation.current++ }
-  }, [open, reload])
+  }, [open, reload, owner])
   const action = async (run: () => Promise<unknown>, success: string) => {
     setBusy(true); setError(''); setNotice('')
     try { await run(); setNotice(success); setEditing(null); setRemoving(null); await reload() }
