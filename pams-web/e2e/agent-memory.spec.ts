@@ -5,6 +5,8 @@ import { resolve } from 'node:path'
 test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined })
 const user = { id: 1, username: 'memory-test', realName: '林老师', roleCode: 'DIRECTOR', roleLevel: 4, orgId: 1, permissions: ['activity:view', 'kb:read'], managementCapabilities: [], isOwner: false }
 async function setup(page: Page, dark = false) {
+  let authModule = ''
+  page.on('request', request => { if(new URL(request.url()).pathname==='/src/stores/auth.ts')authModule=request.url() })
   let enabled = true
   const expiresAt = new Date(Date.now() + 90 * 86400000).toISOString()
   let rows = [
@@ -41,8 +43,22 @@ async function setup(page: Page, dark = false) {
   await page.getByRole('button', { name: '长期记忆', exact: true }).click()
   await expect(page.getByRole('heading', { name: '跨会话记住你的习惯' })).toBeVisible()
   await expect(page.getByText('先给结论，再说明依据。')).toBeVisible()
-  return { errors, conflict: () => { conflict = true } }
+  return { errors, conflict: () => { conflict = true }, authModule: () => authModule }
 }
+
+test('切换组织时先清空旧记忆，再等待当前组织的数据', async ({ page }) => {
+  const state=await setup(page)
+  let release!:()=>void
+  const gate=new Promise<void>(resolve=>{release=resolve})
+  await page.route('**/api/agent/memories',async route=>{await gate;await route.fulfill({json:{code:200,data:{enabled:true,records:[]}}})})
+  try {
+    expect(state.authModule()).not.toBe('')
+    await page.evaluate(async url=>{const {useAuthStore}=await import(url);useAuthStore.setState({user:{...useAuthStore.getState().user,orgId:2}})},state.authModule())
+    await expect(page.getByText('先给结论，再说明依据。')).toHaveCount(0)
+    await expect(page.getByText('正在读取你的记忆…')).toBeVisible()
+  } finally {release()}
+  await expect(page.getByRole('heading',{name:'还没有记忆',exact:true})).toBeVisible()
+})
 
 test('添加、编辑、候选确认、删除和开关完成一个管理流程', async ({ page }) => {
   const { errors } = await setup(page)
