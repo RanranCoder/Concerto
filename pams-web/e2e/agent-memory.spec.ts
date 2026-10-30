@@ -47,6 +47,7 @@ async function setup(page: Page, dark = false) {
 test('添加、编辑、候选确认、删除和开关完成一个管理流程', async ({ page }) => {
   const { errors } = await setup(page)
   await page.getByRole('button', { name: '添加记忆', exact: true }).click()
+  await expect(page.getByLabel('记忆名称', { exact: true })).toBeFocused()
   await page.getByLabel('记忆名称', { exact: true }).fill('语言')
   await page.getByLabel('记住什么').fill('使用中文')
   await page.getByLabel('有效期（从保存时起，天）').fill('30')
@@ -54,6 +55,7 @@ test('添加、编辑、候选确认、删除和开关完成一个管理流程',
   await expect(page.getByText('使用中文', { exact: true })).toBeVisible()
   const language = page.locator('.memory-list > li').filter({ has: page.getByRole('heading', { name: '语言', exact: true }) })
   await language.getByRole('button', { name: '编辑', exact: true }).click()
+  await expect(page.getByLabel('记住什么')).toBeFocused()
   await page.getByLabel('记住什么').fill('使用简体中文')
   await page.getByRole('button', { name: '保存并启用' }).click()
   await expect(language.getByText('使用简体中文')).toBeVisible()

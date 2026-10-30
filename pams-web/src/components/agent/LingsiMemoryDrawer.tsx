@@ -24,6 +24,12 @@ export default function LingsiMemoryDrawer({ open, onClose }: { open: boolean; o
   const [days, setDays] = useState(90)
   const [removing, setRemoving] = useState<string | null>(null)
   const generation = useRef(0)
+  const editor = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    if (!editing) return
+    editor.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    editor.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input:not(:disabled),textarea:not(:disabled)')?.focus({ preventScroll: true })
+  }, [editing])
   const reload = useCallback(async () => {
     const ticket = ++generation.current
     setLoading(true)
@@ -74,7 +80,7 @@ export default function LingsiMemoryDrawer({ open, onClose }: { open: boolean; o
         <div className="memory-actions"><Button onClick={() => { setError(''); void reload() }} disabled={busy} loading={loading}>刷新</Button>
           <Button onClick={() => edit('new')} disabled={!data?.enabled || busy}>添加记忆</Button></div>
       </div>
-      {editing && <form className="memory-editor" aria-label="编辑长期记忆" onSubmit={e => {
+      {editing && <form ref={editor} className="memory-editor" aria-label="编辑长期记忆" onSubmit={e => {
         e.preventDefault()
         void action(() => saveMemory({ scope: project.trim() ? `PROJECT:${project.trim()}` : 'USER', key: key.trim(), content: content.trim(), consent: true,
           revision: editing === 'new' ? undefined : editing.revision, days }), '记忆已保存')
