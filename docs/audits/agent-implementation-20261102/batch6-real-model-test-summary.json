@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-11-02T11:25:41.861Z",
+  "log": "pams-backend/target/batch6-real-planning-final.log",
+  "reportWindowStart": "2026-11-02T11:21:33.685Z",
+  "totals": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 1
+  },
+  "reports": [
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledPlanningRealModelTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

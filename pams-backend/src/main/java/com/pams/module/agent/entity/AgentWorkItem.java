@@ -16,6 +16,12 @@ public class AgentWorkItem {
     private String agentName;
     @Column(columnDefinition = "TEXT", nullable = false)
     private String instruction;
+    @Column(columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String contractJson;
+    @Column(columnDefinition = "JSON")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String resultJson;
     @Column(columnDefinition = "JSON", nullable = false)
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String dependenciesJson;

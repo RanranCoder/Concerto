@@ -431,6 +431,8 @@ public class TaskGate {
         }
 
         // 【乐观锁抢占】—— 影响行数 0 = 重复提交
+        if(task.getWorkItemId()!=null && !registry.visibleTo(tool,ctx.withRunId(task.getRunId()).withWorkItem(task.getWorkItemId(),task.getWorkItemRevision())))
+            throw new BizException(4403,"节点能力或工具契约已变化，请重新规划");
         if (!registry.visibleTo(tool, ctx)) throw new BizException(4403,"无权限执行该操作");
         int claimed = task.getWorkItemId()==null ? (requests==null ? repository.claimOwned(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
                 LocalDateTime.now(),com.pams.module.agent.orchestration.RuntimeIdentity.ID) : requests.claimOrdinary(task)) : workItems.claimAction(task,ctx);

@@ -27,7 +27,7 @@ export default function NotificationOperations() {
   }, [token, revision])
   return <>
     <NotificationPolicyPanel />
-    <Space style={{ display: 'flex', marginBottom: 16 }}><Button onClick={() => setRevision(n => n + 1)} loading={loading}>刷新管线状态</Button><span>仅显示当前组织的处理状态与错误类别</span></Space>
+    <Space wrap className="notification-ops-toolbar"><Button onClick={() => setRevision(n => n + 1)} loading={loading}>刷新管线状态</Button><span>仅显示当前组织的处理状态与错误类别</span></Space>
     <GlassCard style={{ padding: 16, marginBottom: 16 }}><Space><span>订阅本人维护告警</span><Switch aria-label="订阅本人维护告警" checked={identity === token && subscribed} disabled={loading || identity !== token} loading={savingSubscription} onChange={async enabled => {
       setSavingSubscription(true)
       try { const result = await put<{ enabled: boolean }>('/notifications/operations/subscription', { enabled }); if(token === useAuthStore.getState().token) setSubscribed(result.enabled) }
@@ -37,7 +37,7 @@ export default function NotificationOperations() {
     {error && <Alert type="error" message="管线状态加载失败，请刷新重试" />}
     {Object.entries(identity === token ? data : {}).map(([table, metrics]) => <GlassCard key={table} style={{ padding: 16, marginBottom: 16 }}>
       <h3>{{ notification_outbox: '收件箱生成', notification_delivery: '在线唤醒', notification_reminder: '定时提醒' }[table] ?? table}</h3>
-      <p>{metrics.states.map(s => `${s.status}: ${s.count}`).join(' / ') || '暂无记录'}</p>
+      <div className="notification-pipeline-states">{metrics.states.length ? metrics.states.map(s => <div key={s.status}><span>{({ PENDING: '待处理', PROCESSING: '处理中', SENT: '已发送', DELIVERED: '已送达', DONE: '已完成', FAILED: '失败', DEAD: '终止', RETRY: '待重试', SKIPPED: '已跳过', CANCELLED: '已取消' } as Record<string, string>)[s.status] ?? s.status}</span><strong>{s.count}</strong></div>) : <span>暂无记录</span>}</div>
       <p>最早待处理：{metrics.oldestPendingAt ?? '无'} · 已重试：{metrics.retried}</p>
       <GlassTable rowKey="id" dataSource={metrics.failures} pagination={false} locale={{ emptyText: '暂无失败记录' }} columns={[
         { title: '记录 ID', dataIndex: 'id' }, { title: '尝试次数', dataIndex: 'attempts' }, { title: '错误类别', dataIndex: 'last_error' },

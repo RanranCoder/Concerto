@@ -1,0 +1,33 @@
+{
+  "status" : "PASS",
+  "bodyTailPresent" : true,
+  "usage" : {
+    "attempts" : 1,
+    "failures" : 0,
+    "degradedResponses" : 0,
+    "reportedCalls" : 1,
+    "usageComplete" : true,
+    "reportedInputTokens" : 4367,
+    "reportedOutputTokens" : 376,
+    "cost" : null,
+    "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+    "models" : [ "deepseek-flash" ],
+    "calls" : [ {
+      "durationMs" : 2722,
+      "failed" : false,
+      "provider" : "deepseek",
+      "model" : "deepseek-flash",
+      "finishReason" : "tool_calls",
+      "usage" : {
+        "inputTokens" : 4367,
+        "outputTokens" : 376,
+        "cacheHitTokens" : 4096,
+        "cacheMissTokens" : 271
+      }
+    } ],
+    "maxCalls" : 8,
+    "perCallOutputTokenCap" : 4096,
+    "maximumOutputTokens" : 32768
+  },
+  "previousPreserved" : true
+}

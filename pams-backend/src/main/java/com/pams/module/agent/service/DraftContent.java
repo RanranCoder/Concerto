@@ -30,14 +30,15 @@ public class DraftContent {
         var args=arguments(plan);if(args.isEmpty()) return result;
         if("draftArticleFromActivity".equals(tool)) {
             result.put("title",Objects.toString(args.get("title"),""));result.put("content",plain(args.get("content")));
-        } else for(String key:CHAPTERS.keySet()) result.put(key,plain(args.get(key)));
+        } else if(args.containsKey("documentBody")) result.put("documentBody",plain(args.get("documentBody")));
+        else for(String key:CHAPTERS.keySet()) result.put(key,plain(args.get(key)));
         return result;
     }
     public String preview(String tool,AgentActionPlan plan) {
         var fields=fields(tool,plan);if(fields.isEmpty()) return plan.preview();
         StringBuilder body=new StringBuilder();
         if("draftArticleFromActivity".equals(tool)) return "# "+fields.get("title")+"\n\n"+fields.get("content");
-        for(var field:fields.entrySet()) if(!field.getValue().isBlank()) body.append("## ").append(CHAPTERS.get(field.getKey())).append("\n\n").append(field.getValue()).append("\n\n");
+        for(var field:fields.entrySet()) if(!field.getValue().isBlank()) body.append(field.getKey().equals("documentBody") ? "" : "## " + CHAPTERS.get(field.getKey()) + "\n\n").append(field.getValue()).append("\n\n");
         return body.toString().strip();
     }
     public AgentActionPlan replace(String tool,AgentActionPlan original,Map<String,String> values) {

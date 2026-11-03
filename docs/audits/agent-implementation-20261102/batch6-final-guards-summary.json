@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-11-02T11:33:45.722Z",
+  "log": "pams-backend/target/batch6-final-guards.log",
+  "reportWindowStart": "2026-11-02T11:31:33.519Z",
+  "totals": {
+    "tests": 33,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 33
+  },
+  "reports": [
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.AgentDisabledRegistryTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledExecutionIntegrationTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledPlanningServiceTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentEditorialIntegrationTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.MaterialDocumentReadTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

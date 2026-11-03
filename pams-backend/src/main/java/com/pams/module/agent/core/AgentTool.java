@@ -44,6 +44,12 @@ public interface AgentTool {
     /** 是否写类工具（写类必须走 D2 确认门禁） */
     default boolean writeOperation() { return false; }
 
+    /** Explicit opt-in: missing arguments do not imply that a tool can create a form. */
+    default boolean supportsForm() { return false; }
+
+    /** Runtime diagnostic contract; does not grant permissions or change the function schema. */
+    default ToolDescriptor descriptor() { return ToolDescriptor.from(this); }
+
     /**
      * 执行工具。
      *

@@ -1,0 +1,742 @@
+[ {
+  "name" : "createActivity",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "activity:create" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : true,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "name" : {
+        "type" : "string",
+        "description" : "活动名称，可空——缺失时系统弹表单向用户收集"
+      },
+      "theme" : {
+        "type" : "string",
+        "description" : "活动主题，可省略"
+      },
+      "type" : {
+        "type" : "string",
+        "description" : "活动类型，可省略"
+      },
+      "startDate" : {
+        "type" : "string",
+        "description" : "开始日期 yyyy-MM-dd，可空——缺失时系统弹表单向用户收集"
+      },
+      "endDate" : {
+        "type" : "string",
+        "description" : "结束日期 yyyy-MM-dd，可省略"
+      },
+      "location" : {
+        "type" : "string",
+        "description" : "活动地点，可省略"
+      },
+      "organizer" : {
+        "type" : "string",
+        "description" : "承办单位，可省略"
+      },
+      "host" : {
+        "type" : "string",
+        "description" : "主办单位，可省略"
+      },
+      "targetAudience" : {
+        "type" : "string",
+        "description" : "参与对象，可省略"
+      },
+      "description" : {
+        "type" : "string",
+        "description" : "活动简介，可省略"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "createMember",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "member:manage" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "SENSITIVE",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "name" : {
+        "type" : "string",
+        "description" : "姓名，必填"
+      },
+      "sessionId" : {
+        "type" : "integer",
+        "description" : "届别 ID，可省略（默认当前届别）"
+      },
+      "deptId" : {
+        "type" : "integer",
+        "description" : "部门 ID，可省略"
+      },
+      "position" : {
+        "type" : "string",
+        "description" : "职务，可省略"
+      },
+      "studentNo" : {
+        "type" : "string",
+        "description" : "学号，可省略"
+      },
+      "className" : {
+        "type" : "string",
+        "description" : "班级，可省略"
+      },
+      "phone" : {
+        "type" : "string",
+        "description" : "手机号，可省略"
+      },
+      "gender" : {
+        "type" : "string",
+        "description" : "性别 M/F，可省略"
+      },
+      "remark" : {
+        "type" : "string",
+        "description" : "备注，可省略"
+      }
+    },
+    "required" : [ "name" ]
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "createSeatLayout",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "seat:edit" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "templateId" : {
+        "type" : "integer",
+        "description" : "座位模板 ID，可省略"
+      },
+      "name" : {
+        "type" : "string",
+        "description" : "座位表名称，可省略（默认取活动名）"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "draftArticleFromActivity",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "article:create", "activity:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "articleType" : {
+        "type" : "string",
+        "description" : "稿件类型：REPORT（报道）/ NOTICE（通知），默认 REPORT"
+      },
+      "authorId" : {
+        "type" : "integer",
+        "description" : "稿件负责人用户 ID，可省略（默认当前用户）"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "draftPlanSections",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "plan:edit" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "documentBody" : {
+        "type" : "string",
+        "description" : "完整策划书正文，自由结构，无固定章节要求；优先使用此参数"
+      },
+      "background" : {
+        "type" : "string",
+        "description" : "「活动背景」正文（你撰写的）"
+      },
+      "purpose" : {
+        "type" : "string",
+        "description" : "「活动目的」正文（你撰写的）"
+      },
+      "content" : {
+        "type" : "string",
+        "description" : "「活动内容」正文（你撰写的，可分条）"
+      },
+      "notice" : {
+        "type" : "string",
+        "description" : "「活动注意事项」正文（你撰写的）"
+      },
+      "emergency" : {
+        "type" : "string",
+        "description" : "「应急预案」正文（你撰写的）"
+      },
+      "budget" : {
+        "type" : "string",
+        "description" : "「经费预算」正文（物品/数量/单价/总价，可用纯文本表格）"
+      },
+      "flow" : {
+        "type" : "string",
+        "description" : "「活动流程」正文（你撰写的，可按时间顺序排列）"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "generateActivitySchedule",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "schedule:generate" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "startDate" : {
+        "type" : "string",
+        "description" : "开始日期 yyyy-MM-dd，必填"
+      },
+      "endDate" : {
+        "type" : "string",
+        "description" : "结束日期 yyyy-MM-dd，必填"
+      },
+      "startTime" : {
+        "type" : "string",
+        "description" : "每天开始时间 HH:mm，必填"
+      },
+      "endTime" : {
+        "type" : "string",
+        "description" : "每天结束时间 HH:mm，必填"
+      },
+      "deptIds" : {
+        "type" : "array",
+        "description" : "参与部门 ID 数组，必填"
+      },
+      "peoplePerSlot" : {
+        "type" : "integer",
+        "description" : "每个时段需要人数，可省略（不限）"
+      },
+      "semester" : {
+        "type" : "string",
+        "description" : "学期，如 2025-2026-1，可省略"
+      }
+    },
+    "required" : [ "startDate", "endDate", "startTime", "endTime", "deptIds" ]
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "generateActivityTasks",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "task:manage" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "onlyMissing" : {
+        "type" : "boolean",
+        "description" : "跳过已存在的同名任务，默认 true"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "previewCreditBatch",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "quality:activity_add" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "来源活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "credit" : {
+        "type" : "number",
+        "description" : "每人加分值，如 0.5，必填"
+      },
+      "project" : {
+        "type" : "string",
+        "description" : "加分项目名称，默认'活动参与'"
+      },
+      "remark" : {
+        "type" : "string",
+        "description" : "备注，可省略"
+      },
+      "onlySigned" : {
+        "type" : "boolean",
+        "description" : "只给已签到的人加分，默认 true"
+      }
+    },
+    "required" : [ "credit" ]
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "publishAnnouncement",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "notice:publish" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "title" : {
+        "type" : "string",
+        "description" : "公告标题，必填"
+      },
+      "content" : {
+        "type" : "string",
+        "description" : "公告正文，必填"
+      }
+    },
+    "required" : [ "title", "content" ]
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+}, {
+  "name" : "queryActivityOverview",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "activity:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "keyword" : {
+        "type" : "string",
+        "description" : "活动名称关键词，可省略"
+      },
+      "status" : {
+        "type" : "string",
+        "description" : "活动状态：PLANNING / ONGOING / FINISHED / CANCELLED，可省略"
+      },
+      "month" : {
+        "type" : "string",
+        "description" : "查询月份，格式 yyyy-MM，可省略；省略时默认近 3 个月"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryActivityTasks",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "task:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID；省略时只看逾期任务"
+      },
+      "overdueOnly" : {
+        "type" : "boolean",
+        "description" : "只看逾期任务，默认 false"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryAttendance",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "attendance:view", "attendance:self:view" ],
+  "permissionMode" : "ANY",
+  "requiresLeader" : false,
+  "sensitivity" : "SENSITIVE",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "限定活动/课程 ID，可省略"
+      },
+      "mineOnly" : {
+        "type" : "boolean",
+        "description" : "只看本人考勤，默认 false"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryCommonFreeTime",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "semester" : {
+        "type" : "string",
+        "description" : "学期，如 2025-2026-1，可省略"
+      },
+      "userIds" : {
+        "type" : "array",
+        "description" : "用户 ID 数组；省略时为自己"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryCreditRecords",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "quality:view" ],
+  "permissionMode" : "ANY",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "keyword" : {
+        "type" : "string",
+        "description" : "项目名称关键词，可省略"
+      },
+      "activityId" : {
+        "type" : "integer",
+        "description" : "限定活动 ID，可省略"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryMyPendingWork",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "task:view", "plan:review", "content:view", "schedule:view", "schedule:self:view", "notice:view" ],
+  "permissionMode" : "ANY",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : { }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryNotifications",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "unreadOnly" : {
+        "type" : "boolean",
+        "description" : "只看未读，默认 false"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryPartyMemberProgress",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "party:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "SENSITIVE",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "keyword" : {
+        "type" : "string",
+        "description" : "姓名关键词，可省略"
+      },
+      "stage" : {
+        "type" : "string",
+        "description" : "发展阶段，如 积极分子 / 发展对象 / 预备党员，可省略"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "queryRosterSigninStats",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "checkin:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "activityId" : {
+        "type" : "integer",
+        "description" : "活动 ID，可省略；与 activityName 二选一"
+      },
+      "activityName" : {
+        "type" : "string",
+        "description" : "活动名称，与 activityId 二选一；不知道活动 ID 时直接传名称，系统会自动匹配。"
+      },
+      "includeUnsigned" : {
+        "type" : "boolean",
+        "description" : "是否列出未签人员姓名，默认 false"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "recallConversation",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "sourceMessageId" : {
+        "minimum" : 1,
+        "type" : "integer"
+      },
+      "offset" : {
+        "minimum" : 0,
+        "type" : "integer"
+      },
+      "beforeMessageId" : {
+        "minimum" : 1,
+        "type" : "integer"
+      },
+      "keyword" : {
+        "maxLength" : 100,
+        "type" : "string"
+      }
+    },
+    "additionalProperties" : false
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "searchArticles",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "content:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "keyword" : {
+        "type" : "string",
+        "description" : "标题关键词，可省略"
+      },
+      "status" : {
+        "type" : "string",
+        "description" : "状态：DRAFT / PENDING / APPROVED / PUBLISHED / REJECTED，可省略"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "searchMaterials",
+  "schemaVersion" : "1",
+  "operationKind" : "READ",
+  "requiredPermissions" : [ "material:view" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "keyword" : {
+        "type" : "string",
+        "description" : "材料名称关键词，可省略"
+      },
+      "bizType" : {
+        "type" : "string",
+        "description" : "材料类型，可省略"
+      },
+      "activityId" : {
+        "type" : "integer",
+        "description" : "限定某个活动 ID，可省略"
+      },
+      "limit" : {
+        "type" : "integer",
+        "description" : "返回条数上限，默认 10"
+      }
+    }
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "NOT_APPLICABLE"
+}, {
+  "name" : "sendNotification",
+  "schemaVersion" : "1",
+  "operationKind" : "PREPARE",
+  "requiredPermissions" : [ "notification:send" ],
+  "permissionMode" : "ALL",
+  "requiresLeader" : false,
+  "sensitivity" : "NORMAL",
+  "supportsForm" : false,
+  "parametersSchema" : {
+    "type" : "object",
+    "properties" : {
+      "title" : {
+        "type" : "string",
+        "description" : "通知标题，必填"
+      },
+      "content" : {
+        "type" : "string",
+        "description" : "通知正文，必填"
+      },
+      "recipientUserId" : {
+        "type" : "integer",
+        "description" : "接收人用户 ID，可省略"
+      },
+      "recipientRole" : {
+        "type" : "string",
+        "description" : "接收角色码，如 STAFF / DIRECTOR，可省略"
+      },
+      "recipientDeptId" : {
+        "type" : "integer",
+        "description" : "接收部门 ID，可省略"
+      },
+      "entityType" : {
+        "type" : "string",
+        "description" : "关联实体类型，如 activity / task，可省略"
+      },
+      "entityId" : {
+        "type" : "integer",
+        "description" : "关联实体 ID，可省略"
+      }
+    },
+    "required" : [ "title", "content" ]
+  },
+  "completenessPolicy" : "NOT_DECLARED",
+  "idempotencyPolicy" : "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED"
+} ]

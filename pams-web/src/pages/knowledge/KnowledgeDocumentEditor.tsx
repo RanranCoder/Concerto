@@ -17,7 +17,7 @@ export default function KnowledgeDocumentEditor({document, onClose, onSaved}: {d
       message.success('文档已保存并建立索引'); onSaved()
     } catch (err) {setError(errorText(err, '文档保存失败，请重试。'))} finally {running.current = false; setSaving(false)}
   }
-  return <FormSurface mode="drawer" title={document ? '编辑文档' : '录入文档'} description="保留来源和章节条款，便于灵思引用后核对。" open onCancel={close} onOk={() => form.submit()} okText="保存并建立索引" confirmLoading={saving} cancelButtonProps={{disabled: saving}} keyboard={!saving} closable={!saving}>
+  return <FormSurface mode="drawer" title={document ? '编辑文档' : '录入文档'} description="保留来源和章节条款，便于concerto引用后核对。" open onCancel={close} onOk={() => form.submit()} okText="保存并建立索引" confirmLoading={saving} cancelButtonProps={{disabled: saving}} keyboard={!saving} closable={!saving}>
     {error && <Alert showIcon type="error" message={error} className="admin-form-error" />}
     <Form form={form} layout="vertical" preserve={false} onFinish={save} initialValues={document || {docType: 'REGULATION', visibility: 'ALL'}}>
       <FormSection title="文档信息"><Form.Item name="title" label="文档标题" rules={[{required: true, whitespace: true, message: '请输入文档标题'}]}><Input maxLength={200} placeholder="例如：学生组织活动材料归档指引" /></Form.Item>

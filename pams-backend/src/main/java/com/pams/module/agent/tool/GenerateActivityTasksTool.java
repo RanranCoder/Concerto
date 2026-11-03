@@ -27,6 +27,7 @@ import java.util.Map;
  */
 @Component
 public class GenerateActivityTasksTool implements WriteAgentTool {
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.AgentTaskPlanService planChanges;
 
     private static final String ARGS_MARK = "__args__:";
 
@@ -64,7 +65,8 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
 
     @Override
     public String description() {
-        return "为活动生成标准筹备任务清单（策划、宣传、物资、场地、签到、总结等），"
+        return "可用tasks传1–10项明确任务建议，并携带queryActivityTasks获得的planBaseline，走真实计划预览/整批确认/原子保存/回执；已有同名项默认跳过，不静默重复追加。"
+                + "未提供tasks时兼容标准筹备任务模板。为活动生成标准筹备任务清单（策划、宣传、物资、场地、签到、总结等），"
                 + "任务截止日期按活动开始日自动倒排。适用于'给这个活动拉一份筹备清单'"
                 + "'帮我建一下活动任务'等指令。会先生成待确认清单，确认后写入。";
     }
@@ -74,6 +76,11 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
         return ToolArgs.schema("object", ToolArgs.map(
                 "activityId", ToolArgs.prop("integer", "活动 ID，可省略；与 activityName 二选一"),
                 "activityName", ToolArgs.prop("string", ActivityResolver.NAME_DESC),
+                "planBaseline", ToolArgs.prop("string", "显式建议所需整体任务计划基线"),
+                "tasks", Map.of("type","array","maxItems",10,"items",Map.of("type","object","properties",ToolArgs.map(
+                        "name",ToolArgs.prop("string","任务名称，必填"),"deptId",ToolArgs.prop("integer","部门ID"),"assigneeUserId",ToolArgs.prop("integer","真实账号ID；不猜负责人"),
+                        "startDate",ToolArgs.prop("string","ISO开始日期"),"endDate",ToolArgs.prop("string","ISO结束日期，与开始成对"),"dependsOn",ToolArgs.prop("integer","已有前置任务ID"),
+                        "isMilestone",ToolArgs.prop("integer","0或1"),"priority",ToolArgs.prop("integer","优先级"),"description",ToolArgs.prop("string","任务说明")),"required",List.of("name"),"additionalProperties",false)),
                 "onlyMissing", ToolArgs.prop("boolean", "跳过已存在的同名任务，默认 true")
         ), List.of());
     }
@@ -90,6 +97,11 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
                 activityResolver.resolve(ToolArgs.lng(args, "activityId"), ToolArgs.str(args, "activityName"));
         if (res.failed()) return ToolResult.failed(res.message());
         Long activityId = res.activity().getId();
+        if(args!=null && args.get("tasks")!=null) {
+            if(!(args.get("tasks") instanceof List<?> list))return ToolResult.failed("tasks须为任务建议数组");
+            try{return planChanges.prepareBatch(ctx,activityId,ToolArgs.str(args,"planBaseline"),list,!Boolean.FALSE.equals(args.get("onlyMissing")));}
+            catch(Exception e){return ToolResult.failed(e.getMessage()==null?"任务建议无效":e.getMessage());}
+        }
         boolean onlyMissing = args == null || !Boolean.FALSE.equals(args.get("onlyMissing"));
 
         Activity activity = res.activity();
@@ -131,6 +143,11 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
         if (items.isEmpty()) {
             return ToolResult.ok("该活动已有完整的筹备任务清单，无需重复生成。");
         }
+        if(planChanges!=null){
+            try{var suggestions=new ArrayList<Map<String,Object>>();for(var entry:toCreate){LocalDate due=LocalDate.parse(entry.get("due").toString());suggestions.add(ToolArgs.map("name",entry.get("name"),"startDate",due.isBefore(LocalDate.now())?due.toString():LocalDate.now().toString(),"endDate",due.toString(),"priority",1,"description","由灵思按标准筹备流程建议"));}
+                return planChanges.prepareBatch(ctx,activityId,com.pams.module.agent.service.AgentTaskPlanService.baseline(taskService.listByActivity(activityId)),suggestions,onlyMissing);
+            }catch(Exception e){return ToolResult.failed(e.getMessage()==null?"任务计划预览失败":e.getMessage());}
+        }
 
         List<String> detailLines = new ArrayList<>();
         detailLines.add("活动：" + activity.getName());
@@ -156,6 +173,10 @@ public class GenerateActivityTasksTool implements WriteAgentTool {
     public CommitResult commit(ToolContext ctx, AgentActionPlan plan) {
         Map<String, Object> exec = readArgs(plan);
         if (exec == null) return CommitResult.failed("无法还原任务参数，请重新发起。");
+        if(exec.containsKey("operationId") && planChanges!=null) {
+            try{return planChanges.commitGenerated(ctx,plan);}catch(com.pams.common.BizException e){return CommitResult.failed(e.getMessage());}
+            catch(Exception e){return new CommitResult("RESULT_UNKNOWN",0,0,"任务建议提交结果待核对，不要重复执行。",Map.of(),List.of());}
+        }
 
         Long activityId = lng(exec.get("activityId"));
         if (activityId == null) return CommitResult.failed("活动 ID 缺失，请重新发起。");

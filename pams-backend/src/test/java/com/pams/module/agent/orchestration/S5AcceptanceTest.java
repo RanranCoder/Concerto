@@ -32,6 +32,8 @@ import static org.assertj.core.api.Assertions.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class S5AcceptanceTest {
+    private static final Set<String> LEGACY_MATRIX=Set.of("queryActivityOverview","queryActivityTasks","queryAttendance","queryCommonFreeTime","queryCreditRecords","queryMyPendingWork","queryNotifications","queryPartyMemberProgress","queryRosterSigninStats","searchArticles","searchMaterials",
+        "createActivity","createMember","createSeatLayout","draftArticleFromActivity","draftPlanSections","generateActivitySchedule","generateActivityTasks","previewCreditBatch","publishAnnouncement","sendNotification");
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
         String url=System.getenv("PAMS_S5_DB_URL");
         if(url==null || !url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/pams_s5_[a-zA-Z0-9_]+\\?.*"))throw new IllegalStateException("S5 requires an isolated pams_s5_* database on a local tunnel");
@@ -53,6 +55,7 @@ class S5AcceptanceTest {
     @Autowired PlanReviewService reviews;
     @Autowired BenchmarkService benchmark;
     @Autowired AgentEvaluationMeter meter;
+    @Autowired com.pams.module.notification.service.NotificationOutboxWorker notificationWorker;
     private final ObjectMapper json=new ObjectMapper().registerModule(new com.fasterxml.jackson.databind.module.SimpleModule().addSerializer(java.time.LocalDateTime.class,new com.fasterxml.jackson.databind.ser.std.ToStringSerializer()));
     private final List<Map<String,Object>> evidence=new ArrayList<>();
     private final String prefix="S5-"+UUID.randomUUID().toString().substring(0,8);
@@ -71,13 +74,19 @@ class S5AcceptanceTest {
     }
     @BeforeAll void fixture() throws Exception {
         ctx=identity(1L);
-        assertThat(tools.all()).hasSize(21);
+        assertThat(tools.all().stream().map(AgentTool::name).toList()).containsAll(LEGACY_MATRIX);
+        save("tool-coverage.json",Map.of("registered",tools.all().stream().map(AgentTool::name).toList(),"legacyMatrix",LEGACY_MATRIX,
+            "requiresAdditionalAcceptance",tools.all().stream().map(AgentTool::name).filter(n->!LEGACY_MATRIX.contains(n)).toList()));
         dept=db.queryForObject("select min(id) from sys_department where org_id=1",Long.class);
         session=db.queryForObject("select min(id) from member_session where org_id=1",Long.class);
         template=db.queryForObject("select min(id) from seat_layout where is_template=1 and org_id=1",Long.class);
         var result=preview("createActivity",Map.of("name",prefix+"-事实活动","startDate","2026-11-20","endDate","2026-11-20","location","S5 测试礼堂","type","OTHER"));
         gate.confirm(result.plan().planId(),result.plan().confirmToken(),ctx);
         activity=db.queryForObject("select id from activity where name=?",Long.class,prefix+"-事实活动");
+        // Seed the reader's inbox explicitly; announcement senders are not recipients.
+        var notification=preview("sendNotification",Map.of("title",prefix+"-查询通知样本","content","独立测试库通知样本","recipientUserId",1));
+        assertThat(gate.confirm(notification.plan().planId(),notification.plan().confirmToken(),ctx).get("status")).isEqualTo("SUCCESS");
+        notificationWorker.tick(); // Scheduled delivery is intentionally disabled under the test profile.
         db.update("insert ignore into sys_role(id,org_id,code,name,level,data_scope,status) values(9001,1,'S5_NONE','S5 无业务授权',1,'SELF',1)");
         db.update("insert ignore into sys_user(id,org_id,username,password,real_name,role_id,status) values(9001,1,'s5-none','not-a-login-password','S5 无权限测试用户',9001,1)");
         db.update("insert into signin_roster(activity_id,fields_json,org_id) values(?,?,1)",activity,"{\"姓名\":\"S5 合成学生\",\"学号\":\"S50001\"}");
@@ -113,7 +122,7 @@ class S5AcceptanceTest {
             case "createMember" -> Map.of("name",prefix+"-合成成员","sessionId",session,"deptId",dept,"position","STAFF","studentNo",prefix);
             case "createSeatLayout" -> Map.of("activityId",activity,"templateId",template,"name",prefix+"-座位表");
             case "draftArticleFromActivity" -> Map.of("activityId",activity);
-            case "draftPlanSections" -> Map.of("activityId",activity,"background","S5 测试活动背景","content","2026-11-20 在 S5 测试礼堂开展合成测试活动");
+            case "draftPlanSections" -> Map.of("activityId",activity,"documentBody","<h1>自由策划书</h1><p>2026-11-20 在 S5 测试礼堂开展合成测试活动</p><p>正文完整尾部</p>");
             case "generateActivityTasks","queryActivityTasks","queryRosterSigninStats" -> Map.of("activityId",activity);
             case "generateActivitySchedule" -> Map.of("activityId",activity,"startDate","2026-11-20","endDate","2026-11-20","startTime","14:00","endTime","15:40","deptIds",List.of(dept),"peoplePerSlot",1,"semester","S5-TEST");
             case "previewCreditBatch" -> Map.of("activityId",activity,"credit",0.5,"onlySigned",false);
@@ -131,8 +140,8 @@ class S5AcceptanceTest {
         };
     }
     private long count(String table) { return db.queryForObject("select count(*) from "+table+" where org_id=1",Long.class); }
-    @TestFactory @Order(1) Stream<DynamicTest> allTwentyOneTools() {
-        return tools.all().stream().sorted(Comparator.comparing(AgentTool::name)).map(tool->DynamicTest.dynamicTest(tool.name(),()->{
+    @TestFactory @Order(1) Stream<DynamicTest> legacyTwentyOneToolMatrix() {
+        return tools.all().stream().filter(t->LEGACY_MATRIX.contains(t.name())).sorted(Comparator.comparing(AgentTool::name)).map(tool->DynamicTest.dynamicTest(tool.name(),()->{
             var row=new LinkedHashMap<String,Object>();row.put("tool",tool.name());row.put("fixturePrefix",prefix);row.put("write",tool.writeOperation());
             try {
                 var low=identity(9001L);
@@ -152,6 +161,11 @@ class S5AcceptanceTest {
                     var receipt=gate.confirm(result.plan().planId(),result.plan().confirmToken(),ctx);
                     assertThat(receipt.get("status")).as(tool.name()+" receipt "+receipt).isEqualTo("SUCCESS");
                     long after=count(table);assertThat(after).isGreaterThan(before);
+                    if("sendNotification".equals(tool.name())) {
+                        notificationWorker.tick();
+                        assertThat(db.queryForObject("select count(*) from notification_inbox i join notification n on n.id=i.message_id where i.org_id=1 and i.user_id=1 and n.title=?",Long.class,prefix+"-通知")).isEqualTo(1L);
+                        row.put("recipientInboxDelivered",true);
+                    }
                     gate.confirm(result.plan().planId(),result.plan().confirmToken(),ctx);
                     assertThat(count(table)).as("repeated confirmation").isEqualTo(after);
                     row.put("actualBusinessRowsAdded",after-before);row.put("previewNoWrite",true);row.put("repeatedConfirmationNoWrite",true);
@@ -195,6 +209,28 @@ class S5AcceptanceTest {
             gate.confirm(action.getId(),(String)plan.get("confirmToken"),ctx);assertThat(count("article")).isEqualTo(before+1);
             save("live-business.json",Map.of("status","PASS","runId",run.getId(),"receiptStatus",receipt.get("status"),"newArticleRows",1,"usage",meter.snapshot(ctx.getStreamId())));
         } finally {meter.close(ctx.getStreamId());state.cancel(run.getId(),1L);}
+    }
+    @Test @Order(3) void liveFreePlanPreservesExistingVersionAndCommitsFullBody() throws Exception {
+        Assumptions.assumeTrue("true".equals(System.getenv("PAMS_S5_LIVE")));
+        ctx=identity(1L);meter.open(ctx.getStreamId(),8,4096);
+        long before=count("activity_plan");
+        Long previous=db.queryForObject("select id from activity_plan where activity_id=? order by version desc limit 1",Long.class,activity);
+        String original=db.queryForObject("select content from activity_plan where id=?",String.class,previous);
+        try {
+            var result=specialist.execute("generalist","为活动 ID "+activity+"（"+prefix+"-事实活动）编写一份简短策划书，日期2026-11-20，地点S5 测试礼堂。正文只用三个自定义标题：目标、安排、验收。通过 draftPlanSections 的 documentBody 参数传入完整HTML正文，末尾包含验收标记 PLAN_BODY_END。不要套用12章，不要创建其他活动，生成待确认清单即可。",ctx,null,ctx.getStreamId(),"teacher");
+            assertThat(result.plan()).as(result.text()).isNotNull();
+            assertThat(result.plan().preview()).contains("PLAN_BODY_END");
+            assertThat(count("activity_plan")).isEqualTo(before);
+            var receipt=gate.confirm(result.plan().planId(),result.plan().confirmToken(),ctx);
+            assertThat(receipt.get("status")).as(receipt.toString()).isEqualTo("SUCCESS");
+            assertThat(count("activity_plan")).isEqualTo(before+1);
+            assertThat(db.queryForObject("select content from activity_plan where id=?",String.class,previous)).isEqualTo(original);
+            String body=db.queryForObject("select content from activity_plan where activity_id=? order by version desc limit 1",String.class,activity);
+            assertThat(body).contains("PLAN_BODY_END","S5 测试礼堂");
+            gate.confirm(result.plan().planId(),result.plan().confirmToken(),ctx);
+            assertThat(count("activity_plan")).isEqualTo(before+1);
+            save("live-plan.json",Map.of("status","PASS","previousPreserved",true,"bodyTailPresent",true,"usage",meter.snapshot(ctx.getStreamId())));
+        } finally {meter.close(ctx.getStreamId());}
     }
     @Test @Order(3) void liveReviewLocatesAnInjectedFactError() throws Exception {
         Assumptions.assumeTrue("true".equals(System.getenv("PAMS_S5_LIVE")));

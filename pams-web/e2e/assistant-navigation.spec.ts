@@ -20,6 +20,7 @@ async function setup(page: Page) {
     else if (path === '/api/dashboard') data = { activityStats: {}, weekSchedules: 0, myTasks: [], recentArticles: [], recentMaterials: [], recentAnnouncements: [] }
     else if (path === '/api/kb/stats') data = { retriever: 'fulltext-ngram', fulltextAvailable: true, documentCount: 0, chunkCount: 0, snapshotCount: 0, lastIndexedAt: null }
     else if (path === '/api/kb/chunks') data = { records: [], total: 0, current: 1, size: 20 }
+    else if (path === '/api/kb/entries') data = { records: [], total: 0, current: 1, size: 20 }
     await route.fulfill({ json: { code: 200, data } })
   })
 }

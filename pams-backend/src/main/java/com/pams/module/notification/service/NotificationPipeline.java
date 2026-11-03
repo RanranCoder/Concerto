@@ -57,6 +57,22 @@ public class NotificationPipeline {
       +"WHERE u.org_id=? AND u.deleted=0 AND u.status=1 AND (u.id=? OR r.code=? OR u.dept_id=?)",
       Long.class,org,uid,role,dept);
     String eventKey=key(type,title,content,entity,entityId,sender);
+    return recordAudience(type,title,content,entity,entityId,sender,audience,eventKey);
+  }
+  /** Agent confirmations use a server-owned operation key and an exact frozen recipient set. */
+  @Transactional
+  public Notification recordFrozen(NotificationType type,String title,String content,Long sender,List<Long> audience,String operation) {
+    if(operation==null || !operation.matches("[a-f0-9-]{36}") || audience==null || audience.isEmpty() || audience.size()>200
+        || title==null || title.isBlank() || title.length()>100 || content==null || content.isBlank() || content.length()>500)
+      throw new BizException(2051,"冻结通知参数无效");
+    var unique=new TreeSet<>(audience);
+    var args=new ArrayList<Object>();args.add(org());args.addAll(unique);
+    long valid=db.queryForObject("SELECT COUNT(*) FROM sys_user u JOIN sys_role r ON r.id=u.role_id AND r.org_id=u.org_id WHERE u.org_id=? AND u.deleted=0 AND u.status=1 AND r.status='ACTIVE' AND u.id IN ("+String.join(",",Collections.nCopies(unique.size(),"?"))+")",Long.class,args.toArray());
+    if(valid!=unique.size())throw new BizException(2051,"冻结受众已失效，请重新预览");
+    return recordAudience(type,title,content,null,null,sender,List.copyOf(unique),"agent:"+operation);
+  }
+  private Notification recordAudience(NotificationType type,String title,String content,String entity,Long entityId,Long sender,List<Long> audience,String eventKey) {
+    long org=org();
     var existing=db.queryForList("SELECT id FROM notification WHERE org_id=? AND event_key=?",Long.class,org,eventKey);
     Notification n;
     if(existing.isEmpty()) {

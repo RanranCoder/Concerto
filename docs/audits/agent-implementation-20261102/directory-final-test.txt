@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.pams.module.agent.service.AgentDirectoryReadTest
+-------------------------------------------------------------------------------
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 16.85 s -- in com.pams.module.agent.service.AgentDirectoryReadTest

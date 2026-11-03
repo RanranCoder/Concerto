@@ -38,6 +38,14 @@ public class AgentLlmCaller {
     private final AgentProperties props;
     private final AgentEventPublisher publisher;
     private final ThinkingTrace thinkingTrace;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.agent.provider.TaskProviderRegistry taskProviders;
+
+    public void beginTask(String stream, ToolContext ctx) {
+        if (taskProviders != null) taskProviders.begin(stream, ctx.getLoginUser().getOrgId());
+    }
+    public void endTask(String stream) { if (taskProviders != null) taskProviders.release(stream); }
+    private LlmProvider selected(String stream) { return taskProviders == null ? primaryProvider : taskProviders.get(stream); }
     @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentEvaluationMeter evaluation;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.llm.LlmCancellation cancellation = new com.pams.module.agent.llm.LlmCancellation();
@@ -65,6 +73,7 @@ public class AgentLlmCaller {
                                            List<LlmProvider.ToolSpec> specs,
                                            ToolContext ctx, String streamId, int round) {
         if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+        final LlmProvider primaryProvider = selected(streamId);
         LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
                 new ContextBudget(props).fit(messages, specs), specs, props.getTemperature(), props.getMaxTokens());
 
@@ -108,6 +117,7 @@ public class AgentLlmCaller {
     /** Specialist output is task-local and must not enter the shared final-answer delta channel. */
     public LlmProvider.ChatResponse callIsolated(List<LlmProvider.ChatMessage> messages,
                                                List<LlmProvider.ToolSpec> specs, String streamId) {
+        final LlmProvider primaryProvider = selected(streamId);
         LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,specs),specs,props.getTemperature(),props.getMaxTokens());
         for (int attempt=0; attempt<2; attempt++) {
             if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
@@ -125,6 +135,7 @@ public class AgentLlmCaller {
 
     /** Optional compaction gets one bounded attempt, never delays chat through retry + fallback. */
     public LlmProvider.ChatResponse callSummary(List<LlmProvider.ChatMessage> messages, String streamId) {
+        final LlmProvider primaryProvider = selected(streamId);
         if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
         var req=new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,List.of()),List.of(),props.getTemperature(),
                 Math.max(1,Math.min(props.getMaxTokens(),props.getContextSummaryMaxTokens())));
@@ -132,6 +143,21 @@ public class AgentLlmCaller {
         return cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),
                 Math.max(1,Math.min(props.getTimeoutMs(),props.getContextSummaryTimeoutMs())),
                 ()->observed(streamId,req,primaryProvider::chat));
+    }
+    /** One bounded, tool-free planning attempt. The caller owns the single optional repair. */
+    public LlmProvider.ChatResponse callPlanning(List<LlmProvider.ChatMessage> messages,String streamId) {
+        final LlmProvider provider=selected(streamId);
+        int max=Math.max(1,Math.min(2048,props.getMaxTokens()));
+        int input=0;
+        for(var message:messages){
+            input+=ContextBudget.tokens(java.util.Objects.toString(message.content(),""));
+            try{if(message.nativeItems()!=null && !message.nativeItems().isEmpty())input+=ContextBudget.tokens(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(message.nativeItems()));}
+            catch(Exception e){throw new IllegalArgumentException("Planning context native state cannot be budgeted",e);}
+        }
+        if(input+max+props.getContextSafetyTokens()>props.getContextWindowTokens()) throw new IllegalArgumentException("Planning context budget exceeded");
+        var req=new LlmProvider.ChatRequest(messages,List.of(),0.0,max);
+        if("stub".equals(provider.name())) return observed(streamId,req,this::safeStub);
+        return cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),Math.max(1,Math.min(15000,props.getTimeoutMs())),()->observed(streamId,req,provider::chat));
     }
 
     private LlmProvider.ChatResponse observed(String stream,LlmProvider.ChatRequest req,java.util.function.Function<LlmProvider.ChatRequest,LlmProvider.ChatResponse> call) {

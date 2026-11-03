@@ -84,7 +84,7 @@ public class BenchmarkService {
             row.setToolCalls(steps.stream().mapToInt(this::invocations).sum());row.setArtifacts(artifacts.findByRunIdOrderByIdAsc(run.getId()).size());row.setReviewPass(null);
             row.setDurationMs((int)Math.min(Integer.MAX_VALUE,(System.nanoTime()-started)/1000000));row.setCreatedAt(java.time.LocalDateTime.now());
             var metadata=new LinkedHashMap<String,Object>(meter.snapshot(stream));metadata.put("engine","durable-dag-v2");metadata.put("qualityVerdict","NOT_ASSESSED");
-            metadata.put("configuredModel",props.getModel());metadata.put("thinking",props.isThinking());metadata.put("reasoningEffort",props.getReasoningEffort());
+            metadata.put("configuredModel",props.getModel());metadata.put("protocol",props.getProtocol());metadata.put("summaryEnabled",props.isSummaryEnabled());
             metadata.put("maxToolIterations",props.getMaxToolIterations());metadata.put("maxParallelNodes",props.getMaxParallelNodes());
             metadata.put("promptConfigSha256",hash(json.writeValueAsString(registry.enabled().stream().sorted(Comparator.comparing(AgentDefinition::getName))
                 .map(d->Map.of("name",d.getName(),"prompt",Objects.toString(d.getRolePrompt(),""),"scope",Objects.toString(d.getToolScope(),""))).toList())));

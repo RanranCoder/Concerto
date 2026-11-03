@@ -64,6 +64,8 @@ public class Blackboard {
         private int id;
         private String agent;
         private String task;
+        /** Server-produced immutable capability/binding contract for this revision. Null for legacy rules. */
+        private java.util.Map<String,Object> contract;
         private String status = "QUEUED";
         private Long durationMs;
         private Long workItemId;

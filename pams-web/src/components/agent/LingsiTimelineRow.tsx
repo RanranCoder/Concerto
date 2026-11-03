@@ -70,11 +70,11 @@ function AgentAvatar({ name, label }: { name: string; label: string }) {
 }
 
 /**
- * 思维链行：折叠只显示标题（模型推理首句 / 编排旁白一句），推理可展开读全文。
+ * 思维链行：折叠只显示标题（推理摘要首句 / 编排旁白一句），推理可展开读全文。
  *
  * <p>两种行共用这一个组件，靠**有没有 `detail`** 区分（与 {@code groupTimeline} 同一判据）：
  * <ul>
- *   <li>模型推理（V35）：折叠只显示摘要，展开后用中性标题与完整原文替换摘要</li>
+ *   <li>推理摘要（V35）：折叠只显示摘要，展开后用中性标题与完整原文替换摘要</li>
  *   <li>编排旁白（V36）：「正在理解你的问题…」这类后端自述，只有一句标题，没有可展开的内容</li>
  * </ul>
  * 不分成两个组件是刻意的：它们的折叠态是同一行结构（图标 + 标题 + 耗时），
@@ -101,7 +101,7 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
       <div className="lingsi-tl-think">
         <div className="lingsi-tl-think-head" data-expandable={expandable}>
           <span className="lingsi-tl-label" ref={headlineRef} hidden={expanded} />
-          {expanded && <span className="lingsi-tl-label">推理内容</span>}
+          {expanded && <span className="lingsi-tl-label">推理摘要</span>}
           {!finished && <PendingDots />}
           {expandable && (
             <button
@@ -111,7 +111,7 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
               aria-expanded={expanded}
               aria-controls={bodyId}
             >
-              {expanded ? '收起推理' : '展开推理'}
+              {expanded ? '收起摘要' : '展开摘要'}
             </button>
           )}
           {duration && <span className="lingsi-tl-meta">{duration}</span>}
@@ -119,7 +119,7 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
         {expandable && (
           <div className="pams-collapse" data-open={expanded} aria-hidden={!expanded} {...(!expanded ? { inert: '' } : {})}>
             <div className="pams-collapse-inner">
-              <div className="lingsi-tl-think-body" id={bodyId} role="region" aria-label="推理全文"><span ref={contentRef} /></div>
+              <div className="lingsi-tl-think-body" id={bodyId} role="region" aria-label="推理摘要"><span ref={contentRef} /></div>
             </div>
           </div>
         )}

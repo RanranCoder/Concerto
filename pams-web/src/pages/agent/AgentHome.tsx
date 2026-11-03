@@ -16,6 +16,7 @@ import LingsiEntityPanel from '@/components/agent/LingsiEntityPanel'
 import { Menu, PanelRight, Toolbox } from '@/components/agent/LingsiIcons'
 import { agentStatusLabels, conversationStatus } from '@/utils/agentTask'
 import type { AgentConversationStatus, AgentMode } from '@/api/agent'
+import { getAgentModelStatus, type AgentModelStatus } from '@/api/agentProviders'
 
 /**
  * 灵思主页（灵思设计方案 §5 / §7 + UI 改版方案 v2 §A）。
@@ -33,6 +34,7 @@ import type { AgentConversationStatus, AgentMode } from '@/api/agent'
  *    （产物卡的一行、清单卡的查看全文）—— 用 props 传下去会让每个中间组件都感知面板的存在。
  */
 export default function AgentHome() {
+  const [modelStatus, setModelStatus] = useState<AgentModelStatus | null>(null)
   const conversations = useAgentStore((s) => s.conversations)
   const conversationsLoading = useAgentStore((s) => s.conversationsLoading)
   const currentConversationId = useAgentStore((s) => s.currentConversationId)
@@ -301,13 +303,20 @@ export default function AgentHome() {
 
   const isEmpty = rows.length === 0
 
-  /** 模型档位展示：取最近一轮的 provider */
-  const lastProvider = useMemo(() => {
-    for (let i = outcomes.length - 1; i >= 0; i -= 1) {
-      if (outcomes[i].provider) return outcomes[i]
+  // The composer describes the current configuration; message metadata describes past execution.
+  useEffect(() => {
+    let active = true, revision = 0
+    const refreshModel = async () => {
+      const request = ++revision
+      try {
+        const status = await getAgentModelStatus()
+        if (active && request === revision) setModelStatus(typeof status?.configured === 'boolean' ? status : null)
+      } catch { if (active && request === revision) setModelStatus(null) }
     }
-    return null
-  }, [outcomes])
+    void refreshModel()
+    window.addEventListener('focus', refreshModel)
+    return () => { active = false; window.removeEventListener('focus', refreshModel) }
+  }, [currentConversationId, thinking])
 
   const showPanelToggle = panelItems.length > 0 || panelCatalog.length > 0
   const catalogSignature=outcomes.map(o=>`${o.messageId}:${o.plan?.planId}:${o.run?.stateVersion}:${o.run?.status}:${o.notice?.taskId}`).join('|')
@@ -431,8 +440,7 @@ export default function AgentHome() {
           onModeChange={(m) => void setMode(m)}
           autoCollab={autoCollab}
           onAutoCollabChange={setAutoCollab}
-          provider={lastProvider?.provider}
-          degraded={lastProvider?.degraded}
+          modelStatus={modelStatus}
           pendingRefs={pendingRefs}
           onAddRef={addRef}
           onRemoveRef={removeRef}

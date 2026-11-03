@@ -281,7 +281,7 @@ export async function htmlToDocx(html: string, ctx: HtmlToDocxContext): Promise<
   if (!input) return paragraphs
 
   const domParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null
-  if (!domParser) {
+  if (!domParser || !/<[a-z][\s\S]*>/i.test(input)) {
     for (const line of stripHtml(input).split('\n')) {
       if (line.trim()) {
         paragraphs.push(
@@ -301,7 +301,8 @@ export async function htmlToDocx(html: string, ctx: HtmlToDocxContext): Promise<
   const root = doc.body ?? doc.documentElement
   const container = root.nodeName.toLowerCase() === 'div' ? root : root.firstChild ?? root
   for (const child of Array.from(container.childNodes)) {
-    await walkNode(child, ctx, paragraphs, {})
+    const { runs } = await walkNode(child, ctx, paragraphs, {})
+    if (runs.length) paragraphs.push(new mod.Paragraph({ children: runs }))
   }
   return paragraphs
 }

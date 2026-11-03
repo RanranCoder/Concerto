@@ -24,5 +24,8 @@ class ToolResultTextTest {
         assertThat(context.length()).isLessThan(12100);assertThat(context).doesNotContain("must-not-leave");
         var parsed=new com.fasterxml.jackson.databind.ObjectMapper().readTree(context.substring(context.indexOf('{')));
         assertThat(parsed.path("truncated").asBoolean()).isTrue();assertThat(parsed.path("data").path("rows").isArray()).isTrue();
+        assertThat(parsed.path("completeness").path("complete").isNull()).isTrue();
+        assertThat(parsed.path("completeness").path("hasMore").isNull()).isTrue();
+        assertThat(parsed.path("completeness").path("truncated").asBoolean()).isTrue();
     }
 }

@@ -74,7 +74,7 @@ public class AgentMessage implements OrgScoped {
     private String mode;
 
     /**
-     * 本轮思维链（V35）：模型推理（{@code reasoning_content}）按 LLM 调用轮次分段的原文。
+     * 按 LLM 调用轮次分段的公开推理摘要；保留已有历史记录的读取结构。
      *
      * <p>结构见 {@code ThinkingTrace.Step}：
      * {@code [{round, text, startedAt, endedAt, durationMs}]}，前端同名类型 {@code AgentThinkingStep}。
@@ -113,7 +113,7 @@ public class AgentMessage implements OrgScoped {
     @Column(name = "stream_id", length = 64)
     private String streamId;
 
-    /** 实际答复的 provider（deepseek/ollama/stub）——前端据此标注"规则模式"（灵思 §3.5.1） */
+    /** 实际答复的原生协议或 stub；前端据此标注规则模式。 */
     @Column(length = 20)
     private String provider;
 

@@ -3,6 +3,7 @@ import { App, Avatar, Button, Segmented, Skeleton, Space, Typography } from 'ant
 import { ApartmentOutlined, BookOutlined, CheckOutlined, DatabaseOutlined, FolderOutlined, ReloadOutlined, SettingOutlined, SkinOutlined, UserOutlined, WarningOutlined } from '@ant-design/icons'
 import { useBlocker, useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
+import AiServices from './AiServices'
 import PageHeader from '@/components/glass/PageHeader'
 import FormSurface from '@/components/form/FormSurface'
 import { InfoList, LoadError, Panel, RelatedLink, StatusTag } from '@/components/admin/AdminSurface'
@@ -14,7 +15,7 @@ import { parsePacks, useOrgStore } from '@/stores/org'
 import { usePreferencesStore, type ListDensity } from '@/stores/preferences'
 import { useThemeStore } from '@/stores/theme'
 
-const categories = [{key: 'overview', label: '运行概览', icon: <DatabaseOutlined aria-hidden="true" />}, {key: 'organization', label: '组织与功能', icon: <ApartmentOutlined aria-hidden="true" />}, {key: 'preferences', label: '使用偏好', icon: <SkinOutlined aria-hidden="true" />}, {key: 'diagnostics', label: '存储与诊断', icon: <FolderOutlined aria-hidden="true" />}]
+const categories = [{key: 'overview', label: '运行概览', icon: <DatabaseOutlined aria-hidden="true" />}, {key: 'ai', label: 'AI 服务', icon: <SettingOutlined aria-hidden="true" />}, {key: 'organization', label: '组织与功能', icon: <ApartmentOutlined aria-hidden="true" />}, {key: 'preferences', label: '使用偏好', icon: <SkinOutlined aria-hidden="true" />}, {key: 'diagnostics', label: '存储与诊断', icon: <FolderOutlined aria-hidden="true" />}]
 const packNames: Record<string, string> = {party: '党建包 · 党务台账', volunteer: '志愿服务包', club: '社团包'}
 
 export default function Settings() {
@@ -24,7 +25,8 @@ export default function Settings() {
   const orgName = useOrgStore(s => s.orgName), primary = useOrgStore(s => s.primaryColor)
   const savedDensity = usePreferencesStore(s => s.userListDensity), saveDensity = usePreferencesStore(s => s.setUserListDensity)
   const [density, setDensity] = useState<ListDensity>(savedDensity), dirty = density !== savedDensity
-  const blocker = useBlocker(({currentLocation, nextLocation}) => dirty && currentLocation.pathname !== nextLocation.pathname)
+  const [aiDirty, setAiDirty] = useState(false)
+  const blocker = useBlocker(({currentLocation, nextLocation}) => (dirty || aiDirty) && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search))
   const [info, setInfo] = useState<SystemInfoVO | null>(), [org, setOrg] = useState<OrgInfo | null>(), [knowledge, setKnowledge] = useState<KnowledgeStatsVO | null>()
   const [loading, setLoading] = useState(true), [checkedAt, setCheckedAt] = useState<string>(), [refresh, setRefresh] = useState(0)
   const canKnowledge = user?.permissions.includes('kb:read') ?? false
@@ -33,9 +35,9 @@ export default function Settings() {
   const canOrg = user?.permissions.some(p => ['org:manage', 'org:structure:manage'].includes(p)) ?? false
   useEffect(() => {setDensity(savedDensity)}, [savedDensity])
   useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => {if (dirty) {event.preventDefault(); event.returnValue = ''}}
+    const handler = (event: BeforeUnloadEvent) => {if (dirty || aiDirty) {event.preventDefault(); event.returnValue = ''}}
     window.addEventListener('beforeunload', handler); return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty])
+  }, [dirty, aiDirty])
   useEffect(() => {
     let active = true; setLoading(true)
     Promise.allSettled([getSystemInfo(), getCurrentOrg(), canKnowledge ? kbStats() : Promise.resolve(null)]).then(([system, organization, kb]) => {
@@ -58,6 +60,7 @@ export default function Settings() {
   return <div className="admin-v6 settings-v6"><PageHeader title="系统设置" description="查看系统运行情况，管理组织入口与个人使用偏好。" extra={<Button icon={<ReloadOutlined aria-hidden="true" />} loading={loading} onClick={reload}>刷新状态</Button>} />
     <div className="admin-settings-layout"><nav className="admin-rail" aria-label="系统设置分类"><h3>设置分类</h3>{categories.map(item => <button key={item.key} aria-pressed={tab === item.key} onClick={() => switchTab(item.key)}>{item.icon}{item.label}</button>)}</nav><div className="admin-settings-content">
       {info === null && <LoadError message="系统信息加载失败，运行状态暂不可用。" retry={reload} />}
+      {tab === 'ai' && <AiServices onDirty={setAiDirty} />}
       {tab === 'overview' && <>
         <section className="admin-panel"><div className="admin-running"><span className={`admin-health-icon ${healthy ? '' : 'warning'}`}>{healthy ? <CheckOutlined aria-hidden="true" /> : <WarningOutlined aria-hidden="true" />}</span><div><h3>{loading ? '正在检查系统服务' : healthy ? '系统基础健康检查通过' : '系统状态需要核对'}</h3><p>最近检查 {checkedAt || '—'} · 当前组织：{org?.shortName || org?.name || orgName || '—'}</p></div><Button type="link" onClick={() => switchTab('diagnostics')}>查看诊断</Button></div>
           <div className="admin-service-grid"><div><small>应用服务</small><strong>{health}</strong><small>基础响应检查</small></div><div><small>知识检索</small><strong>{kbStatus}</strong><small>维护与更新请前往知识库</small></div><div><small>文件存储</small><strong><StatusTag>{info?.uploadDir ? '目录已配置' : '配置未提供'}</StatusTag></strong><small>读写能力需单独核验</small></div></div></section>
@@ -68,7 +71,7 @@ export default function Settings() {
         <Panel title="组织信息" description="组织资料与架构使用统一维护入口。" extra={canOrg && <Button onClick={() => navigate('/org/structure')}>前往组织架构</Button>}>
           {org === null ? <LoadError message="组织信息读取失败" retry={reload} /> : <InfoList items={[{label: '组织名称', value: org?.name || orgName}, {label: '组织简称', value: org?.shortName}, {label: '组织类型', value: org?.type}, {label: '品牌颜色', value: <span className="admin-color-sample"><i style={{background: primary}} />{primary}</span>}]} />}
         </Panel>
-        <Panel title="功能与领域包" description="通用工作区与组织领域能力分开管理。"><ul className="admin-result-list"><li><span>活动、排班考勤、成员与档案</span><StatusTag tone="success">通用工作区</StatusTag></li><li><span>灵思与知识库</span><StatusTag tone="success">智能协作</StatusTag></li>{org && parsePacks(org.enabledPacks).map(pack => <li key={pack}><span>{packNames[pack] || pack}</span><StatusTag tone="brand">已启用</StatusTag></li>)}</ul><p className="admin-note">入口显示同时受领域包和账号权限控制。调整组织配置请前往组织管理核对。</p></Panel>
+        <Panel title="功能与领域包" description="通用工作区与组织领域能力分开管理。"><ul className="admin-result-list"><li><span>活动、排班考勤、成员与档案</span><StatusTag tone="success">通用工作区</StatusTag></li><li><span>concerto与知识库</span><StatusTag tone="success">智能协作</StatusTag></li>{org && parsePacks(org.enabledPacks).map(pack => <li key={pack}><span>{packNames[pack] || pack}</span><StatusTag tone="brand">已启用</StatusTag></li>)}</ul><p className="admin-note">入口显示同时受领域包和账号权限控制。调整组织配置请前往组织管理核对。</p></Panel>
         {canRoles && <Panel title="授权管理"><RelatedLink title="角色与权限" description="业务授权、管理员身份与治理记录" icon={<SettingOutlined aria-hidden="true" />} onClick={() => navigate('/admin/permissions')} /></Panel>}
       </>}
       {tab === 'preferences' && <>
@@ -85,6 +88,6 @@ export default function Settings() {
         <Panel title="维护入口" description="按业务范围定位问题。">{links}</Panel>
       </>}
     </div></div>
-    <FormSurface title="离开前保存偏好？" description="当前用户列表密度尚未保存。" open={blocker.state === 'blocked'} onCancel={() => blocker.state === 'blocked' && blocker.reset()} footer={<Space wrap><Button onClick={() => blocker.state === 'blocked' && blocker.reset()}>继续编辑</Button><Button onClick={() => {setDensity(savedDensity); if (blocker.state === 'blocked') blocker.proceed()}}>放弃并离开</Button><Button type="primary" onClick={() => {saveDensity(density); if (blocker.state === 'blocked') blocker.proceed()}}>保存并离开</Button></Space>}><p>选择保存后离开，或放弃这次密度修改。</p></FormSurface>
+    <FormSurface title={aiDirty ? '放弃未保存的 AI 服务配置？' : '离开前保存偏好？'} description={aiDirty ? '离开后，本次尚未保存的服务修改将丢失。' : '当前用户列表密度尚未保存。'} open={blocker.state === 'blocked'} onCancel={() => blocker.state === 'blocked' && blocker.reset()} footer={<Space wrap><Button onClick={() => blocker.state === 'blocked' && blocker.reset()}>继续编辑</Button><Button onClick={() => {setDensity(savedDensity); if (blocker.state === 'blocked') blocker.proceed()}}>放弃并离开</Button>{!aiDirty && <Button type="primary" onClick={() => {saveDensity(density); if (blocker.state === 'blocked') blocker.proceed()}}>保存并离开</Button>}</Space>}><p>{aiDirty ? '选择继续编辑，或放弃本次服务修改。' : '选择保存后离开，或放弃这次密度修改。'}</p></FormSurface>
   </div>
 }

@@ -104,7 +104,7 @@ export default function MainLayout() {
       { key: '/', label: '工作台', icon: <DashboardOutlined /> },
       // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限。
       // 「协作」不再单独占一个菜单项：它已内聚为灵思标准模式里自动启用的执行策略。
-      { key: '/agent', label: '灵思', icon: <RobotOutlined /> },
+      { key: '/agent', label: 'concerto', icon: <RobotOutlined /> },
     ]
     // 知识库（V27）：灵思「对话」档位能检索到的资料。
     // kb:read 种子给了全部角色 —— 与 /agent 同一立场：问答人人可用，

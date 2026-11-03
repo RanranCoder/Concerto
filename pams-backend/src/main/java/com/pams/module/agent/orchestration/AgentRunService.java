@@ -96,9 +96,9 @@ public class AgentRunService {
         Blackboard bb;
         try { bb = objectMapper.readValue(run.getBlackboardJson(),Blackboard.class); }
         catch (Exception e) { run.setStatus("PARTIAL"); runRepository.save(run); return "PARTIAL"; }
-        for (var item : bb.getPlan()) if (item.getStatus().startsWith("WAITING_")) item.setStatus(actionStatus);
+        for (var item : bb.getPlan()) if (item.getStatus().startsWith("WAITING_")) item.setStatus("RESULT_UNKNOWN".equals(actionStatus)?"NEEDS_RECONCILE":actionStatus);
         boolean queued = bb.getPlan().stream().anyMatch(item -> !com.pams.module.agent.registry.AgentCatalog.REVIEWER.equals(item.getAgent()) && "QUEUED".equals(item.getStatus()));
-        String state = "SUCCESS".equals(actionStatus) ? queued ? "PARTIAL" : "SUCCESS" : actionStatus;
+        String state = "RESULT_UNKNOWN".equals(actionStatus) ? "NEEDS_RECONCILE" : "SUCCESS".equals(actionStatus) ? queued ? "PARTIAL" : "SUCCESS" : actionStatus;
         run.setStatus(state); run.setFinishedAt(LocalDateTime.now()); run.setBlackboardJson(toJson(bb)); runRepository.save(run);
         if (streamId != null) for (var message : messages.findByStreamIdAndRole(streamId,"ASSISTANT")) {
             message.setExecutionState(state); messages.save(message);

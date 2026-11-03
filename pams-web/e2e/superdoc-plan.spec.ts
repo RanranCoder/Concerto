@@ -17,7 +17,7 @@ async function setupNativePlan(page: Page) {
   ] }] })))
   let plan: Record<string, unknown> = { id: 11, activityId: 7, version: 1, revision: 0, ownerId: 1,
     documentFileId: 50, documentText: '策划书原生文档验证', status: 'DRAFT', reviewers: [], updatedAt: '2026-10-21T10:00:00' }
-  const permissions = ['activity:view', 'activity:edit', 'activity:create', 'activity:review', 'material:view', 'file:view']
+  const permissions = ['activity:view', 'activity:edit', 'activity:create', 'activity:review', 'plan:view', 'plan:edit', 'plan:submit', 'material:view', 'file:view']
   const user = { id: 1, username: 'author', realName: '策划书作者', roleCode: 'TEACHER', roleLevel: 6,
     permissions, businessPermissions: permissions, managementCapabilities: [], orgId: 1, orgName: '文档验证组织', isOwner: true }
   const activity = { id: 7, name: 'SuperDoc 策划书验证', status: 'PLANNING', theme: '原生文档编辑', organizer: '组织部', startDate: '2026-10-21' }
@@ -37,6 +37,7 @@ async function setupNativePlan(page: Page) {
     if (p === '/api/orgs/current') return ok({ id: 1, name: user.orgName, type: '党建办公室', enabledPacks: '["party"]', themeJson: '{}' })
     if (p === '/api/activities/7/detail') return ok({ activity, plan: workspace(), agendas: [], seatZones: {}, score: { rules: [], records: [] }, tasks: [], signinCount: 0 })
     if (p === '/api/activities/7') return ok(activity)
+    if (p === '/api/materials') return ok({ records: [], total: 0, current: 1, size: 20 })
     if (p === '/api/plans/workspace') return ok(workspace())
     if (p === '/api/plans/reviewers') return ok([{ id: 2, name: '审核甲', deptName: '组织部', roleName: '部长' }])
     if (p === '/api/plans/11/submit') {

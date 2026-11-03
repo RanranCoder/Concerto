@@ -4,7 +4,7 @@ import { resolveDocumentTitle } from './pageTitle'
 describe('resolveDocumentTitle', () => {
   it('统一为「协奏-{标签页名}」', () => {
     expect(resolveDocumentTitle('/')).toBe('协奏-工作台')
-    expect(resolveDocumentTitle('/agent')).toBe('协奏-灵思')
+    expect(resolveDocumentTitle('/agent')).toBe('协奏-concerto')
     expect(resolveDocumentTitle('/login')).toBe('协奏-登录')
   })
 
@@ -27,7 +27,7 @@ describe('resolveDocumentTitle', () => {
   })
 
   it('尾部斜杠与未知路由', () => {
-    expect(resolveDocumentTitle('/agent/')).toBe('协奏-灵思')
+    expect(resolveDocumentTitle('/agent/')).toBe('协奏-concerto')
     expect(resolveDocumentTitle('/not-a-real-route')).toBe('协奏-工作台')
   })
 })

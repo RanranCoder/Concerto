@@ -39,7 +39,23 @@ export function useNotificationStream() {
         method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
         signal: current.signal, openWhenHidden: true,
         onopen: async response => {
-          if (response.status === 401) { useAuthStore.getState().logout(); throw new StopStream() }
+          // Navigation can abort this connection before its response arrives.
+          // A stale stream must not clear the session used by the next page.
+          if (stopped || current.signal.aborted || useAuthStore.getState().token !== token) throw new StopStream()
+          if (response.status === 401) {
+            // Stream/proxy failures can return 401 while ordinary authenticated
+            // requests still succeed. Confirm session expiry through the REST API.
+            try { await refreshAuthorization() }
+            catch (error) {
+              const status = (error as { response?: { status?: number } })?.response?.status
+              if (status === 401) {
+                if (!stopped && !current.signal.aborted && useAuthStore.getState().token === token) useAuthStore.getState().logout()
+                throw new StopStream()
+              }
+              throw new Error('Session verification temporarily unavailable')
+            }
+            throw new Error('Notification stream authentication needs reconnecting')
+          }
           if (response.status === 403) { void refreshAuthorization().catch(() => {}); throw new StopStream() }
           if (response.status === 429) {
             const header = response.headers.get('Retry-After')

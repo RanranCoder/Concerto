@@ -100,6 +100,35 @@ public class PlanService {
     public ActivityPlan create(PlanRequest req) { return create(req,context()); }
     @Transactional
     public ActivityPlan create(PlanRequest req,ToolContext ctx) {
+        return createVersion(req,ctx,false);
+    }
+    /** Explicit Agent confirmation creates a version and preserves the previous document. */
+    @Transactional
+    public ActivityPlan createAgentVersion(PlanRequest req,ToolContext ctx,Long expectedId,Long expectedRevision) {
+        lockActivity(req.getActivityId(),ctx);
+        var previous=repository.findTopByActivityIdOrderByVersionDesc(req.getActivityId()).orElse(null);
+        if (previous!=null) entityManager.refresh(previous);
+        if (!Objects.equals(expectedId,previous==null?null:previous.getId())
+                || !Objects.equals(expectedRevision,previous==null?null:previous.getRevision()))
+            throw new BizException(409,"策划书已变化，请重新生成预览并选择版本");
+        return createVersion(req,ctx,true);
+    }
+    /** Native revision preserves the selected version's frozen metadata, including null overrides. */
+    @Transactional
+    public ActivityPlan createAgentNativeRevision(PlanRequest req,ToolContext ctx,Long expectedId,Long expectedRevision) {
+        var saved=createAgentVersion(req,ctx,expectedId,expectedRevision);
+        var source=repository.findById(expectedId).orElseThrow(()->new BizException(409,"原版本不存在"));
+        saved.setNameOverride(source.getNameOverride());saved.setThemeOverride(source.getThemeOverride());
+        saved.setTimeOverride(source.getTimeOverride());saved.setLocationOverride(source.getLocationOverride());
+        saved.setOrganizerOverride(source.getOrganizerOverride());saved.setTargetOverride(source.getTargetOverride());
+        return repository.save(saved);
+    }
+    public ActivityPlan agentCurrent(Long activityId,ToolContext ctx) {
+        var current=repository.findTopByActivityIdOrderByVersionDesc(activityId).orElse(null);
+        if(current!=null) access.requireOwner(current,ctx);
+        return current;
+    }
+    private ActivityPlan createVersion(PlanRequest req,ToolContext ctx,boolean agentConfirmed) {
         if (ctx==null || !ctx.hasPermission("plan:edit") || ctx.getUserId()==null)
             throw new BizException(403,"无权创建策划书");
         Activity a=lockActivity(req.getActivityId(),ctx);
@@ -108,7 +137,7 @@ public class PlanService {
             access.requireOwner(previous,ctx);
             if (previous.getStatus()==ActivityPlan.PlanStatus.PENDING)
                 throw new BizException(2003,"审核中不可新建版本，请先撤回");
-            if (previous.getStatus()==ActivityPlan.PlanStatus.DRAFT)
+            if (previous.getStatus()==ActivityPlan.PlanStatus.DRAFT && !agentConfirmed)
                 throw new BizException(2003,"已有草稿，请直接编辑保存");
         }
         attachments.validate(req,ctx);
@@ -144,7 +173,12 @@ public class PlanService {
     }
     @Transactional
     public void submit(Long id,Long submitterId,List<Long> reviewerIds) {
+        submitAgent(id,submitterId,reviewerIds,null);
+    }
+    @Transactional
+    public void submitAgent(Long id,Long submitterId,List<Long> reviewerIds,Long expectedRevision) {
         ActivityPlan p=raw(id); lockActivity(p.getActivityId(),context()); entityManager.refresh(p);
+        if(expectedRevision!=null && !Objects.equals(expectedRevision,p.getRevision()))throw new BizException(409,"策划书已变化，请重读并重新准备提交");
         access.requireOwner(p,context());
         if (!context().hasPermission("plan:submit")) throw new BizException(403,"没有策划提交权限");
         if (p.getStatus()!=ActivityPlan.PlanStatus.DRAFT) throw new BizException(2005,"当前状态不可提交审核");

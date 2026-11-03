@@ -42,7 +42,7 @@ class LlmCancellationTest {
         server.start();
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
             var props=new AgentProperties();props.setApiKey("local-test-only");props.setBaseUrl("http://127.0.0.1:"+server.getAddress().getPort());
-            var provider=new DeepSeekProvider(props);var lifecycle=new LlmCancellation();
+            var provider=new OpenAiChatCompletionsProvider(new ModelEndpoint("openai_chat_completions",props.getBaseUrl(),"local-test-only","test",false),props.getTimeoutMs(),com.pams.module.agent.provider.ProviderHttpClient.build(new com.pams.module.agent.provider.ProviderUrlPolicy("127.0.0.1")));var lifecycle=new LlmCancellation();
             var request=new LlmProvider.ChatRequest(List.of(LlmProvider.ChatMessage.text("user","test")),List.of(),0,10);
             var result=pool.submit(()->lifecycle.call("sse",()->false,10000,()->provider.chatStream(request,text->{})));
             assertThat(started.await(3,TimeUnit.SECONDS)).isTrue();lifecycle.abort("sse");

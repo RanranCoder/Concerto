@@ -17,6 +17,10 @@ import java.util.Map;
 @RequestMapping("/api/agent/bench")
 @PreAuthorize("hasAuthority('org:audit:view')")
 public class AgentBenchController {
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.orchestration.ControlledPlanningEvaluation planning;
+    public record PlanningRequest(List<String> goals){}
+    @PostMapping("/planning/compare")
+    public Result<Map<String,Object>> comparePlanning(@RequestBody PlanningRequest req){return Result.ok(planning.compare(req.goals(),com.pams.module.agent.core.ToolContext.current(null,null)));}
 
     private final BenchmarkService benchmarkService;
     private final AgentBenchmarkRepository repository;

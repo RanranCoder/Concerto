@@ -30,15 +30,18 @@ class SpecialistLoopTest {
         List<List<LlmProvider.ChatMessage>> requests=new ArrayList<>();
         when(caller.callIsolated(anyList(),anyList(),isNull())).thenAnswer(i->{
             requests.add(List.copyOf(i.getArgument(0)));
-            return requests.size()==1 ? new LlmProvider.ChatResponse("",List.of(new LlmProvider.ToolCallRequest("call","query",Map.of())),"test",false,"reasoning")
+            return requests.size()==1 ? new LlmProvider.ChatResponse("",List.of(new LlmProvider.ToolCallRequest("call","query",Map.of())),"test",false,"summary",null,"model","completed",List.of(Map.of("type","reasoning","encrypted_content","native-state")))
                 : new LlmProvider.ChatResponse("活动在A楼",List.of(),"test",false);
         });
         var result=new SpecialistAgent(registry,tools,caller,publisher,actions,new PolicyGuard(),audit,props)
             .execute("retrieval","核对活动地点",ctx,null,null,null);
         assertThat(result.state()).isEqualTo("SUCCESS"); assertThat(result.text()).isEqualTo("活动在A楼");
         assertThat(requests).hasSize(2);
+        assertThat(requests.getFirst().getFirst().content())
+            .contains("core-policy/v1", "executor/v1", "查询事实", "\"name\":\"query\"", "\"supportsForm\":false")
+            .doesNotContain("立即调用对应工具");
         assertThat(requests.get(1)).anySatisfy(m->{ assertThat(m.role()).isEqualTo("tool"); assertThat(m.toolCallId()).isEqualTo("call"); assertThat(m.content()).contains("A楼"); });
-        assertThat(requests.get(1)).anySatisfy(m->{ assertThat(m.role()).isEqualTo("assistant"); assertThat(m.reasoningContent()).isEqualTo("reasoning"); });
+        assertThat(requests.get(1)).anySatisfy(m->{ assertThat(m.role()).isEqualTo("assistant"); assertThat(m.reasoningContent()).isNull(); assertThat(m.nativeItems()).containsExactly(Map.of("type","reasoning","encrypted_content","native-state")); });
         verify(caller,never()).callLlm(any(),any(),any(),any(),anyInt());
     }
     @Test void requiredActionPreviewCannotBeReplacedByAnUnconfirmedTextClaim() {

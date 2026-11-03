@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-11-02T02:45:56.470Z",
+  "log": "pams-backend/target/batch6-confirmed-tests.log",
+  "reportWindowStart": "2026-11-02T02:41:52.491Z",
+  "totals": {
+    "tests": 78,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 78
+  },
+  "reports": [
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.AgentScopeTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledPlanningHttpTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledPlanningServiceTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledPlanValidatorTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.DagSchedulerTest.xml",
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.MultiAgentBaseTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.prompt.PromptRendererTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.LongTermMemoryTest.xml",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.PlanningCallTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

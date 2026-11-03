@@ -1,0 +1,736 @@
+{
+  "qualityVerdict" : "NOT_ASSESSED",
+  "releaseEligible" : false,
+  "commonBudget" : {
+    "perCallOutputTokenCap" : 2048,
+    "maxCalls" : 2
+  },
+  "previewOnly" : true,
+  "businessConfirmed" : false,
+  "samples" : [ {
+    "ruleBaseline" : {
+      "goal" : "只读取活动42的详情，不做修改。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "task" : "用户目标：只读取活动42的详情，不做修改。\n本步骤：只检索与「只读取活动42的详情，不做修改。」相关的数据与知识。保留工具实际返回的实体 ID、日期、地点和来源；不要在本步骤代写正文或要求用户批准下游文稿，不把未完成的准备事项推断成已登记事实不可信。",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "MODEL_PLAN_VALIDATED",
+      "previewOnly" : true,
+      "reasonCode" : "",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "deepseek-flash",
+      "plan" : {
+        "goal" : "只读取活动42的详情，不做修改。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "retrieval",
+          "task" : "用户目标：只读取活动42的详情，不做修改。\n本步骤：读取活动42的基本详情。\n建议能力：getActivityDetail\n完成条件：getActivityDetail 的实际回执对应 activityId=42，并返回该活动的基本详情。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ "只读取活动42的详情", "不做修改" ],
+      "clarifications" : [ ],
+      "steps" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "capability" : "getActivityDetail",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "getActivityDetail 的实际回执对应 activityId=42，并返回该活动的基本详情。",
+        "inputBindings" : [ {
+          "parameter" : "activityId",
+          "source" : "USER",
+          "quote" : "42"
+        } ]
+      } ]
+    },
+    "goal" : "只读取活动42的详情，不做修改。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 5937,
+      "reportedOutputTokens" : 381,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 3073,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5937,
+          "outputTokens" : 381,
+          "cacheHitTokens" : 0,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 3266
+  }, {
+    "ruleBaseline" : {
+      "goal" : "先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：只检索与「先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。」相关的数据与知识。保留工具实际返回的实体 ID、日期、地点和来源；不要在本步骤代写正文或要求用户批准下游文稿，不把未完成的准备事项推断成已登记事实不可信。",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      }, {
+        "id" : 2,
+        "agent" : "planning",
+        "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：产出活动方案 / 策划书章节草稿",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1 ]
+      }, {
+        "id" : 3,
+        "agent" : "reviewer",
+        "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1, 2 ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "MODEL_PLAN_VALIDATED",
+      "previewOnly" : true,
+      "reasonCode" : "",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "deepseek-flash",
+      "plan" : {
+        "goal" : "先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "retrieval",
+          "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：读取活动42的活动详情。\n建议能力：getActivityDetail\n完成条件：getActivityDetail 回执明确返回 activityId=42 的活动详情。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        }, {
+          "id" : 2,
+          "agent" : "retrieval",
+          "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：在已读取活动42详情后，查询活动42已登记的议程。\n建议能力：queryActivityAgenda\n完成条件：queryActivityAgenda 回执返回活动42已登记议程的分页结果或明确空结果。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ 1 ]
+        }, {
+          "id" : 3,
+          "agent" : "retrieval",
+          "task" : "用户目标：先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。\n本步骤：在已读取活动42详情后，查询活动42已录入的评分汇总。\n建议能力：queryActivityScores\n完成条件：queryActivityScores 回执返回活动42的评分规则及已录入评分汇总或明确空结果。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ 1 ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ "先读取活动42详情", "再查询活动42已登记的议程和已录入评分汇总", "不生成建议方案" ],
+      "clarifications" : [ ],
+      "steps" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "capability" : "getActivityDetail",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "getActivityDetail 回执明确返回 activityId=42 的活动详情。",
+        "inputBindings" : [ {
+          "parameter" : "activityId",
+          "source" : "USER",
+          "quote" : "42"
+        } ]
+      }, {
+        "id" : 2,
+        "agent" : "retrieval",
+        "capability" : "queryActivityAgenda",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "queryActivityAgenda 回执返回活动42已登记议程的分页结果或明确空结果。",
+        "inputBindings" : [ {
+          "parameter" : "activityId",
+          "source" : "USER",
+          "quote" : "42"
+        } ]
+      }, {
+        "id" : 3,
+        "agent" : "retrieval",
+        "capability" : "queryActivityScores",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "queryActivityScores 回执返回活动42的评分规则及已录入评分汇总或明确空结果。",
+        "inputBindings" : [ {
+          "parameter" : "activityId",
+          "source" : "USER",
+          "quote" : "42"
+        } ]
+      } ]
+    },
+    "goal" : "先读取活动42详情，再查询该活动已登记的议程和已录入评分汇总，不生成建议方案。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 6163,
+      "reportedOutputTokens" : 1614,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 9834,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 6163,
+          "outputTokens" : 1614,
+          "cacheHitTokens" : 2432,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 9881
+  }, {
+    "ruleBaseline" : {
+      "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "writing",
+        "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      }, {
+        "id" : 2,
+        "agent" : "reviewer",
+        "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1 ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "RULE_BASELINE",
+      "previewOnly" : true,
+      "reasonCode" : "MODEL_UNAVAILABLE",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "",
+      "plan" : {
+        "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "writing",
+          "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        }, {
+          "id" : 2,
+          "agent" : "reviewer",
+          "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ 1 ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ ],
+      "clarifications" : [ ],
+      "steps" : [ ]
+    },
+    "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 1,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 12921,
+        "failed" : true
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 12946
+  }, {
+    "ruleBaseline" : {
+      "goal" : "只查询策划书8的组织审批状态，不提交、不审批。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "task" : "用户目标：只查询策划书8的组织审批状态，不提交、不审批。\n本步骤：只检索与「只查询策划书8的组织审批状态，不提交、不审批。」相关的数据与知识。保留工具实际返回的实体 ID、日期、地点和来源；不要在本步骤代写正文或要求用户批准下游文稿，不把未完成的准备事项推断成已登记事实不可信。",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      }, {
+        "id" : 2,
+        "agent" : "planning",
+        "task" : "用户目标：只查询策划书8的组织审批状态，不提交、不审批。\n本步骤：产出活动方案 / 策划书章节草稿",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1 ]
+      }, {
+        "id" : 3,
+        "agent" : "reviewer",
+        "task" : "用户目标：只查询策划书8的组织审批状态，不提交、不审批。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1, 2 ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "MODEL_PLAN_VALIDATED",
+      "previewOnly" : true,
+      "reasonCode" : "",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "deepseek-flash",
+      "plan" : {
+        "goal" : "只查询策划书8的组织审批状态，不提交、不审批。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "retrieval",
+          "task" : "用户目标：只查询策划书8的组织审批状态，不提交、不审批。\n本步骤：查询策划书8的组织审批状态及可见审核意见，不提交、不审批。\n建议能力：getPlanReviewStatus\n完成条件：工具实际返回 planId 为 8 的策划书审批状态、版本信息及可见审核意见；若返回不存在、无权限或错误，则如实记录该回执，不推断为已通过或已提交。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ "仅查询策划书8的组织审批状态与可见审核意见", "不提交策划书", "不执行审批或任何写入操作" ],
+      "clarifications" : [ ],
+      "steps" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "capability" : "getPlanReviewStatus",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "工具实际返回 planId 为 8 的策划书审批状态、版本信息及可见审核意见；若返回不存在、无权限或错误，则如实记录该回执，不推断为已通过或已提交。",
+        "inputBindings" : [ {
+          "parameter" : "planId",
+          "source" : "USER",
+          "quote" : "8"
+        } ]
+      } ]
+    },
+    "goal" : "只查询策划书8的组织审批状态，不提交、不审批。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 6118,
+      "reportedOutputTokens" : 1439,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 9247,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 6118,
+          "outputTokens" : 1439,
+          "cacheHitTokens" : 2432,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 9283
+  }, {
+    "ruleBaseline" : {
+      "goal" : "把那个稿件送审；没有明确稿件ID先问我，不要默认选中任何稿件。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "writing",
+        "task" : "用户目标：把那个稿件送审；没有明确稿件ID先问我，不要默认选中任何稿件。\n本步骤：根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      }, {
+        "id" : 2,
+        "agent" : "reviewer",
+        "task" : "用户目标：把那个稿件送审；没有明确稿件ID先问我，不要默认选中任何稿件。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1 ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "NEEDS_CLARIFICATION",
+      "previewOnly" : true,
+      "reasonCode" : "",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "deepseek-flash",
+      "plan" : {
+        "goal" : "把那个稿件送审；没有明确稿件ID先问我，不要默认选中任何稿件。",
+        "mode" : null,
+        "plan" : [ ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ "没有明确稿件ID时必须先向用户询问，不得默认选中任何稿件", "在获得明确稿件ID前不发起任何送审或检索式默认选择", "送审操作须以稿件原文baseline为依据，选择稿件后再规划读原文与送审预览" ],
+      "clarifications" : [ "请问“那个稿件”的明确稿件ID（articleId）是多少？", "如果暂时不确定ID，可以提供稿件标题关键词或关联活动名称，是否允许我据此检索候选稿件并由你确认后再送审？" ],
+      "steps" : [ ]
+    },
+    "goal" : "把那个稿件送审；没有明确稿件ID先问我，不要默认选中任何稿件。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 6028,
+      "reportedOutputTokens" : 483,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 3877,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 6028,
+          "outputTokens" : 483,
+          "cacheHitTokens" : 2304,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 3915
+  }, {
+    "ruleBaseline" : {
+      "goal" : "只读查询活动42的筹备任务进度，不修改任何任务。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "task" : "用户目标：只读查询活动42的筹备任务进度，不修改任何任务。\n本步骤：只检索与「只读查询活动42的筹备任务进度，不修改任何任务。」相关的数据与知识。保留工具实际返回的实体 ID、日期、地点和来源；不要在本步骤代写正文或要求用户批准下游文稿，不把未完成的准备事项推断成已登记事实不可信。",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "MODEL_PLAN_VALIDATED",
+      "previewOnly" : true,
+      "reasonCode" : "",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "e254e264f3bbcdd3c22e95eb2c1004f12ed2ef958abbf967b181779748bebc48",
+      "model" : "deepseek-flash",
+      "plan" : {
+        "goal" : "只读查询活动42的筹备任务进度，不修改任何任务。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "retrieval",
+          "task" : "用户目标：只读查询活动42的筹备任务进度，不修改任何任务。\n本步骤：只读查询活动42的筹备任务清单与进度。\n建议能力：queryActivityTasks\n完成条件：工具回执返回活动42的任务清单、进度或状态信息；若结果分页，回执同时给出明确的分页信息。",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ "只读查询，不修改任何任务", "仅查询活动42" ],
+      "clarifications" : [ ],
+      "steps" : [ {
+        "id" : 1,
+        "agent" : "retrieval",
+        "capability" : "queryActivityTasks",
+        "operationKind" : "READ",
+        "requiresConfirmation" : false,
+        "completionCriteria" : "工具回执返回活动42的任务清单、进度或状态信息；若结果分页，回执同时给出明确的分页信息。",
+        "inputBindings" : [ {
+          "parameter" : "activityId",
+          "source" : "USER",
+          "quote" : "42"
+        } ]
+      } ]
+    },
+    "goal" : "只读查询活动42的筹备任务进度，不修改任何任务。",
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 5952,
+      "reportedOutputTokens" : 692,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 4409,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5952,
+          "outputTokens" : 692,
+          "cacheHitTokens" : 2432,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 4438
+  } ],
+  "syntheticCapabilityChecks" : [ {
+    "actualCapabilities" : [ "getActivityDetail" ],
+    "code" : "R1_DETAIL",
+    "expectedCapabilities" : [ "getActivityDetail" ],
+    "passed" : true
+  }, {
+    "actualCapabilities" : [ "queryActivityAgenda", "getActivityDetail", "queryActivityScores" ],
+    "code" : "R2_COMPOSITE",
+    "expectedCapabilities" : [ "queryActivityAgenda", "getActivityDetail", "queryActivityScores" ],
+    "passed" : true
+  }, {
+    "actualCapabilities" : [ ],
+    "code" : "A1_SUBMISSION",
+    "expectedCapabilities" : [ "prepareArticleSubmission", "readArticleDocument" ],
+    "passed" : false
+  }, {
+    "actualCapabilities" : [ "getPlanReviewStatus" ],
+    "code" : "P1_STATUS",
+    "expectedCapabilities" : [ "getPlanReviewStatus" ],
+    "passed" : true
+  }, {
+    "actualCapabilities" : [ ],
+    "code" : "C1_AMBIGUITY",
+    "expectedCapabilities" : [ ],
+    "passed" : true
+  }, {
+    "actualCapabilities" : [ "queryActivityTasks" ],
+    "code" : "R3_TASKS",
+    "expectedCapabilities" : [ "queryActivityTasks" ],
+    "passed" : true
+  } ],
+  "identityFixture" : "ISOLATED_TEST_TEACHER_PLUS_EVALUATION_CAPABILITY",
+  "businessExecutionBenefit" : "NOT_MEASURED",
+  "providerFixture" : {
+    "targetDatabase" : "ISOLATED_IN_MEMORY_H2",
+    "model" : "deepseek-flash",
+    "protocol" : "openai_responses",
+    "sourceAccess" : "READ_ONLY_LOCAL_CONFIG",
+    "baseUrl" : "https://api.deepseek.com"
+  }
+}

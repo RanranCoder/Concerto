@@ -30,6 +30,17 @@ import java.util.Map;
 
 @Service
 public class ArticleService {
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
+
+    /** Shared native/agent optimistic version; never overwrite concurrent native edits. */
+    @Transactional
+    public Article agentChange(Long id,Long expectedRevision,ArticleRequest request,Long userId,boolean manager,boolean submission) {
+        Article article=getEntity(id);
+        entityManager.refresh(article,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if(!java.util.Objects.equals(expectedRevision,article.getRevision()))throw new BizException(409,"稿件已变化，请重读并重新预览");
+        if(submission)submit(id,userId,manager);else update(id,request,userId,manager);
+        repository.flush();return article;
+    }
     @Autowired
     private com.pams.module.notification.service.NotificationReminderService reminders;
     private final ArticleRepository repository;
@@ -93,6 +104,7 @@ public class ArticleService {
     private Map<String, Object> toVo(Article a) {
         Map<String, Object> vo = new LinkedHashMap<>();
         vo.put("id", a.getId());
+        vo.put("revision", a.getRevision());
         vo.put("title", a.getTitle());
         vo.put("summary", a.getSummary() == null ? "" : a.getSummary());
         vo.put("content", a.getContent() == null ? "" : a.getContent());

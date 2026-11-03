@@ -263,7 +263,7 @@ export async function planToDocx(
   const { Document, Packer, Paragraph, Table, TextRun, AlignmentType } = mod
   const { htmlToDocx } = await import('./legacyHtmlToDocx')
 
-  const orgName = meta?.orgName || '信息工程学院党建办公室'
+  const orgName = meta?.orgName || ''
   const title = meta?.name || '活动策划书'
   const theme = meta?.theme || ''
   const ctx = { mod }
@@ -313,7 +313,7 @@ export async function planToDocx(
     }
     if (!html.trim()) continue
 
-    children.push(
+    if (!(sections.length === 1 && sec.label === '正文')) children.push(
       new Paragraph({
         heading: mod.HeadingLevel.HEADING_2,
         spacing: { before: 160, after: 80 },

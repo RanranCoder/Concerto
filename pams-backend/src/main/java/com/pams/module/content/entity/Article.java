@@ -16,6 +16,8 @@ public class Article implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Version
+    private Long revision = 0L;
     @Column(nullable = false, length = 150)
     private String title;
     @Column(length = 500)

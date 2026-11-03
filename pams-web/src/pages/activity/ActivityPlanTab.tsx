@@ -207,7 +207,7 @@ export default function ActivityPlanTab({
     setPreviewError(false)
     const prepare = latest?.documentFileId
       ? fetchPlanDocument(latest.id)
-      : planToDocx(fromPlan(latest), meta, fromOverrides(latest), parseSectionOrder(latest?.sectionOrder))
+      : planToDocx(fromPlan(latest), meta, fromOverrides(latest), latest ? parseSectionOrder(latest.sectionOrder) : [{ label: '正文', field: 'content' }])
     prepare
       .then((data) => {
         if (!cancelled) setBlob(data)

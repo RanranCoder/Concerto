@@ -63,7 +63,7 @@ export default function KnowledgeBase() {
     },
   })
   return <div className="admin-v6 knowledge-v6">
-    <PageHeader title="知识库" description="管理灵思可引用的资料，核对内容来源、数据时效与检索结果。" extra={<>
+    <PageHeader title="知识库" description="管理concerto可引用的资料，核对内容来源、数据时效与检索结果。" extra={<>
       <Button icon={<ReloadOutlined aria-hidden="true" />} loading={loading} onClick={reload}>刷新</Button>
       {canIndex && <Dropdown trigger={['click']} menu={{items: [{key: 'index', label: '重建全部检索索引'}, {key: 'snapshots', label: '刷新业务快照'}], onClick: ({key}) => maintain(key as 'index' | 'snapshots')}}><Button icon={<SettingOutlined aria-hidden="true" />} loading={maintenance}>维护工具</Button></Dropdown>}{canManage && <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setEditor({})}>录入文档</Button>}
     </>} />

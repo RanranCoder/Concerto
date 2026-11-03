@@ -59,18 +59,6 @@ import java.util.concurrent.Executor;
 @Service
 public class AgentOrchestrator {
 
-    /** 系统提示词——约束语气、边界、以及"必须用工具而不是编造" */
-    private static final String SYSTEM_PROMPT = """
-            你是「灵思」，一个党务管理系统的智能助手。你的职责是帮使用者处理日常事务。
-
-            行为准则：
-            1. 只依据工具返回的事实回答。工具没返回的信息，明确说"我没查到"，绝不编造具体数字、人名、日期。
-            2. 涉及数据变更（加分、起草、排班、发布、创建）时，先说明你打算做什么；确认与参数补全由系统的确认清单和表单完成，你不需要自己索要"确认"二字，也不要替表单向用户提问。
-            3. 发起创建/生成/发送类操作时，只要用户表达了意图（如"建个活动""发个通知"），<b>立即调用对应工具</b>——把用户已提到的字段填进参数，缺的留空；缺少参数时系统会弹出结构化表单请使用者填写。即使一个参数都没有也直接调用工具，<b>绝不为了凑参数而在对话里反问用户</b>。
-            4. 回答用简洁的中文，不要客套话，不要复述用户的问题。
-            5. 涉及人名、手机号、身份证号时不要罗列细节，概括即可。
-            6. 如果问题超出现有工具能力范围，直接说明你能做什么，并给出可用的问法示例。
-            """;
 
     @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
     @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.repository.AgentMessageRepository messageRows;
@@ -209,12 +197,13 @@ public class AgentOrchestrator {
             out.put("conversationId",actualConversation);out.put("messageId",messageId);out.put("executionState","CANCELLED");out.put("reply",reply);return out;
         } catch(RuntimeException failure) {
             emit(bound,AgentStreamEvent.error(streamId,publisher.nextSeq(streamId),"请求未完成，请恢复请求状态后重试。"));throw failure;
-        } finally { thinkingTrace.clear(streamId);publisher.clear(streamId); }
+        } finally { thinkingTrace.clear(streamId);publisher.clear(streamId);llmCaller.endTask(streamId); }
     }
 
     private Map<String, Object> run(String message, Long conversationId, ToolContext ctx, String streamId,
                                     List<Map<String, Object>> refs, boolean collabEnabled) {
         long startedAt = System.currentTimeMillis();
+        llmCaller.beginTask(streamId, ctx);
 
         // ===== ① TTFE：进入编排的第一时间就推 THINKING，不得等首个工具出结果 =====
         emitNote(ctx, streamId, "正在理解你的问题…");
@@ -345,15 +334,8 @@ public class AgentOrchestrator {
                 }
                 iteration++;
 
-                // 把 LLM 的"我要调工具"回合放进上下文，保证多轮一致性。
-                // ⚠️ 必须带 toolCalls：OpenAI 兼容协议要求 assistant(tool_calls) 与其后的
-                // tool(tool_call_id) 成对出现，只放一句裸文本会被 DeepSeek 判为非法请求。
-                // ⚠️ 也必须带 reasoningContent：思考模式下**只要请求带了 tools**，
-                // 官方思考模式契约要求回传该回合推理原文，否则 **HTTP 400**：
-                // "The reasoning_content in the thinking mode must be passed back to the API."
-                // （2026-10-12 JVM 直连真 API 复现；thinking 关闭时不触发）。漏掉它 = 第一次工具调用之后整轮失败。
-                messages.add(LlmProvider.ChatMessage.assistantCalling(
-                        response.content(), response.toolCalls(), response.reasoningContent()));
+                // Preserve native output state across tool exchanges.
+                messages.add(LlmProvider.ChatMessage.assistantCalling(response));
 
                 // ===== ④⑤ 逐个派发 + 结果过闸口 =====
                 boolean writePlanProduced = false;
@@ -542,7 +524,7 @@ public class AgentOrchestrator {
      *   <li><b>协议层面</b>：OpenAI 兼容协议要求 {@code role="tool"} 必须带
      *       {@code tool_call_id}，且其前一条必须是带 {@code tool_calls} 的 assistant。
      *       历史的 tool 行没有配对信息（{@code agent_message} 只存摘要文本），
-     *       回灌必然构造出非法请求 → DeepSeek 直接 400。</li>
+     *       回灌会构造出缺少配对调用状态的非法请求。</li>
      *   <li><b>语义层面</b>：工具结果是"那一轮的证据"，不是"对话内容"。
      *       跨轮回灌会让模型把过期数据当成当前事实，反而增加幻觉。</li>
      * </ol>
@@ -550,7 +532,7 @@ public class AgentOrchestrator {
      */
     private List<LlmProvider.ChatMessage> buildContext(Long convId, String currentMessage, ToolContext ctx,
                                                        String refsNote) {
-        return contextAssembler.assemble(SYSTEM_PROMPT, convId, currentMessage, ctx, refsNote);
+        return contextAssembler.assemble(com.pams.module.agent.prompt.PromptRenderer.executor(ctx, registry.visibleTools(ctx), null, props.getMaxToolIterations()), convId, currentMessage, ctx, refsNote);
     }
 
     private List<LlmProvider.ToolSpec> toSpecs(List<AgentTool> tools) {

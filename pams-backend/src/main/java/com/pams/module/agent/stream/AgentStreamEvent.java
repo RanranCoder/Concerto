@@ -40,12 +40,10 @@ public record AgentStreamEvent(String streamId, int seq, String type,
      */
     public static final String THINKING = "THINKING";
     /**
-     * 模型推理增量（思维链正文）。
+     * 模型公开推理摘要增量。
      *
-     * <p>来源：provider 的 {@code delta.reasoning_content}（**思考模式**的思维链字段。
-     * 注意它是请求参数 {@code thinking:{type:enabled|disabled}} 的产物、官方默认开启，
-     * <b>不是</b>某个"reasoner 模型"独有 —— 2026-10-12 起官方模型取值只有
-     * {@code deepseek-flash} / {@code deepseek-v4-pro}）。
+     * <p>来源：原生 Responses 的 {@code response.reasoning_summary_text.delta}。
+     * 不包含加密 reasoning 状态，也不依赖厂商扩展字段。
      * 与 {@link #MESSAGE_DELTA} 同构：{@code round} 标识"本轮第几次 LLM 调用"，
      * 前端把**同 round 的片段拼成一段推理**，round 变化即新起一段。
      *

@@ -15,6 +15,13 @@ import java.util.*;
 
 @RestController @RequestMapping("/api/agent")
 public class AgentRuntimeController {
+    @org.springframework.beans.factory.annotation.Autowired private ActionReconciliationService reconciliation;
+    @PostMapping("/tasks/{id}/reconcile")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public Result<Map<String,Object>> reconcile(@PathVariable Long id,@AuthenticationPrincipal LoginUser user,
+                                                @RequestBody(required=false)Map<String,String> body) throws Exception {
+        return Result.ok(reconciliation.reconcile(id,ToolContext.current(null,null,body==null?null:body.get("mode"))));
+    }
     private final AgentRequestService requests;
     private final AgentEventPublisher publisher;
     private final WorkItemState state;

@@ -34,7 +34,7 @@ export default function LingsiEmptyState({onPick, onOpenTools, mode='standard', 
     {title:'日常事务', desc:'查看活动任务与待办，明确下一步', text:'帮我汇总当前待处理的活动任务，按截止时间列出准备事项。', icon:<AppstoreOutlined/>, tone:'', visible:true, target:undefined},
   ].filter(e => e.visible)
   return <div className="lingsi-hero">
-    <div className="lingsi-welcome-greeting"><img src={LINGSI_AVATAR_SRC} className="lingsi-welcome-avatar" alt="灵思"/><div><h2>你好，我是灵思</h2><p>把资料、人员和安排，连成可以推进的工作。</p></div></div>
+    <div className="lingsi-welcome-greeting"><img src={LINGSI_AVATAR_SRC} className="lingsi-welcome-avatar" alt="concerto"/><div><h2>你好，我是concerto</h2><p>把资料、人员和安排，连成可以推进的工作。</p></div></div>
     <div className="lingsi-welcome-note"><strong>{kb?'从已有资料中，找到有出处的答案。':writable?'先准备，再确认，接着推进。':'先看清情况，再决定下一步。'}</strong><p>{kb?'只检索当前可查看的资料，回答附带出处。':writable?'你说目标，我查资料、整理方案。涉及系统数据的变更，会先列出清单。':'本次只查询业务数据，不执行写入。'}</p></div>
     <div className="lingsi-starter-heading"><h3>从一件具体的事开始</h3><span>{kb?'资料问答':writable?'标准模式':'只读模式'}</span></div>
     <div className="lingsi-starters">{entries.map(e => <button type="button" key={e.title} className="lingsi-starter" onClick={() => onPick(e.text,e.target)}><span className={`lingsi-category ${e.tone}`}>{e.icon}</span><span><strong>{e.title}</strong><small>{e.desc}</small></span><ArrowRight size={14}/></button>)}</div>

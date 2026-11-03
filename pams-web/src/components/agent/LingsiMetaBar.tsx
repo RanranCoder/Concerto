@@ -39,7 +39,7 @@ export default function LingsiMetaBar({ provider, degraded, durationMs, toolCall
   return (
     <div className="lingsi-meta">
       {isStub && (
-        <Tooltip title="当前未接入模型或模型调用失败，回答由本地关键词规则产生，能力有限">
+        <Tooltip title="这条答复生成时未启用模型，或该次模型调用失败，因此使用本地规则。当前服务配置请查看输入框。">
           <Tag color="orange" className="lingsi-meta-tag">
             <span className="lingsi-meta-tag-in">
               <Rules size={11} />

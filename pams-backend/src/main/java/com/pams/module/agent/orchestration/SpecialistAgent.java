@@ -46,7 +46,7 @@ public class SpecialistAgent {
         Set<String> allowed=new HashSet<>(scoped.stream().map(AgentTool::name).toList());
         List<LlmProvider.ToolSpec> specs=scoped.stream().map(t->new LlmProvider.ToolSpec(t.name(),t.description(),t.parametersSchema())).toList();
         List<LlmProvider.ChatMessage> messages=new ArrayList<>();
-        String system = rolePrompt(agent)+"\n依据工具事实完成当前分配的子任务。历史中其他专家的任务不属于你的作用域。写入先生成预览，等待系统确认，不自行提交。";
+        String system = com.pams.module.agent.prompt.PromptRenderer.executor(ctx, scoped, rolePrompt(agent), props.getMaxToolIterations());
         if (contextAssembler != null) messages.addAll(contextAssembler.specialist(system, ctx.getConversationId(), task==null?"":task, ctx));
         else {
             messages.add(LlmProvider.ChatMessage.text("system",system));
@@ -73,7 +73,7 @@ public class SpecialistAgent {
             if(calls==null || calls.isEmpty()) {
                 if(actionRequired && predecided==null) {
                     if(round<max && !degraded) {
-                        messages.add(new LlmProvider.ChatMessage("assistant",text,null,null,response==null?null:response.reasoningContent()));
+                        messages.add(response == null ? LlmProvider.ChatMessage.text("assistant", text) : LlmProvider.ChatMessage.assistantCalling(response));
                         messages.add(LlmProvider.ChatMessage.text("user","本任务要求可确认预览，目前没有对应清单。请使用可见工具准备待确认清单；缺必要参数时明确说明。没有工具回执不得宣称已保存、已发布或已完成。"));
                         continue;
                     }
@@ -85,7 +85,7 @@ public class SpecialistAgent {
                 break;
             }
             if(round==max) { if(!"FAILED".equals(state)) state="PARTIAL"; text="子任务已达到工具调用上限，尚未完成。"; break; }
-            if(response!=null) messages.add(LlmProvider.ChatMessage.assistantCalling(text,calls,response.reasoningContent()));
+            if(response!=null) messages.add(LlmProvider.ChatMessage.assistantCalling(response));
             for(LlmProvider.ToolCallRequest call:calls) {
                 if(aborted(streamId)) { state="CANCELLED"; break; }
                 AgentTool tool=toolRegistry.find(call.name()).orElse(null);

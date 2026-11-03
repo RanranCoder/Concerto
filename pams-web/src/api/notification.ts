@@ -10,6 +10,7 @@ export interface NotificationVO {
   activityId?: number | null
   actionState?: string | null
   notify?: boolean
+  priority?: string
   senderName: string | null
   read: boolean
   createdAt: string

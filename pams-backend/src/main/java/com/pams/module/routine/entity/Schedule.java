@@ -31,6 +31,8 @@ public class Schedule implements OrgScoped {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Version
+    private Long revision = 0L;
     /** SMOKING_CURB/CLASS_DUTY/BOOTH/ARCHIVE/STAMP/CLASS_CHECK/ACTIVITY */
     private String scheduleType;
     private Long activityId;

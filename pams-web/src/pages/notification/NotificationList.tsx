@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Empty, Select, Segmented, Space, Spin, Switch, Tag } from 'antd'
+import { Alert, App, Button, Empty, Pagination, Select, Segmented, Spin, Switch, Tag } from 'antd'
 import PendingWorkList from '@/components/notification/PendingWorkList'
 import NotificationOperations from '@/components/notification/NotificationOperations'
-import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CheckOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useNotificationStore } from '@/stores/notification'
 import { useAuthStore } from '@/stores/auth'
 import { notificationRoute } from '@/utils/notificationRoute'
 import GlassCard from '@/components/glass/GlassCard'
-import GlassTable from '@/components/glass/GlassTable'
+import FormSurface from '@/components/form/FormSurface'
+import { TYPE_LABEL, preferenceGroup } from '@/components/notification/notificationLabels'
+import '@/styles/notification-v6.css'
 import PageHeader from '@/components/glass/PageHeader'
 import {
   getNotificationPreferences,
@@ -18,41 +20,6 @@ import {
 } from '@/api/notificationPage'
 
 // 对照后端 NotificationType 枚举：TASK_ASSIGNED, PLAN_SUBMITTED, PLAN_APPROVED, PLAN_REJECTED, SYSTEM, PLAN_MODIFIED, NEWS_UPLOADED, SIGNIN_ROSTER_UPLOADED, SIGNIN_COMPLETED, ARTICLE_SUBMITTED, ARTICLE_ASSIGNED, ARTICLE_APPROVED, ARTICLE_REJECTED, ARTICLE_PUBLISHED, ARTICLE_DEADLINE_REMINDER, ANNOUNCEMENT
-const TYPE_LABEL: Record<string, string> = {
-  TASK_ASSIGNED: '任务',
-  TASK_CHANGED: '任务变更',
-  TASK_COMPLETED: '任务完成',
-  TASK_DUE_REMINDER: '任务临期',
-  TASK_OVERDUE_REMINDER: '任务逾期',
-  TASK_OVERDUE_DIGEST: '逾期摘要',
-  SCHEDULE_START_REMINDER: '班前提醒',
-  SCHEDULE_PUBLISHED: '排班发布',
-  SCHEDULE_CHANGED: '排班调整',
-  SCHEDULE_CANCELLED: '排班取消',
-  PLAN_WITHDRAWN: '策划书撤回',
-  COLLABORATION: '协作提醒',
-  PLAN_SUBMITTED: '策划书',
-  PLAN_APPROVED: '策划书',
-  PLAN_REJECTED: '策划书',
-  PLAN_MODIFIED: '策划书',
-  SYSTEM: '系统',
-  GOVERNANCE_CHANGED: '授权变更',
-  QUALITY_SUMMARY: '素拓处理摘要',
-  PARTY_SUMMARY: '党务处理摘要',
-  IMPORT_RESULT: '导入结果',
-  MAINTENANCE_ALERT: '维护告警',
-  ORG_DIGEST: '每日资讯摘要',
-  NEWS_UPLOADED: '新媒体',
-  SIGNIN_ROSTER_UPLOADED: '签到',
-  SIGNIN_COMPLETED: '签到',
-  ARTICLE_SUBMITTED: '推文',
-  ARTICLE_ASSIGNED: '推文',
-  ARTICLE_APPROVED: '推文',
-  ARTICLE_REJECTED: '推文',
-  ARTICLE_PUBLISHED: '推文',
-  ARTICLE_DEADLINE_REMINDER: '推文',
-  ANNOUNCEMENT: '公告',
-}
 
 interface NotificationRow {
   id: number
@@ -72,9 +39,14 @@ interface NotificationRow {
 
 export default function NotificationList() {
   const canOperate = useAuthStore(s => s.user?.managementCapabilities?.includes('org:audit:view') ?? false)
-  const [searchParams] = useSearchParams()
-  const [view, setView] = useState(['pending', 'operations'].includes(searchParams.get('view') ?? '') ? searchParams.get('view')! : 'messages')
-  useEffect(() => { if (['pending', 'operations'].includes(searchParams.get('view') ?? '')) setView(searchParams.get('view')!) }, [searchParams])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedView = searchParams.get('view')
+  const view = requestedView === 'pending' || (requestedView === 'operations' && canOperate) ? requestedView : 'messages'
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [error, setError] = useState(false)
+  const [prefsError, setPrefsError] = useState(false)
+  const [prefsReady, setPrefsReady] = useState(false)
+  const [markingAll, setMarkingAll] = useState(false)
   const navigate = useNavigate()
   const revision = useNotificationStore(s => s.revision)
   const { message } = App.useApp()
@@ -90,28 +62,30 @@ export default function NotificationList() {
   const fetchList = useCallback(() => {
     const token = useAuthStore.getState().token
     setLoading(true)
+    setError(false)
+    let active = true
     listNotificationsPage({ type: typeFilter, page, size })
       .then((res) => {
-        if (token !== useAuthStore.getState().token) return
+        if (!active || token !== useAuthStore.getState().token) return
         setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
         setTotal(res.total)
       })
-      .catch(() => {
-        /* 拦截已提示 */
-      })
-      .finally(() => setLoading(false))
+      .catch(() => { if (active) setError(true) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [typeFilter, page, size])
 
   useEffect(() => {
-    fetchList()
+    return fetchList()
   }, [fetchList, revision])
 
   const fetchPrefs = useCallback(() => {
+    setPrefsError(false)
+    setPrefsReady(false)
     getNotificationPreferences()
       .then((res) => setPrefs(res ?? []))
-      .catch(() => {
-        /* 拦截已提示 */
-      })
+      .catch(() => setPrefsError(true))
+      .finally(() => setPrefsReady(true))
   }, [])
 
   useEffect(() => {
@@ -130,7 +104,6 @@ export default function NotificationList() {
     try {
       await useNotificationStore.getState().markAllAsRead()
       message.success('已全部标记为已读')
-      fetchList()
     } catch {
       /* 拦截已提示 */
     }
@@ -151,130 +124,41 @@ export default function NotificationList() {
     }
   }
 
-  const columns = [
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      width: 90,
-      render: (t: string) => <Tag color="blue">{TYPE_LABEL[t] ?? t}</Tag>,
-    },
-    {
-      title: '标题',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true,
-      render: (v: string, r: NotificationRow) => (
-        <Space size={4}>
-          {!r.read && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: 'var(--brand)' }} />}
-          {r.priority === 'URGENT' && <Tag color="red">紧急</Tag>}
-          <span style={{ fontWeight: r.read ? 'calc(400 - var(--font-weight-compensation))' : 'calc(600 - var(--font-weight-compensation))' }}>{v}</span>
-        </Space>
-      ),
-    },
-    { title: '内容', dataIndex: 'content', key: 'content', ellipsis: true },
-    { title: '发送人', dataIndex: 'senderName', key: 'senderName', width: 110, render: (v: string | null) => v || '系统' },
-    {
-      title: '时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 160,
-      align: 'right' as const,
-      onCell: () => ({ style: { fontVariantNumeric: 'tabular-nums' } }),
-      render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      align: 'right' as const,
-      width: 100,
-      render: (_: unknown, r: NotificationRow) => (
-        <Space>
-          {notificationRoute(r) && <Button type="link" size="small" onClick={() => {
-            if (!r.read) void handleMarkRead(r.id)
-            navigate(notificationRoute(r)!)
-          }}>{r.actionState === 'open' ? (r.type === 'PLAN_SUBMITTED' || r.type === 'ARTICLE_SUBMITTED' ? '去审核' : '去处理') : '查看'}</Button>}
-          {r.read ? '已读' : <Button type="link" size="small" onClick={() => handleMarkRead(r.id)}>标记已读</Button>}
-        </Space>
-      ),
-    },
-  ]
-
-  return (
-    <div>
-      <PageHeader
-        title="通知中心"
-        description="系统内所有协作消息：策划书、签到、新媒体、排班、素拓、党务等"
-        extra={
-          <Button icon={<CheckOutlined />} onClick={handleMarkAll}>
-            全部已读
-          </Button>
-        }
-      />
-
-      <Segmented aria-label="通知视图" value={view} onChange={value => setView(String(value))} options={[{ label: '消息记录', value: 'messages' }, { label: '待我处理', value: 'pending' }, ...(canOperate ? [{ label: '管线运维', value: 'operations' }] : [])]} style={{ marginBottom: 16 }} />
-      {view === 'operations' && canOperate && <NotificationOperations />}
-      {view === 'pending' && <GlassCard style={{ padding: 16 }}><PendingWorkList /></GlassCard>}
-      <div hidden={view !== 'messages'}>
-
-      <GlassCard style={{ padding: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <Select
-            placeholder="按类型筛选"
-            allowClear
-            style={{ width: 160 }}
-            value={typeFilter}
-            onChange={setTypeFilter}
-            options={Object.entries(TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))}
-          />
-          <Button icon={<ReloadOutlined />} onClick={fetchList}>
-            刷新
-          </Button>
-        </Space>
-      </GlassCard>
-
-      <GlassTable<NotificationRow>
-        columns={columns}
-        dataSource={data}
-        rowKey="id"
-        loading={loading}
-        locale={{ emptyText: <Empty description="暂无通知" /> }}
-        pagination={{
-          current: page,
-          pageSize: size,
-          total,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
-          onChange: (p, s) => {
-            setPage(p)
-            setSize(s)
-          },
-        }}
-      />
-
-      <GlassCard style={{ padding: 16, marginTop: 16 }}>
-        <div style={{ fontWeight: 'calc(600 - var(--font-weight-compensation))', marginBottom: 12 }}>通知偏好设置</div>
-        <Spin spinning={prefLoading}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-            {prefs.map((p) => (
-              <div
-                key={p.type}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}
-              >
-                <span style={{ fontSize: 14 }}>
-                  {TYPE_LABEL[p.type] ?? p.type}
-                  {p.system && <Tag color="red" style={{ marginLeft: 6 }}>系统</Tag>}
-                </span>
-                <Switch size="small" checked={p.enabled} disabled={p.system} onChange={(v) => togglePref(p.type, v)} />
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-            系统级通知（如密码重置）不可关闭
-          </div>
-        </Spin>
-      </GlassCard>
-      </div>
-    </div>
-  )
+  return <div className="notification-page">
+    <PageHeader title="通知中心" description="集中查看协作消息，及时处理相关事项" extra={<>
+      <Button aria-label="通知设置" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>通知设置</Button>
+      <Button icon={<CheckOutlined />} loading={markingAll} onClick={() => { setMarkingAll(true); void handleMarkAll().finally(() => setMarkingAll(false)) }}>全部已读</Button>
+    </>} />
+    <div className="notification-nav"><Segmented aria-label="通知视图" value={view} onChange={value => {
+      const next = new URLSearchParams(searchParams)
+      if (value === 'messages') next.delete('view'); else next.set('view', String(value))
+      setSearchParams(next)
+    }} options={[{ label: '消息记录', value: 'messages' }, { label: '待我处理', value: 'pending' }, ...(canOperate ? [{ label: '管线运维', value: 'operations' }] : [])]} /></div>
+    {view === 'operations' && canOperate && <div className="notification-operations"><NotificationOperations /></div>}
+    {view === 'pending' && <GlassCard className="notification-pending"><PendingWorkList /></GlassCard>}
+    {view === 'messages' && <section className="notification-inbox" aria-label="消息记录">
+      <div className="notification-toolbar"><Select aria-label="按类型筛选" placeholder="全部类型" allowClear value={typeFilter} onChange={value => { setTypeFilter(value); setPage(1) }} options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} /><Button icon={<ReloadOutlined />} loading={loading} onClick={() => fetchList()}>刷新</Button></div>
+      {error && <Alert type="error" showIcon message="消息加载失败，请重试" action={<Button onClick={() => fetchList()}>重试</Button>} />}
+      <Spin spinning={loading}>
+        {!data.length ? <div className="notification-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error ? '暂时无法显示消息' : typeFilter ? '没有匹配的通知' : '暂无通知'} /></div> : <ul className="notification-list">{data.map(row => {
+          const route = notificationRoute(row)
+          return <li key={row.id} className={'notification-row' + (!row.read ? ' is-unread' : '')}>
+            <div className="notification-message"><div className="notification-title"><span className="notification-dot" aria-label={row.read ? '已读消息' : '未读消息'} /><h3>{row.title}</h3>{row.priority === 'URGENT' && <Tag color="error">紧急</Tag>}</div>
+              <p className="notification-summary">{row.content}</p><div className="notification-meta"><span>{TYPE_LABEL[row.type] ?? row.type}</span><span>{row.senderName || '系统'}</span><time dateTime={row.createdAt}>{row.createdAt ? dayjs(row.createdAt).format('MM-DD HH:mm') : '—'}</time></div></div>
+            <div className="notification-actions">{route && <Button type="link" onClick={async () => { if (!row.read) await handleMarkRead(row.id); navigate(route) }}>{row.actionState === 'open' ? (row.type === 'PLAN_SUBMITTED' || row.type === 'ARTICLE_SUBMITTED' ? '去审核' : '去处理') : '查看'}</Button>}{row.read ? <span className="notification-read">已读</span> : <Button type="text" onClick={() => handleMarkRead(row.id)}>标记已读</Button>}</div>
+          </li>
+        })}</ul>}
+      </Spin>
+      <div className="notification-pagination"><Pagination current={page} pageSize={size} total={total} showSizeChanger showTotal={t => `共 ${t} 条`} onChange={(p, s) => { setPage(p); setSize(s) }} /></div>
+    </section>}
+    <FormSurface mode="drawer" title="通知设置" description="选择需要接收的协作消息，修改后自动保存" open={settingsOpen} onCancel={() => setSettingsOpen(false)} width={520} footer={<Button aria-label="完成" onClick={() => setSettingsOpen(false)}>完成</Button>}>
+      {prefsError ? <Alert type="error" message="通知设置加载失败" action={<Button onClick={fetchPrefs}>重试</Button>} /> : <Spin spinning={!prefsReady || prefLoading}>
+        {prefsReady && !prefs.length && <Empty description="暂无可配置的通知" />}
+        {['任务与活动', '新媒体与推文', '排班与签到', '组织与系统'].map(group => {
+          const items = prefs.filter(p => preferenceGroup(p.type) === group)
+          return items.length > 0 && <section className="notification-pref-group" key={group}><h3>{group}</h3>{items.map(p => <div className="notification-pref-row" key={p.type}><span>{TYPE_LABEL[p.type] ?? p.type}{p.system && <small>系统必收</small>}</span><Switch aria-label={TYPE_LABEL[p.type] ?? p.type} size="small" checked={p.enabled} disabled={p.system || prefLoading} onChange={v => togglePref(p.type, v)} /></div>)}</section>
+        })}<p className="notification-pref-note">密码重置等系统级通知不可关闭。</p>
+      </Spin>}
+    </FormSurface>
+  </div>
 }

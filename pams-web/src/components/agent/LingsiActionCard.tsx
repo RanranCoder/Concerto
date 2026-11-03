@@ -150,7 +150,7 @@ export default function LingsiActionCard({ plan, toolName, busy, readonly, citat
             </Button>
           )}
           <Button size="small" onClick={onCancel} disabled={busy}>
-            取消
+            {toolName === 'draftPlanSections' ? '保留当前版本' : '取消'}
           </Button>
           <Tooltip
             title={
@@ -162,7 +162,7 @@ export default function LingsiActionCard({ plan, toolName, busy, readonly, citat
             }
           >
             <Button size="small" type="primary" loading={busy} disabled={readonly} onClick={onConfirm}>
-              {confirmation}
+              {toolName === 'draftPlanSections' ? '使用 Agent 生成的版本' : confirmation}
             </Button>
           </Tooltip>
         </span>

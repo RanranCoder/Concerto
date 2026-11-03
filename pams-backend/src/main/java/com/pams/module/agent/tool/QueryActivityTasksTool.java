@@ -50,7 +50,8 @@ public class QueryActivityTasksTool implements AgentTool {
     public Map<String, Object> parametersSchema() {
         return ToolArgs.schema("object", ToolArgs.map(
                 "activityId", ToolArgs.prop("integer", "活动 ID；省略时只看逾期任务"),
-                "overdueOnly", ToolArgs.prop("boolean", "只看逾期任务，默认 false")
+                "overdueOnly", ToolArgs.prop("boolean", "只看逾期任务，默认 false"),
+                "page", ToolArgs.prop("integer", "页码，从0开始，每页5条，hasMore时继续查询")
         ), List.of());
     }
 
@@ -62,8 +63,11 @@ public class QueryActivityTasksTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolContext ctx, Map<String, Object> args) {
+        if(ctx==null || ctx.getLoginUser()==null || !ctx.hasPermission("task:view") || !java.util.Objects.equals(ctx.getLoginUser().getOrgId(),com.pams.common.OrgContext.get())) return ToolResult.denied("无权读取当前组织任务");
         Long activityId = ToolArgs.lng(args, "activityId");
         boolean overdueOnly = ToolArgs.bool(args, "overdueOnly");
+        int pageNumber=ToolArgs.intVal(args,"page",0);
+        if(pageNumber<0 || pageNumber>10000)return ToolResult.failed("page超出范围");
 
         try {
             List<com.pams.module.activity.entity.Task> tasks;
@@ -77,6 +81,8 @@ public class QueryActivityTasksTool implements AgentTool {
                 overdueOnly = true;
             }
             if (tasks == null) tasks = List.of();
+            tasks=tasks.stream().filter(t->java.util.Objects.equals(t.getOrgId(),ctx.getLoginUser().getOrgId())).sorted(java.util.Comparator.comparing(com.pams.module.activity.entity.Task::getId)).toList();
+            String planBaseline=activityId==null?null:com.pams.module.agent.service.AgentTaskPlanService.baseline(tasks);
 
             List<Map<String, Object>> rows = new ArrayList<>();
             List<Map<String, Object>> refs = new ArrayList<>();
@@ -89,6 +95,8 @@ public class QueryActivityTasksTool implements AgentTool {
                 if (overdueOnly && !od) continue;
                 rows.add(ToolArgs.row(
                         "id", t.getId(),
+                        "revision", t.getRevision(),
+                        "assigneeUserId", t.getAssigneeUserId(),
                         "name", t.getName(),
                         "status", t.getStatus() == null ? null : t.getStatus().name(),
                         "progress", t.getProgress(),
@@ -100,7 +108,10 @@ public class QueryActivityTasksTool implements AgentTool {
                         "link", "/activity/" + t.getActivityId() + "/tasks"));
             }
 
+            int totalMatches=rows.size();int start=Math.min(pageNumber*5,rows.size()),end=Math.min(start+5,rows.size());
+            rows=new ArrayList<>(rows.subList(start,end));refs=new ArrayList<>(refs.subList(start,end));
             Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("planBaseline",planBaseline);payload.put("pageNumber",pageNumber);payload.put("pageSize",5);payload.put("hasMore",end<totalMatches);payload.put("totalMatches",totalMatches);
             payload.put("activityId", activityId);
             payload.put("total", tasks.size());
             payload.put("doneCount", done);
@@ -111,6 +122,7 @@ public class QueryActivityTasksTool implements AgentTool {
             payload.put("page", "task");
 
             if (rows.isEmpty()) {
+                if(totalMatches>0)return ToolResult.ok("当前页无更多任务，请查看前页；不代表匹配任务为空。",payload);
                 return ToolResult.ok(overdueOnly ? "没有逾期任务，进度都正常。"
                         : "该活动还没有创建任务。", payload);
             }

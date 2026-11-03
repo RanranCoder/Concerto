@@ -1,0 +1,25 @@
+[ {
+  "pass" : true,
+  "articleId" : 12,
+  "case" : "OVERLAPPING_NATIVE_OPTIMISTIC_LOCK"
+}, {
+  "case" : "ROLLBACK_AND_NO_REPLAY",
+  "pass" : true,
+  "articleId" : 13,
+  "revision" : 0
+}, {
+  "case" : "CONCURRENT_OPERATION_IDEMPOTENCY",
+  "pass" : true,
+  "articleId" : 14,
+  "revision" : 1
+}, {
+  "case" : "CONCURRENT_GATE_CONFIRM",
+  "pass" : true,
+  "articleId" : 15,
+  "revision" : 1
+}, {
+  "case" : "V64_MYSQL_MIGRATION",
+  "pass" : true,
+  "database" : "pams_s5_batch6_9acce82559ef",
+  "serverVersion" : "9.5.0"
+} ]

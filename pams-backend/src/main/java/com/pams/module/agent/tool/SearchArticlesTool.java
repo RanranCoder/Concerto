@@ -45,7 +45,7 @@ public class SearchArticlesTool implements AgentTool {
 
     @Override
     public String description() {
-        return "检索新闻稿/推文的生产状态（草稿、待审、已发布）与阅读数据。"
+        return "分页检索Article稿件的类型、生产状态（草稿、待审、已发布）与阅读数据。不是News模型，结果不包含全文，须readArticleDocument读原文。"
                 + "用于回答'有哪些稿子待审''推文发布情况''阅读量怎么样'等问题。";
     }
 
@@ -54,6 +54,9 @@ public class SearchArticlesTool implements AgentTool {
         return ToolArgs.schema("object", ToolArgs.map(
                 "keyword", ToolArgs.prop("string", "标题关键词，可省略"),
                 "status", ToolArgs.prop("string", "状态：DRAFT / PENDING / APPROVED / PUBLISHED / REJECTED，可省略"),
+                "type", ToolArgs.prop("string", "类型：PREHEAT / REPORT / VIDEO，可省略"),
+                "page", ToolArgs.prop("integer", "从0开始的页码"),
+                "activityId", ToolArgs.prop("integer", "可选的明确活动ID"),
                 "limit", ToolArgs.prop("integer", "返回条数上限，默认 10")
         ), List.of());
     }
@@ -73,17 +76,19 @@ public class SearchArticlesTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolContext ctx, Map<String, Object> args) {
+        if(ctx==null||ctx.getLoginUser()==null||!ctx.hasPermission("content:view")||!java.util.Objects.equals(com.pams.common.OrgContext.get(),ctx.getLoginUser().getOrgId()))return ToolResult.denied("当前组织或稿件查看权限无效");
         String keyword = ToolArgs.str(args, "keyword");
         String status = ToolArgs.str(args, "status");
         int limit = Math.min(Math.max(ToolArgs.intVal(args, "limit", 10), 1), 30);
+        int pageIndex=ToolArgs.intVal(args,"page",0);if(pageIndex<0||pageIndex>10000)return ToolResult.failed("页码无效");
 
         try {
             PageResult<Map<String, Object>> page =
-                    articleService.page(status, null, keyword, null, 1, limit);
+                    articleService.page(status, ToolArgs.str(args,"type"), keyword, ToolArgs.lng(args,"activityId"), pageIndex+1, limit);
             List<Map<String, Object>> records = page.getRecords() == null ? List.of() : page.getRecords();
 
             if (records.isEmpty()) {
-                return ToolResult.ok("没有找到符合条件的稿件。");
+                return ToolResult.ok("当前页没有稿件。",ToolArgs.map("total",page.getTotal(),"returned",0,"pageIndex",pageIndex,"hasMore",false));
             }
 
             List<Map<String, Object>> rows = new ArrayList<>();
@@ -107,6 +112,7 @@ public class SearchArticlesTool implements AgentTool {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("count", page.getTotal());
             payload.put("returned", records.size());
+            payload.put("pageIndex",pageIndex);payload.put("pageSize",limit);payload.put("hasMore",(long)pageIndex*limit+records.size()<page.getTotal());payload.put("scope","ARTICLE_METADATA");payload.put("bodyRead",false);
             payload.put("table", ToolArgs.table(
                     new String[]{"标题", "状态", "类型", "阅读量", "发布时间"}, rows));
             payload.put("page", "article");

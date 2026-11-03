@@ -1,0 +1,128 @@
+{
+  "samples" : [ {
+    "ruleModelCalls" : 0,
+    "modelMetrics" : {
+      "attempts" : 1,
+      "failures" : 1,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 14125,
+        "failed" : true
+      } ],
+      "maxCalls" : 2,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 4096
+    },
+    "elapsedMs" : 14275,
+    "ruleBaseline" : {
+      "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。",
+      "mode" : null,
+      "plan" : [ {
+        "id" : 1,
+        "agent" : "writing",
+        "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ ]
+      }, {
+        "id" : 2,
+        "agent" : "reviewer",
+        "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+        "contract" : null,
+        "status" : "QUEUED",
+        "durationMs" : null,
+        "workItemId" : null,
+        "revision" : 1,
+        "attempt" : 0,
+        "dependsOn" : [ 1 ]
+      } ],
+      "findings" : [ ],
+      "artifacts" : [ ],
+      "decisions" : [ ],
+      "openQuestions" : [ ],
+      "cancelled" : false,
+      "persistedState" : null
+    },
+    "modelCandidate" : {
+      "status" : "RULE_BASELINE",
+      "previewOnly" : true,
+      "reasonCode" : "MODEL_OUTPUT_INCOMPLETE",
+      "attempts" : 1,
+      "promptVersion" : "planner/v1",
+      "promptSha256" : "c78d57686831c4d86c046aa9b7fe50a94ccec27ad8dd9209686dfb19a15fb140",
+      "capabilitySha256" : "3a2bf7902fa302c80bb52523dc568e394cadf37a1c35b0fc40f1749cafecb386",
+      "model" : "",
+      "plan" : {
+        "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。",
+        "mode" : null,
+        "plan" : [ {
+          "id" : 1,
+          "agent" : "writing",
+          "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：根据原任务和上游事实，使用已有工具生成可确认的推文草稿或公告发布预览；纯文本不是待确认清单。不要重复检索已明确的实体事实。不宣称已支持独立新闻稿和公告草稿",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ ]
+        }, {
+          "id" : 2,
+          "agent" : "reviewer",
+          "task" : "用户目标：先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。\n本步骤：对产物做完整性 / 事实 / 合规审查",
+          "contract" : null,
+          "status" : "QUEUED",
+          "durationMs" : null,
+          "workItemId" : null,
+          "revision" : 1,
+          "attempt" : 0,
+          "dependsOn" : [ 1 ]
+        } ],
+        "findings" : [ ],
+        "artifacts" : [ ],
+        "decisions" : [ ],
+        "openQuestions" : [ ],
+        "cancelled" : false,
+        "persistedState" : null
+      },
+      "constraints" : [ ],
+      "clarifications" : [ ],
+      "steps" : [ ]
+    },
+    "goal" : "先读取稿件18的原文，再准备这篇稿件的送审清单；等我确认后提交组织审核，不审批、不发布。"
+  } ],
+  "qualityVerdict" : "NOT_ASSESSED",
+  "releaseEligible" : false,
+  "commonBudget" : {
+    "maxCalls" : 2,
+    "perCallOutputTokenCap" : 2048
+  },
+  "previewOnly" : true,
+  "businessConfirmed" : false,
+  "syntheticCapabilityChecks" : [ {
+    "passed" : false,
+    "actualCapabilities" : [ ],
+    "code" : "A1_SUBMISSION",
+    "expectedCapabilities" : [ "prepareArticleSubmission", "readArticleDocument" ]
+  } ],
+  "identityFixture" : "ISOLATED_TEST_TEACHER_PLUS_EVALUATION_CAPABILITY",
+  "businessExecutionBenefit" : "NOT_MEASURED",
+  "providerFixture" : {
+    "protocol" : "openai_responses",
+    "sourceAccess" : "READ_ONLY_LOCAL_CONFIG",
+    "baseUrl" : "https://api.deepseek.com",
+    "targetDatabase" : "ISOLATED_IN_MEMORY_H2",
+    "model" : "deepseek-flash"
+  }
+}

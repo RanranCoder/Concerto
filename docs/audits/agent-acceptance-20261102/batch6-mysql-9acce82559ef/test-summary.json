@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-11-02T12:52:51.616Z",
+  "log": "docs/audits/agent-acceptance-20261102/batch6-mysql-9acce82559ef/batch6-mysql.log",
+  "reportWindowStart": "2026-11-02T12:48:17.473Z",
+  "totals": {
+    "tests": 42,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 42
+  },
+  "reports": [
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledExecutionIntegrationTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentEditorialIntegrationTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentNotificationIntegrationTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentTaskPlanIntegrationTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.BatchSixMySqlAcceptanceTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.BatchSixProcessRecoveryTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

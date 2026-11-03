@@ -1,0 +1,177 @@
+[ {
+  "tool" : "createActivity",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "createMember",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "createSeatLayout",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "draftArticleFromActivity",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "draftPlanSections",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "generateActivitySchedule",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "generateActivityTasks",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 10,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "previewCreditBatch",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "ambiguityRejected" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "publishAnnouncement",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryActivityOverview",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryActivityTasks",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryAttendance",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryCommonFreeTime",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryCreditRecords",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryMyPendingWork",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryNotifications",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryPartyMemberProgress",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "queryRosterSigninStats",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "ambiguityRejected" : true,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "searchArticles",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "searchMaterials",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : false,
+  "resultStatus" : "OK",
+  "populatedTenantRead" : true,
+  "emptyTenantNoFailure" : true,
+  "status" : "PASS"
+}, {
+  "tool" : "sendNotification",
+  "fixturePrefix" : "S5-a5d5b0ee",
+  "write" : true,
+  "recipientInboxDelivered" : true,
+  "actualBusinessRowsAdded" : 1,
+  "previewNoWrite" : true,
+  "repeatedConfirmationNoWrite" : true,
+  "status" : "PASS"
+} ]

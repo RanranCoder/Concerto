@@ -8,7 +8,7 @@ import LingsiMarkdown from './LingsiMarkdown'
 import LingsiCopyButton from './LingsiCopyButton'
 import { Close } from './LingsiIcons'
 
-const fieldNames:Record<string,string>={title:'标题',content:'正文',background:'活动背景',purpose:'活动目的',notice:'注意事项',emergency:'应急预案',budget:'经费预算',flow:'活动流程'}
+const fieldNames:Record<string,string>={documentBody:'策划书全文',title:'标题',content:'正文',background:'活动背景',purpose:'活动目的',notice:'注意事项',emergency:'应急预案',budget:'经费预算',flow:'活动流程'}
 const statusNames:Record<string,string>={PENDING_CONFIRM:'预览，尚未写入',REVIEW_REQUIRED:'需修订',SUCCESS:'已执行',PARTIAL:'部分完成',FAILED:'执行失败',CANCELLED:'已失效，未执行',RUNNING:'正在提交'}
 export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:{artifact:AgentArtifactSummary;initialVersion?:number;onClose:()=>void}) {
   const cached=useAgentPanel.getState().drafts[artifact.id]

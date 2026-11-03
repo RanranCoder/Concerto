@@ -55,7 +55,7 @@ export default function LingsiMessageActions({ text, onRegenerate, hidden }: Pro
           </button>
         </Tooltip>
       )}
-      <span className="lingsi-gen-note">由灵思生成</span>
+      <span className="lingsi-gen-note">由concerto生成</span>
     </div>
   )
 }

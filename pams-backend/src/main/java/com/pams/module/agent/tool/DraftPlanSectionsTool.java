@@ -78,11 +78,8 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
 
     @Override
     public String description() {
-        return "为活动起草策划书章节内容，生成一份策划书草稿（DRAFT 状态，不提交审核）。"
-                + "用法：你（模型）先按章节撰写正文，再作为参数传进来——"
-                + "activityName 传活动名称；background/purpose/content/notice/emergency/budget/flow "
-                + "分别对应「活动背景/活动目的/活动内容/活动注意事项/应急预案/经费预算/活动流程」，"
-                + "只写你确实写了内容的章节，没写的章节不用传。"
+        return "自由编写活动策划书，不要求固定模板、章节数量或组织名称。优先用 documentBody 传完整正文（HTML 段落、标题、列表、表格或纯文本），可按用户要求任意组织。生成草稿，不提交审核。"
+                + "activityName 传活动名称。旧的 background/purpose/content/notice/emergency/budget/flow 参数仅用于兼容已有章节草稿，不必遵循这些章节。"
                 + "正文可含简单排版（段落、列表），也支持纯文本。"
                 + "调用后会先给用户看全文预览，确认后才写入策划书（草稿）。";
     }
@@ -92,6 +89,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         return ToolArgs.schema("object", ToolArgs.map(
                 "activityId", ToolArgs.prop("integer", "活动 ID，可省略；与 activityName 二选一"),
                 "activityName", ToolArgs.prop("string", ActivityResolver.NAME_DESC),
+                "documentBody", ToolArgs.prop("string", "完整策划书正文，自由结构，无固定章节要求；优先使用此参数"),
                 "background", ToolArgs.prop("string", "「活动背景」正文（你撰写的）"),
                 "purpose", ToolArgs.prop("string", "「活动目的」正文（你撰写的）"),
                 "content", ToolArgs.prop("string", "「活动内容」正文（你撰写的，可分条）"),
@@ -117,16 +115,21 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         if (res.failed()) return ToolResult.failed(res.message());
         Activity activity = res.activity();
         Long activityId = activity.getId();
+        var current = planService.agentCurrent(activityId, ctx);
+        if (current != null && current.getStatus() == com.pams.module.activity.entity.ActivityPlan.PlanStatus.PENDING)
+            return ToolResult.failed("当前策划书正在审核，请先在策划书页面撤回再生成新版本。");
 
         // 只收非空章节；空串不落库（否则会把用户已编辑的章节清空）
         Map<String, String> provided = new LinkedHashMap<>();
+        String documentBody = ToolArgs.str(args, "documentBody");
+        if (documentBody != null && !documentBody.isBlank()) provided.put("documentBody", documentBody.trim());
         for (Object[] row : CHAPTERS) {
             String key = (String) row[0];
             String v = ToolArgs.str(args, key);
-            if (v != null && !v.isBlank()) provided.put(key, v.trim());
+            if (!provided.containsKey("documentBody") && v != null && !v.isBlank()) provided.put(key, v.trim());
         }
         if (provided.isEmpty()) {
-            return ToolResult.failed("还没有任何章节内容。请先按章节撰写正文（至少给出「活动背景」与「活动内容」），"
+            return ToolResult.failed("还没有正文内容。请先撰写完整策划书，"
                     + "再把它们作为参数传给我；也可以告诉我活动主题与要点，我来帮你写。");
         }
 
@@ -138,12 +141,11 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
 
         List<AgentActionPlan.PlanItem> items = new ArrayList<>();
         List<AgentActionPlan.SkippedItem> skipped = new ArrayList<>();
-        for (Object[] row : CHAPTERS) {
+        for (Object[] row : cleaned.containsKey("documentBody") ? new Object[][]{{"documentBody", "策划书正文"}} : CHAPTERS) {
             String key = (String) row[0];
             String chapterLabel = (String) row[1];
             String body = cleaned.get(key);
             if (body == null) {
-                skipped.add(new AgentActionPlan.SkippedItem(chapterLabel, "本次未生成", "留待你补充或下一轮再写"));
                 continue;
             }
             String plain = htmlSanitizer.toPlainText(body).trim();
@@ -153,11 +155,11 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         List<String> detailLines = new ArrayList<>();
         detailLines.add("关联活动：" + activity.getName());
         detailLines.add("落库状态：策划书草稿（DRAFT，需在活动详情 → 策划书中提交审核）");
-        detailLines.add("生成章节：" + items.size() + " 章"
-                + (skipped.isEmpty() ? "（12 章骨架中其余章节由活动基本信息带出）"
-                                     : "，未生成 " + skipped.size() + " 章（见上方跳过项）"));
+        detailLines.add(current == null ? "使用 Agent 版本将创建草稿。" : "已有策划书：选择保留当前版本则不写入；选择使用 Agent 版本将新建草稿，原文保留在历史版本中。");
         Map<String, Object> exec = new LinkedHashMap<>();
         exec.put("activityId", activityId);
+        exec.put("expectedPlanId", current == null ? null : current.getId());
+        exec.put("expectedRevision", current == null ? null : current.getRevision());
         exec.putAll(cleaned);
         detailLines.add(ARGS_MARK + writeJson(exec));
 
@@ -168,7 +170,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
                 detailLines, true, null, preview);
 
         return ToolResult.plan(
-                "已按 12 章骨架整理出 " + items.size() + " 章内容"
+                "已整理出策划书正文，共 " + items.size() + " 项内容"
                         + (skipped.isEmpty() ? "。" : "，另有 " + skipped.size() + " 章未生成（已列在清单中）。")
                         + "请点「查看全文」通读后再确认；确认后写入策划书草稿（不会自动提交审核）。",
                 plan);
@@ -195,13 +197,17 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
             req.setEmergency(sanitize(exec.get("emergency")));
             req.setBudget(sanitize(exec.get("budget")));
             req.setFlow(sanitize(exec.get("flow")));
+            if (exec.get("documentBody") != null) {
+                req.setContent(sanitize(exec.get("documentBody")));
+                req.setSectionOrder("[{\"label\":\"正文\",\"field\":\"content\",\"customLabel\":\"正文\"}]");
+            }
             req.setSyncActivity(false); // 只写策划书，不回写活动基本信息
 
-            var saved = planService.create(req,ctx);
+            var saved = planService.createAgentVersion(req,ctx,lng(exec.get("expectedPlanId")),lng(exec.get("expectedRevision")));
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "activity", "id", activityId,
-                    "label", "活动 " + activityId + " 策划书", "link", "/activities/" + activityId));
+                    "label", "活动 " + activityId + " 策划书", "link", "/activities/" + activityId + "?tab=plan&planId=" + saved.getId()));
 
             return new CommitResult("SUCCESS", 1, 0,
                     "已生成策划书草稿（第 " + saved.getVersion() + " 版，草稿状态），"
@@ -222,9 +228,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
     private String buildPreview(Activity activity, Map<String, String> cleaned) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(activity.getName()).append(" · 策划书草稿\n\n");
-        sb.append("> 一、活动名称 / 二、活动主题 / 五、活动时间 / 六、活动地点 / 七、活动组织单位 / 八、活动对象 ");
-        sb.append("由活动基本信息自动带出，以下为本次生成的章节正文。\n\n");
-        for (Object[] row : CHAPTERS) {
+        for (Object[] row : cleaned.containsKey("documentBody") ? new Object[][]{{"documentBody", "正文"}} : CHAPTERS) {
             String body = cleaned.get((String) row[0]);
             if (body == null) continue;
             String plain = htmlSanitizer.toPlainText(body).trim();

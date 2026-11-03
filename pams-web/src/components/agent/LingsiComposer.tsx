@@ -6,8 +6,10 @@ import type { ActivityVO } from '@/api/activity'
 import { ArrowUp, Close, Plan, Plus, Rules, Sparkles, Stop, Toolbox } from './LingsiIcons'
 import GlassSelect from '@/components/glass/GlassSelect'
 import type { GlassSelectOption } from '@/components/glass/GlassSelect'
+import type { AgentModelStatus } from '@/api/agentProviders'
 
 interface Props {
+  modelStatus?: AgentModelStatus | null
   busy: boolean
   canStop?: boolean
   disabled?: boolean
@@ -74,6 +76,7 @@ export default function LingsiComposer({
   onModeChange,
   autoCollab,
   onAutoCollabChange,
+  modelStatus,
   provider,
   degraded,
   pendingRefs,
@@ -148,8 +151,19 @@ export default function LingsiComposer({
     }, 300)
   }
 
-  /** 模型档位：只做展示，切换入口在后端配置（pams.agent.provider），不做假下拉 */
-  const modelNode = degraded ? (
+  /** Current organization configuration is independent of the execution mode of historical replies. */
+  const modelNode = modelStatus === null ? (
+    <Tooltip title="暂时无法确认当前 AI 服务配置，请刷新后重试。历史消息保留当时的执行模式。">
+      <span className="lingsi-model-pill"><Sparkles size={12} />服务状态未确认</span>
+    </Tooltip>
+  ) : modelStatus ? (
+    <Tooltip title={modelStatus.configured ? `新任务使用：${modelStatus.displayName} · ${modelStatus.modelId}。实际调用结果和降级状态请查看对应消息。` : '当前组织尚未启用模型服务，使用本地规则模式。管理员可在系统设置 → AI 服务中配置并设为默认。'}>
+      <span className={`lingsi-model-pill${modelStatus.configured ? '' : ' lingsi-model-pill-warn'}`}>
+        {modelStatus.configured ? <Sparkles size={12} /> : <Rules size={11.5} />}
+        {modelStatus.configured ? modelStatus.displayName : '规则模式'}
+      </span>
+    </Tooltip>
+  ) : degraded ? (
     <Tooltip title="后端未接入模型或调用失败，回答由本地关键词规则产生，能力有限">
       <span className="lingsi-model-pill lingsi-model-pill-warn">
         <Rules size={11.5} />
@@ -157,8 +171,8 @@ export default function LingsiComposer({
       </span>
     </Tooltip>
   ) : (
-    <Tooltip title={provider ? `当前使用 ${provider === 'deepseek' ? 'DeepSeek' : provider}` : '发送消息，开始与灵思协作'}>
-      <span className="lingsi-model-pill"><Sparkles size={12} />{provider === 'deepseek' ? 'DeepSeek' : provider || '灵思就绪'}</span>
+    <Tooltip title={provider ? `当前使用 ${provider === 'deepseek' ? 'DeepSeek' : provider}` : '发送消息，开始与concerto协作'}>
+      <span className="lingsi-model-pill"><Sparkles size={12} />{provider === 'deepseek' ? 'DeepSeek' : provider || 'concerto就绪'}</span>
     </Tooltip>
   )
 
@@ -224,7 +238,7 @@ export default function LingsiComposer({
                 ? '正在加载会话…'
                 : kb
                   ? '问一个资料问题，例如：活动结束后要归档哪些材料？'
-                  : '把你想推进的事，交给灵思…'
+                  : '把你想推进的事，交给concerto…'
             }
             autoSize={{ minRows: 2, maxRows: 6 }}
             disabled={disabled}

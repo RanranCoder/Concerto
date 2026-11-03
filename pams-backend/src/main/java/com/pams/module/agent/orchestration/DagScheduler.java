@@ -22,6 +22,7 @@ import java.util.concurrent.Executor;
 @Slf4j
 @Service
 public class DagScheduler {
+    @org.springframework.beans.factory.annotation.Autowired private ControlledNodeExecutor controlledExecutor;
     private final WorkItemState state;
     private final SpecialistAgent specialist;
     private final AgentRunRepository runs;
@@ -110,6 +111,7 @@ public class DagScheduler {
         long t=System.currentTimeMillis();
         try {
             SpecialistAgent.Result result;
+            String receipt=null;
             try {
                 ctx=reload(state.owned(node.getRunId(),initial.getUserId())).withWorkItem(node.getId(),node.getRevision()).withAttempt(node.getAttempt());
                 var fresh=SecurityContextHolder.createEmptyContext();
@@ -117,13 +119,15 @@ public class DagScheduler {
                         ctx.getAuthorities().stream().map(SimpleGrantedAuthority::new).toList()));
                 SecurityContextHolder.setContext(fresh);
                 emit(ctx,AgentStreamEvent.agentStart(ctx.getStreamId(),publisher.nextSeq(ctx.getStreamId()),node.getAgentName(),null,null,ctx.getConversationId()));
-                result=specialist.execute(node.getAgentName(),node.getInstruction()+upstream(node,state.nodes(node.getRunId())),
+                if(node.getContractJson()!=null){var controlled=controlledExecutor.execute(node,ctx);result=controlled.result();receipt=controlled.receipt();}
+                else result=specialist.execute(node.getAgentName(),node.getInstruction()+upstream(node,state.nodes(node.getRunId())),
                         ctx.withWorkItem(node.getId(),node.getRevision()).withAttempt(node.getAttempt()),null,ctx.getStreamId(),ctx.getLoginUser().getUsername());
             } catch(Exception e) {
                 log.warn("节点执行失败：run={} node={}",node.getRunId(),node.getId(),e);
                 result=new SpecialistAgent.Result(node.getAgentName(),"节点执行未完成，请核对权限或稍后重试。",List.of(),"FAILED","",false,Sensitivity.NORMAL,null,null,List.of(),List.of());
             }
-            state.complete(node,result,System.currentTimeMillis()-t,token);
+            if(node.getContractJson()!=null)state.complete(node,result,System.currentTimeMillis()-t,token,receipt);
+            else state.complete(node,result,System.currentTimeMillis()-t,token);
             emit(ctx,AgentStreamEvent.agentEnd(ctx.getStreamId(),publisher.nextSeq(ctx.getStreamId()),node.getAgentName(),null,result.state(),System.currentTimeMillis()-t,ctx.getConversationId()));
             notifyUpdate(ctx); return result;
         } finally {

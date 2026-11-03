@@ -60,26 +60,17 @@ pams:
   # 密钥治理口径与 jwt.secret 一致：优先环境变量 PAMS_AGENT_API_KEY。
   # 若两者都为空，LlmConfig 会自动降级为 stub 规则模式（不阻塞启动，离线可演示）。
   agent:
-    provider: deepseek
-    base-url: https://api.deepseek.com
-    # ⚠️ model id 随官方调整，不要凭记忆写：2026-10-12 起 /chat/completions 的有效取值是
-    # deepseek-flash / deepseek-v4-pro（前者更快更省，后者更强）；
-    # 旧的 deepseek-chat / deepseek-reasoner 已不在官方取值列表里。
-    # 实测（2026-10-12 真 Key 打真 API）：旧 id 目前仍返回 200 —— 服务端把它静默别名到
-    # deepseek-flash，所以"用旧 id 会 400"并不成立；换掉的价值是不再依赖未公开的别名行为，
-    # 且日志/计费里的模型名与实际一致。（"规则模式"的真因是 Key 没进 JVM 环境变量，与模型名无关。）
-    model: deepseek-flash
+    provider: openai
+    protocol: ${PAMS_AGENT_PROTOCOL:openai_chat_completions}
+    base-url: ${PAMS_AGENT_BASE_URL:https://api.openai.com/v1}
+    model: ${PAMS_AGENT_MODEL:}
     timeout-ms: 30000
-    # 思考模式下推理与正文**共享** max_tokens：给太小会被推理吃光，响应以 finish_reason=length
-    # 收尾、正文被截断（表现为"答到一半没了"，不报错）。官方思考模式默认 64K，这里按成本取中间值。
     max-tokens: 8192
     temperature: 0.3
-    # 思考模式：官方 2026-10-12 起是**请求参数**（thinking:{type:enabled|disabled}，默认 enabled），
-    # 不再是独立模型。关掉则模型不再产出 reasoning_content，过程区的思维链会整段为空（V35 落库与下发仍在）。
-    thinking: true
-    # 推理投入档位 none|low|high|max（官方默认 high）。只写归一化后的值：
-    # 官方的 minimal/medium/xhigh 别名会被归一化成 low/high，写别名会造成"不同档位其实同效"的错觉。
-    reasoning-effort: high
+    summary-enabled: ${PAMS_AGENT_SUMMARY_ENABLED:false}
+    provider-encryption-key: ${PAMS_AI_ENCRYPTION_KEY:}
+    provider-key-file: ${PAMS_AI_KEY_FILE:./data/secrets/ai-provider.key}
+    provider-internal-hosts: ${PAMS_AI_INTERNAL_HOSTS:}
     context-rounds: 6
     max-tool-iterations: 5
     stream-buffer-size: 500
@@ -109,8 +100,9 @@ pams:
     secret: test-only-jwt-secret-0123456789abcdef0123456789abcdef
   agent:
     # ⚠️ 测试**永不打真实 API**：上面那条 .env 导入会在"开发者本机存在 .env"时把真 Key 带进来，
-    # 若不在这里显式压住，`mvn test` 就会真的实例化 DeepSeekProvider ——
+    # 若不在这里显式压住，`mvn test` 就会真的实例化 原生 OpenAI 客户端 ——
     # 任何碰到 LLM 的测试都会变成对外发请求（慢、花钱、结果不稳定），而且只在有 .env 的机器上复现。
-    # 需要验证"导入生效 / 有 Key 就选 deepseek"时，用环境变量显式打开：
-    #   PAMS_TEST_AGENT_PROVIDER=deepseek mvn -o -Dtest=... test
+    # 需要验证"导入生效 / 有 Key 就选原生协议"时，用环境变量显式打开：
+    #   PAMS_TEST_AGENT_PROVIDER=openai mvn -o -Dtest=... test
     provider: ${PAMS_TEST_AGENT_PROVIDER:stub}
+    provider-key-file: ./target/test-data/ai-provider.key

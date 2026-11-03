@@ -39,6 +39,8 @@ public class CreateActivityTool implements WriteAgentTool {
     @Override
     public String name() { return "createActivity"; }
 
+    @Override public boolean supportsForm() { return true; }
+
     @Override
     public String label() { return "创建活动"; }
 

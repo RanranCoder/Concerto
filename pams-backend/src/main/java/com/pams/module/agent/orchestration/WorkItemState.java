@@ -28,6 +28,8 @@ public class WorkItemState {
     private final ApplicationEventPublisher events;
     private final ObjectMapper json = new ObjectMapper();
     private final PolicyGuard policy = new PolicyGuard();
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.registry.AgentRegistry agentRegistry;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.config.AgentProperties agentProperties;
     @org.springframework.beans.factory.annotation.Autowired private AgentRunEventRepository runEvents;
     @org.springframework.beans.factory.annotation.Autowired private AgentReviewIssueRepository reviewIssues;
     @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.AgentRequestService requests;
@@ -83,6 +85,7 @@ public class WorkItemState {
         for(var p:bb.getPlan()) {
             var n=new AgentWorkItem(); n.setRunId(runId); n.setNodeKey(p.getId()); n.setAgentName(p.getAgent());
             n.setInstruction(p.getTask()); n.setDependenciesJson(encode(p.getDependsOn())); n.setUpdatedAt(LocalDateTime.now());
+            n.setContractJson(p.getContract()==null?null:encode(p.getContract()));
             items.save(n);
         }
         update(run,true);
@@ -117,7 +120,9 @@ public class WorkItemState {
         AgentStep step=new AgentStep(); step.setRunId(id); step.setWorkItemId(n.getId()); step.setAgentName(n.getAgentName());
         step.setRevision(n.getRevision()); step.setAttempt(n.getAttempt()); step.setStatus("RUNNING");
         step.setSeq((int)steps.countByRunId(id)+1); step.setCreatedAt(LocalDateTime.now());
-        step.setInputJson(encode(Map.of("instruction",n.getInstruction(),"dependsOn",dependencies(n)))); steps.save(step);
+        var input=new LinkedHashMap<String,Object>();input.put("instruction",n.getInstruction());input.put("dependsOn",dependencies(n));
+        if(n.getContractJson()!=null)input.put("contract",ControlledBindings.tree(n.getContractJson()));
+        step.setInputJson(encode(input)); steps.save(step);
         update(run); return n;
     }
     /** Called inside the same transaction as gate creation: a token always belongs to one revision. */
@@ -140,15 +145,27 @@ public class WorkItemState {
         AgentWorkItem n=items.findById(action.getWorkItemId()).orElseThrow();
         if(!Objects.equals(n.getRunId(),run.getId()) || n.getRevision()!=action.getWorkItemRevision()
                 || !Objects.equals(n.getActionTaskId(),action.getId())) throw new BizException(4400,"确认清单已失效");
+        if(n.getContractJson()!=null){
+            if(!agentProperties.isControlledExecutionEnabled() || !agentProperties.isControlledPlanningEnabled() || !agentProperties.getControlledPlanningOrgIds().contains(run.getOrgId()))throw new BizException(409,"本组织受控执行已关闭");
+            var contract=ControlledBindings.tree(n.getContractJson());
+            var definition=agentRegistry.byName(n.getAgentName()).filter(d->Integer.valueOf(1).equals(d.getEnabled())).orElseThrow(()->new BizException(403,"专家已停用"));
+            var scope=agentRegistry.toolScopeOf(definition);
+            if(!action.getToolName().equals(contract.path("capability").asText()) || scope!=null&&!scope.contains(action.getToolName()))throw new BizException(403,"节点能力已撤销");
+        }
         if("BLOCKED".equals(n.getReviewStatus()) || reviewIssues.existsByWorkItemIdAndRevisionAndAttemptAndSeverity(n.getId(),n.getRevision(),n.getAttempt(),"BLOCKING")) throw new BizException(4400,"请先修订审查问题");
         return tasks.claimOwned(action.getId(),AgentTask.PENDING_CONFIRM,AgentTask.RUNNING,LocalDateTime.now(),RuntimeIdentity.ID);
     }
     @Transactional
     public void complete(AgentWorkItem attempted,SpecialistAgent.Result result,long duration,String token) {
+        complete(attempted,result,duration,token,null);
+    }
+    @Transactional
+    public void complete(AgentWorkItem attempted,SpecialistAgent.Result result,long duration,String token,String receipt) {
         AgentRun run=lock(attempted.getRunId());
         if(!Objects.equals(run.getDispatchToken(),token)) throw new BizException(4400,"该执行尝试已失效");
         AgentWorkItem n=items.findById(attempted.getId()).orElseThrow();
         if(n.getRevision()!=attempted.getRevision() || n.getAttempt()!=attempted.getAttempt()) throw new BizException(4400,"执行版本已过期");
+        n.setResultJson(receipt);
         String stored=policy.forStorage(result.sensitivity(),result.text(),"敏感步骤结果未在任务记录中留存，请在对应业务页核对。");
         if(n.getActionTaskId()==null) { n.setStatus(run.isCancelRequested()?"CANCELLED":result.state()); n.setOutputText(stored); }
         else {
@@ -169,11 +186,14 @@ public class WorkItemState {
             if(factChars+fact.length()>10000)continue;
             facts.add(fact);factChars+=fact.length();
         }
-        s.setOutputJson(encode(Map.of("text",Objects.toString(stored,""),"state",result.state(),"toolFacts",facts,"invocations",result.invocations().stream().map(i->Map.of("name",i.name(),"status",i.status(),"durationMs",i.durationMs())).toList())));
+        s.setOutputJson(encode(Map.of("text",Objects.toString(stored,""),"state",result.state(),"toolFacts",facts,"structuredReceipt",receipt==null?Map.of():ControlledBindings.tree(receipt),"invocations",result.invocations().stream().map(i->Map.of("name",i.name(),"status",i.status(),"durationMs",i.durationMs())).toList())));
         s.setStatus(n.getStatus()); s.setDurationMs((int)duration); steps.save(s);
         update(run);
     }
-    private String nodeStatus(String status) { return AgentTask.PENDING_CONFIRM.equals(status)?"WAITING_CONFIRM":status; }
+    private String nodeStatus(String status) {
+        if("RESULT_UNKNOWN".equals(status)) return "NEEDS_RECONCILE";
+        return AgentTask.PENDING_CONFIRM.equals(status)?"WAITING_CONFIRM":status;
+    }
     /** Only actual normal tool data or a committed business receipt is authoritative review evidence. */
     public String sourceFacts(AgentWorkItem node) {
         if(node.getActionTaskId()!=null) {
@@ -237,6 +257,16 @@ public class WorkItemState {
     /** Revision invalidates only this node and its transitive dependants, keeping attempt history. */
     @Transactional
     public void revise(Long runId,Long nodeId,Long userId,int revision,String instruction) {
+        var target=nodes(runId).stream().filter(n->n.getId().equals(nodeId)).findFirst().orElse(null);
+        if(target!=null && target.getContractJson()!=null)throw new BizException(409,"受控节点须通过服务端规划句柄修订");
+        reviseBranch(runId,nodeId,userId,revision,instruction);
+    }
+    @Transactional
+    public void reviseContract(Long runId,Long nodeId,Long userId,int revision,Blackboard.PlanItem replacement) {
+        reviseBranch(runId,nodeId,userId,revision,replacement.getTask());
+        var node=items.findById(nodeId).orElseThrow();node.setContractJson(encode(replacement.getContract()));items.saveAndFlush(node);
+    }
+    private void reviseBranch(Long runId,Long nodeId,Long userId,int revision,String instruction) {
         owned(runId,userId); AgentRun run=lock(runId);
         requireActive(run);
         if(run.getDispatchToken()!=null || instruction==null || instruction.isBlank() || instruction.length()>16000) throw new BizException(4400,"执行中不可修改，或修订内容无效");
@@ -261,6 +291,7 @@ public class WorkItemState {
                 if(!AgentTask.CANCELLED.equals(fresh.getStatus())) throw new BizException(409,"该分支已有业务提交，请刷新核对结果");
             }
             n.setRevision(n.getRevision()+1); n.setStatus("QUEUED"); n.setOutputText(null); n.setActionTaskId(null);
+            n.setResultJson(null);
             n.setReviewStatus("NOT_REVIEWED");
             if(n.getId().equals(nodeId)) n.setInstruction(instruction);
             items.save(n);
@@ -347,6 +378,7 @@ public class WorkItemState {
         var bb=new Blackboard(); bb.setGoal(run.getGoal()); bb.setMode(run.getMode()); bb.setPersistedState(overall(run,all));
         for(var n:all) {
             var p=new Blackboard.PlanItem(); p.setId(n.getNodeKey()); p.setAgent(n.getAgentName()); p.setTask(n.getInstruction());
+            if(n.getContractJson()!=null)p.setContract(json.convertValue(ControlledBindings.tree(n.getContractJson()),new TypeReference<Map<String,Object>>(){}));
             p.setStatus(n.getStatus()); p.setDependsOn(dependencies(n)); p.setWorkItemId(n.getId()); p.setRevision(n.getRevision()); p.setAttempt(n.getAttempt()); bb.getPlan().add(p);
             if(n.getOutputText()!=null) bb.addFinding(n.getAgentName(),n.getOutputText(),null);
         }
@@ -363,7 +395,7 @@ public class WorkItemState {
             throw new java.util.concurrent.CancellationException("本次执行已停止");
     }
     private boolean uncertain(AgentTask action) {
-        return AgentTask.RUNNING.equals(action.getStatus()) && (action.getExecutionOwner()!=null && !RuntimeIdentity.ID.equals(action.getExecutionOwner())
+        return "RESULT_UNKNOWN".equals(action.getStatus()) || AgentTask.RUNNING.equals(action.getStatus()) && (action.getExecutionOwner()!=null && !RuntimeIdentity.ID.equals(action.getExecutionOwner())
             || action.getConfirmedAt()!=null && action.getConfirmedAt().isBefore(RuntimeIdentity.STARTED) && action.getExecutionOwner()==null);
     }
     @Transactional
@@ -374,6 +406,7 @@ public class WorkItemState {
         for(var n:nodes(id)) {
             if(n.getActionTaskId()!=null) {
                 var a=tasks.findById(n.getActionTaskId()).orElseThrow();
+                if("RESULT_UNKNOWN".equals(a.getStatus())) {n.setStatus("NEEDS_RECONCILE");items.save(n);continue;}
                 if(AgentTask.RUNNING.equals(a.getStatus())) { n.setStatus(uncertain(a)?"NEEDS_RECONCILE":"RUNNING");items.save(n);continue; }
                 if(Set.of(AgentTask.SUCCESS,AgentTask.FAILED,AgentTask.PARTIAL).contains(a.getStatus())) continue;
                 tasks.cancelPending(a.getId(),uid,LocalDateTime.now());

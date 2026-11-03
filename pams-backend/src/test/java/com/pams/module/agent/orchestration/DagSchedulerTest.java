@@ -53,6 +53,7 @@ class DagSchedulerTest {
     @Autowired AgentMessageRepository messageRows;
     @Autowired ArtifactLedger artifactLedger;
     @Autowired ArtifactEditor artifactEditor;
+    @Autowired ActionReconciliationService reconciliation;
     @Autowired AgentArtifactRepository artifactRows;
 
     @MockitoBean AgentLlmCaller caller;
@@ -374,6 +375,20 @@ class DagSchedulerTest {
         assertThat(state.nodes(run.getId()).getLast().getAttempt()).isZero();
         gate.confirm(action.getId(),action.getConfirmToken(),ctx);
         assertThat(activities.count()).isEqualTo(before+1);
+    }
+    @Test void unknownBusinessOutcomeRemainsReconcileRequiredAfterRecoveryAndCancellation() throws Exception {
+        var run=initialize(node(1,"unknown-write"),node(2,"must-not-run",1));
+        when(caller.callIsolated(anyList(),anyList(),any())).thenAnswer(i->create("-unknown"));
+        scheduler.drive(run.getId(),1L);
+        var action=tasks.findByRunIdOrderByIdAsc(run.getId()).getFirst();
+        tasks.finish(action.getId(),"RESULT_UNKNOWN","{\"status\":\"RESULT_UNKNOWN\"}",java.time.LocalDateTime.now());
+        state.settle(action);state.recover(run.getId(),1L);
+        assertThat(state.owned(run.getId(),1L).getStatus()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(state.ready(run.getId())).isEmpty();
+        assertThat(reconciliation.reconcile(action.getId(),ctx)).containsEntry("reconciled",false);
+        assertThat(state.cancel(run.getId(),1L)).isEqualTo("NEEDS_RECONCILE");
+        assertThat(state.nodes(run.getId())).extracting(AgentWorkItem::getStatus).containsExactly("NEEDS_RECONCILE","CANCELLED");
+        assertThat(tasks.findById(action.getId()).orElseThrow().getStatus()).isEqualTo("RESULT_UNKNOWN");
     }
 
     long draftActivity() {

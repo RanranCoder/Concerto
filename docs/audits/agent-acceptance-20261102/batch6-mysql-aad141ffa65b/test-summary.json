@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-11-02T12:57:25.527Z",
+  "totals": {
+    "tests": 43,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 43
+  },
+  "expectedSuites": 6,
+  "reports": [
+    {
+      "report": "TEST-com.pams.module.agent.orchestration.ControlledExecutionIntegrationTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentEditorialIntegrationTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentNotificationIntegrationTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.AgentTaskPlanIntegrationTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.BatchSixMySqlAcceptanceTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "report": "TEST-com.pams.module.agent.service.BatchSixProcessRecoveryTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "isolation": {
+    "database": "pams_s5_batch6_aad141ffa65b",
+    "dedicatedAccount": true,
+    "businessDatabaseUsed": false,
+    "cleanup": "VERIFIED_REMOVED_CREATED_DATABASE_AND_ACCOUNTS",
+    "remainingSchemas": 0,
+    "remainingAccounts": 0,
+    "exitCode": 0,
+    "completedAtUtc": "2026-11-02T12:54:58.952912400Z"
+  },
+  "passed": true
+}

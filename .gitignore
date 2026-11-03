@@ -8,6 +8,7 @@ pams-web/node_modules/
 pams-web/dist/
 # Playwright E2E 产物
 pams-web/test-results/
+pams-web/test-results-s5/
 pams-web/playwright-report/
 # IDE / OS
 .idea/
@@ -33,6 +34,10 @@ database/materials.csv
 # 部署密钥（docker compose 用，勿提交）
 .env
 .env.local
+# Application-managed AI encryption keys (never commit).
+data/secrets/
+pams-backend/data/secrets/
+target/test-data/
 
 # 本地数据库备份与临时构建（含真实数据，勿提交）
 .backups/

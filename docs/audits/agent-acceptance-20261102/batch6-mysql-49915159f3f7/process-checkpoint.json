@@ -1,0 +1,1 @@
+[{"kind":"PENDING","articleId":17,"taskId":36},{"kind":"COMMITTED","articleId":18,"taskId":37},{"kind":"CONTROLLED_QUEUED","runId":6},{"taskId":38,"articleId":19,"checkpointPhase":"BUSINESS_SQL_FLUSHED_OUTER_TRANSACTION_OPEN","kind":"IN_FLIGHT"}]

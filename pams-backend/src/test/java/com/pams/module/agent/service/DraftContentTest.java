@@ -16,6 +16,13 @@ class DraftContentTest {
         assertThat(drafts.preview("draftPlanSections",plan)).contains("完整尾部").doesNotContain("截断预览");
         assertThat(drafts.fields("draftPlanSections",plan)).containsKey("purpose");
     }
+    @Test void freeDocumentBodySurvivesPreviewAndEditingWithVersionGuard() throws Exception {
+        var original=plan(Map.of("activityId",42,"expectedPlanId",7,"expectedRevision",3,"documentBody","<p>自由结构正文</p>"));
+        assertThat(drafts.fields("draftPlanSections",original)).containsOnlyKeys("documentBody");
+        var edited=drafts.replace("draftPlanSections",original,Map.of("documentBody","修改后的完整正文"));
+        assertThat(drafts.preview("draftPlanSections",edited)).contains("修改后的完整正文").doesNotContain("null");
+        assertThat(drafts.arguments(edited)).containsEntry("expectedPlanId",7).containsEntry("expectedRevision",3);
+    }
     @Test void editsEscapeMarkupAndCannotReplaceServerOwnedEntityIds() throws Exception {
         var plan=plan(Map.of("activityId",42,"title","原题","content","<p>原文</p>"));
         var updated=drafts.replace("draftArticleFromActivity",plan,Map.of("title","改题","content","<img src=x onerror=alert(1)>"));

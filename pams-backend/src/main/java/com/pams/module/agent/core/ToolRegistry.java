@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class ToolRegistry {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.pams.module.agent.orchestration.ControlledToolGuard controlledGuard;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
     @org.springframework.beans.factory.annotation.Autowired(required=false) private com.pams.module.agent.service.AgentRequestService requests;
@@ -41,7 +43,11 @@ public class ToolRegistry {
     public ToolRegistry(List<AgentTool> all) {
         all.stream()
           .sorted(Comparator.comparing(AgentTool::name))
-          .forEach(t -> tools.put(t.name(), t));
+          .forEach(t -> {
+              if (tools.putIfAbsent(t.name(), t) != null) {
+                  throw new IllegalStateException("Duplicate agent tool: " + t.name());
+              }
+          });
         log.info("灵思工具注册完成，共 {} 个（读 {} / 写 {}）", tools.size(),
                 tools.values().stream().filter(t -> !t.writeOperation()).count(),
                 tools.values().stream().filter(AgentTool::writeOperation).count());
@@ -70,6 +76,7 @@ public class ToolRegistry {
      */
     public boolean visibleTo(AgentTool tool, ToolContext ctx) {
         if (ctx == null) return false;
+        if(controlledGuard!=null && !controlledGuard.allows(tool,ctx))return false;
         if (tool.writeOperation() && (ctx.isReadonly() || ctx.isKb())) return false;
         if (tool.requiresLeader() && !ctx.hasAnyPermission("article:create","party:view")) return false;
         if (authorization != null && ctx.getUserId()!=null) {
@@ -93,6 +100,7 @@ public class ToolRegistry {
         for (AgentTool t : tools.values()) {
             if (visibleTo(t, ctx)) out.add(t);
         }
+        out.sort(Comparator.comparing(AgentTool::name));
         return out;
     }
 
@@ -135,12 +143,20 @@ public class ToolRegistry {
             throw new AccessDeniedException("无权限执行工具：" + toolName);
         }
 
+        if(controlledGuard!=null)controlledGuard.arguments(tool,ctx,args==null?Map.of():args);
         return tool.execute(ctx, args == null ? Map.of() : args);
     }
 
     /** 全部工具（含不可见的），管理/排障用 */
     public List<AgentTool> all() {
-        return new ArrayList<>(tools.values());
+        return tools.values().stream().sorted(Comparator.comparing(AgentTool::name)).toList();
+    }
+
+    /** Visible scope only: never reveal denied tools. An empty scope explicitly means no tools. */
+    public List<ToolDescriptor> effectiveDescriptors(ToolContext ctx, java.util.Set<String> scope) {
+        java.util.Objects.requireNonNull(scope, "scope");
+        return visibleTools(ctx).stream().filter(t -> scope.contains(t.name()))
+                .map(AgentTool::descriptor).toList();
     }
 
     /**
@@ -156,6 +172,7 @@ public class ToolRegistry {
             m.put("runningLabel", t.runningLabel());
             m.put("sensitivity", t.sensitivity().name().toLowerCase());
             m.put("write", t.writeOperation());
+            m.put("descriptor", t.descriptor());
             out.add(m);
         }
         return out;

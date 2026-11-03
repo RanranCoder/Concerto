@@ -35,6 +35,38 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/agent/team")
 public class AgentTeamController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.orchestration.ControlledPlanningService controlledPlanning;
+    @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.orchestration.ControlledPlanStore controlledPlans;
+
+    @PostMapping("/plan/controlled/prepare")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public Result<com.pams.module.agent.orchestration.ControlledPlanStore.Proposal> prepareControlled(@RequestBody TeamRequest req){
+        var ctx=ToolContext.current(req.conversationId(),null,req.toolMode());if(req.conversationId()!=null)conversations.require(req.conversationId(),ctx.getUserId());
+        return Result.ok(controlledPlans.prepare(req.goal(),ctx));
+    }
+    public record ControlledRequest(String planRef,Long conversationId,String toolMode){}
+    @PostMapping("/run/controlled")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public Result<Map<String,Object>> runControlled(@RequestBody ControlledRequest req){
+        var ctx=ToolContext.current(req.conversationId(),null,req.toolMode());if(req.conversationId()!=null)conversations.require(req.conversationId(),ctx.getUserId());
+        Long id=controlledPlans.start(req.planRef(),ctx);scheduler.resume(id,ctx);return Result.ok(Map.of("runId",id));
+    }
+    public record ControlledRevision(int revision,String planRef,Long conversationId,String toolMode){}
+    @PostMapping("/runs/{id}/nodes/{nodeId}/replan")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public Result<Void> replan(@PathVariable Long id,@PathVariable Long nodeId,@RequestBody ControlledRevision req){
+        var ctx=ToolContext.current(req.conversationId(),null,req.toolMode());scheduler.snapshot(id,ctx);
+        controlledPlans.replace(id,nodeId,req.revision(),req.planRef(),ctx);scheduler.resume(id,ctx);return Result.ok();
+    }
+
+    @PostMapping("/plan/controlled")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public Result<com.pams.module.agent.orchestration.ControlledPlanningService.Preview> controlledPlan(@RequestBody TeamRequest req) {
+        var ctx=ToolContext.current(req.conversationId(),null,req.toolMode());
+        if(req.conversationId()!=null)conversations.require(req.conversationId(),ctx.getUserId());
+        return Result.ok(controlledPlanning.preview(req.goal(),ctx));
+    }
 
     private final CoordinatorAgent coordinator;
     private final AgentRunService runService;

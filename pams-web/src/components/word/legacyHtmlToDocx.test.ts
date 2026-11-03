@@ -6,6 +6,17 @@ import { htmlToDocx } from './legacyHtmlToDocx'
 ;(globalThis as unknown as { DOMParser: typeof DOMParser }).DOMParser = DOMParser
 
 describe('htmlToDocx browser path', () => {
+  it('preserves Agent plain text and top-level inline content in the DOCX bytes', async () => {
+    const mod = await import('docx')
+    const JSZip = (await import('jszip')).default
+    const children = await htmlToDocx('策划正文开头\n完整尾部<strong>重要安排</strong>', { mod })
+    const bytes = await mod.Packer.toBuffer(new mod.Document({ sections: [{ children }] }))
+    const zip = await JSZip.loadAsync(bytes)
+    const xml = await zip.file('word/document.xml')!.async('string')
+    expect(xml).toContain('策划正文开头')
+    expect(xml).toContain('完整尾部')
+    expect(xml).toContain('重要安排')
+  })
   it('maps blocks and inline runs to docx paragraphs', async () => {
     const mod = await import('docx')
     const ctx = { mod }

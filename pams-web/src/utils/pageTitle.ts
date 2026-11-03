@@ -17,7 +17,7 @@ const FALLBACK = '工作台'
  */
 const RULES: Array<[RegExp, string]> = [
   [/^\/$/, '工作台'],
-  [/^\/agent(\/|$)/, '灵思'],
+  [/^\/agent(\/|$)/, 'concerto'],
   [/^\/knowledge(\/|$)/, '知识库'],
 
   [/^\/activities\/[^/]+\/edit(\/|$)/, '编辑活动'],

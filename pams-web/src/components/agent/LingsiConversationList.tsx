@@ -28,8 +28,8 @@ export default function LingsiConversationList({list, loading, currentId, curren
   const filtered = list.filter(c => (c.title || '未命名任务').toLowerCase().includes(query.trim().toLowerCase())
     && (filter === 'all' || (filter === 'pending' ? getStatus(c) === 'PENDING_CONFIRM' : isCompleted(getStatus(c)))))
   const navigate = (id?: number) => { if (busy) return; id == null ? onNew() : onSelect(id); onNavigate?.() }
-  return <aside className="lingsi-sider" aria-label="灵思任务列表">
-    <div className="lingsi-sider-head"><span className="lingsi-sider-title"><span className="lingsi-v6-ai"><Sparkles size={18}/></span>灵思</span><small>Agent</small></div>
+  return <aside className="lingsi-sider" aria-label="concerto任务列表">
+    <div className="lingsi-sider-head"><span className="lingsi-sider-title"><span className="lingsi-v6-ai"><Sparkles size={18}/></span>concerto</span><small>Agent</small></div>
     <button type="button" className="lingsi-new-task" disabled={busy} onClick={() => navigate()}><Plus size={15}/>新建任务</button>
     <Input className="lingsi-sider-search" aria-label="搜索任务" placeholder="搜索任务" prefix={<Search size={14}/>} value={query} allowClear onChange={e => setQuery(e.target.value)}/>
     <div className="lingsi-task-filters" role="group" aria-label="任务状态筛选">

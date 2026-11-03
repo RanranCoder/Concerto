@@ -24,6 +24,8 @@ import java.util.Map;
  */
 @Component
 public class SendNotificationTool implements WriteAgentTool {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.service.AgentNotificationActionService actions;
 
     private static final String ARGS_MARK = "__args__:";
 
@@ -47,7 +49,10 @@ public class SendNotificationTool implements WriteAgentTool {
 
     @Override
     public String description() {
-        return "向指定的用户、角色或部门定向发送一条站内通知。"
+        return "先用resolveNotificationAudience获得受众快照audienceRef，再准备站内通知，确认后才提交Outbox。标题最多100字、正文最多500字，不静默截断。"
+                + "只提供旧的单一用户/角色/部门条件时会生成快照；多个条件须明确combination。受众集合变化须重新预览，不自动扩大发送范围。"
+                + "提交、入箱、信号与阅读不同，提交后用getNotificationDeliveryStatus核对。不支持FORM或未经校验的业务实体链接。"
+                + "向指定的用户、角色或部门定向发送一条站内通知。"
                 + "适用于'提醒一下 XX 部门的同学''通知负责人尽快处理'等指令。"
                 + "通知确认后记录并异步投递，无法撤回。";
     }
@@ -57,6 +62,8 @@ public class SendNotificationTool implements WriteAgentTool {
         return ToolArgs.schema("object", ToolArgs.map(
                 "title", ToolArgs.prop("string", "通知标题，必填"),
                 "content", ToolArgs.prop("string", "通知正文，必填"),
+                "audienceRef", ToolArgs.prop("string", "受众解析返回的15分钟快照句柄，优先使用"),
+                "combination", Map.of("type","string","enum",List.of("UNION","INTERSECTION")),
                 "recipientUserId", ToolArgs.prop("integer", "接收人用户 ID，可省略"),
                 "recipientRole", ToolArgs.prop("string", "接收角色码，如 STAFF / DIRECTOR，可省略"),
                 "recipientDeptId", ToolArgs.prop("integer", "接收部门 ID，可省略"),
@@ -73,6 +80,9 @@ public class SendNotificationTool implements WriteAgentTool {
 
     @Override
     public ToolResult execute(ToolContext ctx, Map<String, Object> args) {
+        if(actions!=null) {
+            try{return actions.prepare(ctx,args);}catch(com.pams.common.BizException e){return ToolResult.failed(e.getMessage());}
+        }
         String title = ToolArgs.str(args, "title");
         String content = ToolArgs.str(args, "content");
         if (title == null || title.isBlank()) return ToolResult.failed("通知标题不能为空。");
@@ -121,6 +131,10 @@ public class SendNotificationTool implements WriteAgentTool {
     public CommitResult commit(ToolContext ctx, AgentActionPlan plan) {
         Map<String, Object> exec = readArgs(plan);
         if (exec == null) return CommitResult.failed("无法还原通知内容，请重新发起。");
+        if(exec.containsKey("operationId") && actions!=null) {
+            try{return actions.commit(ctx,plan);}catch(com.pams.common.BizException e){return CommitResult.failed(e.getMessage());}
+            catch(Exception e){return new CommitResult("RESULT_UNKNOWN",0,0,"通知提交结果待核对，不要重新发送。",Map.of(),List.of());}
+        }
 
         try {
             var saved = notificationService.createAndSave(

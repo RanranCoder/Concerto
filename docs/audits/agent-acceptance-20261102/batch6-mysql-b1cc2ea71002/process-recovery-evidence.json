@@ -1,0 +1,27 @@
+{
+  "status" : "PASS",
+  "cases" : [ {
+    "taskId" : 35,
+    "kind" : "PENDING",
+    "articleId" : 16,
+    "status" : "SUCCESS",
+    "revision" : 1
+  }, {
+    "taskId" : 36,
+    "kind" : "COMMITTED",
+    "articleId" : 17,
+    "status" : "SUCCESS",
+    "revision" : 1
+  }, {
+    "taskId" : 37,
+    "kind" : "ROLLED_BACK",
+    "articleId" : 18,
+    "status" : "RUNNING",
+    "revision" : 0
+  }, {
+    "kind" : "CONTROLLED_QUEUED",
+    "status" : "SUCCESS",
+    "runId" : 6
+  } ],
+  "actualJvmKilled" : true
+}

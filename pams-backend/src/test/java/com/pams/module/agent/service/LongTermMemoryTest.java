@@ -101,7 +101,7 @@ class LongTermMemoryTest {
     }
     @Test void commandsBypassTheModelAndOrdinaryNewChatGetsThePreference() {
         var saved=orchestrator.chatSync("记住：风格=先给结论",null,ctx(),List.of(),false);
-        assertThat(saved.get("reply")).asString().contains("已保存");verifyNoInteractions(caller);
+        assertThat(saved.get("reply")).asString().contains("已保存");verifyNoModelCalls();
         when(caller.callLlm(anyList(),anyList(),any(),any(),anyInt())).thenAnswer(i->{
             List<LlmProvider.ChatMessage> input=i.getArgument(0);
             assertThat(input).anyMatch(m->m.content()!=null&&m.content().contains("先给结论"));
@@ -125,7 +125,7 @@ class LongTermMemoryTest {
         assertThat(memory.command(assistant,ctx())).isNull();assertThat(memory.list(ctx())).isEmpty();
         var result=orchestrator.chatSync("记住：密码=secret",null,ctx(),List.of(),false);
         assertThat(result.get("executionState")).isEqualTo("FAILED");assertThat(result.get("reply")).asString().contains("未更改");
-        verifyNoInteractions(caller);
+        verifyNoModelCalls();
     }
     @Test void quotaAndInvalidExpiryCannotBeBypassed() {
         assertThatThrownBy(()->memory.save(ctx(),"USER","格式","文本",true,null,null,0)).isInstanceOf(BizException.class);
@@ -150,6 +150,13 @@ class LongTermMemoryTest {
         memory.save(ctx(),"USER","风格","先给结论",true,null,null,90);
         when(knowledge.retrieve(anyString(),any())).thenReturn(new com.pams.module.knowledge.service.KnowledgeQuery.RetrievalOutcome(List.of(),0,0,0,0,"NO_HITS"));
         var kb=new ToolContext(ctx().getLoginUser(),List.of(),null,null,"kb");
-        orchestrator.chatSync("没有依据的问题",null,kb,List.of(),false);verifyNoInteractions(caller);
+        orchestrator.chatSync("没有依据的问题",null,kb,List.of(),false);verifyNoModelCalls();
+    }
+    private void verifyNoModelCalls(){
+        // Task lifecycle bookkeeping is expected even when a command bypasses model inference.
+        verify(caller,never()).callLlm(anyList(),anyList(),any(),any(),anyInt());
+        verify(caller,never()).callIsolated(anyList(),anyList(),any());
+        verify(caller,never()).callSummary(anyList(),any());
+        verify(caller,never()).callPlanning(anyList(),any());
     }
 }

@@ -112,7 +112,7 @@ export default function LingsiProcessZone({ items, active, resultStarted = false
 
       <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>
         <div className="pams-collapse-inner">
-        <div className="lingsi-process-body" id={bodyId} role="group" aria-label="思维链与执行步骤">
+        <div className="lingsi-process-body" id={bodyId} role="group" aria-label="推理摘要与执行步骤">
           {teamPanel && <div className="lingsi-tl-hint">专家与审查明细见上方面板</div>}
           {groups.map((group, index) => (
             <div className="lingsi-tl-group" key={group.key}>

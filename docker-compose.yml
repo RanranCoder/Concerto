@@ -42,10 +42,18 @@ services:
       # 灵思（Agent）DeepSeek 密钥：可选，经 .env/环境变量注入，仓库内不存任何真实密钥。
       # 不设置（默认空）时后端自动降级为 stub 规则模式，应用照常启动（见 LlmConfig）。
       PAMS_AGENT_API_KEY: ${PAMS_AGENT_API_KEY:-}
+      PAMS_AGENT_PROTOCOL: ${PAMS_AGENT_PROTOCOL:-openai_chat_completions}
+      PAMS_AGENT_BASE_URL: ${PAMS_AGENT_BASE_URL:-https://api.openai.com/v1}
+      PAMS_AGENT_MODEL: ${PAMS_AGENT_MODEL:-}
+      PAMS_AGENT_SUMMARY_ENABLED: ${PAMS_AGENT_SUMMARY_ENABLED:-false}
+      PAMS_AI_ENCRYPTION_KEY: ${PAMS_AI_ENCRYPTION_KEY:-}
+      PAMS_AI_KEY_FILE: /app/data/secrets/ai-provider.key
+      PAMS_AI_INTERNAL_HOSTS: ${PAMS_AI_INTERNAL_HOSTS:-}
       PAMS_UPLOAD_DIR: /app/uploads
       TZ: Asia/Shanghai
     volumes:
       - pams-uploads:/app/uploads
+      - pams-ai-secrets:/app/data/secrets
     networks:
       - pams-net
 
@@ -67,6 +75,7 @@ services:
 volumes:
   pams-mysql-data:
   pams-uploads:
+  pams-ai-secrets:
 
 networks:
   pams-net:

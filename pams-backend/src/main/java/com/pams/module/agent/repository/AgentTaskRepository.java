@@ -24,6 +24,17 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
 
     Optional<AgentTask> findByIdAndUserId(Long id, Long userId);
 
+    /** Receipt reconciliation may settle only the exact state observed, never overwrite a newer result. */
+    @Modifying(clearAutomatically=true,flushAutomatically=true)
+    @Transactional
+    @Query("update AgentTask t set t.status='SUCCESS', t.resultJson=:result, t.finishedAt=:ts, t.rowVersion=t.rowVersion+1 where t.id=:id and t.userId=:userId and t.status=:from and t.rowVersion=:version")
+    int reconcileSuccess(@Param("id")Long id,@Param("userId")Long userId,@Param("from")String from,@Param("version")long version,
+                         @Param("result")String result,@Param("ts")LocalDateTime ts);
+    @Modifying(clearAutomatically=true,flushAutomatically=true)
+    @Transactional
+    @Query("update AgentTask t set t.status='RESULT_UNKNOWN',t.rowVersion=t.rowVersion+1 where t.id=:id and t.userId=:userId and t.status='RUNNING' and t.rowVersion=:version")
+    int markInterruptedUnknown(@Param("id")Long id,@Param("userId")Long userId,@Param("version")long version);
+
     Page<AgentTask> findByUserIdOrderByIdDesc(Long userId, Pageable pageable);
 
     List<AgentTask> findByUserIdAndStatusOrderByIdDesc(Long userId, String status);
