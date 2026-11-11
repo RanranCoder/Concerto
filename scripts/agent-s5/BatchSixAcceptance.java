@@ -27,7 +27,9 @@ class BatchSixAcceptance {
                     }
                     System.out.println("Created disposable MySQL schema: "+database);
                     System.out.println("Evidence directory: "+output);
-                    var command=new ProcessBuilder("C:/dev/Git/bin/bash.exe","-c","mvn -q -f pams-backend/pom.xml -Dtest=AgentEditorialIntegrationTest,ControlledExecutionIntegrationTest,BatchSixMySqlAcceptanceTest,BatchSixProcessRecoveryTest,AgentTaskPlanIntegrationTest,AgentNotificationIntegrationTest -Dpams.batch6.output=../docs/audits/agent-acceptance-20261102/batch6-mysql-"+suffix+" -Dsurefire.runOrder=alphabetical test");
+                    boolean browser=List.of(args).contains("--browser");
+                    String suites=browser?"BatchSixBrowserIntegrationTest":"AgentEditorialIntegrationTest,ControlledExecutionIntegrationTest,BatchSixMySqlAcceptanceTest,BatchSixProcessRecoveryTest,AgentTaskPlanIntegrationTest,AgentNotificationIntegrationTest,ConversationRecallIntegrationTest";
+                    var command=new ProcessBuilder("C:/dev/Git/bin/bash.exe","-c","mvn -q -f pams-backend/pom.xml -Dtest="+suites+" -Dpams.batch6.output=../docs/audits/agent-acceptance-20261102/batch6-mysql-"+suffix+" -Dsurefire.runOrder=alphabetical test");
                     command.directory(repo.toFile());var env=command.environment();
                     env.put("PAMS_S5_BATCH6","true");env.put("PAMS_S5_BATCH5","true");env.put("PAMS_S5_DB_URL",url);env.put("PAMS_S5_DB_USER",user);env.put("PAMS_S5_DB_PASSWORD",password);
                     env.put("PAMS_TEST_AGENT_PROVIDER","stub");env.put("PAMS_RUN_CONTROLLED_PLANNING_REAL","false");

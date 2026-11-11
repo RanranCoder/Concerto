@@ -17,7 +17,9 @@ for (const file of fs.readdirSync(reportRoot)) {
 const totals = reports.reduce((sum, r) => { for (const key of Object.keys(sum)) sum[key] += r[key]; return sum; }, { tests: 0, failures: 0, errors: 0, skipped: 0 });
 totals.passed = totals.tests - totals.failures - totals.errors - totals.skipped;
 const isolation = JSON.parse(fs.readFileSync(path.join(directory, 'batch6-isolation.json'), 'utf8'));
-const result = { generatedAt: new Date().toISOString(), totals, expectedSuites: 6, reports, isolation, passed: isolation.exitCode === 0 && reports.length === 6 && totals.tests > 0 && totals.failures === 0 && totals.errors === 0 && totals.skipped === 0 };
+const expectedNames = ['AgentEditorialIntegrationTest', 'ControlledExecutionIntegrationTest', 'BatchSixMySqlAcceptanceTest', 'BatchSixProcessRecoveryTest', 'AgentTaskPlanIntegrationTest', 'AgentNotificationIntegrationTest', 'ConversationRecallIntegrationTest'];
+const suitesMatch = expectedNames.every(name => reports.some(r => r.report.endsWith('.' + name + '.xml')));
+const result = { generatedAt: new Date().toISOString(), totals, expectedSuites: expectedNames.length, reports, isolation, passed: isolation.exitCode === 0 && suitesMatch && reports.length === expectedNames.length && totals.tests > 0 && totals.failures === 0 && totals.errors === 0 && totals.skipped === 0 };
 fs.writeFileSync(path.join(directory, 'test-summary.json'), JSON.stringify(result, null, 2) + '\n');
 console.log(JSON.stringify({ ...totals, passedAcceptance: result.passed }));
 if (!result.passed) process.exitCode = 1;
