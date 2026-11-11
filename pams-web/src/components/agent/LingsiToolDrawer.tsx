@@ -1,7 +1,8 @@
 import { Drawer, Empty, Spin, Tag, Alert } from 'antd'
 import { useEffect, useState } from 'react'
-import { listAgentTools } from '@/api/agent'
-import type { AgentToolVO } from '@/api/agent'
+import { listAgentTools, getAgentDiagnostics } from '@/api/agent'
+import type { AgentToolVO, AgentDiagnostics } from '@/api/agent'
+import { useAuthStore } from '@/stores/auth'
 import { kbSources } from '@/api/knowledge'
 import type { KnowledgeSourceVO } from '@/api/knowledge'
 import { useAgentStore } from '@/stores/agent'
@@ -27,11 +28,20 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
   const [list, setList] = useState<AgentToolVO[]>([])
   const [sources, setSources] = useState<KnowledgeSourceVO[]>([])
   const [loading, setLoading] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<AgentDiagnostics | null>(null)
+  const canAudit = useAuthStore(s => s.user?.permissions?.includes('org:audit:view') ?? false)
   // 只读档位下后端会把写类工具整体摘掉，面板必须跟着拉 ——
   // 否则会出现"面板里写着能做，实际调不动"的错位
   const mode = useAgentStore((s) => s.mode)
 
   const kb = mode === 'kb'
+
+  useEffect(() => {
+    let current = true
+    setDiagnostics(null)
+    if (open && canAudit && !kb) getAgentDiagnostics(mode).then(value => { if (current) setDiagnostics(value) }).catch(() => {})
+    return () => { current = false }
+  }, [open, canAudit, kb, mode])
 
   useEffect(() => {
     if (!open) return
@@ -150,6 +160,18 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
             <>
               {renderGroup('查询类（只读，不改变数据）', reads)}
               {renderGroup('操作类（会改动数据，先生成清单待你确认）', writes)}
+              {diagnostics && <details>
+                <summary>专家能力与配置诊断</summary>
+                <p>按当前账号权限和模式显示；能力可见不代表业务已执行。</p>
+                {diagnostics.experts.map(expert => <div key={expert.agent} style={{ marginBottom: 16 }}>
+                  <strong>{expert.agent} · {expert.effectiveTools.length} 项</strong>
+                  <ul>{expert.effectiveTools.map(tool => <li key={tool.name}>
+                    {tool.name} · {tool.operationKind === 'READ' ? '只读' : '需确认'}
+                    {tool.idempotencyPolicy === 'PERSISTED_OPERATION_RECEIPT_NO_UNKNOWN_REPLAY' ? ' · 支持持久回执核对' : ''}
+                  </li>)}</ul>
+                  <small>角色配置：{diagnostics.roles.find(role => role.agent === expert.agent)?.roleStatus}</small>
+                </div>)}
+              </details>}
             </>
           )}
         </>

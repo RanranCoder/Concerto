@@ -181,3 +181,40 @@
 
 .lingsi-artifact-picker{display:flex;gap:8px;align-items:center;padding:8px 16px;font-size:var(--fs-caption);border-bottom:0.5px solid var(--border)}
 .lingsi-artifact-picker select{min-width:0;flex:1;min-height:32px;font:inherit;color:var(--text-primary);background:var(--canvas);border:0.5px solid var(--border);border-radius:var(--r-sm)}
+
+/* Collaboration is a task ledger: identity, responsibility, dependency, then state. */
+.lingsi-run-overview{margin:4px 0 16px;border:0.5px solid var(--border);border-radius:var(--r-md);background:var(--soft);font-size:var(--fs-caption);overflow-wrap:anywhere}
+.lingsi-run-overview>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px 0}
+.lingsi-run-toggle,.lingsi-run-inspect{display:flex;align-items:center;gap:8px;border:0;background:none;color:var(--text-primary);font:inherit;cursor:pointer;min-height:36px;padding:0;text-align:start}
+.lingsi-run-toggle{flex-wrap:wrap}
+.lingsi-run-inspect{color:var(--brand-text);flex-shrink:0}
+.lingsi-run-inspect:hover{text-decoration:underline}
+.lingsi-run-counts{display:flex;flex-wrap:wrap;gap:6px 16px;padding:4px 12px 12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.lingsi-run-counts b{color:var(--text-primary);font-weight:600}
+.lingsi-run-attention,.lingsi-run-state.is-warning{color:var(--warn)}
+.lingsi-run-nodes{list-style:none;padding:0;margin:0 12px 4px}
+.lingsi-run-nodes>li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:0.5px solid var(--border)}
+.lingsi-run-task{min-width:0;line-height:1.6}
+.lingsi-run-task strong{font-weight:500;color:var(--text-primary)}
+.lingsi-run-task small{display:block;font-size:12px;color:var(--text-secondary);margin-top:3px}
+.lingsi-run-task .lingsi-run-dependency{margin-top:5px}
+.lingsi-run-state{font-size:12px;line-height:1.6;white-space:nowrap;color:var(--text-secondary)}
+.lingsi-run-marker{font-size:14px;line-height:1.6;color:var(--text-secondary)}
+.lingsi-run-state.is-success,.lingsi-run-marker.is-success{color:var(--ok)}
+.lingsi-run-state.is-danger,.lingsi-run-marker.is-danger{color:var(--danger)}
+.lingsi-run-state.is-processing,.lingsi-run-marker.is-processing{color:var(--brand-text)}
+.lingsi-run-empty{margin:0;padding:0 12px 12px;color:var(--text-secondary)}
+.lingsi-result-label{font-size:12px;font-weight:500;color:var(--text-secondary);margin:20px 0 10px}
+.lingsi-process-label{margin-right:12px;font-weight:500;color:var(--text-primary)}
+.lingsi-work-target:focus-visible,.lingsi-run-overview button:focus-visible,.lingsi-team-head:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.lingsi-team-head{width:100%;border:0;background:none;text-align:start;min-height:40px;font-family:inherit}
+.lingsi-team-agent{min-height:36px;align-items:start;padding-block:5px}
+.lingsi-team-agent .lingsi-run-state{margin-left:auto}
+.lingsi-team-name{flex:1;min-width:0;overflow-wrap:anywhere}
+.lingsi-team-av{font-size:12px}
+@media(max-width:600px){
+  .lingsi-run-overview>header{flex-wrap:wrap}
+  .lingsi-run-toggle,.lingsi-run-inspect{min-height:44px}
+  .lingsi-run-nodes>li{gap:6px;grid-template-columns:16px minmax(0,1fr) auto}
+  .lingsi-run-counts{gap:6px 12px}
+}

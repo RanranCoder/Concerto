@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import type { TimelineItem } from '@/stores/agent'
 import { agentColorOf, agentShortOf } from '@/styles/categoryColors'
 import { formatDuration, hasTeamPanel } from '@/utils/thinking'
 import { Caret, Sparkles } from './LingsiIcons'
+import { runStatusLabels, statusTone } from './LingsiRunOverview'
 
 interface Props {
   items: TimelineItem[]
@@ -22,6 +23,7 @@ interface Props {
  */
 export default function LingsiTeamPanel({ items, active }: Props) {
   const [manual, setManual] = useState<boolean | null>(null)
+  const bodyId = useId()
 
   const { agents, reason, reviews } = useMemo(() => {
     const seen = new Map<string, TimelineItem>()
@@ -49,45 +51,42 @@ export default function LingsiTeamPanel({ items, active }: Props) {
   if (!hasTeamPanel(items)) return null
 
   const waiting = agents.some(a => a.status?.startsWith('WAITING_'))
-  const open = manual ?? Boolean(active || waiting)
+  const open = manual ?? Boolean(active || waiting || agents.some(a => ['FAILED', 'PARTIAL'].includes(a.status ?? '')))
   const done = agents.filter((a) => a.completed && a.status === 'SUCCESS').length
   const failed = agents.filter((a) => a.status === 'FAILED').length
   const lastReview = reviews[reviews.length - 1]
 
   const summary = (() => {
-    const parts: string[] = [`${agents.length} 项执行记录`]
+    const parts: string[] = ['协作进展', `${new Set(agents.map(a => a.agent)).size} 位专家`, `${agents.length} 项执行记录`]
     if (waiting) parts.push('需要你处理')
     if (active) parts.push(`已完成 ${done}/${agents.length}`)
-    else if (failed) parts.push(`${failed} 位失败`)
+    else if (failed) parts.push(`${failed} 项失败`)
     if (lastReview) parts.push(lastReview.verdict === 'PASS' ? '基础检查已完成' : '审查要求修订')
     return parts.join(' / ')
   })()
 
   return (
     <div className="lingsi-team">
-      <span
+      <button
+        type="button"
         className={`lingsi-team-head${active ? ' lingsi-team-head-live' : ''}`}
         onClick={() => setManual(!open)}
-        role="button"
-        tabIndex={0}
         aria-expanded={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setManual(!open) }
-        }}
+        aria-controls={bodyId}
       >
         <Sparkles size={13} />
         <Caret size={13} open={open} />
         <span>{summary}</span>
-      </span>
+      </button>
 
       <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>
         <div className="pams-collapse-inner">
-        <div className="lingsi-team-body">
-          {reason && <div className="lingsi-team-reason">判定为协作：{reason}</div>}
+        <div className="lingsi-team-body" id={bodyId}>
+          {reason && <div className="lingsi-team-reason">{reason}</div>}
           <div className="lingsi-team-list">
             {agents.map((a) => {
-              const st = !a.completed || a.status?.startsWith('WAITING_') ? 'run' : a.status === 'SUCCESS' ? 'ok' : 'warn'
-              const text = !a.completed ? '执行中' : ({ SUCCESS:'已完成', FAILED:'失败', WAITING_INPUT:'待补充', WAITING_CONFIRM:'待确认', PARTIAL:'未完成', CANCELLED:'已停止' } as Record<string,string>)[a.status ?? ''] ?? '待核对'
+              const status = a.status || (a.completed ? 'UNKNOWN' : active ? 'RUNNING' : 'UNKNOWN')
+              const text = runStatusLabels[status] ?? '待核对'
               return (
                 <div className="lingsi-team-agent" key={a.key}>
                   <span className="lingsi-team-av" style={{ background: agentColorOf(a.agent ?? '') }}>
@@ -97,7 +96,7 @@ export default function LingsiTeamPanel({ items, active }: Props) {
                   {typeof a.durationMs === 'number' && a.durationMs > 0 && (
                     <span className="lingsi-team-dur">{formatDuration(a.durationMs)}</span>
                   )}
-                  <span className={`tone-tag tone-${st === 'ok' ? 'success' : st === 'warn' ? 'warning' : 'processing'}`}>
+                  <span className={`lingsi-run-state is-${statusTone(status)}`}>
                     {text}
                   </span>
                 </div>

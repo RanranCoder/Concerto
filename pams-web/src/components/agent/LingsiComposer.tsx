@@ -7,6 +7,7 @@ import { ArrowUp, Close, Plan, Plus, Rules, Sparkles, Stop, Toolbox } from './Li
 import GlassSelect from '@/components/glass/GlassSelect'
 import type { GlassSelectOption } from '@/components/glass/GlassSelect'
 import type { AgentModelStatus } from '@/api/agentProviders'
+import { createRequestId } from '@/utils/requestId'
 
 interface Props {
   modelStatus?: AgentModelStatus | null
@@ -38,6 +39,7 @@ interface Props {
    */
   seed?: { text: string; nonce: number } | null
   onSend: (text: string) => void
+  onInstruct?: (text: string, inputId: string) => Promise<unknown>
   onStop: () => void
   onOpenTools: () => void
 }
@@ -84,10 +86,14 @@ export default function LingsiComposer({
   onRemoveRef,
   seed,
   onSend,
+  onInstruct,
   onStop,
   onOpenTools,
 }: Props) {
   const [value, setValue] = useState('')
+  const [instructionPending, setInstructionPending] = useState(false)
+  const [instructionNotice, setInstructionNotice] = useState('')
+  const instruction = useRef<{ text: string; id: string } | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
 
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -123,9 +129,27 @@ export default function LingsiComposer({
   const readonly = mode === 'readonly'
   const kb = mode === 'kb'
 
-  const submit = () => {
+  const submit = async () => {
     const text = value.trim()
-    if (!text || busy || disabled) return
+    if (!text || disabled || instructionPending) return
+    if (busy) {
+      if (!onInstruct) return
+      const inputId = instruction.current?.text === text ? instruction.current.id : createRequestId()
+      instruction.current = { text, id: inputId }
+      setInstructionPending(true)
+      try {
+        await onInstruct(text, inputId)
+        instruction.current = null
+        setValue(current => current.trim() === text ? '' : current)
+        setInstructionNotice('已收到补充指令，将在下一执行边界处理。')
+      } catch {
+        setInstructionNotice('暂未确认收到指令。输入已保留，可重试或在任务结束后发送。')
+      } finally {
+        setInstructionPending(false)
+      }
+      return
+    }
+    setInstructionNotice('')
     setValue('')
     onSend(text)
   }
@@ -297,6 +321,12 @@ export default function LingsiComposer({
               </label>
             </div>
 
+            {busy && onInstruct && value.trim() && (
+              <button type="button" className="lingsi-send" aria-label="发送补充指令"
+                disabled={disabled || instructionPending} onClick={() => void submit()}>
+                <ArrowUp size={19} />
+              </button>
+            )}
             {busy ? (
               <Tooltip title={canStop ? '停止本次回答' : '正在停止，等待执行状态确认'}>
                 <button type="button" className="lingsi-send lingsi-send-stop" aria-label="停止任务" disabled={!canStop} onClick={onStop}>
@@ -319,6 +349,7 @@ export default function LingsiComposer({
           </div>
         </div>
 
+        {instructionNotice && <div className="lingsi-composer-hint" role="status">{instructionNotice}</div>}
         <div className="lingsi-composer-hint">
           <div className="lingsi-composer-meta">
             {modelNode}

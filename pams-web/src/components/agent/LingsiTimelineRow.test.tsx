@@ -131,7 +131,7 @@ describe('推理展开去重', () => {
     expect(rows[1].querySelector('.pams-stream-char')).not.toBeNull()
     view.rerender(<LingsiProcessZone items={[current,{...tool,completed:true},next]} active resultStarted />)
     expect(view.container.querySelector('.pams-stream-char, .pams-stream-pending')).toBeNull()
-    expect(view.getByRole('button', {name:'正在生成结果…'})).toBeTruthy()
+    expect(view.getByRole('button', {name:/执行过程.*正在生成结果…/})).toBeTruthy()
     expect(view.container.querySelector('.lingsi-tl-think .lingsi-dots')).toBeNull()
   })
 

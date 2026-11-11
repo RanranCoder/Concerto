@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { AgentActionPlan, TaskInputResult } from '@/api/agent'
 import type { OutcomeMessage, TimelineItem } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
@@ -5,7 +6,6 @@ import { citationSnippet } from '@/utils/citationSnippet'
 import LingsiAvatar from './LingsiAvatar'
 import LingsiMarkdown from './LingsiMarkdown'
 import LingsiProcessZone from './LingsiProcessZone'
-import LingsiTeamPanel from './LingsiTeamPanel'
 import LingsiMetaBar from './LingsiMetaBar'
 import LingsiRefs from './LingsiRefs'
 import LingsiActionCard from './LingsiActionCard'
@@ -14,6 +14,7 @@ import LingsiArtifactCard from './LingsiArtifactCard'
 import LingsiSources from './LingsiSources'
 import LingsiMessageActions from './LingsiMessageActions'
 import LingsiWorkItems from './LingsiWorkItems'
+import LingsiRunOverview from './LingsiRunOverview'
 
 interface Props {
   msg: OutcomeMessage
@@ -57,6 +58,15 @@ export default function LingsiMessageBody({
   onSubmitForm,
 }: Props) {
   const hasPlan = Boolean(msg.plan)
+  const workItemsRef = useRef<HTMLDivElement>(null)
+  const inspectWorkItems = () => {
+    const target = workItemsRef.current
+    if (!target) return
+    const details = target.querySelector('details')
+    if (details) details.open = true
+    target.scrollIntoView({ block: 'nearest', behavior: 'auto' })
+    target.focus({ preventScroll: true })
+  }
   const openText = useAgentPanel((s) => s.openText)
   const citations = msg.citations ?? []
 
@@ -90,13 +100,14 @@ export default function LingsiMessageBody({
           位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，
           过程区是「具体每一步做了什么」的明细层，先汇总后明细。
         */}
-        {!msg.run && <LingsiTeamPanel items={timeline} active={active} />}
+        <LingsiRunOverview run={msg.run} items={timeline} active={active} onInspect={inspectWorkItems} />
 
         {/* ---------- 过程区（§7.1 上半段） ---------- */}
         {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active}
-          resultStarted={!hasLiveReasoning && Boolean(msg.reply || hasPlan || msg.form || msg.notice || artifacts.length)} />}
+          teamOverview={Boolean(msg.run)} resultStarted={!hasLiveReasoning && Boolean(msg.reply || hasPlan || msg.form || msg.notice || artifacts.length)} />}
 
         {/* ---------- 结果区（§7.1 下半段）：文档流，无容器 ---------- */}
+        {msg.reply && (msg.run || timeline.length > 0) && <div className="lingsi-result-label">{msg.streaming ? '正在生成回复' : '回复内容'}</div>}
         {msg.reply ? (
           <LingsiMarkdown
             text={msg.reply}
@@ -120,7 +131,7 @@ export default function LingsiMessageBody({
         */}
         {msg.citations && msg.citations.length > 0 && <LingsiSources citations={msg.citations} />}
 
-        {msg.run && <LingsiWorkItems run={msg.run} readonly={readonly} busy={planBusy || formBusy} onConfirm={onConfirmPlan} onCancel={onCancelPlan} onSubmit={onSubmitForm} />}
+        {msg.run && <div ref={workItemsRef} tabIndex={-1} className="lingsi-work-target" aria-label="任务详情与待处理事项"><LingsiWorkItems run={msg.run} readonly={readonly} busy={planBusy || formBusy} onConfirm={onConfirmPlan} onCancel={onCancelPlan} onSubmit={onSubmitForm} /></div>}
         {!msg.run && hasPlan && msg.plan && (
           <LingsiActionCard
             plan={msg.plan}

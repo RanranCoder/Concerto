@@ -752,7 +752,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       for (const m of res?.records ?? []) {
         if (m.role === 'USER') {
           // 用户提问按出现顺序与 assistant 回复一一对齐（每轮 user → assistant）
-          users.push(m.content)
+          users.push(m.content + (m.instructions ?? []).map((instruction, index) =>
+            `\n\n补充指令${index >= (m.instructionsConsumed ?? 0) ? '（未处理）' : ''}：${instruction.text}`).join(''))
           // 附加上下文随 refs_json 落库（UI v2 `+`），历史里照样能看出当时选了哪个实体
           userRefs.push(
             (m.references ?? []).map((r) => ({ type: r.type, id: r.id ?? '', label: r.label })),
@@ -791,7 +792,19 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           notice: m.taskResult ? noticeFromStatus(m.taskResult.status, m.taskResult) : undefined,
         })
       }
-      set({ outcomes, userTexts: users, userRefs })
+      const tail = res?.records?.at(-1)
+      const active = tail?.role === 'USER' && tail.activeRequestId && tail.streamId && users.length === outcomes.length + 1
+        ? { requestId: tail.activeRequestId, streamId: tail.streamId } : null
+      if (active) {
+        receivedSeqs.clear()
+        streamCursor = 0
+        stoppedStreams.delete(active.streamId)
+        outcomes.push({ ...emptyOutcome(), ...active, streaming: true })
+      }
+      set({ outcomes, userTexts: users, userRefs, ...(active ? {
+        activeRequestId: active.requestId, activeStreamId: active.streamId, thinking: true,
+      } : {}) })
+      if (active) void get().reconcileConnection()
       for (const o of outcomes) if (o.run?.status === 'RUNNING') void get().refreshRun(o.run.id)
     } catch {
       // http 拦截器已提示
@@ -880,16 +893,18 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         const list = [...s.outcomes]
         const placeholderIdx = list.length - 1
         if (placeholderIdx >= 0 && list[placeholderIdx].status !== 'stopped') {
+          const liveRun = list[placeholderIdx].run
+          const resolvedRun = liveRun && (!res.run || (liveRun.stateVersion ?? 0) > (res.run.stateVersion ?? 0)) ? liveRun : res.run
           list[placeholderIdx] = {
             requestId: res.requestId ?? requestId,
             messageId: res.messageId,
             streamId: res.streamId,
             reply: res.reply,
-            executionState: res.executionState,
-            run: res.run,
+            executionState: resolvedRun?.status ?? res.executionState,
+            run: resolvedRun,
             toolCalls: res.toolCalls ?? [],
-            plan: res.plan ?? null,
-            form: res.form ?? null,
+            plan: resolvedRun ? null : res.plan ?? null,
+            form: resolvedRun ? null : res.form ?? null,
             references: res.references ?? [],
             // V27：REST 返回是权威值（WS 的过程事件里也可能带，但以这里为准）
             citations: res.citations ?? [],
@@ -913,10 +928,16 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
             streaming: false,
           }
         }
+        // Natural-language input continuation returns the same durable task.
+        // Retire its old form instead of leaving two competing input surfaces.
+        const resumedTaskId = res.form?.taskId ?? res.plan?.planId
+        if (resumedTaskId != null) for (let i = 0; i < placeholderIdx; i++) {
+          if (list[i].form?.taskId === resumedTaskId) list[i] = { ...list[i], form: null }
+        }
         // 多轮「接续」（用户反馈 item 3）：本轮出了新清单 → 会话里旧的确认卡原地退役。
         // 后端创建新清单时已把旧任务置 CANCELLED；这里让旧卡立刻显式变成"已被取代"，
         // 避免"首轮确认按钮还在、但上下文已经走了"的错位感（会话中始终只有一张可确认卡）。
-        if (res.plan && !res.run) {
+        if (res.plan && !list[placeholderIdx]?.run) {
           const newSummary = res.plan.summary
           for (let i = 0; i < list.length - 1; i += 1) {
             const o = list[i]
@@ -940,12 +961,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   stopping: false,
   activeStreamId: null,
           currentConversationId: res.conversationId,
-          pendingPlan: res.plan ?? null,
+          pendingPlan: list[placeholderIdx]?.run ? null : res.plan ?? null,
           pendingTaskCount: res.pendingTaskCount ?? s.pendingTaskCount,
         }
       })      // 新会话首次问答后刷新列表（标题已确定）
       void get().fetchConversations()
-      if (res.run) void get().refreshRun(res.run.id)
+      const boundRun = get().outcomes.find(o => o.requestId === (res.requestId ?? requestId))?.run
+      if (boundRun) void get().refreshRun(boundRun.id)
     } catch {
       if (version !== requestVersion) return
       set((s) => {
@@ -1191,7 +1213,17 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
 
   applyTaskDone: (payload) => {
     if (typeof payload['runId'] === 'number') {
-      void get().refreshRun(payload['runId'])
+      const state = get()
+      if (state.outcomes.some(o => o.run?.id === payload.runId)) {
+        void state.refreshRun(payload['runId'])
+      } else if (state.activeRequestId && state.outcomes.at(-1)?.streaming &&
+        (payload.requestId === state.activeRequestId ||
+          (typeof payload.streamId === 'string' && payload.streamId === state.activeStreamId)) &&
+        (state.currentConversationId == null || payload.conversationId == null || Number(payload.conversationId) === state.currentConversationId)) {
+        // First run update arrives before /chat returns. Recover the run via
+        // our request identity instead of dropping an as-yet-unbound run ID.
+        void state.reconcileConnection()
+      }
       void get().fetchConversations()
       return
     }

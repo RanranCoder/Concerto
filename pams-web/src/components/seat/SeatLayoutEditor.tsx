@@ -24,7 +24,7 @@ import {
 import type { ColorLabel, SeatCell, SeatLayoutVO } from '@/api/seatLayout'
 import {
   SEAT_AISLE_HATCH,
-  SEAT_DEFAULT_COLOR,
+  SEAT_UNKNOWN_COLOR,
   SEAT_ZONE_COLORS,
 } from '@/styles/categoryColors'
 
@@ -77,7 +77,8 @@ export default function SeatLayoutEditor({
     PRESET_COLORS[0].label,
   )
   const [colorManageOpen, setColorManageOpen] = useState(false)
-  const [newColor, setNewColor] = useState(SEAT_DEFAULT_COLOR)
+  const [savingLayout, setSavingLayout] = useState(false)
+  const [newColor, setNewColor] = useState(SEAT_UNKNOWN_COLOR)
   const [newLabel, setNewLabel] = useState('')
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [dragStart, setDragStart] = useState<string | null>(null)
@@ -345,10 +346,34 @@ export default function SeatLayoutEditor({
       message.warning('该颜色已存在')
       return
     }
-    const next = [...colorLabels, { color, label: label.trim() }]
-    setColorLabels(next)
-    setSelectedColor(color)
-    setSelectedLabel(label.trim())
+    const entry = { color, label: label.trim() }
+    setColorLabels([...colorLabels, entry])
+    selectColor(entry)
+    setNewLabel('')
+  }
+  const updateLabeledSeats = (color: string, replacement?: ColorLabel) => {
+    const update = (previous: Map<string, SeatCell>) => {
+      const next = new Map(previous)
+      for (const [id, cell] of previous) {
+        if (cell.type === 'seat' && cell.color?.toLowerCase() === color.toLowerCase()) {
+          next.set(id, { ...cell, color: replacement?.color, label: replacement?.label })
+        }
+      }
+      return next
+    }
+    setCells(update)
+    // 座位撤销历史沿用当前色板，避免恢复已删除或改色的标签。
+    setHistory((previous) => previous.map((entry) => ({ ...entry, cells: update(entry.cells) })))
+  }
+  const updateColor = (entry: ColorLabel, replacement: ColorLabel) => {
+    if (entry.color === replacement.color && entry.label === replacement.label) return
+    if (colorLabels.some((c) => c !== entry && c.color.toLowerCase() === replacement.color.toLowerCase())) {
+      message.warning('该颜色已存在')
+      return
+    }
+    setColorLabels(colorLabels.map((c) => c === entry ? replacement : c))
+    updateLabeledSeats(entry.color, replacement)
+    if (selectedColor === entry.color) selectColor(replacement)
   }
   const removeColor = (color: string) => {
     if (colorLabels.length <= 1) {
@@ -357,19 +382,14 @@ export default function SeatLayoutEditor({
     }
     const next = colorLabels.filter((c) => c.color !== color)
     setColorLabels(next)
+    updateLabeledSeats(color)
     if (selectedColor === color) selectColor(next[0])
-  }
-  const renameColor = (color: string, label: string) => {
-    if (!label.trim()) return
-    setColorLabels((prev) =>
-      prev.map((c) => (c.color === color ? { ...c, label: label.trim() } : c)),
-    )
-    if (selectedColor === color) setSelectedLabel(label.trim())
   }
 
   // 保存布局
   const saveLayout = async () => {
-    if (readOnly) return
+    if (readOnly || savingLayout) return false
+    setSavingLayout(true)
     try {
       const { createSeatLayout, updateSeatLayout } =
         await import('@/api/seatLayout')
@@ -389,9 +409,13 @@ export default function SeatLayoutEditor({
         await createSeatLayout(payload)
       }
       message.success('座位表已保存')
-      onSaved?.()
+      await onSaved?.()
+      return true
     } catch {
       /* 拦截已提示 */
+      return false
+    } finally {
+      setSavingLayout(false)
     }
   }
 
@@ -430,7 +454,7 @@ export default function SeatLayoutEditor({
           td.className = 'aisle'
           td.title = '过道'
         } else if (cell?.type === 'seat') {
-          td.style.background = cell.color || '#fff'
+          td.style.background = cell.color || SEAT_UNKNOWN_COLOR
           td.textContent = cell.label?.[0] || ''
         }
         tr.appendChild(td)
@@ -671,15 +695,6 @@ export default function SeatLayoutEditor({
                     </div>
                   ))}
                 </div>
-                <Button
-                  size="small"
-                  type="link"
-                  icon={<EditOutlined />}
-                  onClick={() => setColorManageOpen(true)}
-                  style={{ padding: 0, marginTop: 8 }}
-                >
-                  配色管理
-                </Button>
                 <div
                   style={{
                     marginTop: 4,
@@ -726,7 +741,7 @@ export default function SeatLayoutEditor({
 
           {/* 模板 */}
           <Space size={4}>
-            <Button size="small" icon={<SaveOutlined />} onClick={saveLayout}>
+            <Button size="small" icon={<SaveOutlined />} loading={savingLayout} onClick={saveLayout}>
               保存
             </Button>
             <Button size="small" onClick={loadTemplates}>
@@ -886,7 +901,7 @@ export default function SeatLayoutEditor({
                       background: isAisle
                         ? SEAT_AISLE_HATCH
                         : cell?.type === 'seat'
-                          ? cell.color || SEAT_DEFAULT_COLOR
+                          ? cell.color || SEAT_UNKNOWN_COLOR
                           : 'transparent',
                       border: isAisle
                         ? 'none'
@@ -987,6 +1002,11 @@ export default function SeatLayoutEditor({
           />
           过道
         </span>
+        {!readOnly && (
+          <Button size="small" icon={<EditOutlined />} onClick={() => setColorManageOpen(true)}>
+            管理颜色标签
+          </Button>
+        )}
       </div>
 
       {/* 模板弹窗 */}
@@ -1046,35 +1066,61 @@ export default function SeatLayoutEditor({
       {/* 配色管理弹窗 */}
       <FormSurface
         mode="drawer"
-        title="配色管理"
+        title="颜色标签"
+        description="标签与底部图例同步，点击保存后写入座位表。删除标签会清除相关座位的颜色标记，座位仍保留。"
         open={colorManageOpen}
-        onCancel={() => setColorManageOpen(false)}
-        footer={<Button onClick={() => setColorManageOpen(false)}>关闭</Button>}
+        onCancel={() => {
+          if (!savingLayout) setColorManageOpen(false)
+        }}
+        footer={
+          <Space>
+            <Button disabled={savingLayout} onClick={() => setColorManageOpen(false)}>
+              关闭
+            </Button>
+            <Button
+              type="primary"
+              loading={savingLayout}
+              onClick={async () => {
+                if (await saveLayout()) setColorManageOpen(false)
+              }}
+            >
+              保存
+            </Button>
+          </Space>
+        }
       >
-        <Space.Compact style={{ marginBottom: 12, display: 'flex' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
           <ColorPicker
-            size="small"
+            aria-label="选择标签颜色"
+            style={{ width: 38, height: 38 }}
+            disabledAlpha
             value={newColor}
             onChangeComplete={(c) => setNewColor(c.toHexString())}
           />
           <Input
-            size="small"
-            placeholder="标签，如 嘉宾区"
+            aria-label="新标签名称"
+            placeholder="标签名称，如嘉宾区"
             maxLength={20}
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
+            onPressEnter={() => addColor(newColor, newLabel)}
           />
           <Button
-            size="small"
             type="primary"
-            onClick={() => {
-              addColor(newColor, newLabel)
-              setNewLabel('')
-            }}
+            style={{ height: 38 }}
+            disabled={!newLabel.trim()}
+            onClick={() => addColor(newColor, newLabel)}
           >
             新增
           </Button>
-        </Space.Compact>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {colorLabels.map((c) => (
             <div
@@ -1083,29 +1129,28 @@ export default function SeatLayoutEditor({
             >
               <ColorPicker
                 size="small"
+                disabledAlpha
                 value={c.color}
-                onChangeComplete={(nc) => {
-                  const next = colorLabels.map((x) =>
-                    x.color === c.color ? { ...x, color: nc.toHexString() } : x,
-                  )
-                  setColorLabels(next)
-                  if (selectedColor === c.color)
-                    setSelectedColor(nc.toHexString())
-                }}
+                onChangeComplete={(nc) => updateColor(c, { ...c, color: nc.toHexString() })}
               />
               <Input
                 size="small"
+                key={c.label}
+                aria-label={`编辑标签 ${c.label}`}
                 defaultValue={c.label}
                 maxLength={20}
                 style={{ flex: 1 }}
-                onPressEnter={(e) =>
-                  renameColor(c.color, (e.target as HTMLInputElement).value)
-                }
-                onBlur={(e) => renameColor(c.color, e.target.value)}
+                onPressEnter={(e) => e.currentTarget.blur()}
+                onBlur={(e) => {
+                  const label = e.target.value.trim() || c.label
+                  e.target.value = label
+                  updateColor(c, { ...c, label })
+                }}
               />
               <Button
                 size="small"
                 danger
+                aria-label={`删除标签 ${c.label}`}
                 icon={<DeleteOutlined />}
                 onClick={() => removeColor(c.color)}
               />

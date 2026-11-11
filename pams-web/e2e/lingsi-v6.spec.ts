@@ -57,6 +57,99 @@ async function setup(page:Page) {
   }}
 }
 const task=(page:Page,title:string)=>page.locator('.lingsi-conv-select').filter({hasText:title})
+
+test('运行中可补充指令，失败重试保留文本和请求标识', async ({page}) => {
+  const {agentModule,errors}=await setup(page)
+  const submissions:{ inputId:string; text:string }[]=[]
+  await page.route('**/api/agent/requests/steering-test/instructions',async route=>{
+    submissions.push(route.request().postDataJSON())
+    await route.fulfill({json:submissions.length===1
+      ? {code:409,message:'暂时无法接收'}
+      : {code:200,data:{position:1}}})
+  })
+  await page.evaluate(async source=>{
+    const {useAgentStore}=await import(source)
+    useAgentStore.setState({thinking:true,activeRequestId:'steering-test',mode:'standard'})
+  },agentModule())
+  const editor=page.getByRole('textbox',{name:'任务内容'})
+  await editor.fill('先暂停查询，改为整理现有资料')
+  await editor.press('Enter')
+  await expect(page.getByText('暂未确认收到指令。输入已保留，可重试或在任务结束后发送。')).toBeVisible()
+  await expect(editor).toHaveValue('先暂停查询，改为整理现有资料')
+  await expect(page.getByRole('button',{name:'停止任务'})).toBeVisible()
+  await page.getByRole('button',{name:'发送补充指令'}).click()
+  await expect(editor).toHaveValue('')
+  await expect(page.getByText('已收到补充指令，将在下一执行边界处理。')).toBeVisible()
+  expect(submissions).toHaveLength(2)
+  expect(submissions[0]).toEqual(submissions[1])
+  expect(errors).toEqual([])
+})
+
+test('实时协作到快照与刷新始终使用同一概览', async ({page}) => {
+  const {agentModule,errors}=await setup(page)
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.locator('.lingsi-plan')).toBeVisible()
+  const run={id:910,streamId:'live-overview',conversationId:1,stateVersion:5,status:'WAITING_CONFIRM',actions:[],nodes:[
+    {id:1,workItemId:31,agent:'planning',task:'整理策划初稿',status:'WAITING_CONFIRM',dependsOn:[],revision:1,attempt:1},
+  ]}
+  await page.route('**/api/agent/requests/live-request',route=>route.fulfill({json:{code:200,data:{requestId:'live-request',streamId:'live-overview',conversationId:1,status:'WAITING_CONFIRM',cancelled:false,run}}}))
+  await page.evaluate(async source=>{
+    const {useAgentStore}=await import(source)
+    useAgentStore.setState((s:{outcomes:object[]})=>({activeRequestId:'live-request',activeStreamId:'live-overview',thinking:true,timeline:[],outcomes:s.outcomes.map((o,index)=>index===s.outcomes.length-1?{...o,run:undefined,requestId:'live-request',streamId:'live-overview',streaming:true,plan:null,reply:''}:o)}))
+    useAgentStore.getState().applyStreamEvent({streamId:'live-overview',seq:1,type:'AGENT_START',ts:1,payload:{agent:'planning',displayName:'策划专家',requestId:'live-request'}})
+  },agentModule())
+  const overview=page.getByRole('region',{name:'协作概览'})
+  await expect(overview).toContainText('已收到 1 项执行记录')
+  await expect(page.locator('.lingsi-team')).toHaveCount(0)
+  await overview.evaluate(el=>el.setAttribute('data-live-shell','retained'))
+  await overview.getByRole('button',{name:/协作进展/}).click()
+  await page.evaluate(async source=>{
+    const {useAgentStore}=await import(source)
+    useAgentStore.getState().applyTaskDone({type:'AGENT_RUN_UPDATED',runId:910,streamId:'live-overview',conversationId:1})
+  },agentModule())
+  await expect(overview).toContainText('0/1')
+  await expect(overview).toHaveAttribute('data-live-shell','retained')
+  await expect(overview.getByRole('button',{name:/协作进展/})).toHaveAttribute('aria-expanded','false')
+  await expect(page.locator('.lingsi-team')).toHaveCount(0)
+  await page.route('**/api/agent/conversations/1/messages**',route=>route.fulfill({json:{code:200,data:{records:[{id:1,role:'USER',content:'准备策划'},{id:2,role:'ASSISTANT',content:'请核对初稿',run,streamId:'live-overview',toolCalls:[],references:[],artifacts:[]}],total:2}}}))
+  await page.reload()
+  await task(page,'准备培训班策划初稿').click()
+  await expect(overview).toContainText('0/1')
+  await expect(overview).toContainText('整理策划初稿')
+  await expect(page.locator('.lingsi-team')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+for (const width of [1440,768,390]) test(`协作概览呈现分工与依赖 ${width}`, async ({page}) => {
+  const {agentModule,errors} = await setup(page)
+  await task(page,'准备培训班策划初稿').click()
+  await expect(page.locator('.lingsi-plan')).toBeVisible()
+  await page.evaluate(async source => {
+    const {useAgentStore} = await import(source)
+    const run = {id:810,streamId:'overview',conversationId:1,status:'WAITING_CONFIRM',actions:[],nodes:[
+      {id:1,workItemId:21,agent:'retrieval',task:'检索往期培训班策划与归档要求',status:'SUCCESS',dependsOn:[],revision:1,attempt:1},
+      {id:2,workItemId:22,agent:'planning',task:'整理培训班策划初稿',status:'WAITING_CONFIRM',dependsOn:[1],revision:1,attempt:1},
+      {id:3,workItemId:23,agent:'scheduling',task:'核对会务人员与值班时段',status:'RUNNING',dependsOn:[],revision:1,attempt:1},
+      {id:4,workItemId:24,agent:'reviewer',task:'检查策划内容与任务要求是否一致',status:'QUEUED',dependsOn:[2,3],revision:1,attempt:0},
+    ]}
+    useAgentStore.setState((s:{outcomes:object[]})=>({outcomes:s.outcomes.map((o,index)=>index===s.outcomes.length-1?{
+      ...o,run,plan:null,reply:'## 培训班筹备进展\n\n已找到往期策划与归档要求，并整理了本期策划初稿。\n\n- **策划初稿**：等待你确认后保存。\n- **会务排班**：正在核对人员与时段。\n- **内容审查**：将在前置任务完成后开始。',
+    }:o)}))
+  },agentModule())
+  await page.setViewportSize({width,height:1000})
+  if(width===390)await page.getByRole('button',{name:'切换深色'}).click()
+  const overview=page.getByRole('region',{name:'协作概览'})
+  await overview.scrollIntoViewIfNeeded()
+  await expect(overview).toContainText('1/4')
+  await expect(overview).toContainText('等待前置任务：整理培训班策划初稿、核对会务人员与值班时段')
+  await expect(overview).toContainText('等待上游')
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true)
+  await page.screenshot({path:resolve(output,`collaboration-overview-${width}.png`),animations:'disabled'})
+  await overview.getByRole('button',{name:/查看待处理事项/}).click()
+  await expect(page.locator('.lingsi-work-target')).toBeFocused()
+  await expect(page.locator('.lingsi-work-items>details')).toHaveAttribute('open','')
+  expect(errors).toEqual([])
+})
 /** 运行模式是自建下拉（非原生 select）：点触发器展开，再点选项 */
 const pickMode=async(page:Page,label:string)=>{await page.getByRole('combobox',{name:'运行模式'}).click();await page.getByRole('option',{name:label,exact:true}).click()}
 

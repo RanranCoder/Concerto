@@ -9,14 +9,17 @@ export const getAgentModelStatus = () => get<AgentModelStatus>('/agent/model-sta
 export interface ProviderView {
   id: number; version: number; displayName: string; protocol: AiProtocol; baseUrl: string; modelId: string
   summaryEnabled: boolean; hasApiKey: boolean; testStatus: string; testedAt: string | null; testSummary: boolean
+  contextWindowTokens: number | null
 }
 export interface ProviderDraft {
   id?: number; version?: number; displayName: string; protocol: AiProtocol; baseUrl: string; modelId: string
   apiKey?: string; summaryEnabled: boolean; testTicket?: string
+  contextWindowTokens?: number | null
 }
 export interface ProviderListing {
   items: ProviderView[]; defaultId: number | null; defaultVersion: number; deploymentProtocol: AiProtocol
   deploymentModel: string; deploymentAvailable: boolean; encryptionReady: boolean
+  deploymentContextWindowTokens: number
 }
 export interface ProviderTest { success: boolean; message: string; durationMs: number; summaryAvailable: boolean; ticket: string | null }
 const root = '/agent/providers'

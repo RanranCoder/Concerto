@@ -10,7 +10,9 @@ import './ai-services.css'
 
 const protocols = [{ value: 'openai_chat_completions', label: 'Chat Completions' }, { value: 'openai_responses', label: 'Responses' }]
 const protocolName = (value?: string) => protocols.find(p => p.value === value)?.label || '—'
-const blank: ProviderDraft = { displayName: '', protocol: 'openai_chat_completions', baseUrl: '', modelId: '', apiKey: '', summaryEnabled: false }
+const contextWindows = [128, 262, 500, 1000].map(k => ({ value: k * 1000, label: `${k}k` }))
+const windowName = (value?: number | null) => contextWindows.find(option => option.value === value)?.label ?? value?.toLocaleString('zh-CN') ?? '—'
+const blank: ProviderDraft = { displayName: '', protocol: 'openai_chat_completions', baseUrl: '', modelId: '', apiKey: '', summaryEnabled: false, contextWindowTokens: 128000 }
 
 export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => void }) {
   const { message, modal } = App.useApp()
@@ -32,10 +34,11 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
   useEffect(() => { onDirty(dirty); return () => onDirty(false) }, [dirty, onDirty])
   const startEdit = (item: ProviderView | null) => {
     revision.current++; setEditing(item); setDirty(false); setResult(undefined); setFormError('')
-    form.resetFields(); form.setFieldsValue(item ? { ...item, apiKey: '' } : blank)
+    form.resetFields()
+    form.setFieldsValue(item ? { ...item, apiKey: '', contextWindowTokens: item.contextWindowTokens ?? null } : blank)
   }
   const close = () => {
-    const discard = () => { revision.current++; form.resetFields(); setEditing(undefined); setResult(undefined); setDirty(false) }
+    const discard = () => { revision.current++; setEditing(undefined); setResult(undefined); setDirty(false) }
     if (dirty) modal.confirm({ title: '放弃未保存的服务配置？', content: '尚未保存的修改将丢失。', okText: '放弃修改', cancelText: '继续编辑', onOk: discard })
     else discard()
   }
@@ -67,8 +70,22 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
     try {
       const value = await draft(); setBusy(true); setFormError('')
       if (!await requireStorage()) return
-      await saveProvider({ ...value, testTicket: result?.success ? result.ticket || undefined : undefined })
-      setDirty(false); form.resetFields(); setEditing(undefined); setResult(undefined)
+      const saved = await saveProvider({ ...value, testTicket: result?.success ? result.ticket || undefined : undefined })
+      setData(current => current && {
+        ...current,
+        items: current.items.some(item => item.id === saved.id)
+          ? current.items.map(item => item.id === saved.id ? saved : item)
+          : [...current.items, saved],
+      })
+      if (value.contextWindowTokens != null && saved.contextWindowTokens !== value.contextWindowTokens) {
+        setEditing(saved)
+        form.setFieldValue('apiKey', '')
+        setResult(undefined)
+        setDirty(true)
+        setFormError('服务端未保存所选上下文窗口。请确认后端已升级后重试。')
+        return
+      }
+      setDirty(false); setEditing(undefined); setResult(undefined)
       message.success('AI 服务已保存'); await reload()
     } catch (e) { if (e && typeof e === 'object' && 'errorFields' in e) return; setFormError(reportError(e)) }
     finally { setBusy(false) }
@@ -87,6 +104,7 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
           { label: '当前服务', value: <Space wrap><strong>{active?.displayName || '部署配置'}</strong><StatusTag tone={active || data.deploymentAvailable ? 'success' : 'neutral'}>{active ? '组织默认' : data.deploymentAvailable ? '部署默认' : '规则模式'}</StatusTag></Space> },
           { label: '接口协议', value: protocolName(active?.protocol || data.deploymentProtocol) },
           { label: '请求模型', value: active?.modelId || (data.deploymentAvailable ? data.deploymentModel : '—') },
+          { label: '上下文窗口', value: windowName(active?.contextWindowTokens ?? data.deploymentContextWindowTokens) },
           { label: '最近测试', value: active?.testedAt ? `${dayjs(active.testedAt).format('YYYY-MM-DD HH:mm:ss')} · ${active.testStatus === 'PASSED' ? '测试通过' : '测试失败'}` : '未提供测试记录' },
         ]} />
         <p className="admin-note">设置更新后，新任务使用新配置；正在执行的任务继续使用原配置。最近测试结果不代表实时可用状态。</p>
@@ -119,6 +137,9 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
           } }]}><Input maxLength={2048} placeholder="https://api.example.com/v1" /></Form.Item>
           <Form.Item name="apiKey" label="API Key" extra={editing ? '密钥已保存。留空保留原密钥，填写则替换。' : '密钥由服务端加密保存，不会在后续读取时返回。'} rules={[{ required: !editing, whitespace: true, message: '请填写 API Key' }, { max: 4096 }]}><Input.Password autoComplete="new-password" placeholder={editing ? '留空保留已保存的密钥' : '填写服务 API Key'} /></Form.Item>
           <Form.Item name="modelId" label="请求模型 ID" rules={[{ required: true, whitespace: true, message: '请填写服务商提供的模型 ID' }, { max: 200 }]}><Input maxLength={200} placeholder="填写准确的模型 ID，区分大小写" /></Form.Item>
+          <Form.Item name="contextWindowTokens" label="上下文窗口" extra="设置 Agent 的本地预算上限。请选择所用模型支持的档位。">
+            <Select options={contextWindows} placeholder={`沿用部署配置（${windowName(data?.deploymentContextWindowTokens)}）`} />
+          </Form.Item>
           {protocol === 'openai_responses' && <Form.Item name="summaryEnabled" label="请求推理摘要" valuePropName="checked" extra="仅支持此能力的模型可返回摘要；摘要不是完整思维链。"><Switch /></Form.Item>}
         </FormSection>
       </Form>

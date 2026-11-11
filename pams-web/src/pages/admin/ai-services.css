@@ -4,13 +4,13 @@
 .ai-service-record:first-child { padding-top: 0; }
 .ai-service-record + .ai-service-record { border-top: 1px solid var(--border); }
 .ai-service-record-heading, .ai-service-record-footer, .ai-service-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.ai-service-record-heading > strong { font-size: 15px; overflow-wrap: anywhere; }
+.ai-service-record-heading > strong { font-size: var(--fs-title); overflow-wrap: anywhere; }
 .ai-service-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 16px 0; }
-.ai-service-fields dt { color: var(--text-secondary); font-size: 12px; margin-bottom: 4px; }
+.ai-service-fields dt { color: var(--text-secondary); font-size: var(--fs-caption); margin-bottom: 4px; }
 .ai-service-fields dd { margin: 0; overflow-wrap: anywhere; }
 .ai-service-url { grid-column: 1 / -1; }
 .ai-service-record-footer .admin-note { margin: 0; }
-.ai-service-editor-footer > span { font-size: 12px; color: var(--text-secondary); }
+.ai-service-editor-footer > span { font-size: var(--fs-caption); color: var(--text-secondary); }
 @media (max-width: 600px) {
   .ai-service-fields { grid-template-columns: 1fr; }
   .ai-service-record-footer { align-items: flex-start; flex-direction: column; }

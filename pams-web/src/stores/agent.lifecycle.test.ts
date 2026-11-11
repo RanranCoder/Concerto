@@ -10,11 +10,57 @@ beforeEach(()=>{
   vi.mocked(api.listConversations).mockResolvedValue({records:[],total:0,current:1,size:50,pendingTaskCount:0})
 })
 describe('灵思任务切换与停止',()=>{
+  it('刷新未完成的会话后恢复同一个请求，并保留补充指令',async()=>{
+    vi.mocked(api.listMessages).mockResolvedValue({records:[{
+      role:'USER',content:'查询资料',streamId:'steering-stream',activeRequestId:'steering-request',
+      instructions:[{id:'steering-input',text:'只查本月'}],instructionsConsumed:1,
+    } as AgentMessageVO],total:1,current:1,size:50})
+    vi.mocked(api.getAgentRequest).mockResolvedValue({
+      requestId:'steering-request',streamId:'steering-stream',conversationId:1,status:'RUNNING',cancelled:false,
+    })
+    vi.mocked(api.agentStreamSince).mockResolvedValue({streamId:'steering-stream',since:0,events:[]})
+    await useAgentStore.getState().selectConversation(1)
+    await vi.waitFor(()=>expect(api.agentStreamSince).toHaveBeenCalledWith('steering-stream',0))
+    const state=useAgentStore.getState()
+    expect(state.thinking).toBe(true)
+    expect(state.activeRequestId).toBe('steering-request')
+    expect(state.userTexts).toEqual(['查询资料\n\n补充指令：只查本月'])
+    expect(api.agentChat).not.toHaveBeenCalled()
+  })
+  it('聊天补充信息接续同一任务时退休上一轮表单',async()=>{
+    vi.mocked(api.agentChat).mockResolvedValueOnce({...reply(1,'请补充地点'),form:{taskId:77,formKey:'createActivity',title:'补充信息',fields:[{name:'location',label:'地点',type:'text',required:true}],values:{}}})
+    await useAgentStore.getState().sendMessage('创建培训班')
+    expect(useAgentStore.getState().outcomes[0].form?.taskId).toBe(77)
+    const plan={planId:77,summary:'创建培训班',total:1,items:[],skipped:[],detailLines:[],reversible:true,confirmToken:'ct',needsConfirm:true}
+    vi.mocked(api.agentChat).mockResolvedValueOnce({...reply(1,'信息已补齐'),plan})
+    await useAgentStore.getState().sendMessage('地点在会议室')
+    expect(useAgentStore.getState().outcomes[0].form).toBeNull()
+    expect(useAgentStore.getState().outcomes[1].plan?.planId).toBe(77)
+    expect(api.confirmAgentTask).not.toHaveBeenCalled()
+  })
   const runView = (): AgentRunView => ({ id:50,streamId:'stream-1',conversationId:1,status:'WAITING_CONFIRM',nodes:[],actions:[7,8].map(id=>({
     id,runId:50,workItemId:id,revision:1,toolName:'createActivity',status:'PENDING_CONFIRM',summary:`清单${id}`,conversationId:1,
     createdAt:'2026-10-24',confirmedAt:null,finishedAt:null,expired:false,reversible:true,
     plan:{planId:id,summary:`清单${id}`,total:1,items:[],skipped:[],detailLines:[],reversible:true,confirmToken:`token-${id}`,needsConfirm:true},
   })) })
+  it.each([true,false])('首次协作更新绑定快照，迟到响应不退回旧界面（含旧 run：%s）',async(hasOldRun)=>{
+    let finish!:(value:AgentChatResponse)=>void
+    vi.mocked(api.agentChat).mockImplementationOnce(()=>new Promise(resolve=>finish=resolve))
+    const pending=useAgentStore.getState().sendMessage('准备协作任务')
+    const requestId=useAgentStore.getState().activeRequestId!
+    useAgentStore.setState({activeStreamId:'stream-1',currentConversationId:1})
+    const run={...runView(),stateVersion:8}
+    vi.mocked(api.getAgentRequest).mockResolvedValue({requestId,streamId:'stream-1',conversationId:1,status:'WAITING_CONFIRM',cancelled:false,run})
+    useAgentStore.getState().applyTaskDone({type:'AGENT_RUN_UPDATED',runId:50,conversationId:2,streamId:'foreign'})
+    expect(api.getAgentRequest).not.toHaveBeenCalled()
+    useAgentStore.getState().applyTaskDone({type:'AGENT_RUN_UPDATED',runId:50,conversationId:1,streamId:'stream-1'})
+    await vi.waitFor(()=>expect(useAgentStore.getState().outcomes[0].run?.stateVersion).toBe(8))
+    vi.mocked(api.getAgentRun).mockResolvedValue(run)
+    finish({...reply(1,'请确认'),run:hasOldRun?{...run,stateVersion:2,status:'RUNNING'}:undefined})
+    await pending
+    expect(useAgentStore.getState().outcomes[0].run?.stateVersion).toBe(8)
+    expect(useAgentStore.getState().outcomes[0].executionState).toBe('WAITING_CONFIRM')
+  })
   it('协作确认后保留独立分支的清单，并在同一条消息刷新续跑结果',async()=>{
     const run=runView()
     vi.mocked(api.getAgentRun).mockResolvedValue(run)

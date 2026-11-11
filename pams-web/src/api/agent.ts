@@ -322,6 +322,9 @@ export interface AgentConversationsPage {
 }
 
 export interface AgentMessageVO {
+  activeRequestId?: string
+  instructions?: { id: string; text: string }[]
+  instructionsConsumed?: number
   run?: AgentRunView
   executionState?: string | null
   id: number
@@ -412,6 +415,13 @@ export interface AgentToolVO {
   sensitivity: string
 }
 
+export interface AgentDiagnostics {
+  mode: string
+  roles: { agent: string; roleStatus: string; corePolicySha256: string; roleSha256: string }[]
+  experts: { agent: string; effectiveTools: { name: string; operationKind: string; idempotencyPolicy: string }[] }[]
+}
+export const getAgentDiagnostics = (mode: AgentMode) => get<AgentDiagnostics>('/agent/diagnostics', { mode })
+
 /* ---------------------------------------------------------------- 对话 */
 
 export const agentChat = (
@@ -425,7 +435,7 @@ export const agentChat = (
    */
   collab: boolean = true,
   requestId?: string,
-) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab, requestId })
+) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab, requestId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
 
 export const agentAbort = (streamId: string) =>
   post<{ streamId: string; aborted: boolean }>(`/agent/chat/${streamId}/abort`)
@@ -528,7 +538,11 @@ export interface AgentRequestSnapshot {
   run?: AgentRunView
   message?: AgentMessageVO | null
   actions?: AgentTaskVO[]
+  instructions?: { id: string; text: string }[]
+  instructionsConsumed?: number
 }
+export const instructAgentRequest = (id: string, inputId: string, text: string) =>
+  post<{ position: number }>(`/agent/requests/${id}/instructions`, { inputId, text })
 export const abortAgentRequest = (id: string) => post<{ status: string; runId?: number; aborted: boolean }>(`/agent/requests/${id}/abort`)
 export const getAgentRequest = (id: string) => get<AgentRequestSnapshot>(`/agent/requests/${id}`)
 export const cancelAgentRun = (id: number) => post<AgentRunView>(`/agent/team/runs/${id}/cancel`)

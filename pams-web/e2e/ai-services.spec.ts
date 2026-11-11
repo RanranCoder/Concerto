@@ -13,9 +13,9 @@ async function setup(page: Page, mode = 'light', encryptionReady = true) {
   }, { user, mode })
   const listing = { items: [{ id: 7, version: 0, displayName: '组织助手', protocol: 'openai_responses',
     baseUrl: 'https://ai.example.com/v1', modelId: 'organization-model', summaryEnabled: true,
-    hasApiKey: true, testStatus: 'PASSED', testedAt: '2026-10-31T08:00:00Z', testSummary: true }],
+    hasApiKey: true, testStatus: 'PASSED', testedAt: '2026-10-31T08:00:00Z', testSummary: true, contextWindowTokens: null as number | null }],
     defaultId: null as number | null, defaultVersion: 0, deploymentProtocol: 'openai_chat_completions', deploymentModel: 'deployment-model',
-    deploymentAvailable: true, encryptionReady }
+    deploymentAvailable: true, encryptionReady, deploymentContextWindowTokens: 65536 }
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
     const path = new URL(route.request().url()).pathname
     let data: unknown = []
@@ -28,7 +28,12 @@ async function setup(page: Page, mode = 'light', encryptionReady = true) {
       else data = { id: 9, version: 0, ...route.request().postDataJSON() }
     } else if (path === '/api/agent/providers/test') data = { success: true, message: '普通请求、SSE 及工具往返测试通过', durationMs: 420, summaryAvailable: true, ticket: 'test-receipt' }
     else if (path === '/api/agent/providers/7/activate') { listing.defaultId = 7; listing.defaultVersion++; data = null }
-    else if (path === '/api/agent/providers/7') data = { ...listing.items[0], version: 1 }
+    else if (path === '/api/agent/providers/7' && route.request().method() === 'PUT') {
+      const item = listing.items[0]
+      item.contextWindowTokens = route.request().postDataJSON().contextWindowTokens
+      item.version++
+      data = item
+    }
     await route.fulfill({ json: { code: 200, data } })
   })
 }
@@ -74,7 +79,7 @@ test('新增服务按原生协议测试，改动后测试凭据失效', async ({
   await drawer.getByLabel('Base URL', { exact: true }).fill('https://ai.example.com/v1')
   await drawer.getByLabel('API Key', { exact: true }).fill('test-key-only')
   await drawer.getByLabel('请求模型 ID', { exact: true }).fill('new-model')
-  await drawer.locator('.ant-select-selector').click()
+  await drawer.locator('.ant-form-item').filter({ hasText: '接口协议' }).locator('.ant-select-selector').click()
   await page.locator('.ant-select-item-option').filter({ hasText: 'Responses' }).click()
   await expect(drawer.getByLabel('请求推理摘要', { exact: true })).toBeVisible()
   const testRequest = page.waitForRequest(r => r.url().endsWith('/agent/providers/test'))
@@ -83,10 +88,15 @@ test('新增服务按原生协议测试，改动后测试凭据失效', async ({
   await expect(drawer.getByText('普通请求、SSE 及工具往返测试通过')).toBeVisible()
   await drawer.getByLabel('请求模型 ID', { exact: true }).fill('changed-model')
   await expect(drawer.getByText('普通请求、SSE 及工具往返测试通过')).toHaveCount(0)
+  await drawer.locator('.ant-form-item').filter({ hasText: '上下文窗口' }).locator('.ant-select-selector').click()
+  await expect(page.locator('.ant-select-dropdown:visible .ant-select-item-option'))
+    .toHaveText(['128k', '262k', '500k', '1000k'])
+  await page.locator('.ant-select-item-option').filter({ hasText: '1000k' }).click()
   const saveRequest = page.waitForRequest(r => new URL(r.url()).pathname === '/api/agent/providers' && r.method() === 'POST')
   await drawer.getByRole('button', { name: '保存配置' }).click()
   const saved = (await saveRequest).postDataJSON()
   expect(saved.testTicket).toBeUndefined(); expect(saved.modelId).toBe('changed-model')
+  expect(saved.contextWindowTokens).toBe(1_000_000)
   await expect(drawer).not.toBeVisible()
 })
 
@@ -100,6 +110,21 @@ test('编辑不回填密钥，关闭前处理未保存修改', async ({ page }) 
   await expect(page.locator('.ant-modal-confirm-title')).toHaveText('放弃未保存的服务配置？')
   await page.getByRole('button', { name: '继续编辑', exact: true }).click()
   await expect(drawer.getByLabel('显示名称', { exact: true })).toHaveValue('修改名称')
+})
+
+test('保存并重新打开 AI 服务时保留所选上下文窗口', async ({ page }) => {
+  await setup(page)
+  await page.goto('/admin/settings?section=ai')
+  const edit = page.getByRole('button', { name: '编辑 / 测试' })
+  await edit.click()
+  const drawer = page.getByRole('dialog')
+  const window = drawer.locator('.ant-form-item').filter({ hasText: '上下文窗口' })
+  await window.locator('.ant-select-selector').click()
+  await page.locator('.ant-select-item-option').filter({ hasText: '500k' }).click()
+  await drawer.getByRole('button', { name: '保存配置' }).click()
+  await expect(drawer).not.toBeVisible()
+  await edit.click()
+  await expect(window.locator('.ant-select-selection-item')).toHaveText('500k')
 })
 
 test('Concerto 输入框展示当前配置，旧规则答复不会覆盖模型状态', async ({ page }) => {

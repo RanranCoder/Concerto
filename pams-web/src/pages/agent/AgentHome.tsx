@@ -4,6 +4,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { AgentActionPlan, TaskInputResult } from '@/api/agent'
+import { instructAgentRequest } from '@/api/agent'
 import LingsiConversationList from '@/components/agent/LingsiConversationList'
 import LingsiComposer from '@/components/agent/LingsiComposer'
 import LingsiEmptyState from '@/components/agent/LingsiEmptyState'
@@ -446,6 +447,16 @@ export default function AgentHome() {
           onRemoveRef={removeRef}
           seed={seed}
           onSend={handleSend}
+          onInstruct={activeRequestId && !stopping
+            ? async (text, inputId) => {
+              await instructAgentRequest(activeRequestId, inputId, text)
+              useAgentStore.setState(state => {
+                const index = state.outcomes.findIndex(outcome => outcome.requestId === activeRequestId)
+                if (index < 0 || !state.userTexts[index]) return state
+                return { userTexts: state.userTexts.map((value, i) => i === index ? `${value}\n\n补充指令：${text}` : value) }
+              })
+            }
+            : undefined}
           onStop={() => void stop()}
           onOpenTools={() => setToolsOpen(true)}
         />

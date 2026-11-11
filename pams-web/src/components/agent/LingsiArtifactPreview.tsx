@@ -36,7 +36,7 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
       .catch(()=>{if(sequence===request.current){setError('无法加载成果，请刷新重试。');setDetail(null)}})
       .finally(()=>{if(sequence===request.current)setLoading(false)})
     return ()=>{request.current++}
-  },[artifact.id,selected,artifact.status,reload]) // Keep a reader on the selected version when a new version arrives.
+  },[artifact.id,selected,artifact.status,artifact.taskId,artifact.taskVersion,artifact.currentVersion,reload]) // Keep a reader on the selected version when a new version arrives.
   useEffect(()=>{
     let stale=false;setPrevious(null)
     if(tab==='changes' && selected>1)getAgentArtifact(artifact.id,selected-1).then(v=>{if(!stale)setPrevious(v)}).catch(()=>{if(!stale)setError('前一版本未能加载，请重试。')})
@@ -64,8 +64,13 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
     finally {setSaving(false)}
   }
   const current=detail?.version===artifact.currentVersion
-  const status=detail?.status==='SUCCESS' && ['draftPlanSections','draftArticleFromActivity'].includes(artifact.toolName)?'已保存业务草稿'
-    : detail?.status==='SUCCESS' && artifact.toolName==='publishAnnouncement'?'已发布':statusNames[detail?.status ?? ''] ?? ''
+  // A newer server catalog receipt must supersede a cached pending detail while it reloads.
+  // Historical selected versions keep their own action state, even if the latest version succeeded.
+  const catalogAuthoritative=selected===artifact.currentVersion && (!detail || artifact.taskVersion!=null && artifact.taskVersion>=(detail.artifact.taskVersion ?? 0))
+  const lifecycle=catalogAuthoritative?artifact.status:detail?.status
+  const editable=Boolean(detail?.editable && current && !loading && ['PENDING_CONFIRM','REVIEW_REQUIRED'].includes(lifecycle ?? ''))
+  const status=lifecycle==='SUCCESS' && ['draftPlanSections','draftArticleFromActivity'].includes(artifact.toolName)?'已保存业务草稿'
+    : lifecycle==='SUCCESS' && artifact.toolName==='publishAnnouncement'?'已发布':statusNames[lifecycle ?? ''] ?? ''
   const tabs=[['content','内容预览'],['changes','本次变更'],['sources','参考资料']]
   return <div className="lingsi-v6-panel-content">
     <header className="lingsi-preview-header"><h2>{artifact.title}</h2><button type="button" className="lingsi-icon-btn" aria-label="关闭工作成果预览" onClick={onClose}><Close size={16}/></button></header>
@@ -91,11 +96,11 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
         {editing ? <form onSubmit={e=>{e.preventDefault();void save()}}>
           <p>修改暂存在当前页面，保存后生成新预览，仍需确认才会写入业务系统。</p>
           {Object.entries(fields).map(([key,value],i)=><label className="lingsi-draft-field" key={key}>{fieldNames[key] ?? key}<textarea ref={i===0?editorRef:undefined} value={value} disabled={saving} maxLength={key==='title'?200:24000} onChange={e=>update(key,e.target.value)} /></label>)}
-          <div className="lingsi-draft-actions"><button type="button" disabled={saving} onClick={()=>{useAgentPanel.getState().discardDraft(artifact.id);setFields(detail.fields);setEditing(false)}}>放弃修改</button><button type="submit" disabled={saving || mode!=='standard' || !current || !detail.editable}>{saving?'正在复核…':'保存新版本并复核'}</button></div>
+          <div className="lingsi-draft-actions"><button type="button" disabled={saving} onClick={()=>{useAgentPanel.getState().discardDraft(artifact.id);setFields(detail.fields);setEditing(false)}}>放弃修改</button><button type="submit" disabled={saving || mode!=='standard' || !editable}>{saving?'正在复核…':'保存新版本并复核'}</button></div>
         </form> : <>
           {detail.preview && <><div className="lingsi-preview-document-meta"><span>第 {selected} 版</span><LingsiCopyButton text={detail.preview} label="复制预览全文"/></div><article className="lingsi-preview-document"><LingsiMarkdown text={detail.preview}/></article></>}
           {!detail.preview && <table className="lingsi-artifact-table"><thead><tr><th>对象</th><th>变更内容</th></tr></thead><tbody>{detail.plan.items?.map((row,i)=><tr key={i}><th>{row.label}</th><td>{row.sub}</td></tr>)}</tbody></table>}
-          {detail.editable && <button type="button" disabled={mode!=='standard'} onClick={()=>{setFields(detail.fields);setEditing(true);useAgentPanel.getState().rememberDraft(artifact.id,selected,detail.fields)}}>修改正文</button>}
+          {editable && <button type="button" disabled={mode!=='standard'} onClick={()=>{setFields(detail.fields);setEditing(true);useAgentPanel.getState().rememberDraft(artifact.id,selected,detail.fields)}}>修改正文</button>}
         </>}
         {detail.issues?.length>0 && <section className="lingsi-artifact-issues" aria-label="本版审查问题"><h3>需核对的问题</h3>{detail.issues.map(i=><div key={i.id}><p>{i.location}</p><blockquote>{i.quote}</blockquote><p>{i.reason}</p></div>)}</section>}
         {detail.reviewStatus==='UNVERIFIED' && <p className="lingsi-preview-empty">本版尚未完成自动核验，请人工核对。</p>}
