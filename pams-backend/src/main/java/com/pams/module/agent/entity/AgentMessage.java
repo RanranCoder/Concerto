@@ -36,7 +36,8 @@ public class AgentMessage implements OrgScoped {
     @Column(nullable = false, length = 20)
     private String role;
 
-    @Lob
+    // MEDIUMTEXT is a textual value, not a JDBC locator CLOB. Hibernate 7 rejects
+    // string search functions on a CLOB-mapped attribute before SQL execution.
     @Column(columnDefinition = "MEDIUMTEXT")
     private String content;
 

@@ -38,6 +38,8 @@ class BatchSixMySqlAcceptanceTest {
     @Test void v64AndSchemaScopedAccountAreRealMySql(){
         assertThat(db.queryForObject("SELECT DATABASE()",String.class)).matches("pams_s5_batch6_[a-f0-9]{12}");
         assertThat(db.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version='64' AND success=1",Long.class)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version='65' AND success=1",Long.class)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='agent_run' AND column_name IN ('prompt_bundle_json','user_timezone')",Long.class)).isEqualTo(2);
         assertThat(db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('article','schedule') AND column_name='revision' AND is_nullable='NO'",Long.class)).isEqualTo(2);
         assertThat(db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='agent_work_item' AND column_name IN ('contract_json','result_json') AND data_type='json'",Long.class)).isEqualTo(2);
         var grants=db.queryForList("SHOW GRANTS FOR CURRENT_USER",String.class);assertThat(grants).allSatisfy(g->assertThat(g).satisfiesAnyOf(v->assertThat(v).contains("GRANT USAGE ON *.*"),v->assertThat(v.replace("\\","")).contains("pams_s5_batch6_")));

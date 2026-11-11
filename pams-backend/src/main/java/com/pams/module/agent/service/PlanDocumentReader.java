@@ -8,6 +8,7 @@ import java.util.*;
 
 /** Read-only format probe. Text blocks are addresses within a hashed snapshot, not edit handles. */
 public final class PlanDocumentReader {
+    static final int CHUNK_LENGTH = 600;
     public record Document(List<Map<String,Object>> blocks,List<String> unsupportedElements) {}
     private PlanDocumentReader() {}
     public static String hash(byte[] bytes) {
@@ -47,9 +48,9 @@ public final class PlanDocumentReader {
     private static void add(List<Map<String,Object>> blocks,String id,String type,String text) throws IOException {
         if(blocks.size()>=10000) throw new IOException("Document block budget exceeded");
         // Split for bounded model rendering; never silently discard part of a paragraph/cell.
-        for(int start=0,part=0;start<Math.max(1,text.length());start+=600,part++) {
+        for(int start=0,part=0;start<Math.max(1,text.length());start+=CHUNK_LENGTH,part++) {
             if(blocks.size()>=10000) throw new IOException("Document block budget exceeded");
-            String content=text.substring(start,Math.min(text.length(),start+600));
+            String content=text.substring(start,Math.min(text.length(),start+CHUNK_LENGTH));
             blocks.add(Map.of("blockId",id+"p"+part,"type",type,"text",content,"hash",hash(content)));
         }
     }

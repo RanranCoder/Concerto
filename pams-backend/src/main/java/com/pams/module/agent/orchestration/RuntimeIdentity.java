@@ -4,6 +4,8 @@ import java.util.UUID;
 /** Current single-instance broker deployment: a different JVM cannot still own this process's work. */
 public final class RuntimeIdentity {
     public static final String ID=UUID.randomUUID().toString();
-    public static final LocalDateTime STARTED=LocalDateTime.now();
+    public static final LocalDateTime STARTED = LocalDateTime.ofInstant(
+            java.time.Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime()),
+            java.time.ZoneId.systemDefault());
     private RuntimeIdentity() {}
 }

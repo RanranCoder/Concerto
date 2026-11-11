@@ -34,6 +34,13 @@ public class AgentRuntimeController {
                                   AgentTaskRepository tasks,TaskGate gate,ConversationStore conversations,AgentRunEventRepository events) {
         this.requests=requests;this.publisher=publisher;this.state=state;this.scheduler=scheduler;this.tasks=tasks;this.gate=gate;this.conversations=conversations;this.events=events;
     }
+    @PostMapping("/requests/{id}/instructions")
+    public Result<Map<String,Object>> instruct(@PathVariable String id, @AuthenticationPrincipal LoginUser user,
+                                              @RequestBody Map<String,String> body) {
+        int position = requests.appendInstruction(id, user.getId(), body.get("inputId"), body.get("text"));
+        return Result.ok(Map.of("position", position));
+    }
+
     @PostMapping("/requests/{id}/abort")
     public Result<Map<String,Object>> abortRequest(@PathVariable String id,@AuthenticationPrincipal LoginUser user) {
         var request=requests.cancel(id,user.getId());String status=request.getStatus();
@@ -54,6 +61,8 @@ public class AgentRuntimeController {
         if(!requests.live(request)) throw new BizException(403,"请求权限已变化，请基于当前权限重新发起");
         var out=new LinkedHashMap<String,Object>();out.put("requestId",id);out.put("streamId",request.getStreamId());out.put("conversationId",request.getConversationId());
         out.put("runId",request.getRunId());out.put("status",request.getStatus());out.put("cancelled",request.isCancelled());
+        out.put("instructions", requests.instructions(request));
+        out.put("instructionsConsumed", request.getSteeringConsumed());
         if(request.getRunId()!=null) out.put("run",scheduler.view(request.getRunId(),ToolContext.current(null,null)));
         if(request.getStreamId()!=null) out.put("actions",tasks.findByStreamIdAndUserIdOrderByIdAsc(request.getStreamId(),user.getId()).stream().map(t->gate.detail(t.getId(),user.getId())).toList());
         if(request.getConversationId()!=null) {

@@ -19,17 +19,23 @@ import java.nio.charset.StandardCharsets;
 @Service
 public class AgentProviderService {
     public record Draft(Long id, Long version, String displayName, String protocol, String baseUrl,
-                        String modelId, String apiKey, boolean summaryEnabled, String testTicket) {
+                        String modelId, String apiKey, boolean summaryEnabled, String testTicket, Integer contextWindowTokens) {
+        public Draft(Long id, Long version, String displayName, String protocol, String baseUrl,
+                     String modelId, String apiKey, boolean summaryEnabled, String testTicket) {
+            this(id, version, displayName, protocol, baseUrl, modelId, apiKey, summaryEnabled, testTicket, null);
+        }
         @Override public String toString() { return "ProviderDraft[id=" + id + "]"; }
     }
     public record View(long id, long version, String displayName, String protocol, String baseUrl, String modelId,
-                       boolean summaryEnabled, boolean hasApiKey, String testStatus, Instant testedAt, boolean testSummary) {}
+                       boolean summaryEnabled, boolean hasApiKey, String testStatus, Instant testedAt, boolean testSummary,
+                       Integer contextWindowTokens) {}
     public record Listing(List<View> items, Long defaultId, long defaultVersion, String deploymentProtocol,
-                          String deploymentModel, boolean deploymentAvailable, boolean encryptionReady) {}
+                          String deploymentModel, boolean deploymentAvailable, boolean encryptionReady, int deploymentContextWindowTokens) {}
     public record TestResult(boolean success, String message, long durationMs, boolean summaryAvailable, String ticket) {}
     public record ModelStatus(boolean configured, String displayName, String protocol, String modelId, String source) {}
     private record Stored(long id, long orgId, long version, String name, String protocol, String url, String model,
-                          String ciphertext, boolean summary, String test, Instant testedAt, boolean testSummary) {}
+                          String ciphertext, boolean summary, String test, Instant testedAt, boolean testSummary,
+                          Integer contextWindowTokens) {}
     private final JdbcTemplate db;
     private final ProviderSecrets secrets;
     private final ProviderUrlPolicy urls;
@@ -49,9 +55,10 @@ public class AgentProviderService {
         Timestamp timestamp = r.getTimestamp("tested_at");
         return new Stored(r.getLong("id"), r.getLong("org_id"), r.getLong("version"), r.getString("display_name"),
                 r.getString("protocol"), r.getString("base_url"), r.getString("model_id"), r.getString("api_key_ciphertext"),
-                r.getBoolean("summary_enabled"), r.getString("test_status"), timestamp == null ? null : timestamp.toInstant(), r.getBoolean("test_summary"));
+                r.getBoolean("summary_enabled"), r.getString("test_status"), timestamp == null ? null : timestamp.toInstant(), r.getBoolean("test_summary"),
+                r.getObject("context_window_tokens", Integer.class));
     }
-    private View view(Stored s) { return new View(s.id, s.version, s.name, s.protocol, s.url, s.model, s.summary, true, s.test, s.testedAt, s.testSummary); }
+    private View view(Stored s) { return new View(s.id, s.version, s.name, s.protocol, s.url, s.model, s.summary, true, s.test, s.testedAt, s.testSummary, s.contextWindowTokens); }
     private Map<String,Object> defaults(long org) {
         return db.queryForList("select config_id,version from agent_provider_default where org_id=?", org).stream()
                 .findFirst().orElse(Map.of("version", 0L));
@@ -61,7 +68,7 @@ public class AgentProviderService {
     public Listing list() {
         long org = org(); var d = defaults(org);
         return new Listing(db.query("select * from agent_provider_config where org_id=? order by id", this::row, org).stream().map(this::view).toList(),
-                defaultId(d), defaultVersion(d), props.getProtocol(), props.getModel(), !"stub".equals(props.getProvider()) && props.resolveApiKey() != null && props.getModel() != null && !props.getModel().isBlank(), secrets.available());
+                defaultId(d), defaultVersion(d), props.getProtocol(), props.getModel(), !"stub".equals(props.getProvider()) && props.resolveApiKey() != null && props.getModel() != null && !props.getModel().isBlank(), secrets.available(), props.getContextWindowTokens());
     }
     /** Safe for organization members: configuration identity, never credentials or endpoint addresses. */
     public ModelStatus modelStatus() {
@@ -85,7 +92,11 @@ public class AgentProviderService {
         String key = d.apiKey == null || d.apiKey.isBlank() ? old == null ? null : secrets.decrypt(old.ciphertext) : text(d.apiKey, 4096, "API Key");
         if (key == null) throw new BizException(4400, "新增服务必须填写 API Key");
         if (d.summaryEnabled && !"openai_responses".equals(protocol)) throw new BizException(4400, "推理摘要仅适用于 Responses");
-        return new ModelEndpoint(protocol, url, key, text(d.modelId, 200, "请求模型 ID"), d.summaryEnabled);
+        Integer window = d.contextWindowTokens;
+        if (window != null && !Set.of(128_000, 262_000, 500_000, 1_000_000).contains(window))
+            throw new BizException(4400, "上下文窗口仅支持 128k、262k、500k 或 1000k");
+        if (window == null && old != null) window = old.contextWindowTokens;
+        return new ModelEndpoint(protocol, url, key, text(d.modelId, 200, "请求模型 ID"), d.summaryEnabled, window);
     }
     public LlmProvider create(ModelEndpoint endpoint) {
         urls.validate(endpoint.baseUrl());
@@ -176,19 +187,19 @@ public class AgentProviderService {
             if (db.queryForObject("select count(*) from agent_provider_config where org_id=?", Long.class, org) >= 50) throw new BizException(4400, "每个组织最多保存 50 个 AI 服务");
             KeyHolder key = new GeneratedKeyHolder();
             db.update(connection -> {
-                var statement = connection.prepareStatement("insert into agent_provider_config(org_id,display_name,protocol,base_url,model_id,api_key_ciphertext,summary_enabled,test_status,tested_at,test_summary) values(?,?,?,?,?,?,?,?,?,?)", new String[]{"id"});
-                Object[] values = {org, name, e.protocol(), e.baseUrl(), e.model(), cipher, e.summary(), state, tested == null ? null : Timestamp.from(tested), summary};
+                var statement = connection.prepareStatement("insert into agent_provider_config(org_id,display_name,protocol,base_url,model_id,api_key_ciphertext,summary_enabled,test_status,tested_at,test_summary,context_window_tokens) values(?,?,?,?,?,?,?,?,?,?,?)", new String[]{"id"});
+                Object[] values = {org, name, e.protocol(), e.baseUrl(), e.model(), cipher, e.summary(), state, tested == null ? null : Timestamp.from(tested), summary, e.contextWindowTokens()};
                 for (int i = 0; i < values.length; i++) statement.setObject(i + 1, values[i]);
                 return statement;
             }, key); id = Objects.requireNonNull(key.getKey()).longValue();
         } else if (!changed && !verified) {
-            // A name-only save must not overwrite a newer connection-test result.
+            // Local settings must not overwrite a newer connection-test result.
             id = old.id;
-            db.update("update agent_provider_config set display_name=?,version=version+1,updated_at=CURRENT_TIMESTAMP where id=? and org_id=?", name, id, org);
+            db.update("update agent_provider_config set display_name=?,context_window_tokens=?,version=version+1,updated_at=CURRENT_TIMESTAMP where id=? and org_id=?", name, e.contextWindowTokens(), id, org);
         } else {
             id = old.id;
-            db.update("update agent_provider_config set display_name=?,protocol=?,base_url=?,model_id=?,api_key_ciphertext=?,summary_enabled=?,test_status=?,tested_at=?,test_summary=?,version=version+1,updated_at=CURRENT_TIMESTAMP where id=? and org_id=?",
-                    name,e.protocol(),e.baseUrl(),e.model(),cipher,e.summary(),state,tested == null ? null : Timestamp.from(tested),summary,id,org);
+            db.update("update agent_provider_config set display_name=?,protocol=?,base_url=?,model_id=?,api_key_ciphertext=?,summary_enabled=?,test_status=?,tested_at=?,test_summary=?,context_window_tokens=?,version=version+1,updated_at=CURRENT_TIMESTAMP where id=? and org_id=?",
+                    name,e.protocol(),e.baseUrl(),e.model(),cipher,e.summary(),state,tested == null ? null : Timestamp.from(tested),summary,e.contextWindowTokens(),id,org);
         }
         audit(org, id, old == null ? "CREATE" : "UPDATE"); return view(read(id, org));
     }
@@ -227,6 +238,6 @@ public class AgentProviderService {
         var s = found.getFirst();
         if (stream != null) db.update("insert into agent_provider_task_usage(stream_id,org_id,config_id,config_version,protocol,model_id) values(?,?,?,?,?,?)",
                 stream, org, s.id, s.version, s.protocol, s.model);
-        return create(new ModelEndpoint(s.protocol, s.url, secrets.decrypt(s.ciphertext), s.model, s.summary));
+        return create(new ModelEndpoint(s.protocol, s.url, secrets.decrypt(s.ciphertext), s.model, s.summary, s.contextWindowTokens));
     }
 }

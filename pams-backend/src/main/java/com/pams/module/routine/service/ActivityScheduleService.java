@@ -87,6 +87,59 @@ public class ActivityScheduleService {
             throw new BizException(2408, "排班候选人员已变化，请重新生成清单并核对后确认。");
         }
         Long activityId = resolveActivityId(req);
+        return saveDrafts(req, activityId, calculation);
+    }
+
+    /** Saves only fully matched unpublished drafts inside the explicitly delegated scope. */
+    @Transactional
+    public List<Map<String, Object>> generateDelegatedDraft(ActivityScheduleGenerateRequest req, String expected) {
+        Long orgId = com.pams.common.OrgContext.get();
+        validate(orgId != null && req.getActivityId() != null && req.getDeptIds() != null
+                && req.getDeptIds().size() == 1 && req.getPeoplePerSlot() != null
+                && req.getPeoplePerSlot() >= 1 && req.getPeoplePerSlot() <= 10
+                && req.getSemester() == null && req.getSemesterStartDate() == null
+                && req.getStartDate() != null && req.getEndDate() != null
+                && !req.getEndDate().isBefore(req.getStartDate()) && !req.getEndDate().isAfter(req.getStartDate().plusDays(6))
+                && req.getStartTime() != null && req.getEndTime() != null && req.getEndTime().isAfter(req.getStartTime()),
+                "授权仅覆盖一个活动、一个部门和七天内的明确排班草稿");
+        var activity = activityRepository.lockById(req.getActivityId()).filter(a -> orgId.equals(a.getOrgId())
+                && a.getStatus() != ActivityStatus.ARCHIVED).orElseThrow(() -> new BizException(2408, "关联活动不可用"));
+        Long deptId = req.getDeptIds().getFirst();
+        validate(departmentRepository.findById(deptId).filter(dept -> orgId.equals(dept.getOrgId())).isPresent(),
+                "参与部门不可用");
+        var overlaps = scheduleRepository.findByScheduleTypeAndActivityIdAndScheduleDateBetween(
+                Schedule.TYPE_ACTIVITY, activity.getId(), req.getStartDate(), req.getEndDate());
+        validate(overlaps.stream().noneMatch(schedule ->
+                schedule.getStartTime() == null || schedule.getEndTime() == null
+                        || (schedule.getStartTime().isBefore(req.getEndTime())
+                        && schedule.getEndTime().isAfter(req.getStartTime()))),
+                "指定范围已有重叠排班，请先核对已有记录");
+
+        Calculation calculation = calculate(req);
+        validate(expected != null && expected.equals(previewFingerprint(calculation.details())),
+                "排班候选人员已变化，请重新核对");
+        long coveredDays = calculation.assignments().stream().map(Assignment::date).distinct().count();
+        validate(coveredDays == java.time.temporal.ChronoUnit.DAYS.between(req.getStartDate(), req.getEndDate()) + 1,
+                "部分日期没有完整班次，请先核对候选");
+        var assignedIds = new java.util.HashSet<Long>();
+        for (Assignment assignment : calculation.assignments()) {
+            validate(!assignment.slot().startTime().isBefore(req.getStartTime())
+                            && !assignment.slot().endTime().isAfter(req.getEndTime()),
+                    "候选班次超出授权时段，请调整时段后核对");
+            validate(assignment.people().size() == req.getPeoplePerSlot()
+                            && assignment.people().stream().allMatch(candidate -> candidate.userId() != null),
+                    "候选人数不足或账号身份不明确，请先核对");
+            assignment.people().forEach(candidate -> assignedIds.add(candidate.userId()));
+        }
+        var accounts = userRepository.findAllById(assignedIds);
+        validate(accounts.size() == assignedIds.size() && accounts.stream().allMatch(user ->
+                orgId.equals(user.getOrgId()) && Objects.equals(user.getStatus(), 1)
+                        && user.getDept() != null && deptId.equals(user.getDept().getId())),
+                "候选账号已失效或不在授权部门，请先核对");
+        return saveDrafts(req, activity.getId(), calculation);
+    }
+
+    private List<Map<String, Object>> saveDrafts(ActivityScheduleGenerateRequest req, Long activityId, Calculation calculation) {
         List<String> deptNames = new ArrayList<>();
         for (Long deptId : req.getDeptIds()) {
             departmentRepository.findById(deptId).ifPresent(d -> deptNames.add(d.getName()));

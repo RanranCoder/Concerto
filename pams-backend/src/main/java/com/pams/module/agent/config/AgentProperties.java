@@ -17,7 +17,10 @@ public class AgentProperties {
     private int maxTokens = 8192;
     private double temperature = 0.3;
     private int contextRounds = 6;
-    private int contextWindowTokens = 32768;
+    // Conservative UTF-8 byte estimate, not provider tokenizer units. The 47-tool menu
+    // plus one live tool exchange must fit without dropping schemas or instructions.
+    private int contextWindowTokens = 65536;
+    public int getContextWindowTokens() { return Math.min(contextWindowTokens, 1_000_000); }
     private int contextSafetyTokens = 1024;
     private int contextToolResultTokens = 2048;
     private int contextSummaryTokens = 3072;

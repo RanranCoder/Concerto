@@ -65,6 +65,8 @@ pams:
     base-url: ${PAMS_AGENT_BASE_URL:https://api.openai.com/v1}
     model: ${PAMS_AGENT_MODEL:}
     timeout-ms: 30000
+    word-renderer: ${PAMS_AGENT_WORD_RENDERER:}
+    word-pdf-text: ${PAMS_AGENT_WORD_PDF_TEXT:}
     max-tokens: 8192
     temperature: 0.3
     summary-enabled: ${PAMS_AGENT_SUMMARY_ENABLED:false}

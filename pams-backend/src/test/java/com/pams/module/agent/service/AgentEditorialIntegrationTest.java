@@ -72,8 +72,8 @@ class AgentEditorialIntegrationTest {
     ActivityPlan plan(){var p=new ActivityPlan();p.setActivityId(activity.getId());p.setOwnerId(1L);p.setVersion(1);p.setStatus(ActivityPlan.PlanStatus.DRAFT);p.setContent("策划正文");return plans.saveAndFlush(p);}
     @Test void planSubmissionRevalidatesCandidatesAndCurrentRevision()throws Exception{
         var plan=plan();var info=editorial.planReview(ctx,plan.getId());var candidates=(List<?>)info.payload().get("reviewerCandidates");assertThat(candidates).isNotEmpty();
-        var candidate=(com.pams.module.activity.service.PlanAccessService.Candidate)candidates.getFirst();
-        var p=pending(planTool,planTool.execute(ctx,Map.of("planId",plan.getId(),"expectedRevision",plan.getRevision(),"reviewerIds",List.of(candidate.id()))));
+        var candidate=(Map<?,?>)candidates.getFirst();assertThat(new EditorialTools.PlanReview(editorial).toLlmText(ctx,info)).contains(candidate.get("name").toString()).doesNotContain("未展开的结构化字段");
+        var p=pending(planTool,planTool.execute(ctx,Map.of("planId",plan.getId(),"expectedRevision",plan.getRevision(),"reviewerIds",List.of(candidate.get("id")))));
         assertThat(gate.confirm(p.planId(),p.confirmToken(),ctx)).containsEntry("status","SUCCESS");
         assertThat(plans.findById(plan.getId()).orElseThrow().getStatus()).isEqualTo(ActivityPlan.PlanStatus.PENDING);
         assertThat(reconciliation.reconcile(p.planId(),ctx)).containsEntry("reconciled",true);

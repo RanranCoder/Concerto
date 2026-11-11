@@ -48,7 +48,9 @@ public class WorkItemState {
         if (!Objects.equals(run.getOrgId(),OrgContext.get())) throw new BizException(403,"组织上下文不匹配");
         return run;
     }
-    public List<AgentWorkItem> nodes(Long runId) { return items.findByRunIdOrderByNodeKeyAsc(runId); }
+    public List<AgentWorkItem> nodes(Long runId) {
+        return items.findByRunIdOrderByNodeKeyAsc(runId).stream().filter(node -> !"SUPERSEDED".equals(node.getStatus())).toList();
+    }
     public List<Integer> dependencies(AgentWorkItem item) {
         try { return json.convertValue(AgentJson.readTree(json,item.getDependenciesJson()),new TypeReference<List<Integer>>(){}); }
         catch(Exception e) { throw new IllegalStateException("任务依赖损坏",e); }
@@ -82,6 +84,8 @@ public class WorkItemState {
         if(!nodes(runId).isEmpty()) throw new BizException(4400,"任务已初始化");
         run.setStreamId(ctx.getStreamId()); run.setToolMode(ctx.getMode()); run.setAuthorityJson(encode(ctx.getAuthorities()));
         run.setRequestId(ctx.getRequestId());
+        run.setUserTimezone(ctx.getTimezone());
+        run.setPromptBundleJson(ctx.getPromptBundleJson()!=null?ctx.getPromptBundleJson():com.pams.module.agent.prompt.PromptBundle.capture(agentRegistry));
         for(var p:bb.getPlan()) {
             var n=new AgentWorkItem(); n.setRunId(runId); n.setNodeKey(p.getId()); n.setAgentName(p.getAgent());
             n.setInstruction(p.getTask()); n.setDependenciesJson(encode(p.getDependsOn())); n.setUpdatedAt(LocalDateTime.now());
@@ -140,7 +144,11 @@ public class WorkItemState {
     @Transactional
     public int claimAction(AgentTask action,ToolContext ctx) {
         AgentRun run=lock(action.getRunId());
+        com.pams.module.agent.prompt.PromptBundle.validate(run.getPromptBundleJson());
         requireActive(run);
+        if (requests.collaborativeSteering(run.getStreamId(), run.getId(), false).pending()) {
+            throw new BizException(409, "已收到补充指令，当前预览将更新，请稍后确认");
+        }
         if(!ctx.getAuthorities().containsAll(authority(run))) throw new BizException(403,"任务所需权限已变化，请重新发起");
         AgentWorkItem n=items.findById(action.getWorkItemId()).orElseThrow();
         if(!Objects.equals(n.getRunId(),run.getId()) || n.getRevision()!=action.getWorkItemRevision()
@@ -154,6 +162,50 @@ public class WorkItemState {
         }
         if("BLOCKED".equals(n.getReviewStatus()) || reviewIssues.existsByWorkItemIdAndRevisionAndAttemptAndSeverity(n.getId(),n.getRevision(),n.getAttempt(),"BLOCKING")) throw new BizException(4400,"请先修订审查问题");
         return tasks.claimOwned(action.getId(),AgentTask.PENDING_CONFIRM,AgentTask.RUNNING,LocalDateTime.now(),RuntimeIdentity.ID);
+    }
+
+    /**
+     * Replaces the current graph under its dispatch lease. Old nodes and their attempts remain in storage.
+     * An already submitted action can have effects even when its receipt is not yet available.
+     */
+    @Transactional
+    public boolean replanUncommitted(Long id, String token, Blackboard replacement, int steeringThrough) {
+        AgentRun run = lock(id);
+        requireActive(run);
+        if (!Objects.equals(token, run.getDispatchToken())) throw new BizException(409, "协作调度权已变化");
+        validate(replacement.getPlan());
+        var oldNodes = nodes(id);
+        if (oldNodes.stream().anyMatch(node -> "RUNNING".equals(node.getStatus()) || node.getContractJson() != null)) return false;
+        var actions = tasks.findByRunIdOrderByIdAsc(id);
+        var replaceable = Set.of(AgentTask.PENDING_CONFIRM, AgentTask.WAITING_INPUT, AgentTask.CANCELLED, "REVIEW_REQUIRED");
+        if (actions.stream().anyMatch(action -> !replaceable.contains(action.getStatus()))) return false;
+        for (var action : actions) {
+            if (AgentTask.CANCELLED.equals(action.getStatus())) continue;
+            if (tasks.cancelPending(action.getId(), run.getUserId(), LocalDateTime.now()) == 0) {
+                throw new BizException(409, "原清单状态已变化，请核对执行结果");
+            }
+        }
+        int offset = items.findByRunIdOrderByNodeKeyAsc(id).stream().mapToInt(AgentWorkItem::getNodeKey).max().orElse(0);
+        for (var node : oldNodes) {
+            node.setStatus("SUPERSEDED");
+            node.setUpdatedAt(LocalDateTime.now());
+            items.save(node);
+        }
+        for (var step : replacement.getPlan()) {
+            var node = new AgentWorkItem();
+            node.setRunId(id);
+            node.setNodeKey(offset + step.getId());
+            node.setAgentName(step.getAgent());
+            node.setInstruction(step.getTask());
+            node.setDependenciesJson(encode(step.getDependsOn().stream().map(key -> key + offset).toList()));
+            node.setUpdatedAt(LocalDateTime.now());
+            items.save(node);
+        }
+        run.setGoal(replacement.getGoal());
+        items.flush();
+        requests.markSteeringConsumed(run.getStreamId(), steeringThrough);
+        update(run);
+        return true;
     }
     @Transactional
     public void complete(AgentWorkItem attempted,SpecialistAgent.Result result,long duration,String token) {

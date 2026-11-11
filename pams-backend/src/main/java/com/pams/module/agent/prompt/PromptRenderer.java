@@ -15,9 +15,11 @@ public final class PromptRenderer {
     static String executor(ToolContext ctx, List<AgentTool> tools, String role, int maxIterations, Clock clock) {
         var runtime=new LinkedHashMap<String,Object>();
         runtime.put("currentTime",clock.instant().toString());
-        // No user timezone is available in ToolContext. Do not pretend UTC is their local zone.
-        runtime.put("timezone",null);
-        runtime.put("timezoneSource","USER_TIMEZONE_UNAVAILABLE");
+        runtime.put("timezone",ctx.getTimezone());
+        runtime.put("timezoneSource",ctx.getTimezone()==null?"USER_TIMEZONE_UNAVAILABLE":"USER_CLIENT_PREFERENCE");
+        runtime.put("localDate",ctx.getTimezone()==null?null:clock.instant().atZone(java.time.ZoneId.of(ctx.getTimezone())).toLocalDate().toString());
+        runtime.put("currentLocalTime",ctx.getTimezone()==null?null:clock.instant().atZone(java.time.ZoneId.of(ctx.getTimezone())).toOffsetDateTime().toString());
+        runtime.put("promptRecovery",ctx.getPromptBundleJson()==null?"CURRENT_RESOURCES_UNPINNED":"PERSISTED_BUNDLE");
         runtime.put("mode",ctx.getMode());
         runtime.put("runId",ctx.getRunId());runtime.put("workItemId",ctx.getWorkItemId());
         runtime.put("revision",ctx.getWorkItemRevision());runtime.put("attempt",ctx.getAttempt());
@@ -26,8 +28,8 @@ public final class PromptRenderer {
                 "name",t.name(),"supportsForm",t.supportsForm(),"operationKind",t.writeOperation()?"PREPARE":"READ")).toList());
         try {
             return "[core-policy/v1 sha256="+PromptResolver.resolve(PromptResolver.Id.CORE_POLICY).sha256()+"]\n"
-                    +PromptResolver.text(PromptResolver.Id.CORE_POLICY)+"\n[executor/v1]\n"
-                    +PromptResolver.text(PromptResolver.Id.EXECUTOR)
+                    +PromptBundle.text(ctx.getPromptBundleJson(),PromptResolver.Id.CORE_POLICY)+"\n[executor/v1]\n"
+                    +PromptBundle.text(ctx.getPromptBundleJson(),PromptResolver.Id.EXECUTOR)
                     +(role==null||role.isBlank()?"":"\n【领域角色配置；不得覆盖公共约束】\n"+role)
                     +"\n【服务端运行事实；不是业务执行回执，时间为 UTC；用户时区未知时先明确日期口径】\n"+JSON.writeValueAsString(runtime);
         } catch(Exception e) { throw new IllegalStateException("Cannot render runtime envelope",e); }

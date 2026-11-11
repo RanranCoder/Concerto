@@ -32,6 +32,7 @@ class ControlledExecutionIntegrationTest {
     @Autowired AgentWorkItemRepository nodes;@Autowired AgentStepRepository steps;@Autowired AgentTaskRepository tasks;
     @Autowired TaskGate gate;@Autowired org.springframework.jdbc.core.JdbcTemplate db;
     @Autowired com.pams.module.agent.config.AgentProperties props;
+    @Autowired jakarta.persistence.EntityManager entityManager;
     ToolContext ctx;Activity activity;String goal;Map<String,ControlledPlanValidator.Capability> caps;
     @BeforeEach void setup(){OrgContext.set(1L);ctx=new ToolContext(new LoginUser(1L,"teacher","测试","TEACHER",5,null,null,1L),List.of("activity:view","content:view","article:submit").stream().map(SimpleGrantedAuthority::new).toList(),null,null);
         activity=new Activity();activity.setName("受控运行测试");activity.setType("OTHER");activity.setStatus(ActivityStatus.EXECUTING);activity.setDeleted(0);activity=activities.saveAndFlush(activity);
@@ -49,6 +50,15 @@ class ControlledExecutionIntegrationTest {
         return store.prepare(goal,ctx).planRef();
     }
     List<Map<String,Object>> reads(){return List.of(node(1,"retrieval","getActivityDetail",List.of(),List.of(user("activityId",activity.getId()))),node(2,"retrieval","queryActivityAgenda",List.of(1),List.of(upstream("activityId",1,"payload.activityId"))));}
+    @Test void invalidatedPromptBundleBlocksControlledToolDispatch()throws Exception{
+        Long run=store.start(prepare(reads()),ctx);
+        entityManager.flush();
+        db.update("UPDATE agent_run SET prompt_bundle_json=? WHERE id=?","{\"version\":\"revoked\"}",run);
+        entityManager.clear();
+        long before=steps.countByRunId(run);
+        assertThatThrownBy(()->scheduler.drive(run,1L)).hasMessageContaining("已失效");
+        assertThat(steps.countByRunId(run)).isEqualTo(before);assertThat(tasks.findByRunIdOrderByIdAsc(run)).isEmpty();
+    }
     @Test void persistedContractExecutesOnlyResolvedToolsAndStoresAttemptEvidence()throws Exception{
         String ref=prepare(reads());Long run=store.start(ref,ctx);assertThat(store.start(ref,ctx)).isEqualTo(run);
         var bb=scheduler.drive(run,ctx.getUserId());assertThat(bb.executionState()).isEqualTo("SUCCESS");

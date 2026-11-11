@@ -36,6 +36,10 @@ public class AgentRun implements OrgScoped {
     @Column(columnDefinition = "JSON")
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String authorityJson;
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String promptBundleJson;
+    @Column(length = 80)
+    private String userTimezone;
     private String dispatchToken;
     private LocalDateTime dispatchStartedAt;
 

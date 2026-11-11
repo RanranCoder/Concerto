@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 /** Business invocation interface. Each provider owns its native wire protocol. */
 public interface LlmProvider {
     String name();
+    default Integer contextWindowTokens() { return null; }
     boolean supportsToolCalling();
     ChatResponse chat(ChatRequest request);
     default ChatResponse chatStream(ChatRequest request, Consumer<String> output) {

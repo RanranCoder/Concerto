@@ -18,7 +18,9 @@ class AgentProviderServiceTest {
     @BeforeEach void setup() {
         var ds=new JdbcDataSource();ds.setURL("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
         db=new JdbcTemplate(ds);db.execute("create table organization(id bigint primary key)");db.update("insert into organization values(1),(2)");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V59__agent_provider_settings.sql"),new ClassPathResource("db/migration/V60__agent_provider_key_state.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V59__agent_provider_settings.sql"),
+                new ClassPathResource("db/migration/V60__agent_provider_key_state.sql"),
+                new ClassPathResource("db/migration/V66__agent_provider_context_window.sql")).execute(ds);
         secrets=new ProviderSecrets(Base64.getEncoder().encodeToString(new byte[32]));
         service=new AgentProviderService(db,secrets,new ProviderUrlPolicy("localhost"),new AgentProperties());OrgContext.set(1L);
     }
@@ -68,6 +70,24 @@ class AgentProviderServiceTest {
         assertThatThrownBy(()->registry.begin("task",2)).isInstanceOf(BizException.class);
         assertThat(registry.begin("other",2)).isSameAs(b);registry.release("task");assertThat(registry.begin("next",1)).isSameAs(b);
         verify(configs,times(2)).resolve(eq(1L),eq(stub),anyString());
+    }
+    @Test void contextWindowIsValidatedAndPinnedWithTheActiveService() {
+        var saved = service.save(draft(null, null, "服务", "key"));
+        assertThat(saved.contextWindowTokens()).isNull();
+        db.update("update agent_provider_config set test_status='PASSED',tested_at=CURRENT_TIMESTAMP");
+        service.activate(saved.id(), saved.version(), 0);
+        var registry = new TaskProviderRegistry(service, new StubProvider());
+        assertThat(registry.begin("old-window", 1).contextWindowTokens()).isNull();
+
+        var updated = service.save(new AgentProviderService.Draft(saved.id(), saved.version(), saved.displayName(),
+                saved.protocol(), saved.baseUrl(), saved.modelId(), "", true, null, 1_000_000));
+        assertThat(updated.contextWindowTokens()).isEqualTo(1_000_000);
+        assertThat(updated.testStatus()).isEqualTo("PASSED");
+        assertThat(registry.get("old-window").contextWindowTokens()).isNull();
+        assertThat(registry.begin("new-window", 1).contextWindowTokens()).isEqualTo(1_000_000);
+        assertThatThrownBy(() -> service.save(new AgentProviderService.Draft(updated.id(), updated.version(),
+                updated.displayName(), updated.protocol(), updated.baseUrl(), updated.modelId(), "", true, null,
+                1_000_001))).isInstanceOf(BizException.class).hasMessageContaining("上下文窗口");
     }
     @Test void rejectsUnsafeUrlsAndMissingEncryptionKey() {
         var policy=new ProviderUrlPolicy("");

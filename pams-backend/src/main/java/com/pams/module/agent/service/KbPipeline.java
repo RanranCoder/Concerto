@@ -99,6 +99,10 @@ public class KbPipeline {
      *         （避免两条链路各写一份"收官逻辑"而漂移）
      */
     public KbOutcome run(String question, Long convId, ToolContext ctx, String streamId) {
+        return run(question, convId, ctx, streamId, 0);
+    }
+
+    KbOutcome run(String question, Long convId, ToolContext ctx, String streamId, int round) {
         if (authorization != null) ctx = authorization.refresh(ctx);
         long t0 = System.currentTimeMillis();
 
@@ -139,9 +143,8 @@ public class KbPipeline {
         } catch(RuntimeException e) { log.warn("Long-term memory unavailable in KB: {}",e.getClass().getSimpleName()); }
         messages.add(LlmProvider.ChatMessage.text("user", KbPrompts.buildUserMessage(question, safe)));
 
-        // 无工具：对话档位"没有工具循环"的物理体现（方案 §7.3）。round 固定 0 ——
-        // 本轮只有一次生成，不存在"重试/降级之外"的换 round 场景（那两种由 callLlm 内部处理）
-        LlmProvider.ChatResponse response = llmCaller.callLlm(messages, List.of(), ctx, streamId, 0);
+        // Each corrected question gets a fresh retrieval and its own answer stream round.
+        LlmProvider.ChatResponse response = llmCaller.callLlm(messages, List.of(), ctx, streamId, round);
         String reply = response.content() == null ? "" : response.content();
 
         // ===== ⑤ 引用回填（闸口 C） =====

@@ -18,9 +18,11 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** Narrow revision workflow: original user request, complete snapshot, real diff, CAS and durable receipt. */
+/** Snapshot-bound Word revision, version check and durable save receipt. */
 @Service
 public class PlanRevisionService {
+    private static final String BLOCK_EDITS = "BLOCK_EDITS";
+    private final com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
     private final JdbcTemplate db;
     private final PlanSnapshotStore snapshots;
     private final ActivityPlanRepository plans;
@@ -31,14 +33,16 @@ public class PlanRevisionService {
     private final FileStorageService storage;
     private final AgentMessageRepository messages;
     private final AgentTaskRepository tasks;
+    private final WordPageReview pageReview;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
     private static final Pattern GOAL=Pattern.compile("(?:请)?只(?:把|将)?(?:经费)?预算(?:总额)?(?:改成|改为|调整为)\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)\\s*元[，,；;\\s]*(?:其余|其他)(?:全文)?(?:保持)?(?:不变|保留)[。！!\\s]*");
     private static final Pattern TOTAL=Pattern.compile("预算总额(?:为|[:：])\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)\\s*元");
     public PlanRevisionService(JdbcTemplate db,PlanSnapshotStore snapshots,ActivityPlanRepository plans,ActivityRepository activities,
             PlanAccessService access,PlanAttachmentService attachments,PlanService planService,FileStorageService storage,
-            AgentMessageRepository messages,AgentTaskRepository tasks) {
+            AgentMessageRepository messages,AgentTaskRepository tasks, WordPageReview pageReview) {
         this.db=db;this.snapshots=snapshots;this.plans=plans;this.activities=activities;this.access=access;
         this.attachments=attachments;this.planService=planService;this.storage=storage;this.messages=messages;this.tasks=tasks;
+        this.pageReview = pageReview;
     }
     private void writable(ToolContext ctx) {
         if(ctx==null || ctx.getLoginUser()==null || ctx.isReadonly() || ctx.isKb()
@@ -63,12 +67,14 @@ public class PlanRevisionService {
             var snapshot=snapshots.require(ToolArgs.str(args,"documentRef"),ctx,true);
             if(!Objects.equals(ToolArgs.lng(args,"planId"),snapshot.planId()) || !snapshot.baseline().equals(ToolArgs.str(args,"baseline")))
                 throw new BizException(409,"快照与指定版本不一致");
-            if(!snapshot.eligible() || snapshot.covered()!=snapshot.total()) throw new BizException(409,"INSUFFICIENT_SOURCE：需要完整读取支持范围内的快照");
             var p=current(snapshot,ctx,false);
             var sources=messages.findByStreamIdAndRole(ctx.getStreamId(),com.pams.module.agent.entity.AgentMessage.ROLE_USER).stream()
                     .filter(m->Objects.equals(m.getConversationId(),ctx.getConversationId())).toList();
             if(sources.size()!=1) throw new BizException(409,"当前请求缺少可核验原始用户目标，请重新明确修订要求");
-            var source=sources.getFirst();var goal=GOAL.matcher(Objects.toString(source.getContent(),"").strip());
+            var source=sources.getFirst();
+            if (args.containsKey("edits")) return prepareBlockEdits(ctx, snapshot, p, source.getId(), args.get("edits"));
+            if(!snapshot.eligible() || snapshot.covered()!=snapshot.total()) throw new BizException(409,"INSUFFICIENT_SOURCE：需要完整读取支持范围内的快照");
+            var goal=GOAL.matcher(Objects.toString(source.getContent(),"").strip());
             if(!goal.matches()) throw new BizException(409,"首版仅支持明确要求：只把预算总额改为3000元，其余保留；其他范围请在原生编辑器修改");
             String blockId=ToolArgs.str(args,"blockId"),before=ToolArgs.str(args,"before"),after=ToolArgs.str(args,"after");
             var block=snapshot.blocks().stream().filter(b->Objects.equals(b.get("blockId"),blockId)).findFirst().orElseThrow(()->new BizException(409,"目标块不存在"));
@@ -87,6 +93,42 @@ public class PlanRevisionService {
             return ToolResult.plan("已准备预算修改预览，尚未写入策划书。请核对差异后确认。",plan);
         } catch(BizException e) {return ToolResult.failed(e.getMessage());}
         catch(Exception e) {return ToolResult.failed("不支持此文档的精确修订，请在原生编辑器修改");}
+    }
+
+    private List<WordBlockEdits.Edit> blockEdits(Object input) {
+        if (!(input instanceof List<?> edits) || edits.isEmpty() || edits.size() > 12) {
+            throw new BizException(409, "请提供 1 至 12 个文档块修订");
+        }
+        return edits.stream().map(edit -> json.convertValue(edit, WordBlockEdits.Edit.class)).toList();
+    }
+
+    private ToolResult prepareBlockEdits(ToolContext ctx, PlanSnapshotStore.Snapshot snapshot, ActivityPlan plan,
+                                         Long sourceMessageId, Object input) throws Exception {
+        var edits = blockEdits(input);
+        WordBlockEdits.apply(snapshot, edits);
+        String encoded = json.writeValueAsString(edits);
+        if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 60000) {
+            throw new BizException(409, "本次修订过长，请分批修改");
+        }
+        String id = UUID.randomUUID().toString();
+        db.update("INSERT INTO agent_plan_revision(id,snapshot_id,org_id,user_id,plan_id,source_message_id,before_text,after_text,block_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                id, snapshot.id(), ctx.getLoginUser().getOrgId(), ctx.getUserId(), plan.getId(),
+                sourceMessageId, "", encoded, BLOCK_EDITS, LocalDateTime.now());
+        var items = edits.stream().map(edit -> new AgentActionPlan.PlanItem(plan.getId(), edit.blockId(), editSummary(edit))).toList();
+        String preview = edits.stream().map(edit -> edit.blockId() + "\n\n" + editSummary(edit))
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+        var action = new AgentActionPlan(null, "策划书第 " + plan.getVersion() + " 版局部修订", items.size(), items,
+                List.of(), List.of("确认后保存为新的草稿版本", "__args__:{\"changeSetId\":\"" + id + "\"}"), true, null, preview);
+        return ToolResult.plan("已准备 Word 局部变更，等待确认保存草稿。", action);
+    }
+
+    private static String editSummary(WordBlockEdits.Edit edit) {
+        return switch (edit.kind()) {
+            case REPLACE -> "原文：" + edit.before() + "\n修改为：" + edit.after();
+            case INSERT_BEFORE -> "在「" + edit.before() + "」之前插入：" + edit.after();
+            case INSERT_AFTER -> "在「" + edit.before() + "」之后插入：" + edit.after();
+            case DELETE -> "删除段落：" + edit.before();
+        };
     }
     static void validateChange(PlanSnapshotStore.Snapshot snapshot,String before,String after,String target) {
         var amount=TOTAL.matcher(Objects.toString(before,""));
@@ -117,16 +159,27 @@ public class PlanRevisionService {
         // Even receipt lookup must still respect current access policy.
         var original=plans.findById(snapshot.planId()).orElseThrow(()->new BizException(404,"原版本不存在或不可见"));
         if(!access.canRead(original,ctx)) throw new BizException(403,"原版本已不可见");
-        if(change.get("result_plan_id")!=null) return receipt(((Number)change.get("result_plan_id")).longValue());
+        if(change.get("result_plan_id")!=null) {
+            return receipt(((Number)change.get("result_plan_id")).longValue(), (String)change.get("page_review_json"));
+        }
         var source=messages.findByIdAndConversationId(((Number)change.get("source_message_id")).longValue(),ctx.getConversationId())
                 .filter(m->com.pams.module.agent.entity.AgentMessage.ROLE_USER.equals(m.getRole()) && Objects.equals(m.getStreamId(),ctx.getStreamId()))
                 .orElseThrow(()->new BizException(409,"原始用户目标已不可核验，请重新预览"));
-        var goal=GOAL.matcher(Objects.toString(source.getContent(),"").strip());
-        if(!goal.matches()) throw new BizException(409,"原始修订目标已变化，请重新预览");
-        validateChange(snapshot,change.get("before_text").toString(),change.get("after_text").toString(),goal.group(1));
-        var p=current(snapshot,ctx,true);
-        String before=change.get("before_text").toString(),after=change.get("after_text").toString();
-        byte[] revised=BudgetDocxRevision.replace(snapshot.bytes(),before,after);
+        current(snapshot,ctx,false);
+        byte[] revised;
+        if (BLOCK_EDITS.equals(change.get("block_id"))) {
+            revised = WordBlockEdits.apply(snapshot, blockEdits(json.readValue(change.get("after_text").toString(), List.class)));
+        } else {
+            var goal = GOAL.matcher(Objects.toString(source.getContent(),"").strip());
+            if (!goal.matches()) throw new BizException(409,"原始修订目标已变化，请重新预览");
+            String before = change.get("before_text").toString(), after = change.get("after_text").toString();
+            validateChange(snapshot,before,after,goal.group(1));
+            revised = BudgetDocxRevision.replace(snapshot.bytes(),before,after);
+        }
+        var review = pageReview.inspectRevision(revised);
+        String reviewJson = json.writeValueAsString(review.facts());
+        // Rendering may take time. Revalidate the source under the activity lock immediately before saving.
+        var p = current(snapshot,ctx,true);
         var file=storage.store(new BytesFile(revised),"PLAN",ctx.getUserId());
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
             @Override public void afterCompletion(int status) {
@@ -138,12 +191,15 @@ public class PlanRevisionService {
         req.setNameOverride(p.getNameOverride());req.setThemeOverride(p.getThemeOverride());req.setTimeOverride(p.getTimeOverride());
         req.setLocationOverride(p.getLocationOverride());req.setOrganizerOverride(p.getOrganizerOverride());req.setTargetOverride(p.getTargetOverride());
         var saved=planService.createAgentNativeRevision(req,ctx,p.getId(),p.getRevision());
-        db.update("UPDATE agent_plan_revision SET result_plan_id=? WHERE id=?",saved.getId(),id);
-        return receipt(saved.getId());
+        db.update("UPDATE agent_plan_revision SET result_plan_id=?, page_review_json=? WHERE id=?",
+                saved.getId(), reviewJson, id);
+        return receipt(saved.getId(), reviewJson);
     }
-    private WriteAgentTool.CommitResult receipt(Long id) {
+    private WriteAgentTool.CommitResult receipt(Long id, String reviewJson) throws IOException {
         var p=plans.findById(id).orElseThrow(()->new BizException(409,"修订回执待核对"));
-        return new WriteAgentTool.CommitResult("SUCCESS",1,0,"已创建预算修订草稿，原稿保留。",Map.of("planId",id,"version",p.getVersion()),
+        var detail = ToolArgs.map("planId", id, "version", p.getVersion());
+        if (reviewJson != null) detail.put("wordPageReview", json.readValue(reviewJson, Map.class));
+        return new WriteAgentTool.CommitResult("SUCCESS",1,0,"已创建 Word 修订草稿，原稿保留。",detail,
                 List.of(ToolArgs.map("type","activity","id",p.getActivityId(),"label","策划书修订草稿","link","/activities/"+p.getActivityId()+"?tab=plan&planId="+id)));
     }
     /** Read the durable business receipt independently of expired source snapshots. Never commits a revision. */
@@ -154,17 +210,17 @@ public class PlanRevisionService {
         for(String line:action.detailLines()) if(line.startsWith("__args__:"))
             id=new com.fasterxml.jackson.databind.ObjectMapper().readTree(line.substring(9)).path("changeSetId").asText();
         if(id==null || !id.matches("[a-f0-9-]{36}")) throw new BizException(409,"变更集标识无效");
-        var rows=db.queryForList("SELECT plan_id,result_plan_id FROM agent_plan_revision WHERE id=? AND org_id=? AND user_id=?",id,ctx.getLoginUser().getOrgId(),ctx.getUserId());
+        var rows=db.queryForList("SELECT plan_id,result_plan_id,page_review_json FROM agent_plan_revision WHERE id=? AND org_id=? AND user_id=?",id,ctx.getLoginUser().getOrgId(),ctx.getUserId());
         if(rows.isEmpty() || rows.getFirst().get("result_plan_id")==null) return Optional.empty();
         var row=rows.getFirst();
         var source=plans.findById(((Number)row.get("plan_id")).longValue()).orElseThrow(()->new BizException(404,"回执关联版本不可见"));
         var result=plans.findById(((Number)row.get("result_plan_id")).longValue()).orElseThrow(()->new BizException(409,"业务回执对应版本待核对"));
         if(!access.canRead(source,ctx) || !access.canRead(result,ctx) || !Objects.equals(source.getActivityId(),result.getActivityId()))
             throw new BizException(403,"无权核对该版本回执");
-        return Optional.of(receipt(result.getId()));
+        return Optional.of(receipt(result.getId(), (String)row.get("page_review_json")));
     }
     private record BytesFile(byte[] bytes) implements org.springframework.web.multipart.MultipartFile {
-        public String getName(){return "document";}public String getOriginalFilename(){return "预算修订草稿.docx";}
+        public String getName(){return "document";}public String getOriginalFilename(){return "策划书修订草稿.docx";}
         public String getContentType(){return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";}
         public boolean isEmpty(){return bytes.length==0;}public long getSize(){return bytes.length;}
         public byte[] getBytes(){return bytes.clone();}public InputStream getInputStream(){return new ByteArrayInputStream(bytes);}

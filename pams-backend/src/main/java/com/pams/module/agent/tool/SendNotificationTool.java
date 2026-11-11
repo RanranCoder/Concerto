@@ -51,7 +51,7 @@ public class SendNotificationTool implements WriteAgentTool {
     public String description() {
         return "先用resolveNotificationAudience获得受众快照audienceRef，再准备站内通知，确认后才提交Outbox。标题最多100字、正文最多500字，不静默截断。"
                 + "只提供旧的单一用户/角色/部门条件时会生成快照；多个条件须明确combination。受众集合变化须重新预览，不自动扩大发送范围。"
-                + "提交、入箱、信号与阅读不同，提交后用getNotificationDeliveryStatus核对。不支持FORM或未经校验的业务实体链接。"
+                + "提交、入箱、信号与阅读不同，提交后用getNotificationDeliveryStatus核对。本版只支持纯文本通知，不能绑定活动或任务等业务实体，不要主动询问或承诺关联链接，entityType/entityId必须省略。不支持FORM。"
                 + "向指定的用户、角色或部门定向发送一条站内通知。"
                 + "适用于'提醒一下 XX 部门的同学''通知负责人尽快处理'等指令。"
                 + "通知确认后记录并异步投递，无法撤回。";
@@ -67,8 +67,8 @@ public class SendNotificationTool implements WriteAgentTool {
                 "recipientUserId", ToolArgs.prop("integer", "接收人用户 ID，可省略"),
                 "recipientRole", ToolArgs.prop("string", "接收角色码，如 STAFF / DIRECTOR，可省略"),
                 "recipientDeptId", ToolArgs.prop("integer", "接收部门 ID，可省略"),
-                "entityType", ToolArgs.prop("string", "关联实体类型，如 activity / task，可省略"),
-                "entityId", ToolArgs.prop("integer", "关联实体 ID，可省略")
+                "entityType", ToolArgs.prop("string", "仅保留历史兼容字段，本版不支持，必须省略"),
+                "entityId", ToolArgs.prop("integer", "仅保留历史兼容字段，本版不支持，必须省略")
         ), List.of("title", "content"));
     }
 

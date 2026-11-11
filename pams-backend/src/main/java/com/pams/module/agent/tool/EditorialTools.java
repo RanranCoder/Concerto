@@ -22,7 +22,7 @@ public final class EditorialTools {
     }
     @Component public static class ArticleReview extends Read {
         public ArticleReview(AgentEditorialService service){super(service);}public String name(){return "getArticleReviewStatus";}public String label(){return "查询稿件审批状态";}
-        public String description(){return "查询明确稿件的组织审批状态、可见意见；与AI审校分开，不表示已发布。不执行审批。";}
+        public String description(){return "查询明确稿件的组织审批状态、可见意见；与AI审校分开，不表示已发布。不执行审批。稿件送审不要求用户指定审核人；不要套用策划书reviewerIds规则。";}
     }
     @Component public static class PlanReview extends Read {
         public PlanReview(AgentEditorialService service){super(service);}public String name(){return "getPlanReviewStatus";}public String label(){return "查询策划审批状态";}
@@ -43,7 +43,7 @@ public final class EditorialTools {
     @Component public static class ArticleSubmission extends Write {
         public ArticleSubmission(AgentEditorialService service){super(service);}public String name(){return "prepareArticleSubmission";}public String label(){return "准备稿件送审";}
         public List<String> requiredPermissions(){return List.of("content:view","article:submit");}
-        public String description(){return "按明确articleId与原文baseline准备送审预览，作者或管理员才可操作草稿/驳回稿。确认后进入PENDING等待人工审批；不自动批准或发布。";}
+        public String description(){return "按明确articleId与原文baseline准备送审预览，作者或管理员才可操作草稿/驳回稿。无需选择或提供审核人，审核资格由原生组织流程决定，不套用策划书reviewerIds。确认后进入PENDING等待人工审批；不自动批准或发布。";}
         public Map<String,Object> parametersSchema(){return ToolArgs.schema("object",ToolArgs.map("articleId",ToolArgs.prop("integer","稿件ID"),"baseline",ToolArgs.prop("string","读取基线")),List.of("articleId","baseline"));}
     }
     @Component public static class PlanSubmission extends Write {

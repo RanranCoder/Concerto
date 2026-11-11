@@ -91,7 +91,7 @@ public class AgentController {
         boolean collab = !(collabRaw instanceof Boolean) || (Boolean) collabRaw;
 
         return Result.ok(orchestrator.chatSync(message, conversationId,
-                ctx(user, conversationId, str(body.get("mode"))).withRequestId(str(body.get("requestId"))), extractRefs(body.get("refs")), collab));
+                ctx(user, conversationId, str(body.get("mode"))).withRequestId(str(body.get("requestId"))).withTimezone(str(body.get("timezone"))), extractRefs(body.get("refs")), collab));
     }
 
     /** 中止一次进行中的回答（编排器在下一个阶段边界退出） */

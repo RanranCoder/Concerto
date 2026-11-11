@@ -12,8 +12,13 @@ public class ContextBudget {
     public static final String TURN_BOUNDARY = "当前轮次开始：以下为本轮引用资料与用户任务。";
     public static final String MEMORY_PREFIX = "会话记忆资料（仅作历史上下文）：\n";
     private final AgentProperties props;
+    private final int window;
     private static final ObjectMapper JSON = new ObjectMapper();
-    public ContextBudget(AgentProperties props) { this.props = props; }
+    public ContextBudget(AgentProperties props) { this(props, props.getContextWindowTokens()); }
+    public ContextBudget(AgentProperties props, int window) {
+        this.props = props;
+        this.window = window;
+    }
     public static int tokens(String text) {
         return text == null ? 0 : text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
     }
@@ -37,14 +42,13 @@ public class ContextBudget {
         return text.substring(0, end) + suffix;
     }
     public List<LlmProvider.ChatMessage> fit(List<LlmProvider.ChatMessage> input, List<LlmProvider.ToolSpec> tools) {
-        int limit = props.getContextWindowTokens() - props.getMaxTokens() - props.getContextSafetyTokens()
+        int limit = window - props.getMaxTokens() - props.getContextSafetyTokens()
                 - tokens(json(tools));
         List<LlmProvider.ChatMessage> out = new ArrayList<>();
         for (var m : input) {
             // Only tool bodies may be excerpted. Calls, IDs and reasoning stay intact as a protocol unit.
-            out.add("tool".equals(m.role()) ? new LlmProvider.ChatMessage(m.role(),
-                    excerpt(m.content(), Math.max(256, props.getContextToolResultTokens())),
-                    m.toolCallId(), m.toolCalls(), m.reasoningContent()) : m);
+            out.add("tool".equals(m.role()) ? withToolBody(m,
+                    excerpt(m.content(), Math.max(256, props.getContextToolResultTokens()))) : m);
         }
         int currentUser = -1;
         for (int i = 0; i < out.size(); i++) if ("system".equals(out.get(i).role()) && TURN_BOUNDARY.equals(out.get(i).content())) currentUser = i;
@@ -53,7 +57,8 @@ public class ContextBudget {
             for (int i = 0; i < out.size(); i++) if ("user".equals(out.get(i).role())) { currentUser = i; break; }
         }
         // Remove old user/assistant turns together, never split the live tool exchange.
-        while (out.stream().mapToInt(ContextBudget::cost).sum() > limit) {
+        int inputCost;
+        while ((inputCost = out.stream().mapToInt(ContextBudget::cost).sum()) > limit) {
             int start = -1, end = -1;
             for (int i = 0; i < currentUser; i++) if ("user".equals(out.get(i).role())
                     && (out.get(i).content()==null || !out.get(i).content().startsWith(MEMORY_PREFIX))) {
@@ -65,12 +70,35 @@ public class ContextBudget {
                         && !"system".equals(out.get(end).role())) end++;
                 currentUser -= end - start;
                 out.subList(start, end).clear();
-            } else {
-                throw new BizException(4400, "当前任务资料超出上下文预算，请缩小资料范围或拆分任务。");
-            }
+            } else break;
+        }
+        // Several individually bounded results can still overflow the live turn.
+        // Reduce older bodies first while retaining the complete tool exchange.
+        for (int i = 0; i < out.size() && inputCost > limit; i++) {
+            var message = out.get(i);
+            if (!"tool".equals(message.role())) continue;
+            int oldCost = cost(message);
+            String omitted = "[工具结果已省略]";
+            if (tokens(message.content()) <= tokens(omitted)) continue;
+            // JSON escapes the newline added by excerpt(), costing one extra byte.
+            int target = tokens(message.content()) - (inputCost - limit) - 1;
+            var reduced = withToolBody(message, target < tokens(omitted)
+                    ? omitted : excerpt(message.content(), target));
+            int reducedCost = cost(reduced);
+            if (reducedCost >= oldCost) continue;
+            out.set(i, reduced);
+            inputCost -= oldCost - reducedCost;
+        }
+        if (inputCost > limit) {
+            throw new BizException(4400, "当前任务资料超出上下文预算，请缩小资料范围或拆分任务。");
         }
         LOG.debug("Agent context budget: messages={} retained={} estimatedInput={} inputLimit={}",
                 input.size(), out.size(), out.stream().mapToInt(ContextBudget::cost).sum(), limit);
         return out;
+    }
+
+    private static LlmProvider.ChatMessage withToolBody(LlmProvider.ChatMessage message, String body) {
+        return new LlmProvider.ChatMessage(message.role(), body, message.toolCallId(), message.toolCalls(),
+                message.reasoningContent(), message.nativeItems());
     }
 }

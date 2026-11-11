@@ -58,6 +58,8 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
     private final ActivityResolver activityResolver;
     private final PlanService planService;
     private final HtmlSanitizer htmlSanitizer;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.agent.service.NativePlanDraftWriter nativeDrafts;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public DraftPlanSectionsTool(ActivityResolver activityResolver, PlanService planService,
@@ -81,7 +83,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         return "自由编写活动策划书，不要求固定模板、章节数量或组织名称。优先用 documentBody 传完整正文（HTML 段落、标题、列表、表格或纯文本），可按用户要求任意组织。生成草稿，不提交审核。"
                 + "activityName 传活动名称。旧的 background/purpose/content/notice/emergency/budget/flow 参数仅用于兼容已有章节草稿，不必遵循这些章节。"
                 + "正文可含简单排版（段落、列表），也支持纯文本。"
-                + "调用后会先给用户看全文预览，确认后才写入策划书（草稿）。";
+                + "用户明确委托生成并保存策划书草稿时，提供完整 documentBody 并设置 saveDraft=true，生成可编辑 Word 新版本。仅预览时省略 saveDraft。修改已有 Word 的局部内容应调用修订工具。";
     }
 
     @Override
@@ -90,6 +92,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
                 "activityId", ToolArgs.prop("integer", "活动 ID，可省略；与 activityName 二选一"),
                 "activityName", ToolArgs.prop("string", ActivityResolver.NAME_DESC),
                 "documentBody", ToolArgs.prop("string", "完整策划书正文，自由结构，无固定章节要求；优先使用此参数"),
+                "saveDraft", ToolArgs.prop("boolean", "用户委托保存 Word 草稿时设为 true。只生成草稿版本，不提交审核"),
                 "background", ToolArgs.prop("string", "「活动背景」正文（你撰写的）"),
                 "purpose", ToolArgs.prop("string", "「活动目的」正文（你撰写的）"),
                 "content", ToolArgs.prop("string", "「活动内容」正文（你撰写的，可分条）"),
@@ -105,6 +108,11 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
 
     @Override
     public Sensitivity sensitivity() { return Sensitivity.NORMAL; }
+
+    @Override
+    public boolean saveDraftInTurn(Map<String,Object> arguments) {
+        return Boolean.TRUE.equals(arguments.get("saveDraft"));
+    }
 
     /* ============================================================ 读阶段：dry-run */
 
@@ -122,6 +130,9 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         // 只收非空章节；空串不落库（否则会把用户已编辑的章节清空）
         Map<String, String> provided = new LinkedHashMap<>();
         String documentBody = ToolArgs.str(args, "documentBody");
+        if (saveDraftInTurn(args) && (documentBody == null || documentBody.isBlank() || documentBody.length() > 64000)) {
+            return ToolResult.failed("保存 Word 草稿需要完整的 documentBody，正文不能超过 64000 字符。");
+        }
         if (documentBody != null && !documentBody.isBlank()) provided.put("documentBody", documentBody.trim());
         for (Object[] row : CHAPTERS) {
             String key = (String) row[0];
@@ -161,6 +172,7 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
         exec.put("expectedPlanId", current == null ? null : current.getId());
         exec.put("expectedRevision", current == null ? null : current.getRevision());
         exec.putAll(cleaned);
+        if (saveDraftInTurn(args)) exec.put("nativeWordDraft", true);
         detailLines.add(ARGS_MARK + writeJson(exec));
 
         String preview = buildPreview(activity, cleaned);
@@ -203,7 +215,12 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
             }
             req.setSyncActivity(false); // 只写策划书，不回写活动基本信息
 
-            var saved = planService.createAgentVersion(req,ctx,lng(exec.get("expectedPlanId")),lng(exec.get("expectedRevision")));
+            Long baseId = lng(exec.get("expectedPlanId"));
+            Long baseRevision = lng(exec.get("expectedRevision"));
+            var word = Boolean.TRUE.equals(exec.get("nativeWordDraft"))
+                    ? nativeDrafts.save(req, ctx, baseId, baseRevision)
+                    : null;
+            var saved = word == null ? planService.createAgentVersion(req, ctx, baseId, baseRevision) : word.plan();
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "activity", "id", activityId,
@@ -212,7 +229,8 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
             return new CommitResult("SUCCESS", 1, 0,
                     "已生成策划书草稿（第 " + saved.getVersion() + " 版，草稿状态），"
                             + "可在活动详情 →「策划书」中继续编辑并提交审核。",
-                    ToolArgs.map("planId", saved.getId(), "version", saved.getVersion()), refs);
+                    ToolArgs.map("planId", saved.getId(), "version", saved.getVersion(),
+                            "wordPageReview", word == null ? null : word.pageReview().facts()), refs);
         } catch (Exception e) {
             return CommitResult.failed("策划书写入失败：" + e.getMessage());
         }

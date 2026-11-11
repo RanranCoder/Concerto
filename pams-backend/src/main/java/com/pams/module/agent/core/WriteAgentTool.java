@@ -17,6 +17,14 @@ public interface WriteAgentTool extends AgentTool {
     @Override
     default boolean writeOperation() { return true; }
 
+    /** Explicit opt-in for tools whose only effect is creating a recoverable draft version. */
+    default boolean saveDraftInTurn(Map<String, Object> arguments) { return false; }
+
+    /** Dedicated commit path for a server-verified scope from the current user's request. */
+    default CommitResult commitDelegated(ToolContext ctx, AgentActionPlan plan) {
+        return CommitResult.failed("此操作需要确认后执行。");
+    }
+
     /**
      * 真正的写阶段。仅在用户通过确认门禁（携带一次性 confirmToken、乐观锁抢占成功）后被调用。
      *

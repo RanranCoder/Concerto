@@ -62,6 +62,9 @@ public record ToolResult(
     }
 
     public boolean isOk() { return "OK".equals(status); }
+    /** Legacy errors are deliberately unclassified; text cannot authorize automatic retries. */
+    public String errorCode() { return isOk()?null:"DENIED".equals(status)?"ACCESS_DENIED":"FORM".equals(status)?"INPUT_REQUIRED":"TOOL_FAILED_UNCLASSIFIED"; }
+    public boolean retryable() { return false; }
 
     /** 是否为表单补全请求（D2.5） */
     public boolean needsInput() { return form != null; }

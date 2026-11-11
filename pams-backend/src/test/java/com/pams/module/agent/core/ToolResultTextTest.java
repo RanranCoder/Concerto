@@ -5,6 +5,14 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ToolResultTextTest {
+    @Test void convertsOnlyIsoSourceTimeAndDoesNotPromiseClippedFullText()throws Exception{
+        var tool=mock(AgentTool.class,CALLS_REAL_METHODS);when(tool.sensitivity()).thenReturn(Sensitivity.NORMAL);
+        var ctx=new ToolContext(null,List.of(),null,null).withTimezone("Asia/Shanghai");
+        String result=tool.toLlmText(ctx,ToolResult.ok("原文",Map.of("complete",true,"hasMore",false,"asOf","2026-11-03T14:15:00Z","content","字".repeat(2000))));
+        var parsed=new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.substring(result.indexOf('{')));
+        assertThat(parsed.path("sourceTime").path("local").asText()).isEqualTo("2026-11-03T22:15+08:00");
+        assertThat(parsed.path("completeness").path("complete").asBoolean()).isFalse();assertThat(parsed.path("truncated").asBoolean()).isTrue();
+    }
     @Test void normalReadContextCarriesActualIdsDatesLocationsAndReferences() {
         var tool=mock(AgentTool.class,CALLS_REAL_METHODS);when(tool.sensitivity()).thenReturn(Sensitivity.NORMAL);
         var result=ToolResult.ok("匹配到活动",Map.of("rows",List.of(Map.of("id",412,"startDate",java.time.LocalDate.of(2026,11,20),"location","S5 测试礼堂"))),List.of(Map.of("type","activity","id",412,"link","/activities/412")));

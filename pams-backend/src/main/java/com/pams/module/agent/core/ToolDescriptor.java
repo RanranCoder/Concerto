@@ -8,12 +8,12 @@ public record ToolDescriptor(
         String name, String schemaVersion, String operationKind,
         List<String> requiredPermissions, String permissionMode, boolean requiresLeader,
         Sensitivity sensitivity, boolean supportsForm, Map<String, Object> parametersSchema,
-        String completenessPolicy, String idempotencyPolicy) {
+        String completenessPolicy, String idempotencyPolicy,ToolContractPolicy contractPolicy) {
     public static ToolDescriptor from(AgentTool tool) {
-        return new ToolDescriptor(tool.name(), "1", tool.writeOperation() ? "PREPARE" : "READ",
+        return new ToolDescriptor(tool.name(), "1", tool instanceof PersistedInteractionTool ? "CONTINUE_INPUT" : tool.writeOperation() ? "PREPARE" : "READ",
                 List.copyOf(tool.requiredPermissions()), tool.anyPermission() ? "ANY" : "ALL",
                 tool.requiresLeader(), tool.sensitivity(), tool.supportsForm(),
                 tool.parametersSchema(), "NOT_DECLARED",
-                tool.writeOperation() ? "LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED" : "NOT_APPLICABLE");
+                tool instanceof PersistedInteractionTool ? "EXISTING_TASK_INPUT; NO_BUSINESS_COMMIT" : tool.writeOperation() ? ToolContractPolicy.durableReceipt(tool.name())?"PERSISTED_OPERATION_RECEIPT_NO_UNKNOWN_REPLAY":"LEGACY_CONFIRM_GATE_NOT_BUSINESS_VERIFIED" : "NOT_APPLICABLE",ToolContractPolicy.of(tool));
     }
 }

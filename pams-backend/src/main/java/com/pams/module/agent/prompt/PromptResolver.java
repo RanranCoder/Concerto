@@ -8,7 +8,10 @@ import java.util.*;
 public final class PromptResolver {
     public enum Id {
         CORE_POLICY("core-policy"), EXECUTOR("executor"), KNOWLEDGE("knowledge"),
-        REVIEWER("reviewer"), MEMORY_SUMMARY("memory-summary"), PLANNER("planner");
+        REVIEWER("reviewer"), MEMORY_SUMMARY("memory-summary"), PLANNER("planner"),
+        COORDINATOR("specialist-coordinator"), RETRIEVAL("specialist-retrieval"), PLANNING("specialist-planning"),
+        WRITING("specialist-writing"), SCHEDULING("specialist-scheduling"), DATA("specialist-data"),
+        SPECIALIST_REVIEWER("specialist-reviewer"), GENERALIST("specialist-generalist");
         private final String file;
         Id(String file) { this.file=file; }
     }

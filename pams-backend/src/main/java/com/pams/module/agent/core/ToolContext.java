@@ -53,6 +53,8 @@ public class ToolContext {
     private Integer attempt;
     private Long workItemId;
     private Integer workItemRevision;
+    private String timezone;
+    private String promptBundleJson;
 
     public ToolContext(LoginUser loginUser, Collection<? extends GrantedAuthority> granted,
                        Long conversationId, String streamId) {
@@ -119,12 +121,12 @@ public class ToolContext {
      * （编排器第 148 行必然走 derive），写类工具重新可见——这是典型的 D11 第 ③ 类语义变更。
      */
     public ToolContext derive(Long conversationId, String streamId) {
-        return new ToolContext(loginUser, authorities, conversationId, streamId, mode).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt);
+        return new ToolContext(loginUser, authorities, conversationId, streamId, mode).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt).withTimezone(timezone).withPromptBundle(promptBundleJson);
     }
 
     /** 换运行模式，其余字段原样保留 */
     public ToolContext withMode(String mode) {
-        return new ToolContext(loginUser, authorities, conversationId, streamId, normalizeMode(mode)).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt);
+        return new ToolContext(loginUser, authorities, conversationId, streamId, normalizeMode(mode)).withRunId(runId).withWorkItem(workItemId, workItemRevision).withRequestId(requestId).withAttempt(attempt).withTimezone(timezone).withPromptBundle(promptBundleJson);
     }
 
     public Long getRunId() { return runId; }
@@ -135,6 +137,8 @@ public class ToolContext {
         copy.attempt = attempt;
         copy.workItemId = workItemId;
         copy.workItemRevision = workItemRevision;
+        copy.timezone = timezone;
+        copy.promptBundleJson = promptBundleJson;
         return copy;
     }
     public Long getWorkItemId() { return workItemId; }
@@ -147,8 +151,18 @@ public class ToolContext {
     }
     public ToolContext restrictTo(Set<String> ceiling) {
         Set<String> permitted = authorities.stream().filter(ceiling::contains).collect(Collectors.toUnmodifiableSet());
-        return new ToolContext(loginUser,permitted,conversationId,streamId,mode).withRunId(runId).withWorkItem(workItemId,workItemRevision).withRequestId(requestId).withAttempt(attempt);
+        return new ToolContext(loginUser,permitted,conversationId,streamId,mode).withRunId(runId).withWorkItem(workItemId,workItemRevision).withRequestId(requestId).withAttempt(attempt).withTimezone(timezone).withPromptBundle(promptBundleJson);
     }
+    public String getTimezone() { return timezone; }
+    /** User/client timezone is a date interpretation preference, never authorization. */
+    public ToolContext withTimezone(String value) {
+        ToolContext copy=withRunId(runId);
+        if(value==null || value.isBlank())copy.timezone=null;
+        else {try {copy.timezone=java.time.ZoneId.of(value).getId();}catch(java.time.DateTimeException e){throw new com.pams.common.BizException(400,"用户时区无效");}}
+        return copy;
+    }
+    public String getPromptBundleJson() { return promptBundleJson; }
+    public ToolContext withPromptBundle(String value) { ToolContext copy=withRunId(runId);copy.promptBundleJson=value;return copy; }
     public Integer getAttempt() { return attempt; }
     public ToolContext withAttempt(Integer value) { ToolContext copy=withRunId(runId); copy.attempt=value; return copy; }
     public String getRequestId() { return requestId; }

@@ -15,6 +15,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     List<Schedule> findByWeekNo(Integer weekNo);
     List<Schedule> findByActivityId(Long activityId);
     List<Schedule> findByScheduleTypeAndActivityId(String scheduleType, Long activityId);
+    List<Schedule> findByScheduleTypeAndActivityIdAndScheduleDateBetween(
+            String scheduleType, Long activityId, LocalDate startDate, LocalDate endDate);
     List<Schedule> findByScheduleTypeAndActivityIdAndStatus(String scheduleType, Long activityId, String status);
 
     /**

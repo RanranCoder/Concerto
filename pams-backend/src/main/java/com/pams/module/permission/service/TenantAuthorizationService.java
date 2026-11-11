@@ -487,7 +487,9 @@ public class TenantAuthorizationService {
         .withRunId(ctx.getRunId())
         .withWorkItem(ctx.getWorkItemId(), ctx.getWorkItemRevision())
         .withRequestId(ctx.getRequestId())
-        .withAttempt(ctx.getAttempt());
+        .withAttempt(ctx.getAttempt())
+        .withTimezone(ctx.getTimezone())
+        .withPromptBundle(ctx.getPromptBundleJson());
   }
 
   public Set<String> grantable(long uid) {

@@ -50,7 +50,7 @@ public class AgentRegistry {
             var builtin=AgentCatalog.defaults().stream().filter(d->d.name().equals(def.getName())).findFirst();
             String role=def.getRolePrompt()==null?"":def.getRolePrompt();
             String status=builtin.isEmpty()?"CUSTOM_ROLE":
-                    java.util.Objects.equals(role,builtin.get().rolePrompt())?"BUILTIN_UNVERSIONED":"CUSTOMIZED_PRESERVED";
+                    java.util.Objects.equals(role,builtin.get().rolePrompt())?"BUILTIN_RESOURCE_V1":"CUSTOMIZED_PRESERVED";
             return new PromptConfiguration(def.getName(),status,
                     com.pams.module.agent.prompt.PromptResolver.resolve(com.pams.module.agent.prompt.PromptResolver.Id.CORE_POLICY).sha256(),
                     roleHash(role),toolScopeOf(def));

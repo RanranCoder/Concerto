@@ -7,9 +7,16 @@ COPY src ./src
 RUN mvn -q -B package -DskipTests
 
 # ---- 运行阶段：JRE 21 ----
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre AS word-runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Shanghai \
+    PAMS_AGENT_WORD_RENDERER=/usr/bin/soffice \
+    PAMS_AGENT_WORD_PDF_TEXT=/usr/bin/pdftotext
+
+FROM word-runtime AS runtime
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-ENV TZ=Asia/Shanghai
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

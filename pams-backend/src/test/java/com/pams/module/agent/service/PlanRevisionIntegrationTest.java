@@ -40,6 +40,8 @@ class PlanRevisionIntegrationTest {
     @Autowired PlanAttachmentService attachments;
     @Autowired JdbcTemplate db;
     @Autowired TaskGate gate;
+    @Autowired ToolOutcomeHandler outcomes;
+    @Autowired com.pams.module.agent.tool.DraftPlanSectionsTool draftTool;
     @Autowired ActionReconciliationService reconciliation;
     @Autowired com.pams.module.agent.orchestration.WorkItemState workItems;
     @Autowired com.pams.module.agent.orchestration.AgentRunService runs;
@@ -116,6 +118,41 @@ class PlanRevisionIntegrationTest {
             assertThat(doc.getParagraphs().get(1).getRuns().getFirst().isBold()).isTrue();
         }
     }
+    @Test void delegatedWordDraftReturnsSavedReceiptThroughTheSharedOutcomeHandler() throws Exception {
+        var input = Map.<String,Object>of("activityId", original.getActivityId(), "saveDraft", true,
+                "documentBody", "<h1>培训班策划</h1><p>会务分工</p><table><tr><td>物料</td><td>2500 元</td></tr></table>");
+        var prepared = draftTool.execute(ctx, input);
+        assertThat(prepared.isOk()).as(prepared.summary()).isTrue();
+        var outcome = outcomes.prepare(ctx, draftTool, prepared,
+                new com.pams.module.agent.llm.LlmProvider.ToolCallRequest("word-draft", draftTool.name(), input));
+        assertThat(outcome.waiting()).isFalse();
+        assertThat(outcome.receipt()).containsEntry("status", "SUCCESS");
+        var revised = plans.findTopByActivityIdOrderByVersionDesc(original.getActivityId()).orElseThrow();
+        assertThat(revised.getVersion()).isEqualTo(original.getVersion() + 1);
+        assertThat(revised.getStatus()).isEqualTo(ActivityPlan.PlanStatus.DRAFT);
+        try (var in = attachments.documentResource(revised).getInputStream(); var doc = new XWPFDocument(in)) {
+            assertThat(doc.getTables().getFirst().getRow(0).getCell(1).getText()).isEqualTo("2500 元");
+        }
+    }
+
+    @Test void generalBlockEditUsesTheExistingVersionAndReceiptPath() throws Exception {
+        var base = args();
+        var sourceMessage = messages.findByStreamIdAndRole(ctx.getStreamId(), AgentMessage.ROLE_USER).getFirst();
+        sourceMessage.setContent("把策划书中的预算总额改称经费上限");
+        messages.saveAndFlush(sourceMessage);
+        var input = Map.<String,Object>of("planId",base.get("planId"),"documentRef",base.get("documentRef"),"baseline",base.get("baseline"),
+                "edits",List.of(Map.of("blockId",base.get("blockId"),"expectedHash",base.get("expectedHash"),
+                        "before","预算总额","after","经费上限")));
+        var prepared = tool.execute(ctx,input);
+        assertThat(prepared.isOk()).as(prepared.summary()).isTrue();
+        var result = revisions.commit(ctx,task(prepared.plan()));
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        var revised = plans.findById(((Number)result.detail().get("planId")).longValue()).orElseThrow();
+        try (var in = attachments.documentResource(revised).getInputStream(); var doc = new XWPFDocument(in)) {
+            assertThat(doc.getParagraphs()).extracting(XWPFParagraph::getText).containsExactly("不改此段落","经费上限为2500元");
+        }
+    }
+
     @Test void staleBaselineOrMissingPermissionCannotPrepareOrSubmit() {
         var args=args();var prepared=tool.execute(ctx,args);var action=task(prepared.plan());
         original.setNotice("并发更新");plans.saveAndFlush(original);
@@ -146,8 +183,10 @@ class PlanRevisionIntegrationTest {
     @Test void reconciliationUsesCommittedReceiptAfterSnapshotExpiryAndNeverCreatesAnotherVersion() throws Exception {
         var prepared=tool.execute(ctx,args());var action=task(prepared.plan());
         var committed=revisions.commit(ctx,action);long count=plans.count();
+        assertThat(committed.detail()).containsKey("wordPageReview");
         tasks.finish(action.planId(),"RESULT_UNKNOWN","{\"status\":\"RESULT_UNKNOWN\"}",java.time.LocalDateTime.now());
         db.update("DELETE FROM agent_plan_snapshot WHERE conversation_id=?",ctx.getConversationId());
+        assertThat(revisions.confirmedReceipt(ctx,action).orElseThrow().detail()).isEqualTo(committed.detail());
         var recovered=reconciliation.reconcile(action.planId(),ctx.derive(null,null));
         assertThat(recovered).containsEntry("status","SUCCESS").containsEntry("reconciled",true);
         assertThat(recovered.toString()).contains(committed.detail().get("planId").toString());

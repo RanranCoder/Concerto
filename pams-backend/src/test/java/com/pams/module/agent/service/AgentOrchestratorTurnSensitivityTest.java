@@ -56,6 +56,11 @@ class AgentOrchestratorTurnSensitivityTest {
     AgentMessageRepository messages;
     @Autowired
     ScriptedProvider llm;
+    @Autowired AgentRequestService requests;
+    @Autowired ConversationStore conversations;
+    @Autowired com.pams.module.agent.repository.AgentRequestRepository requestRows;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    com.pams.module.knowledge.service.KnowledgeQuery knowledgeQuery;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -69,6 +74,126 @@ class AgentOrchestratorTurnSensitivityTest {
     void clearTenant() { com.pams.common.OrgContext.clear(); }
 
     /* ------------------------------------------------------------------ 用例 */
+
+    @Test
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void collaborationReplansWithinTheSameRunWithoutExecutingStaleToolCalls() {
+        String requestId = java.util.UUID.randomUUID().toString();
+        String correction = "策划范围调整为秋季迎新，地点先按报告厅考虑";
+        var firstRun = new java.util.concurrent.atomic.AtomicReference<Long>();
+        var updatedContexts = new CopyOnWriteArrayList<String>();
+        llm.script(toolCall(NORMAL_TOOL), finalReply());
+        llm.beforeResponse = (round, request) -> {
+            if (round == 0) {
+                com.pams.common.OrgContext.set(1L);
+                try {
+                    firstRun.set(requests.owned(requestId, 1L).getRunId());
+                    requests.appendInstruction(requestId, 1L, "update-dag-01", correction);
+                } finally {
+                    com.pams.common.OrgContext.clear();
+                }
+            } else {
+                updatedContexts.add(request.messages().toString());
+            }
+        };
+        try {
+            var result = orchestrator.chatSync("查询已有材料，然后写活动策划书", null,
+                    ctx(true).withRequestId(requestId), List.of(), true);
+            assertThat(result.get("executionState")).isEqualTo("SUCCESS");
+            assertThat(result.get("toolCalls")).isEqualTo(List.of());
+            assertThat(firstRun.get()).isNotNull();
+            var recovered = requests.owned(requestId, 1L);
+            assertThat(recovered.getRunId()).isEqualTo(firstRun.get());
+            assertThat(recovered.getSteeringConsumed()).isEqualTo(1);
+            assertThat(recovered.isSteeringOpen()).isFalse();
+            assertThat(updatedContexts).isNotEmpty().allMatch(text -> text.contains(correction));
+        } finally {
+            removeRequest(requestId);
+        }
+    }
+
+    @Test
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void knowledgeAnswerRepeatsRetrievalAndKeepsOnlyCitationsForTheCorrectedQuestion() {
+        String requestId = java.util.UUID.randomUUID().toString();
+        String correction = "改为查秋季制度";
+        var queries = new CopyOnWriteArrayList<String>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            String query = invocation.getArgument(0);
+            queries.add(query);
+            long id = query.contains(correction) ? 202L : 101L;
+            var fragment = new com.pams.module.knowledge.retriever.ScoredChunk(id, "kb_document", id,
+                    "kb_document:" + id, 0, "制度 " + id, "第一条", "资料正文 " + id, "T1", "normal", null, 1.0);
+            return new com.pams.module.knowledge.service.KnowledgeQuery.RetrievalOutcome(
+                    List.of(fragment), 1, 0, 1, 0, null);
+        }).when(knowledgeQuery).retrieve(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(ToolContext.class));
+        llm.script(new LlmProvider.ChatResponse("旧回答 [1]", List.of(), "deepseek", false, null),
+                new LlmProvider.ChatResponse("更新的回答 [1]", List.of(), "deepseek", false, null));
+        llm.beforeResponse = (round, request) -> {
+            if (round == 0) {
+                com.pams.common.OrgContext.set(1L);
+                try {
+                    requests.appendInstruction(requestId, 1L, "update-kb-01", correction);
+                } finally {
+                    com.pams.common.OrgContext.clear();
+                }
+            }
+        };
+        try {
+            var result = orchestrator.chatSync("查春季制度", null,
+                    ctx(true).withMode("kb").withRequestId(requestId), List.of(), false);
+            assertThat(queries).hasSize(2);
+            assertThat(queries.getLast()).contains(correction);
+            assertThat(result.get("reply").toString()).contains("更新的回答").doesNotContain("旧回答");
+            assertThat(result.get("citations").toString()).contains("sourceId=202").doesNotContain("sourceId=101");
+            assertThat(requests.owned(requestId, 1L).getSteeringConsumed()).isEqualTo(1);
+        } finally {
+            removeRequest(requestId);
+        }
+    }
+
+    @Test
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void instructionReceivedDuringModelCallSkipsStaleToolAndSurvivesRecovery() {
+        String requestId = java.util.UUID.randomUUID().toString();
+        String inputId = java.util.UUID.randomUUID().toString();
+        String update = "改为只回答文字，不再查考勤";
+        var enqueueFailure = new java.util.concurrent.atomic.AtomicReference<RuntimeException>();
+        llm.script(toolCall(SENSITIVE_TOOL), finalReply());
+        llm.beforeResponse = (round, request) -> {
+            if (round == 0) {
+                com.pams.common.OrgContext.set(1L);
+                try {
+                    var active = requests.owned(requestId, 1L);
+                    var history = conversations.messages(active.getConversationId(), 1L, 1, 10, ctx(true));
+                    assertThat(history.getRecords()).anyMatch(message -> requestId.equals(message.get("activeRequestId")));
+                    assertThat(requests.appendInstruction(requestId, 1L, inputId, update)).isEqualTo(1);
+                    assertThat(requests.appendInstruction(requestId, 1L, inputId, update)).isEqualTo(1);
+                } catch (RuntimeException failure) {
+                    enqueueFailure.set(failure);
+                } finally {
+                    com.pams.common.OrgContext.clear();
+                }
+            } else {
+                assertThat(request.messages()).anyMatch(message -> "user".equals(message.role()) && update.equals(message.content()));
+            }
+        };
+        try {
+            var result = orchestrator.chatSync("查一下考勤", null, ctx(true).withRequestId(requestId), List.of(), false);
+            assertThat(enqueueFailure.get()).isNull();
+            assertCompleted(result);
+            assertThat((List<?>)result.get("toolCalls")).isEmpty();
+            var recovered = requests.owned(requestId, 1L);
+            assertThat(requests.instructions(recovered)).containsExactly(new AgentRequestService.Instruction(inputId, update));
+            assertThat(recovered.getSteeringConsumed()).isEqualTo(1);
+            assertThat(recovered.isSteeringOpen()).isFalse();
+        } finally {
+            requestRows.findById(requestId).ifPresent(request -> {
+                if (request.getConversationId() != null) conversations.delete(request.getConversationId(), 1L);
+                requestRows.delete(request);
+            });
+        }
+    }
 
     @Test
     void executedSensitiveToolMakesTheWholeTurnSensitive() {
@@ -250,6 +375,13 @@ class AgentOrchestratorTurnSensitivityTest {
         return new LlmProvider.ChatResponse("最终答复", List.of(), "deepseek", false, null);
     }
 
+    private void removeRequest(String requestId) {
+        requestRows.findById(requestId).ifPresent(request -> {
+            if (request.getConversationId() != null) conversations.delete(request.getConversationId(), 1L);
+            requestRows.delete(request);
+        });
+    }
+
     /* ------------------------------------------------------------------ 假 provider */
 
     /**
@@ -272,10 +404,12 @@ class AgentOrchestratorTurnSensitivityTest {
 
         private final List<ChatResponse> script = new CopyOnWriteArrayList<>();
         private final AtomicInteger calls = new AtomicInteger();
+        private java.util.function.BiConsumer<Integer, ChatRequest> beforeResponse = (round, request) -> {};
 
         void reset() {
             script.clear();
             calls.set(0);
+            beforeResponse = (round, request) -> {};
         }
 
         void script(ChatResponse... responses) {
@@ -296,14 +430,13 @@ class AgentOrchestratorTurnSensitivityTest {
 
         @Override
         public ChatResponse chat(ChatRequest request) {
-            throw new UnsupportedOperationException("本测试只覆盖流式路径");
+            return nextResponse(request);
         }
 
         @Override
         public ChatResponse chatStream(ChatRequest request, java.util.function.Consumer<String> onDelta,
                                        java.util.function.Consumer<String> onReasoning) {
-            int i = calls.getAndIncrement();
-            ChatResponse r = i < script.size() ? script.get(i) : script.get(script.size() - 1);
+            ChatResponse r = nextResponse(request);
             if (r.content() != null && !r.content().isEmpty()) {
                 onDelta.accept(r.content());
             }
@@ -311,6 +444,12 @@ class AgentOrchestratorTurnSensitivityTest {
                 onReasoning.accept(r.reasoningContent());
             }
             return r;
+        }
+
+        private ChatResponse nextResponse(ChatRequest request) {
+            int i = calls.getAndIncrement();
+            beforeResponse.accept(i, request);
+            return script.get(Math.min(i, script.size() - 1));
         }
     }
 }

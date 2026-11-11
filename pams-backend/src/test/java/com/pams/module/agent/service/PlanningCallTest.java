@@ -9,6 +9,18 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class PlanningCallTest {
+    @Test void configuredServiceWindowAppliesToPlanningAndSpecialistCalls() {
+        var primary = mock(LlmProvider.class);
+        when(primary.name()).thenReturn("test");
+        when(primary.chat(any())).thenReturn(LlmProvider.ChatResponse.text("{}", "test"));
+        when(primary.contextWindowTokens()).thenReturn(128_000);
+        var caller = new AgentLlmCaller(primary, mock(LlmProvider.class), new AgentProperties(),
+                mock(AgentEventPublisher.class), mock(ThinkingTrace.class));
+        var messages = List.of(LlmProvider.ChatMessage.text("user", "x".repeat(80_000)));
+        caller.callPlanning(messages, "preview");
+        caller.callIsolated(messages, List.of(), "specialist");
+        verify(primary, times(2)).chat(any());
+    }
     @Test void planningUsesNoToolsBoundedOutputAndOneTransportAttempt(){
         var primary=mock(LlmProvider.class);var stub=mock(LlmProvider.class);var trace=mock(ThinkingTrace.class);
         when(primary.name()).thenReturn("test");when(primary.chat(any())).thenReturn(LlmProvider.ChatResponse.text("{}","test"));

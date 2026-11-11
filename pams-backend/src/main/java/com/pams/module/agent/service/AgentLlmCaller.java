@@ -46,6 +46,10 @@ public class AgentLlmCaller {
     }
     public void endTask(String stream) { if (taskProviders != null) taskProviders.release(stream); }
     private LlmProvider selected(String stream) { return taskProviders == null ? primaryProvider : taskProviders.get(stream); }
+    private int contextWindow(LlmProvider provider) {
+        Integer window = provider.contextWindowTokens();
+        return window == null || window <= 0 ? props.getContextWindowTokens() : window;
+    }
     @org.springframework.beans.factory.annotation.Autowired(required=false) private AgentEvaluationMeter evaluation;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.llm.LlmCancellation cancellation = new com.pams.module.agent.llm.LlmCancellation();
@@ -75,7 +79,7 @@ public class AgentLlmCaller {
         if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
         final LlmProvider primaryProvider = selected(streamId);
         LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(
-                new ContextBudget(props).fit(messages, specs), specs, props.getTemperature(), props.getMaxTokens());
+                new ContextBudget(props, contextWindow(primaryProvider)).fit(messages, specs), specs, props.getTemperature(), props.getMaxTokens());
 
         // 已经是 stub（未配 Key 或显式配置）→ 直连规则模式
         if ("stub".equals(primaryProvider.name())) {
@@ -118,7 +122,7 @@ public class AgentLlmCaller {
     public LlmProvider.ChatResponse callIsolated(List<LlmProvider.ChatMessage> messages,
                                                List<LlmProvider.ToolSpec> specs, String streamId) {
         final LlmProvider primaryProvider = selected(streamId);
-        LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,specs),specs,props.getTemperature(),props.getMaxTokens());
+        LlmProvider.ChatRequest req = new LlmProvider.ChatRequest(new ContextBudget(props, contextWindow(primaryProvider)).fit(messages,specs),specs,props.getTemperature(),props.getMaxTokens());
         for (int attempt=0; attempt<2; attempt++) {
             if (streamId != null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
             try {
@@ -137,7 +141,7 @@ public class AgentLlmCaller {
     public LlmProvider.ChatResponse callSummary(List<LlmProvider.ChatMessage> messages, String streamId) {
         final LlmProvider primaryProvider = selected(streamId);
         if(streamId!=null && publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
-        var req=new LlmProvider.ChatRequest(new ContextBudget(props).fit(messages,List.of()),List.of(),props.getTemperature(),
+        var req=new LlmProvider.ChatRequest(new ContextBudget(props, contextWindow(primaryProvider)).fit(messages,List.of()),List.of(),props.getTemperature(),
                 Math.max(1,Math.min(props.getMaxTokens(),props.getContextSummaryMaxTokens())));
         if("stub".equals(primaryProvider.name())) return observed(streamId,req,this::safeStub);
         return cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),
@@ -154,7 +158,7 @@ public class AgentLlmCaller {
             try{if(message.nativeItems()!=null && !message.nativeItems().isEmpty())input+=ContextBudget.tokens(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(message.nativeItems()));}
             catch(Exception e){throw new IllegalArgumentException("Planning context native state cannot be budgeted",e);}
         }
-        if(input+max+props.getContextSafetyTokens()>props.getContextWindowTokens()) throw new IllegalArgumentException("Planning context budget exceeded");
+        if(input+max+props.getContextSafetyTokens()>contextWindow(provider)) throw new IllegalArgumentException("Planning context budget exceeded");
         var req=new LlmProvider.ChatRequest(messages,List.of(),0.0,max);
         if("stub".equals(provider.name())) return observed(streamId,req,this::safeStub);
         return cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),Math.max(1,Math.min(15000,props.getTimeoutMs())),()->observed(streamId,req,provider::chat));

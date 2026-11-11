@@ -147,6 +147,24 @@ public class ArticleService {
 
     @Transactional
     public Article create(Long creatorId, ArticleRequest req) {
+        return createDraft(creatorId, req, true);
+    }
+
+    /** Creates a personal working draft without assigning work or scheduling deadline reminders. */
+    @Transactional
+    public Article createPersonalDraft(Long creatorId, ArticleRequest req) {
+        Long orgId = com.pams.common.OrgContext.get();
+        if (creatorId == null || !creatorId.equals(req.getAuthorId()) || req.getDeadline() != null
+                || !"REPORT".equals(req.getArticleType()) || orgId == null || req.getActivityId() == null) {
+            throw new BizException(2004, "只允许保存本人负责的活动报道草稿");
+        }
+        activityRepository.findById(req.getActivityId()).filter(activity -> orgId.equals(activity.getOrgId())
+                && activity.getStatus() != com.pams.module.activity.entity.ActivityStatus.ARCHIVED)
+                .orElseThrow(() -> new BizException(2001, "关联活动不可用"));
+        return createDraft(creatorId, req, false);
+    }
+
+    private Article createDraft(Long creatorId, ArticleRequest req, boolean assign) {
         if (req.getAuthorId() == null) {
             throw new BizException(2004, "请指定推文负责人");
         }
@@ -165,7 +183,7 @@ public class ArticleService {
         a.setCreatedAt(LocalDateTime.now());
         a.setUpdatedAt(LocalDateTime.now());
         Article saved = repository.save(a);
-        if (eventPublisher != null) {
+        if (assign && eventPublisher != null) {
             eventPublisher.publishEvent(new ArticleAssignedEvent(
                     saved.getId(), saved.getActivityId(), saved.getTitle(), saved.getAuthorId(), creatorId));
         }

@@ -101,8 +101,9 @@ public class CollaborationRouter {
         if (!hasProducer) {
             return Decision.single("单点查询，无需组队");
         }
-        // 有产出且（跨域 或 复合动作 或 正式文稿）→ 升级
-        if (!(hasRetrieval && hasProducer) && !compoundVerb && !formalDoc) {
+        boolean publicationReview = experts.contains(AgentCatalog.REVIEWER) && containsAny(goal, "发布", "群发");
+        long executionExperts = experts.stream().filter(expert -> !AgentCatalog.REVIEWER.equals(expert)).count();
+        if (!publicationReview && (executionExperts < 2 || (!hasRetrieval && !compoundVerb))) {
             return Decision.single("单一产出任务，单 Agent 即可");
         }
         // 需人工确认的对外内容（公告/推文）走反思回路，由审查专家把关后再出确认卡

@@ -15,14 +15,27 @@ import static org.assertj.core.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named="PAMS_RUN_CONTROLLED_PLANNING_REAL",matches="true")
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:pams_controlled_planning_real;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","spring.datasource.driver-class-name=org.h2.Driver","spring.datasource.username=sa","spring.datasource.password=","pams.agent.benchmark-enabled=true","pams.agent.benchmark-org-ids[0]=1","pams.agent.controlled-planning-enabled=true","pams.agent.controlled-planning-org-ids[0]=1"})
 @ActiveProfiles("test")
-class ControlledPlanningRealModelTest {
+public class ControlledPlanningRealModelTest {
     @Autowired ControlledPlanningEvaluation evaluation;@Autowired org.springframework.jdbc.core.JdbcTemplate db;
     @Autowired com.pams.module.permission.service.TenantAuthorizationService authorization;
     @Autowired org.springframework.core.env.Environment environment;
     @Autowired com.pams.module.agent.provider.ProviderSecrets isolatedSecrets;
     /** Read-only local deployment config; secrets are decrypted/re-encrypted only in memory into H2. */
     Map<String,Object> installDeploymentProvider()throws Exception{
-        try(var isolated=db.getDataSource().getConnection()){if(!isolated.getMetaData().getURL().startsWith("jdbc:h2:mem:"))throw new IllegalStateException("真实模型专项仅允许写入内存H2测试库");}
+        return installTestProvider(db, environment, isolatedSecrets, false);
+    }
+
+    /** Allows the browser harness to seed only the isolated loopback MySQL acceptance schema. */
+    public static Map<String,Object> installTestProvider(org.springframework.jdbc.core.JdbcTemplate db,
+            org.springframework.core.env.Environment environment,
+            com.pams.module.agent.provider.ProviderSecrets isolatedSecrets, boolean browserFixture) throws Exception {
+        try (var isolated = db.getDataSource().getConnection()) {
+            String url = isolated.getMetaData().getURL();
+            boolean allowed = browserFixture
+                    ? url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/pams_s5_batch6_[a-f0-9]{12}(?:\\?.*)?")
+                    : url.startsWith("jdbc:h2:mem:");
+            if (!allowed) throw new IllegalStateException("真实模型专项只可写入隔离的验收库");
+        }
         String requested=environment.getProperty("PAMS_REAL_MODEL","deepseek-flash");
         String master=environment.getProperty("pams.agent.provider-encryption-key","");
         if(master.isBlank())master=java.nio.file.Files.readString(java.nio.file.Path.of(environment.getProperty("PAMS_REAL_PROVIDER_KEY_FILE","../data/secrets/ai-provider.key"))).trim();
@@ -36,7 +49,8 @@ class ControlledPlanningRealModelTest {
                     String plaintext=new com.pams.module.agent.provider.ProviderSecrets(master).decrypt(row.getString(4));
                     db.update("INSERT INTO agent_provider_config(org_id,display_name,protocol,base_url,model_id,api_key_ciphertext,summary_enabled) VALUES(1,?,?,?,?,?,?)","隔离规划评测",protocol,url,model,isolatedSecrets.encrypt(plaintext),row.getBoolean(5));
                     Long id=db.queryForObject("SELECT id FROM agent_provider_config WHERE org_id=1 AND display_name=?",Long.class,"隔离规划评测");db.update("INSERT INTO agent_provider_default(org_id,config_id,version) VALUES(1,?,0)",id);
-                    return Map.of("model",model,"protocol",protocol,"baseUrl",url,"sourceAccess","READ_ONLY_LOCAL_CONFIG","targetDatabase","ISOLATED_IN_MEMORY_H2");
+                    return Map.of("model",model,"protocol",protocol,"baseUrl",url,"sourceAccess","READ_ONLY_LOCAL_CONFIG",
+                            "targetDatabase",browserFixture?"ISOLATED_LOOPBACK_MYSQL":"ISOLATED_IN_MEMORY_H2");
                 }
             }
         }

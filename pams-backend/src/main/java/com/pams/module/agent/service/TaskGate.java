@@ -46,6 +46,7 @@ public class TaskGate {
     @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
     @org.springframework.beans.factory.annotation.Autowired private ArtifactLedger artifacts;
     @org.springframework.beans.factory.annotation.Autowired private DraftContent drafts;
+    @org.springframework.beans.factory.annotation.Autowired private ScopedWriteDelegation delegation;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.orchestration.AgentRunService runService;
     @org.springframework.beans.factory.annotation.Autowired
@@ -161,7 +162,13 @@ public class TaskGate {
         try {
             List<AgentTask> pendings = repository.findByConversationIdAndStatusOrderByIdAsc(
                     conversationId, AgentTask.PENDING_CONFIRM);
-            if (pendings.isEmpty()) return null;
+            if (pendings.isEmpty()) {
+                var inputs=repository.findByConversationIdAndStatusOrderByIdAsc(conversationId,AgentTask.WAITING_INPUT).stream()
+                    .filter(t->java.util.Objects.equals(t.getUserId(),userId) && !isExpired(t)).toList();
+                if(inputs.isEmpty())return null;
+                return "当前会话有待补充信息的任务："+inputs.stream().map(t->t.getId()+"（"+t.getToolName()+"）").collect(java.util.stream.Collectors.joining("、"))
+                    +"。用户本轮补充信息时，先用queryConversationActions读取真实字段，再用supplyTaskInput接续同一任务，不重复创建任务，不要求用户必须填写表单。";
+            }
             AgentTask t = pendings.get(pendings.size() - 1);
             String preview = "";
             if (t.getPlanJson() != null) {
@@ -410,6 +417,21 @@ public class TaskGate {
      * @param ctx          执行上下文
      */
     public Map<String, Object> confirm(Long taskId, String confirmToken, ToolContext ctx) {
+        return confirm(taskId, confirmToken, ctx, Confirmation.MANUAL);
+    }
+
+    Map<String, Object> completeTurnDraft(AgentActionPlan plan, ToolContext ctx) {
+        return confirm(plan.planId(), plan.confirmToken(), ctx, Confirmation.DRAFT);
+    }
+
+    Map<String, Object> completeDelegatedTurnAction(String toolName, AgentActionPlan plan, ToolContext ctx) {
+        if (delegation == null || !ScopedWriteDelegation.supports(toolName)) return null;
+        return confirm(plan.planId(), plan.confirmToken(), ctx, Confirmation.SCOPED);
+    }
+
+    private enum Confirmation { MANUAL, DRAFT, SCOPED }
+
+    private Map<String, Object> confirm(Long taskId, String confirmToken, ToolContext ctx, Confirmation confirmation) {
         AgentTask task = repository.findByIdAndUserId(taskId, ctx.getUserId())
                 .orElseThrow(() -> new BizException(4404, "任务不存在或无权访问"));
 
@@ -434,11 +456,19 @@ public class TaskGate {
         if(task.getWorkItemId()!=null && !registry.visibleTo(tool,ctx.withRunId(task.getRunId()).withWorkItem(task.getWorkItemId(),task.getWorkItemRevision())))
             throw new BizException(4403,"节点能力或工具契约已变化，请重新规划");
         if (!registry.visibleTo(tool, ctx)) throw new BizException(4403,"无权限执行该操作");
-        int claimed = task.getWorkItemId()==null ? (requests==null ? repository.claimOwned(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
+        AgentActionPlan plan = readPlan(task);
+        Long delegatedFrom = null;
+        if (confirmation == Confirmation.SCOPED) {
+            var claim = delegation.claim(task, plan, ctx);
+            if (claim.isEmpty()) return null;
+            delegatedFrom = claim.getAsLong();
+        } else {
+            int claimed = task.getWorkItemId()==null ? (requests==null ? repository.claimOwned(taskId, AgentTask.PENDING_CONFIRM, AgentTask.RUNNING,
                 LocalDateTime.now(),com.pams.module.agent.orchestration.RuntimeIdentity.ID) : requests.claimOrdinary(task)) : workItems.claimAction(task,ctx);
-        if (claimed == 0) {
-            AgentTask fresh = repository.findById(taskId).orElseThrow();
-            return toResultVo(fresh, true);
+            if (claimed == 0) {
+                AgentTask fresh = repository.findById(taskId).orElseThrow();
+                return toResultVo(fresh, true);
+            }
         }
 
         // 二次断言：确认时再校验一次权限（任务可能是很久之前创建的，期间用户角色可能已变）
@@ -454,11 +484,10 @@ public class TaskGate {
             throw new BizException(4400, "该任务不可执行");
         }
 
-        AgentActionPlan plan = readPlan(task);
         WriteAgentTool.CommitResult result;
         String status;
         try {
-            result = writeTool.commit(ctx, plan);
+            result = confirmation == Confirmation.SCOPED ? writeTool.commitDelegated(ctx, plan) : writeTool.commit(ctx, plan);
             status = result.resultStatus();
         } catch (Exception e) {
             log.error("灵思写操作执行失败：task={} tool={}", taskId, task.getToolName(), e);
@@ -477,6 +506,7 @@ public class TaskGate {
             rj.put("detail", result.detail());
             rj.put("references", result.references());
             rj.put("skipped", plan.skipped());
+            if (delegatedFrom != null) rj.put("authorization", Map.of("type", "SCOPED_USER_MESSAGE", "messageId", delegatedFrom));
             resultMap = rj;
             resultJson = mapper.writeValueAsString(rj);
         } catch (Exception e) {
@@ -510,7 +540,7 @@ public class TaskGate {
         // 供前端判断"这次完成是不是当前正开着的那条会话"
         done.put("conversationId", task.getConversationId());
         try {
-            if (ctx.getLoginUser() != null) {
+            if (confirmation == Confirmation.MANUAL && ctx.getLoginUser() != null) {
                 publisher.publishTaskDone(ctx.getLoginUser().getUsername(), done);
             }
         } catch (Exception e) {

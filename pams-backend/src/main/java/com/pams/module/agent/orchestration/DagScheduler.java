@@ -5,6 +5,8 @@ import com.pams.common.OrgContext;
 import com.pams.module.agent.core.*;
 import com.pams.module.agent.entity.*;
 import com.pams.module.agent.repository.AgentRunRepository;
+import com.pams.module.agent.service.AgentRequestService;
+import com.pams.module.agent.service.SteeringInput;
 import com.pams.module.agent.stream.*;
 import com.pams.module.permission.service.TenantAuthorizationService;
 import com.pams.security.LoginUser;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.*;
 import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 /** Durable dependency scheduling. Waiting branches do not block independent ready nodes. */
 @Slf4j
@@ -36,6 +40,8 @@ public class DagScheduler {
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.config.AgentProperties properties;
     @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.ArtifactLedger artifacts;
+    @org.springframework.beans.factory.annotation.Autowired private AgentRequestService requests;
+    @org.springframework.beans.factory.annotation.Autowired private ThinkingTrace thinkingTrace;
     public DagScheduler(WorkItemState state,SpecialistAgent specialist,AgentRunRepository runs,
                         TenantAuthorizationService authorization,AgentEventPublisher publisher,
                         @Qualifier("agentExecutor") Executor executor) {
@@ -43,9 +49,13 @@ public class DagScheduler {
         this.publisher=publisher; this.executor=executor;
     }
     public Blackboard start(AgentRun run,Blackboard plan,ToolContext ctx) {
+        return start(run, plan, ctx, null);
+    }
+
+    public Blackboard start(AgentRun run, Blackboard plan, ToolContext ctx, Function<String,Blackboard> planner) {
         state.initialize(run.getId(),plan,ctx);
         publisher.identify(ctx);
-        return drive(run.getId(),ctx.getUserId());
+        return drive(run.getId(), ctx.getUserId(), planner);
     }
     @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT, fallbackExecution=true)
     public void changed(WorkItemState.Changed event) {
@@ -58,41 +68,76 @@ public class DagScheduler {
         }); } catch(Exception e) { log.warn("续跑队列已满，可从任务详情继续：run={}",event.runId(),e); }
     }
     private ToolContext reload(AgentRun run) {
+        com.pams.module.agent.prompt.PromptBundle.validate(run.getPromptBundleJson());
         var identity=new LoginUser(run.getUserId(),"","","",0,null,null,run.getOrgId());
         var current=authorization.refresh(new ToolContext(identity,List.of(),run.getConversationId(),run.getStreamId(),run.getToolMode()));
         if(!Objects.equals(current.getLoginUser().getOrgId(),run.getOrgId()) || !current.getAuthorities().containsAll(state.authority(run)))
             throw new BizException(403,"任务所需权限已变化，请基于当前权限重新发起");
         // Newly granted permissions cannot widen an existing run's capabilities.
         var granted=state.authority(run).stream().map(SimpleGrantedAuthority::new).toList();
-        return new ToolContext(current.getLoginUser(),granted,run.getConversationId(),run.getStreamId(),run.getToolMode()).withRunId(run.getId()).withRequestId(run.getRequestId());
+        return new ToolContext(current.getLoginUser(),granted,run.getConversationId(),run.getStreamId(),run.getToolMode()).withRunId(run.getId()).withRequestId(run.getRequestId()).withTimezone(run.getUserTimezone()).withPromptBundle(run.getPromptBundleJson());
     }
     public Blackboard drive(Long runId,Long userId) {
+        return drive(runId, userId, null);
+    }
+
+    private Blackboard drive(Long runId, Long userId, Function<String,Blackboard> planner) {
         AgentRun run=state.owned(runId,userId);
         ToolContext ctx=reload(run);
         if(publisher.isAborted(run.getStreamId())) {
             state.cancel(runId,userId);return state.blackboard(state.owned(runId,userId),state.nodes(runId));
         }
+        boolean amended = ctx.getStreamId() != null && requests.byStream(ctx.getStreamId())
+                .filter(request -> Objects.equals(runId, request.getRunId()))
+                .map(request -> request.getSteeringConsumed() > 0).orElse(false);
         String token=UUID.randomUUID().toString();
         if(!state.acquire(runId,token)) return state.blackboard(run,state.nodes(runId));
         List<SpecialistAgent.Result> live=new ArrayList<>();
+        String goal = run.getGoal();
+        BooleanSupplier hasCorrection = () -> planner != null
+                && requests.collaborativeSteering(ctx.getStreamId(), runId, false).pending();
         int parallel="P1".equals(run.getMode()) || "SINGLE".equals(run.getMode()) ? 1 : Math.clamp(properties.getMaxParallelNodes(),1,4);
         // Never fork an uncommitted caller's transaction (e.g. a transactional benchmark fixture).
         boolean inline=org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
         try(var pool=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
             while(true) {
+                if (planner != null && !publisher.isAborted(ctx.getStreamId())) {
+                    var correction = requests.collaborativeSteering(ctx.getStreamId(), runId, false);
+                    if (correction.pending()) {
+                        String updatedGoal = SteeringInput.appendTo(goal, correction.inputs());
+                        if (!state.replanUncommitted(runId, token, planner.apply(updatedGoal), correction.through())) {
+                            state.cancel(runId, userId);
+                            requests.closeSteering(ctx.getStreamId());
+                            live.removeIf(result -> result.plan() != null || result.form() != null);
+                            note(ctx, "补充指令已保存，请先核对已提交的业务动作");
+                            break;
+                        }
+                        goal = updatedGoal;
+                        amended = true;
+                        live.clear();
+                        note(ctx, "已按补充指令更新协作计划");
+                        notifyUpdate(ctx);
+                        continue;
+                    }
+                }
                 List<AgentWorkItem> batch=new ArrayList<>();
                 for(int i=0;i<parallel;i++) {
                     if(publisher.isAborted(ctx.getStreamId())) {state.cancel(runId,userId);break;}
+                    if (hasCorrection.getAsBoolean()) break;
                     var ready=state.ready(runId);
                     if(ready.isEmpty()) break;
                     batch.add(state.begin(runId,ready.get().getId(),token));
                 }
-                if(batch.isEmpty()) break;
+                if (batch.isEmpty()) {
+                    if (planner != null && requests.collaborativeSteering(ctx.getStreamId(), runId, true).pending()) continue;
+                    break;
+                }
                 notifyUpdate(ctx);
-                if(inline || batch.size()==1) for(var node:batch) live.add(execute(node,ctx,token));
+                var boundary = new SpecialistAgent.ExecutionBoundary(hasCorrection, amended);
+                if(inline || batch.size()==1) for(var node:batch) live.add(execute(node,ctx,token,boundary));
                 else {
                     ToolContext captured=ctx;
-                    var futures=batch.stream().map(node->java.util.concurrent.CompletableFuture.supplyAsync(()->execute(node,captured,token),pool)).toList();
+                    var futures=batch.stream().map(node->java.util.concurrent.CompletableFuture.supplyAsync(()->execute(node,captured,token,boundary),pool)).toList();
                     for(var future:futures) live.add(future.join());
                 }
             }
@@ -104,7 +149,7 @@ public class DagScheduler {
         run=state.owned(runId,userId);
         Blackboard bb=state.blackboard(run,state.nodes(runId)); bb.setResults(live); notifyUpdate(ctx); return bb;
     }
-    private SpecialistAgent.Result execute(AgentWorkItem node,ToolContext initial,String token) {
+    private SpecialistAgent.Result execute(AgentWorkItem node,ToolContext initial,String token,SpecialistAgent.ExecutionBoundary boundary) {
         Long priorOrg=OrgContext.get(); var previous=SecurityContextHolder.getContext();
         OrgContext.set(initial.getLoginUser().getOrgId());
         ToolContext ctx=initial;
@@ -121,7 +166,7 @@ public class DagScheduler {
                 emit(ctx,AgentStreamEvent.agentStart(ctx.getStreamId(),publisher.nextSeq(ctx.getStreamId()),node.getAgentName(),null,null,ctx.getConversationId()));
                 if(node.getContractJson()!=null){var controlled=controlledExecutor.execute(node,ctx);result=controlled.result();receipt=controlled.receipt();}
                 else result=specialist.execute(node.getAgentName(),node.getInstruction()+upstream(node,state.nodes(node.getRunId())),
-                        ctx.withWorkItem(node.getId(),node.getRevision()).withAttempt(node.getAttempt()),null,ctx.getStreamId(),ctx.getLoginUser().getUsername());
+                        ctx.withWorkItem(node.getId(),node.getRevision()).withAttempt(node.getAttempt()),null,ctx.getStreamId(),ctx.getLoginUser().getUsername(),boundary);
             } catch(Exception e) {
                 log.warn("节点执行失败：run={} node={}",node.getRunId(),node.getId(),e);
                 result=new SpecialistAgent.Result(node.getAgentName(),"节点执行未完成，请核对权限或稍后重试。",List.of(),"FAILED","",false,Sensitivity.NORMAL,null,null,List.of(),List.of());
@@ -165,6 +210,10 @@ public class DagScheduler {
     }
     private void emit(ToolContext ctx,AgentStreamEvent event) {
         if(ctx.getStreamId()!=null) publisher.publish(ctx.getLoginUser().getUsername(),event.withContext(ctx));
+    }
+    private void note(ToolContext ctx, String text) {
+        thinkingTrace.note(ctx.getStreamId(), text);
+        emit(ctx, AgentStreamEvent.thinking(ctx.getStreamId(), publisher.nextSeq(ctx.getStreamId()), text));
     }
     private void notifyUpdate(ToolContext ctx) {
         var event=new LinkedHashMap<String,Object>(); event.put("type","AGENT_RUN_UPDATED"); event.put("runId",ctx.getRunId());

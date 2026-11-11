@@ -93,7 +93,7 @@ public class AgentPlanReadService {
             if(offset>doc.blocks().size()) return error("VALIDATION_ERROR","cursor 超出文档范围");
             int end=Math.min(offset+4,doc.blocks().size());
             var snapshot=snapshots==null?null:snapshots.record(ctx,id,baseline,bytes,doc,offset,end);
-            return ToolResult.ok("已读取指定版本原文页；分页覆盖由服务端记录，只有支持范围内的完整快照可准备修订。",ToolArgs.map(
+            return ToolResult.ok("已读取指定版本原文页。局部修订只能修改已读取的 Word 块；预算校验模式需要完整覆盖。",ToolArgs.map(
                     "planId",id,"versionLabel",plan.getVersion(),"baseline",baseline,
                     "documentRef",snapshot==null?null:snapshot.id(),
                     "blocks",doc.blocks().subList(offset,end),"nextCursor",end<doc.blocks().size()?end:null,

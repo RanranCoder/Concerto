@@ -54,7 +54,8 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
         return "为活动一键生成值班/排班表，基于无课表自动匹配空闲人员。"
                 + "需要提供活动、日期范围、时间段与参与部门。"
                 + "适用于'给这个活动排个班''安排下周的值班'等指令。"
-                + "会先生成待确认清单，确认后才写入。";
+                + "通常先生成待确认清单。用户当轮明确说「为活动 #123 生成并保存 2026-11-16 至 2026-11-17 每天 09:00 至 10:00 部门 #77 每班 2 人的排班草稿」时，"
+                + "严格传原文的活动、部门、日期、时段和人数，省略学期。服务器核对后仅保存未发布草稿。";
     }
 
     @Override
@@ -172,26 +173,23 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
 
     @Override
     public CommitResult commit(ToolContext ctx, AgentActionPlan plan) {
+        return commit(plan, false);
+    }
+
+    @Override
+    public CommitResult commitDelegated(ToolContext ctx, AgentActionPlan plan) {
+        return commit(plan, true);
+    }
+
+    private CommitResult commit(AgentActionPlan plan, boolean delegated) {
         Map<String, Object> exec = readArgs(plan);
         if (exec == null) return CommitResult.failed("无法还原排班参数，请重新发起。");
 
         try {
-            ActivityScheduleGenerateRequest req = new ActivityScheduleGenerateRequest();
-            req.setActivityId(lng(exec.get("activityId")));
-            req.setStartDate(LocalDate.parse(str(exec.get("startDate"))));
-            req.setEndDate(LocalDate.parse(str(exec.get("endDate"))));
-            req.setStartTime(LocalTime.parse(str(exec.get("startTime"))));
-            req.setEndTime(LocalTime.parse(str(exec.get("endTime"))));
-            req.setDeptIds(toLongList(exec.get("deptIds")));
-            if (exec.get("peoplePerSlot") != null) {
-                req.setPeoplePerSlot(Integer.parseInt(String.valueOf(exec.get("peoplePerSlot"))));
-            }
-            if (exec.get("semester") != null) {
-                req.setSemester(String.valueOf(exec.get("semester")));
-            }
-
-            List<Map<String, Object>> details = scheduleService.generateReviewed(req,
-                    exec.get("previewFingerprint") == null ? null : str(exec.get("previewFingerprint")));
+            ActivityScheduleGenerateRequest req = requestFrom(exec);
+            String fingerprint = str(exec.get("previewFingerprint"));
+            List<Map<String, Object>> details = delegated ? scheduleService.generateDelegatedDraft(req, fingerprint)
+                    : scheduleService.generateReviewed(req, fingerprint);
             int created = 0;
             int persons = 0;
             for (Map<String, Object> d : details) {
@@ -218,7 +216,11 @@ public class GenerateActivityScheduleTool implements WriteAgentTool {
             return new CommitResult(plan.skipped().isEmpty() ? "SUCCESS" : "PARTIAL", persons, plan.skipped().size(),
                     msg + (plan.skipped().isEmpty() ? "" : "仍有空缺，请在活动排班中补齐。"),
                     ToolArgs.map("slots", created, "persons", persons, "skipped", plan.skipped()), refs);
+        } catch (com.pams.common.BizException e) {
+            return CommitResult.failed("排班生成失败：" + e.getMessage());
         } catch (Exception e) {
+            if (delegated) return new CommitResult("RESULT_UNKNOWN", 0, 0,
+                    "排班草稿保存结果待核对，请先查看活动排班。", Map.of(), List.of());
             return CommitResult.failed("排班生成失败：" + e.getMessage());
         }
     }

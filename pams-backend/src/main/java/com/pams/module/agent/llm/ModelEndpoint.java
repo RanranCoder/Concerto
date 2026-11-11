@@ -1,7 +1,11 @@
 package com.pams.module.agent.llm;
 
 /** Immutable task snapshot. Never expose credentials through toString or API responses. */
-public record ModelEndpoint(String protocol, String baseUrl, String apiKey, String model, boolean summary) {
+public record ModelEndpoint(String protocol, String baseUrl, String apiKey, String model, boolean summary,
+                            Integer contextWindowTokens) {
+    public ModelEndpoint(String protocol, String baseUrl, String apiKey, String model, boolean summary) {
+        this(protocol, baseUrl, apiKey, model, summary, null);
+    }
     public ModelEndpoint {
         if (!"openai_chat_completions".equals(protocol) && !"openai_responses".equals(protocol))
             throw new IllegalArgumentException("不支持的 AI 协议");

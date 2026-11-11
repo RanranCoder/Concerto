@@ -67,6 +67,6 @@ public interface AgentTool {
      * 普通读结果保留有界结构化事实；写结果和敏感结果只给摘要，之后仍须过 PolicyGuard。
      */
     default String toLlmText(ToolContext ctx, ToolResult result) {
-        return ToolResultText.render(this,result);
+        return ToolResultText.render(ctx,this,result);
     }
 }

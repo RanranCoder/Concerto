@@ -24,7 +24,6 @@ import com.pams.module.agent.stream.AgentStreamEvent;
 import com.pams.module.agent.stream.ThinkingTrace;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -254,9 +253,10 @@ public class AgentOrchestrator {
         String memoryReply=longTermMemory.command(userMessage,ctx);
         boolean memoryHandled=memoryReply!=null;
         if(memoryHandled){reply=memoryReply;providerName="memory";}
+        if (!memoryHandled && requests != null) requests.openSteering(streamId);
         boolean kbMode = ctx.isKb() && !memoryHandled;
         if (kbMode) {
-            KbPipeline.KbOutcome kb = kbPipeline.run(message, convId, ctx, streamId);
+            KbPipeline.KbOutcome kb = runKb(message, convId, ctx, streamId);
             citationsOut.addAll(kb.citations());
             reply = kb.reply();
             if (kb.provider() != null) providerName = kb.provider();
@@ -305,27 +305,41 @@ public class AgentOrchestrator {
             List<LlmProvider.ToolSpec> specs = toSpecs(visible);
 
             int iteration = 0;
+            int round = 0;
+            int steeringCursor = 0;
             int maxIter = Math.max(props.getMaxToolIterations(), 1);
+            long budgetStarted=System.nanoTime();
+            int budgetCalls=0;
 
             while (true) {
                 // 中止检查点（阶段边界）
                 if (publisher.isAborted(streamId)) {
                     throw new java.util.concurrent.CancellationException();
                 }
+                var instructions = pendingInstructions(streamId, steeringCursor, false);
+                for (var instruction : instructions) {
+                    messages.add(LlmProvider.ChatMessage.text("user", instruction.text()));
+                }
+                steeringCursor += instructions.size();
+                if (!instructions.isEmpty()) emitNote(ctx, streamId, "已接续你补充的指令");
 
                 // ===== ③ 调 LLM（含重试 1 次 + 降级；文本增量按 round 实时推送） =====
-                LlmProvider.ChatResponse response = callLlm(messages, specs, ctx, streamId, iteration);
+                com.pams.module.agent.prompt.RuntimeProgress.refresh(messages,maxIter,iteration,budgetCalls,budgetStarted);
+                LlmProvider.ChatResponse response = callLlm(messages, specs, ctx, streamId, round++);
+                if (!instructions.isEmpty()) requests.markSteeringConsumed(streamId, steeringCursor);
                 providerName = response.provider();
                 degraded = response.degraded();
 
                 // 无工具调用 → 这就是最终答复
                 if (response.toolCalls() == null || response.toolCalls().isEmpty()) {
+                    if (!pendingInstructions(streamId, steeringCursor, true).isEmpty()) continue;
                     reply = response.content() == null ? "" : response.content();
                     break;
                 }
 
                 // 轮数上限保护（防 LLM 死循环，D5）
                 if (iteration >= maxIter) {
+                    if (!pendingInstructions(streamId, steeringCursor, true).isEmpty()) continue;
                     log.warn("灵思工具调用轮数达上限 {}，强制收尾：stream={}", maxIter, streamId);
                     reply = response.content() != null && !response.content().isBlank()
                             ? response.content()
@@ -336,11 +350,17 @@ public class AgentOrchestrator {
 
                 // Preserve native output state across tool exchanges.
                 messages.add(LlmProvider.ChatMessage.assistantCalling(response));
+                int toolGroupStart = messages.size();
 
                 // ===== ④⑤ 逐个派发 + 结果过闸口 =====
                 boolean writePlanProduced = false;
                 boolean formRequested = false;
                 for (LlmProvider.ToolCallRequest call : response.toolCalls()) {
+                    if (!pendingInstructions(streamId, steeringCursor, false).isEmpty()) {
+                        messages.add(LlmProvider.ChatMessage.toolResult(call.id(), "收到用户的新指令，本次调用未执行。"));
+                        continue;
+                    }
+                    budgetCalls++;
                     AgentTool tool = registry.find(call.name()).orElse(null);
 
                     // 幻觉工具名：不抛异常，返回可读结果让 LLM 自我纠正
@@ -370,15 +390,7 @@ public class AgentOrchestrator {
                     emit(ctx, AgentStreamEvent.toolStart(streamId, seq, tool.name(), tool.runningLabel()));
 
                     long t0 = System.currentTimeMillis();
-                    ToolResult result;
-                    try {
-                        result = registry.dispatch(tool.name(), ctx, call.arguments());
-                    } catch (AccessDeniedException e) {
-                        result = ToolResult.denied(e.getMessage());
-                    } catch (Exception e) {
-                        log.warn("灵思工具执行异常：tool={} stream={}", tool.name(), streamId, e);
-                        result = ToolResult.failed(e.getMessage() == null ? "执行异常" : e.getMessage());
-                    }
+                    ToolResult result = ToolOutcomeHandler.execute(registry, ctx, call);
                     long cost = System.currentTimeMillis() - t0;
 
                     // 留存档位取本轮最严：碰过敏感数据的轮次，答复与思维链都不再按 NORMAL 全量留存
@@ -397,8 +409,29 @@ public class AgentOrchestrator {
                     }
 
                     if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+                    if (!pendingInstructions(streamId, steeringCursor, false).isEmpty()
+                            && (result.plan() != null || result.needsInput())) {
+                        messages.add(LlmProvider.ChatMessage.toolResult(call.id(), "收到用户的新指令，旧方案未提交。"));
+                        continue;
+                    }
                     // Both execution strategies share the same action persistence and event contract.
                     ToolOutcomeHandler.PendingAction action = outcomeHandler.prepare(ctx,tool,result,call);
+                    if (action.receipt() != null) {
+                        Object receipt = action.receipt().get("result");
+                        if (receipt instanceof Map<?,?> details && details.get("references") instanceof List<?> references) {
+                            for (Object reference : references) {
+                                if (reference instanceof Map<?,?> map) {
+                                    Map<String,Object> link = new LinkedHashMap<>();
+                                    map.forEach((key,value) -> link.put(String.valueOf(key),value));
+                                    allReferences.add(link);
+                                }
+                            }
+                        }
+                        String receiptText = policyGuard.egressText(tool.sensitivity(), "草稿操作回执：" + receipt
+                                + "。任务状态：" + action.receipt().get("status"));
+                        messages.add(LlmProvider.ChatMessage.toolResult(call.id(), receiptText == null ? "草稿操作结果受限，请核对任务状态。" : receiptText));
+                        continue;
+                    }
                     if (action.form() != null) {
                         pendingForm = action.form(); formRequested = true; break;
                     }
@@ -426,9 +459,22 @@ public class AgentOrchestrator {
                     }
                 }
 
+                if ((formRequested || writePlanProduced) && !pendingInstructions(streamId, steeringCursor, true).isEmpty()) {
+                    taskGate.cancelUnsubmitted(streamId, ctx.getUserId());
+                    pendingForm = null;
+                    pendingPlan = null;
+                    // Complete the provider tool-call group before adding the user's next message.
+                    var unanswered = new java.util.LinkedHashSet<String>();
+                    for (var call : response.toolCalls()) unanswered.add(call.id());
+                    for (var messageEntry : messages.subList(toolGroupStart, messages.size())) {
+                        unanswered.remove(messageEntry.toolCallId());
+                    }
+                    for (String callId : unanswered) messages.add(LlmProvider.ChatMessage.toolResult(callId, "收到用户的新指令，旧方案已撤回。"));
+                    continue;
+                }
                 if (formRequested) {
-                    // 表单已弹出：本轮不再继续调 LLM，等用户在弹窗中补全后经 /tasks/{id}/input 提交
-                    reply = buildFormReply(degraded);
+                    // Missing information is a conversation pause; the form is an optional input surface.
+                    reply = new ToolOutcomeHandler.PendingAction(null,pendingForm).inputQuestion();
                     break;
                 }
 
@@ -516,6 +562,27 @@ public class AgentOrchestrator {
 
     /* ===================================================================== 子过程 */
 
+    private List<AgentRequestService.Instruction> pendingInstructions(String stream, int cursor, boolean sealIfEmpty) {
+        return requests == null ? List.of() : requests.steeringAfter(stream, cursor, sealIfEmpty);
+    }
+
+    private KbPipeline.KbOutcome runKb(String question, Long conversationId, ToolContext ctx, String stream) {
+        if (requests == null) return kbPipeline.run(question, conversationId, ctx, stream);
+        int cursor = 0;
+        int round = 0;
+        while (true) {
+            var corrections = pendingInstructions(stream, cursor, false);
+            if (!corrections.isEmpty()) {
+                question = SteeringInput.appendTo(question, corrections);
+                cursor += corrections.size();
+                emitNote(ctx, stream, "已按补充指令重新检索知识库");
+            }
+            var outcome = kbPipeline.run(question, conversationId, ctx, stream, round++);
+            if (!corrections.isEmpty()) requests.markSteeringConsumed(stream, cursor);
+            if (pendingInstructions(stream, cursor, true).isEmpty()) return outcome;
+        }
+    }
+
     /**
      * 组装对话上下文：system + 最近 K 轮。
      *
@@ -538,7 +605,7 @@ public class AgentOrchestrator {
     private List<LlmProvider.ToolSpec> toSpecs(List<AgentTool> tools) {
         List<LlmProvider.ToolSpec> out = new ArrayList<>();
         for (AgentTool t : tools) {
-            out.add(new LlmProvider.ToolSpec(t.name(), t.description(), t.parametersSchema()));
+            out.add(new LlmProvider.ToolSpec(t.name(),t.description(),t.parametersSchema()));
         }
         return out;
     }
@@ -557,17 +624,6 @@ public class AgentOrchestrator {
                                      List<LlmProvider.ToolSpec> specs,
                                      ToolContext ctx, String streamId, int round) {
         return llmCaller.callLlm(messages, specs, ctx, streamId, round);
-    }
-
-    /** 表单补全弹出后的固定话术（用户看到的是表单卡 + 这句话） */
-    private String buildFormReply(boolean degraded) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("要完成这一步还缺少一些关键信息，我已为你弹出**信息补充表单**。\n\n");
-        sb.append("你提到过的内容已预填进去，请核对并补全后提交——提交后我会生成待确认清单，确认后才会真正执行。");
-        if (degraded) {
-            sb.append("\n\n（当前为规则模式，请仔细核对表单内容。）");
-        }
-        return sb.toString();
     }
 
     /** 写清单生成后的固定话术（用户看到的是清单卡 + 这句话） */
@@ -702,12 +758,19 @@ public class AgentOrchestrator {
             log.info("协作完成：runId={} mode={} 专家={} 耗时={}ms",
                     run == null ? null : run.getId(), decision.mode(), decision.experts(),
                     System.currentTimeMillis() - t0);
-            return new CollaborationOutcome(composeCollabReply(bb, decision),bb,run.getStatus(),run.getId());
+            String reply = composeCollabReply(bb, decision);
+            if (requests != null && requests.byStream(streamId)
+                    .map(request -> requests.instructions(request).size() > request.getSteeringConsumed()).orElse(false)) {
+                reply += "\n\n补充指令已保存。原协作已有业务提交，请核对执行结果后再发起后续任务。";
+            }
+            return new CollaborationOutcome(reply,bb,run.getStatus(),run.getId());
         } catch (java.util.concurrent.CancellationException cancelled) { throw cancelled;
         } catch (Exception e) {
             log.warn("协作执行失败，本轮不产出结果：runId={}",
                     run == null ? null : run.getId(), e);
             return new CollaborationOutcome("这次协作没能完成，请查看执行结果或稍后重试。",null,"FAILED",run==null?null:run.getId());
+        } finally {
+            if (requests != null) requests.closeSteering(streamId);
         }
     }
 

@@ -7,7 +7,6 @@ import com.pams.module.agent.registry.AgentRegistry;
 import com.pams.module.agent.service.*;
 import com.pams.module.agent.stream.*;
 import org.springframework.stereotype.Service;
-import org.springframework.security.access.AccessDeniedException;
 import java.util.*;
 
 /** Bounded specialist loop. Writes prepare actions through the same gate as the ordinary loop. */
@@ -42,11 +41,18 @@ public class SpecialistAgent {
     }
     public Result execute(String agent,String task,ToolContext ctx,List<LlmProvider.ToolCallRequest> predecided,
                           String streamId,String username) {
+        return execute(agent, task, ctx, predecided, streamId, username, new ExecutionBoundary(() -> false, false));
+    }
+
+    record ExecutionBoundary(java.util.function.BooleanSupplier superseded, boolean amendedPlan) {}
+
+    Result execute(String agent,String task,ToolContext ctx,List<LlmProvider.ToolCallRequest> predecided,
+                   String streamId,String username,ExecutionBoundary boundary) {
         List<AgentTool> scoped=scopedTools(agent,ctx);
         Set<String> allowed=new HashSet<>(scoped.stream().map(AgentTool::name).toList());
         List<LlmProvider.ToolSpec> specs=scoped.stream().map(t->new LlmProvider.ToolSpec(t.name(),t.description(),t.parametersSchema())).toList();
         List<LlmProvider.ChatMessage> messages=new ArrayList<>();
-        String system = com.pams.module.agent.prompt.PromptRenderer.executor(ctx, scoped, rolePrompt(agent), props.getMaxToolIterations());
+        String system = com.pams.module.agent.prompt.PromptRenderer.executor(ctx, scoped, com.pams.module.agent.prompt.PromptBundle.role(ctx.getPromptBundleJson(),agent,rolePrompt(agent)), props.getMaxToolIterations());
         if (contextAssembler != null) messages.addAll(contextAssembler.specialist(system, ctx.getConversationId(), task==null?"":task, ctx));
         else {
             messages.add(LlmProvider.ChatMessage.text("system",system));
@@ -57,19 +63,24 @@ public class SpecialistAgent {
         String provider="", text="", state="SUCCESS";
         boolean degraded=false;
         Sensitivity sensitivity=Sensitivity.NORMAL;
-        boolean actionRequired=!ctx.isReadonly() && !ctx.isKb() && scoped.stream().anyMatch(AgentTool::writeOperation)
+        boolean actionRequired=!boundary.amendedPlan() && !ctx.isReadonly() && !ctx.isKb()
+            && scoped.stream().anyMatch(AgentTool::writeOperation)
             && task!=null && List.of("待确认","等待确认","拟执行清单","保存草稿","生成推文草稿").stream().anyMatch(task::contains);
         int max=Math.max(1,props.getMaxToolIterations());
-        for(int round=0;round<=max;round++) {
+        long budgetStarted=System.nanoTime();
+        rounds: for(int round=0;round<=max;round++) {
             if(aborted(streamId)) { state="CANCELLED"; break; }
+            if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break; }
             LlmProvider.ChatResponse response=null;
             List<LlmProvider.ToolCallRequest> calls=predecided;
             if(calls==null) {
+                com.pams.module.agent.prompt.RuntimeProgress.refresh(messages,max,round,invocations.size(),budgetStarted);
                 try { response=caller.callIsolated(messages,specs,streamId); }
                 catch(java.util.concurrent.CancellationException e) { state="CANCELLED"; break; }
                 provider=response.provider(); degraded|=response.degraded(); text=response.content()==null?"":response.content();
                 calls=response.toolCalls();
             }
+            if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break; }
             if(calls==null || calls.isEmpty()) {
                 if(actionRequired && predecided==null) {
                     if(round<max && !degraded) {
@@ -88,6 +99,7 @@ public class SpecialistAgent {
             if(response!=null) messages.add(LlmProvider.ChatMessage.assistantCalling(response));
             for(LlmProvider.ToolCallRequest call:calls) {
                 if(aborted(streamId)) { state="CANCELLED"; break; }
+                if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break rounds; }
                 AgentTool tool=toolRegistry.find(call.name()).orElse(null);
                 if(tool==null || !allowed.contains(call.name())) {
                     invocations.add(new ToolInvocation(call.name(),call.name(),"DENIED","工具不可用或超出专家作用域",0));
@@ -96,9 +108,8 @@ public class SpecialistAgent {
                 emit(ctx,streamId,AgentStreamEvent.toolStart(streamId,publisher.nextSeq(streamId),tool.name(),tool.runningLabel()));
                 long start=System.currentTimeMillis();
                 ToolResult result;
-                try { result=toolRegistry.dispatch(call.name(),ctx,call.arguments()); }
-                catch(AccessDeniedException e) { result=ToolResult.denied(e.getMessage()); }
-                catch(Exception e) { result=ToolResult.failed(e.getMessage()==null?"工具执行异常":e.getMessage()); }
+                try { result=ToolOutcomeHandler.execute(toolRegistry,ctx,call); }
+                catch(java.util.concurrent.CancellationException e) { state="CANCELLED"; break; }
                 long duration=System.currentTimeMillis()-start;
                 sensitivity=Sensitivity.max(sensitivity,tool.sensitivity());
                 String safe=policy.egressText(tool.sensitivity(),tool.toLlmText(ctx,result));
@@ -116,6 +127,7 @@ public class SpecialistAgent {
                 catch(Exception ignored) { /* audit is independent of a successful preview */ }
                 emit(ctx,streamId,AgentStreamEvent.toolEnd(streamId,publisher.nextSeq(streamId),tool.name(),tool.label(),result.status(),duration,result.error()));
                 if(aborted(streamId)) { state="CANCELLED"; break; }
+                if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break rounds; }
                 ToolOutcomeHandler.PendingAction pending=outcomes.prepare(ctx,tool,result,call);
                 if(pending.waiting()) return new Result(agent,safe,invocations,pending.form()!=null?"WAITING_INPUT":"WAITING_CONFIRM",
                     provider,degraded,sensitivity,pending.plan(),pending.form(),refs,rows);

@@ -62,6 +62,8 @@ public class ConversationStore {
     private final ObjectMapper mapper = new ObjectMapper();
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.agent.orchestration.DagScheduler scheduler;
+    @org.springframework.beans.factory.annotation.Autowired
+    private AgentRequestService requests;
 
     public ConversationStore(AgentConversationRepository conversationRepository,
                              AgentMessageRepository messageRepository,
@@ -379,6 +381,20 @@ public class ConversationStore {
         List<Map<String, Object>> records = new ArrayList<>();
         for (AgentMessage m : content) {
             Map<String, Object> vo = toVo(m);
+            if (requests != null && AgentMessage.ROLE_USER.equals(m.getRole())) {
+                requests.forMessage(m.getStreamId(), m.getConversationId(), ctx).ifPresent(request -> {
+                    if (request.isSteeringOpen() && !request.isCancelled() && "RUNNING".equals(request.getStatus())
+                            && !request.getUpdatedAt().isBefore(com.pams.module.agent.orchestration.RuntimeIdentity.STARTED)
+                            && requests.live(request)) {
+                        vo.put("activeRequestId", request.getId());
+                    }
+                    var instructions = requests.instructions(request);
+                    if (!instructions.isEmpty()) {
+                        vo.put("instructions", instructions);
+                        vo.put("instructionsConsumed", request.getSteeringConsumed());
+                    }
+                });
+            }
             if (m.getRunId()!=null && AgentMessage.ROLE_ASSISTANT.equals(m.getRole())) {
                 try {
                     Map<String,Object> run=scheduler.view(m.getRunId(),ctx);
@@ -674,7 +690,13 @@ public class ConversationStore {
     public String contextText(AgentMessage message, ToolContext ctx) {
         Map<String, Object> view = toVo(message);
         revokeUnauthorizedCitations(List.of(view), ctx);
-        return (String) view.get("content");
+        String content = (String) view.get("content");
+        if (requests == null || !AgentMessage.ROLE_USER.equals(message.getRole())) return content;
+        return requests.forMessage(message.getStreamId(), message.getConversationId(), ctx).map(request -> {
+            var inputs = requests.instructions(request);
+            var used = inputs.stream().limit(request.getSteeringConsumed()).map(AgentRequestService.Instruction::text).toList();
+            return used.isEmpty() ? content : content + "\n\n运行中用户补充：\n" + String.join("\n", used);
+        }).orElse(content);
     }
 
     /** 摘要：截断到 N 字（sensitive 消息只存这个） */

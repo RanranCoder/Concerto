@@ -55,7 +55,8 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
     @Override
     public String description() {
         return "根据活动的名称、主题、时间、地点等信息，生成一篇新闻稿/推文的草稿。"
-                + "生成结果为草稿状态，需要用户确认后才写入系统并可在稿件管理中继续编辑。"
+                + "保存为草稿，可在稿件管理中继续编辑。用户当轮明确说「为活动 #123 保存一份本人报道草稿」时，"
+                + "传原文活动ID、REPORT，负责人省略或使用当前用户，由服务器判断是否可直接保存。其他请求准备确认清单。"
                 + "适用于'帮我把这次活动的推文起草了''写一篇活动总结'等指令。";
     }
 
@@ -140,6 +141,15 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
 
     @Override
     public CommitResult commit(ToolContext ctx, AgentActionPlan plan) {
+        return commit(ctx, plan, false);
+    }
+
+    @Override
+    public CommitResult commitDelegated(ToolContext ctx, AgentActionPlan plan) {
+        return commit(ctx, plan, true);
+    }
+
+    private CommitResult commit(ToolContext ctx, AgentActionPlan plan, boolean delegated) {
         Map<String, Object> exec = readArgs(plan);
         if (exec == null) return CommitResult.failed("无法还原草稿参数，请重新发起。");
 
@@ -152,9 +162,10 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
             req.setActivityId(lng(exec.get("activityId")));
             req.setAuthorId(lng(exec.get("authorId")));
             req.setArticleType(str(exec.get("articleType")));
-            req.setDeadline(LocalDateTime.now().plusDays(7));
+            if (!delegated) req.setDeadline(LocalDateTime.now().plusDays(7));
 
-            var saved = articleService.create(ctx.getUserId(), req);
+            var saved = delegated ? articleService.createPersonalDraft(ctx.getUserId(), req)
+                    : articleService.create(ctx.getUserId(), req);
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "article", "id", saved.getId(),
@@ -163,7 +174,11 @@ public class DraftArticleFromActivityTool implements WriteAgentTool {
             return new CommitResult("SUCCESS", 1, 0,
                     "已生成推文草稿《" + saved.getTitle() + "》，可在稿件管理中继续编辑。",
                     ToolArgs.map("articleId", saved.getId()), refs);
+        } catch (com.pams.common.BizException e) {
+            return CommitResult.failed("草稿写入失败：" + e.getMessage());
         } catch (Exception e) {
+            if (delegated) return new CommitResult("RESULT_UNKNOWN", 0, 0,
+                    "草稿保存结果待核对，请先查看稿件管理。", Map.of(), List.of());
             return CommitResult.failed("草稿写入失败：" + e.getMessage());
         }
     }

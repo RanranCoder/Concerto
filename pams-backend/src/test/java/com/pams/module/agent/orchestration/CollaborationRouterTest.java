@@ -82,11 +82,10 @@ class CollaborationRouterTest {
     }
 
     @Test
-    void 正式文稿即使单专家也升级为协作() {
-        // 有审查环节的正式材料值得反思回路，哪怕只有一位产出专家
-        planReturns(AgentCatalog.WRITING, AgentCatalog.REVIEWER);
-        CollaborationRouter.Decision d = router.route("写一份主题党日活动的完整策划书", "standard", true);
-        assertThat(d.upgrade()).isTrue();
+    void 单份策划书草稿由主助手完成() {
+        planReturns(AgentCatalog.PLANNING, AgentCatalog.REVIEWER);
+        CollaborationRouter.Decision d = router.route("写一份主题党日活动的完整策划书并直接保存为草稿", "standard", true);
+        assertThat(d.upgrade()).isFalse();
     }
 
     @Test

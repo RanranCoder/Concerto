@@ -15,6 +15,7 @@ public final class OpenAiResponsesProvider implements LlmProvider {
         this.endpoint = endpoint; transport = new OpenAiTransport(endpoint, timeout, client);
     }
     public String name() { return "openai_responses"; }
+    @Override public Integer contextWindowTokens() { return endpoint.contextWindowTokens(); }
     public boolean supportsToolCalling() { return true; }
     private ObjectNode body(ChatRequest request, boolean stream) {
         var body = JSON.createObjectNode().put("model", endpoint.model()).put("stream", stream)

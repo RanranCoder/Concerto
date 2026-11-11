@@ -36,6 +36,22 @@ class ContextBudgetTest {
         assertThatThrownBy(() -> budget.fit(List.of(LlmProvider.ChatMessage.text("user","约束".repeat(1000))),List.of()))
                 .isInstanceOf(BizException.class);
     }
+    @Test void reducesOlderToolResultsWhenTheirCombinedSizeOverflows() {
+        var p = properties(1500);
+        p.setContextToolResultTokens(600);
+        var task = LlmProvider.ChatMessage.text("user", "查询并比较两个结果");
+        var call = LlmProvider.ChatMessage.assistantCalling("", List.of(
+                new LlmProvider.ToolCallRequest("first", "query", Map.of()),
+                new LlmProvider.ToolCallRequest("second", "query", Map.of())), "查询两个来源");
+        var older = LlmProvider.ChatMessage.toolResult("first", "甲".repeat(200));
+        var newer = LlmProvider.ChatMessage.toolResult("second", "乙".repeat(150));
+        var result = new ContextBudget(p).fit(List.of(task, call, older, newer), List.of());
+
+        assertThat(result).hasSize(4).startsWith(task, call).endsWith(newer);
+        assertThat(result.get(2).toolCallId()).isEqualTo("first");
+        assertThat(result.get(2).content()).isNotEqualTo(older.content());
+        assertThat(result.stream().mapToInt(ContextBudget::cost).sum()).isLessThanOrEqualTo(1098);
+    }
     @Test void toolSchemasAndReasoningConsumeBudget() {
         var budget = new ContextBudget(properties(900));
         var messages = List.of(LlmProvider.ChatMessage.text("user","本轮任务"));
