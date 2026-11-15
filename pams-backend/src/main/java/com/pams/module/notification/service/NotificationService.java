@@ -12,6 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly=true)
 public class NotificationService {
+  private static final String VISIBLE_PACK_NOTICES = " AND ((n.type<>'PARTY_SUMMARY' AND "
+      + "(n.entity_type IS NULL OR n.entity_type NOT LIKE 'PARTY!_%' ESCAPE '!')) OR EXISTS "
+      + "(SELECT 1 FROM org_domain_pack p WHERE p.org_id=n.org_id AND p.pack_code='party' AND p.enabled=1))";
   @org.springframework.beans.factory.annotation.Autowired
   private NotificationPolicyService policies;
   private final JdbcTemplate db;
@@ -30,13 +33,14 @@ public class NotificationService {
   }
   public long countUnreadForUser(Long uid,String role,Long dept) {
     return db.queryForObject("SELECT COUNT(*) FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id "
-      +"WHERE i.org_id=? AND i.user_id=? AND i.read_at IS NULL AND i.archived_at IS NULL AND n.deleted=0",Long.class,NotificationPipeline.org(),uid);
+      +"WHERE i.org_id=? AND i.user_id=? AND i.read_at IS NULL AND i.archived_at IS NULL AND n.deleted=0"
+      + VISIBLE_PACK_NOTICES,Long.class,NotificationPipeline.org(),uid);
   }
   public PageResult<NotificationVO> pageForUser(Long uid,String role,Long dept,NotificationType type,int page,int size) {
     int current=Math.max(1,page),limit=Math.max(1,Math.min(100,size));
     String where=" FROM notification_inbox i JOIN notification n ON n.id=i.message_id AND n.org_id=i.org_id "
       +"LEFT JOIN sys_user u ON u.id=n.sender_id AND u.org_id=n.org_id AND u.deleted=0 "
-      +"WHERE i.org_id=? AND i.user_id=? AND n.deleted=0"+(type==null?"":" AND n.type=?");
+      +"WHERE i.org_id=? AND i.user_id=? AND n.deleted=0"+VISIBLE_PACK_NOTICES+(type==null?"":" AND n.type=?");
     var args=new ArrayList<Object>(List.of(NotificationPipeline.org(),uid));if(type!=null)args.add(type.name());
     PageResult<NotificationVO> result=new PageResult<>();result.setCurrent(current);result.setSize(limit);
     result.setTotal(db.queryForObject("SELECT COUNT(*)"+where,Long.class,args.toArray()));
@@ -98,7 +102,9 @@ public class NotificationService {
   }
   @Transactional
   public void markAllAsRead(Long uid,String role,Long dept) {
-    if(db.update("UPDATE notification_inbox SET read_at=CURRENT_TIMESTAMP WHERE org_id=? AND user_id=? AND read_at IS NULL",NotificationPipeline.org(),uid)>0)
+    if(db.update("UPDATE notification_inbox SET read_at=CURRENT_TIMESTAMP WHERE org_id=? AND user_id=? AND read_at IS NULL"
+        + " AND EXISTS (SELECT 1 FROM notification n WHERE n.org_id=notification_inbox.org_id"
+        + " AND n.id=notification_inbox.message_id" + VISIBLE_PACK_NOTICES + ")",NotificationPipeline.org(),uid)>0)
       pipeline.invalidate(uid);
   }
   public List<NotificationPreferenceVO> getPreferences(Long uid) {

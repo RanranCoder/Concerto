@@ -103,14 +103,23 @@ public class OrgService {
         org.setShortName(req.getOrg().getShortName());
         org.setThemeJson(isBlank(req.getOrg().getThemeColor())
                 ? null : "{\"primaryColor\":\"" + req.getOrg().getThemeColor() + "\"}");
-        org.setEnabledPacks(toJsonArray(req.getEnabledPacks()));
+        org.setEnabledPacks(encodePacks(req.getEnabledPacks()));
         org.setStatus(1);
         org.setDeleted(0);
         org.setCreatedAt(LocalDateTime.now());
         org.setUpdatedAt(LocalDateTime.now());
         org = organizationRepository.save(org);
         Long orgId = org.getId();
-        if (authorization != null) authorization.initializeOrg(orgId);
+        if (authorization != null) {
+            authorization.initializeOrg(orgId);
+            if (req.getEnabledPacks() != null) {
+                for (String code : DomainPacks.CODES) {
+                    if (!DomainPacks.PARTY.equals(code) && req.getEnabledPacks().contains(code)) {
+                        authorization.setPack(orgId, code, true);
+                    }
+                }
+            }
+        }
 
         // 2/3. 新组织的架构与管理员属于「新租户」。多租户判别器按 OrgContext 取值，
         //      故在供给期临时把租户上下文切到新组织，写完恢复（A3）。
@@ -204,6 +213,26 @@ public class OrgService {
                 .orElseThrow(() -> new BizException(2006, "组织不存在"));
     }
 
+    public String effectivePacks(long orgId) {
+        return encodePacks(authorization.enabledPacks(orgId));
+    }
+
+    @Transactional
+    public List<String> updatePack(String code, boolean enabled) {
+        validatePack(code);
+        Organization org = currentOrgForUpdate();
+        authorization.setPack(org.getId(), code, enabled);
+        List<String> active = authorization.enabledPacks(org.getId());
+        org.setEnabledPacks(encodePacks(active));
+        org.setUpdatedAt(LocalDateTime.now());
+        return active;
+    }
+
+    private Organization currentOrgForUpdate() {
+        return organizationRepository.findForUpdate(OrgContext.getOrDefault())
+                .orElseThrow(() -> new BizException(2006, "组织不存在"));
+    }
+
     /**
      * 组织公开列表（免登录）：登录页组织选择与品牌用。
      * 仅暴露非敏感字段——不含 ownerUserId / status / 时间戳等内部信息。
@@ -226,7 +255,11 @@ public class OrgService {
     @Transactional
     public void updateCurrent(String name, String shortName, String logoUrl, String themeColor,
                               List<String> enabledPacks) {
-        Organization org = currentOrg();
+        Organization org = currentOrgForUpdate();
+        if (enabledPacks != null && name == null && shortName == null && logoUrl == null && themeColor == null) {
+            savePacks(org, enabledPacks);
+            return;
+        }
         validateOrgFields(name == null ? org.getName() : name.trim(), shortName, themeColor);
         if (name != null && organizationRepository.findByName(name.trim())
                 .filter(existing -> !existing.getId().equals(org.getId())).isPresent())
@@ -240,8 +273,7 @@ public class OrgService {
             org.setThemeJson("{\"primaryColor\":\"" + themeColor + "\"}");
         }
         if (enabledPacks != null) {
-            if (authorization != null) authorization.updatePacks(org.getId(), enabledPacks.contains("party"));
-            org.setEnabledPacks(toJsonArray(enabledPacks));
+            savePacks(org, enabledPacks);
         }
         org.setUpdatedAt(LocalDateTime.now());
         organizationRepository.save(org);
@@ -494,18 +526,23 @@ public class OrgService {
         return vo;
     }
 
-    private String toJsonArray(List<String> packs) {
-        if (packs == null || packs.isEmpty()) {
-            return "[]";
-        }
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < packs.size(); i++) {
-            if (i > 0) {
-                sb.append(",");
-            }
-            sb.append("\"").append(packs.get(i).replace("\"", "")).append("\"");
-        }
-        return sb.append("]").toString();
+    private void savePacks(Organization org, List<String> enabled) {
+        String encoded = encodePacks(enabled);
+        for (String code : DomainPacks.CODES) authorization.setPack(org.getId(), code, enabled.contains(code));
+        org.setEnabledPacks(encoded);
+        org.setUpdatedAt(LocalDateTime.now());
+        organizationRepository.save(org);
+    }
+
+    private String encodePacks(List<String> packs) {
+        if (packs == null) return "[]";
+        packs.forEach(this::validatePack);
+        return DomainPacks.CODES.stream().filter(packs::contains).map(code -> "\"" + code + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    }
+
+    private void validatePack(String code) {
+        if (code == null || !DomainPacks.CODES.contains(code)) throw new BizException(400, "此组件包暂不可启用");
     }
 
     private boolean isBlank(String s) {

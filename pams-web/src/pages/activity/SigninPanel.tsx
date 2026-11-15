@@ -1,4 +1,5 @@
 import FormSurface from '@/components/form/FormSurface'
+import { useOrgStore } from '@/stores/org'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -80,6 +81,7 @@ export default function SigninPanel({
   active?: boolean
 }) {
   const { message } = App.useApp()
+  const partyEnabled = useOrgStore(s => s.enabledPacks.includes('party'))
   const [list, setList] = useState<SigninVO[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -169,7 +171,7 @@ export default function SigninPanel({
         name: values.name,
         studentNo: values.studentNo || null,
         className: values.className || null,
-        identityType: values.identityType || null,
+        identityType: partyEnabled ? values.identityType || null : null,
         signType: values.signType ?? 'MANUAL',
         signTime: values.signTime
           ? values.signTime.format('YYYY-MM-DD HH:mm:ss')
@@ -459,13 +461,13 @@ export default function SigninPanel({
           <Form.Item name="className" label="班级">
             <Input maxLength={100} placeholder="请输入班级" />
           </Form.Item>
-          <Form.Item name="identityType" label="身份">
+          {partyEnabled && <Form.Item name="identityType" label="身份" preserve={false}>
             <Select
               placeholder="选择身份"
               allowClear
               options={IDENTITY_OPTIONS.map((v) => ({ value: v, label: v }))}
             />
-          </Form.Item>
+          </Form.Item>}
           <Space size={12} style={{ display: 'flex' }}>
             <Form.Item
               name="signType"

@@ -8,6 +8,7 @@ import type { OrgRegisterPayload, OrgUnitInput } from '@/api/org'
 import AuthLayout from '@/components/auth/AuthLayout'
 import OrgUnitEditor from '@/components/auth/OrgUnitEditor'
 import { DEFAULT_PRIMARY_COLOR } from '@/stores/org'
+import { EXTENSION_PACKS } from '@/utils/extensionPacks'
 import { countUnits, removeUnitAt, trimUnits, updateUnitAt, validateUnits } from '@/utils/orgTree'
 
 const ORG_TYPES = [
@@ -19,11 +20,7 @@ const ORG_TYPES = [
   { value: 'OTHER', label: '其他组织', detail: '按你的团队方式协作' },
 ]
 const COLORS = [DEFAULT_PRIMARY_COLOR, '#087F8C', '#6750A4', '#C44C35', '#B23363']
-const PACKS = [
-  { value: 'party', label: '党建包', detail: '党务台账与党员管理' },
-  { value: 'volunteer', label: '志愿包', detail: '志愿服务时长记录' },
-  { value: 'club', label: '社团包', detail: '社员与社团活动管理' },
-]
+const PACKS = EXTENSION_PACKS.filter(pack => pack.available)
 const STEPS = [
   { title: '组织信息', detail: '名称、类型与专属颜色', heading: '先认识一下你的组织', description: '这些信息将用于组织展示，之后也可以在设置中修改。' },
   { title: '组织架构', detail: '搭建部门与下级小组', heading: '让每一份分工，都有位置', description: '至少添加一个部门或小组。点击「子节点」可继续添加下级。' },
@@ -213,8 +210,8 @@ export default function OrgRegister() {
             <div className="review-section"><div className="review-heading"><h3>管理员</h3><button type="button" onClick={() => editStep(2)}>修改</button></div><strong>{values?.username}</strong><p>{values?.realName || '未填写姓名'} · 密码已设置</p></div>
           </div>
           <div className="pack-heading"><h3>扩展功能（选填）</h3><p>按组织需要启用，也可以稍后在设置中调整。</p></div>
-          <div className="pack-options">{PACKS.map((pack) => <Checkbox key={pack.value} checked={packs.includes(pack.value)} onChange={(event) => setPacks((current) => event.target.checked ? [...current, pack.value] : current.filter((value) => value !== pack.value))}>
-            <strong>{pack.label}</strong><span>{pack.detail}</span>
+          <div className="pack-options">{PACKS.map((pack) => <Checkbox key={pack.code} checked={packs.includes(pack.code)} onChange={(event) => setPacks((current) => event.target.checked ? [...current, pack.code] : current.filter((value) => value !== pack.code))}>
+            <strong>{pack.name}</strong><span>{pack.description}</span>
           </Checkbox>)}</div>
         </div>
         {error && <div className="onboarding-error" role="alert">{error}<span>请检查后重试，已填写的信息会保留。</span></div>}

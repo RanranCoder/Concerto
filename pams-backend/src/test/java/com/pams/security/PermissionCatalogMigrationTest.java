@@ -180,6 +180,7 @@ class PermissionCatalogMigrationTest {
       Flyway.configure()
           .dataSource(url, user, password)
           .locations("classpath:db/migration", vendor)
+          .target("71") // V72 adds permissions and deliberately invalidates the V47 rollback fingerprint.
           .load()
           .migrate();
       assertThat(

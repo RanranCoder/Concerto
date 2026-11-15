@@ -28,10 +28,14 @@ class AdminWorkspaceTest {
     static final java.util.concurrent.atomic.AtomicInteger source = new java.util.concurrent.atomic.AtomicInteger();
 
     String register() throws Exception {
+        return register(List.of("party"));
+    }
+
+    String register(List<String> packs) throws Exception {
         String username = "review_" + UUID.randomUUID().toString().replace("-", "");
         var body = Map.of("org", Map.of("name", "页面验收-" + username, "type", "PARTY"),
                 "admin", Map.of("username", username, "password", password, "realName", "验收管理员"),
-                "units", List.of(Map.of("name", "组织部", "children", List.of())), "enabledPacks", List.of("party"));
+                "units", List.of(Map.of("name", "组织部", "children", List.of())), "enabledPacks", packs);
         mvc.perform(post("/api/orgs/register").with(request -> {request.setRemoteAddr("192.0.2." + source.incrementAndGet()); return request;})
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(200));
@@ -76,6 +80,18 @@ class AdminWorkspaceTest {
         assertThat(filtered.path("records").get(0).path("managementSource").asText()).isEqualTo("NONE");
         var owners = request("GET", "/api/users?managementSource=OWNER", null);
         assertThat(owners.path("records").get(0).path("id").asLong()).isEqualTo(ownerId);
+    }
+
+    @Test void organizationWithoutSelectedPacksCanEnablePartyLater() throws Exception {
+        token = register(List.of());
+        assertThat(request("GET", "/api/orgs/current", null).path("enabledPacks").asText()).isEqualTo("[]");
+        mvc.perform(get("/api/party/members").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/orgs/current/packs/party").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0]").value("party"));
+        assertThat(request("GET", "/api/party/members", null).path("total").asInt()).isZero();
     }
 
     @Test void statusBatchReturnsPartialResultsAndRejectsForeignProtectedAndPendingTargets() throws Exception {

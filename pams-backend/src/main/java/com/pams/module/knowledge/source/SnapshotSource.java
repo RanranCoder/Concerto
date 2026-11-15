@@ -3,6 +3,7 @@ package com.pams.module.knowledge.source;
 import com.pams.module.agent.core.ToolContext;
 import com.pams.module.knowledge.entity.KbSnapshot;
 import com.pams.module.knowledge.repository.KbSnapshotRepository;
+import com.pams.module.knowledge.snapshot.SnapshotSpecRegistry;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -106,6 +107,7 @@ public class SnapshotSource implements KnowledgeSource {
         if (ctx == null) return false;
         KbSnapshot s = repository.findById(sourceId).orElse(null);
         if (s == null || s.getAsOf() == null) return false;
+        if (SnapshotSpecRegistry.PARTY_COMPOSITION.equals(s.getSpecCode()) && !ctx.hasPermission("party:view")) return false;
 
         if (VISIBILITY_LEADER.equals(s.getVisibility()) && !ctx.isLeader()) return false;
         if (s.getRequiredPermission() != null && !s.getRequiredPermission().isBlank()
@@ -127,7 +129,7 @@ public class SnapshotSource implements KnowledgeSource {
         if (s == null || s.getSpecCode() == null) return null;
         return switch (s.getSpecCode()) {
             case "member_composition" -> "/members";
-            case "party_composition" -> "/party/members";
+            case SnapshotSpecRegistry.PARTY_COMPOSITION -> "/party/members";
             case "activity_overview" -> "/activities";
             default -> null;   // 未知 spec：不给必然 404 的链接
         };

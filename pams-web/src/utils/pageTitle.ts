@@ -35,6 +35,8 @@ const RULES: Array<[RegExp, string]> = [
   [/^\/party\/members\/[^/]+(\/|$)/, '党员详情'],
   [/^\/party\/members(\/|$)/, '党务台账'],
   [/^\/party\/rosters(\/|$)/, '党员名册'],
+  [/^\/youth(\/|$)/, '团务工作'],
+  [/^\/volunteer(\/|$)/, '志愿服务'],
 
   [/^\/members\/[^/]+(\/|$)/, '成员详情'],
   [/^\/members(\/|$)/, '成员管理'],

@@ -23,6 +23,8 @@ import GlassCard from '@/components/glass/GlassCard'
 import PageHeader from '@/components/glass/PageHeader'
 import StatusTag from '@/components/glass/StatusTag'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
+import YouthPartyReceipts from '@/pages/packs/YouthPartyReceipts'
 import {
   getPartyMember,
   listStages,
@@ -47,6 +49,8 @@ export default function PartyMemberDetail() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const isMinisterOrAbove = (user?.permissions ?? []).includes('party:manage')
+  const youthEnabled = useOrgStore(s => s.enabledPacks.includes('youth'))
+  const canReadYouthReceipts = isMinisterOrAbove && youthEnabled && !!user?.permissions.includes('youth:view')
   const { message } = App.useApp()
   const [stageOpen, setStageOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -199,6 +203,7 @@ export default function PartyMemberDetail() {
       label: '转移',
       children: <TransferPanel memberId={memberId} />,
     },
+    ...(canReadYouthReceipts ? [{ key: 'youth-receipts', label: '推优材料', children: <YouthPartyReceipts memberId={memberId} /> }] : []),
   ]
 
   const currentStage =

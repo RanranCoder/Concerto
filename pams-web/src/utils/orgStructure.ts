@@ -4,7 +4,6 @@ export const ORG_TYPE_LABELS: Record<string, string> = {
   PARTY: '党建办公室', STUDENT_UNION: '学生会', CLUB: '社团',
   VOLUNTEER: '青年志愿者协会', SCIENCE: '科技协会', OTHER: '其他组织',
 }
-export const PACK_LABELS: Record<string, string> = { party: '党建包', volunteer: '志愿包', club: '社团包' }
 
 export function buildStructureIndex(nodes: OrgUnitNode[], accounts: OrgAccount[]) {
   const byId = new Map<number, OrgUnitNode>()

@@ -83,6 +83,10 @@ public class JwtUtil {
         return issuedAt.getTime() / 1000;
     }
 
+    public static boolean isRevoked(Date issuedAt, LocalDateTime watermark) {
+        return issuedAt == null || watermark != null && epochSecond(issuedAt) < epochSecond(watermark);
+    }
+
     public Claims parse(String token) {
         return Jwts.parser().verifyWith(key).build()
                 .parseSignedClaims(token).getPayload();

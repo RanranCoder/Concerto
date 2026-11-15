@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { kbSources } from '@/api/knowledge'
 import type { KnowledgeSourceVO } from '@/api/knowledge'
 import { useAgentStore } from '@/stores/agent'
+import { useOrgStore } from '@/stores/org'
 
 interface Props {
   open: boolean
@@ -33,6 +34,8 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
   // 只读档位下后端会把写类工具整体摘掉，面板必须跟着拉 ——
   // 否则会出现"面板里写着能做，实际调不动"的错位
   const mode = useAgentStore((s) => s.mode)
+  const permissions = useAuthStore(s => s.user?.permissions)
+  const packs = useOrgStore(s => s.enabledPacks.join(','))
 
   const kb = mode === 'kb'
 
@@ -41,10 +44,11 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
     setDiagnostics(null)
     if (open && canAudit && !kb) getAgentDiagnostics(mode).then(value => { if (current) setDiagnostics(value) }).catch(() => {})
     return () => { current = false }
-  }, [open, canAudit, kb, mode])
+  }, [open, canAudit, kb, mode, packs])
 
   useEffect(() => {
     if (!open) return
+    let current = true
     setLoading(true)
     // 对话档位**不用工具**（走独立流水线），所以这里拉的是知识源清单而不是工具清单。
     // 继续显示 11 个读工具会造成"对话模式能查业务数据"的误解 —— 它不能。
@@ -53,16 +57,22 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
       : (listAgentTools(mode) as Promise<unknown>)
     Promise.resolve(loader)
       .then((res) => {
+        if (!current) return
         if (kb) setSources((res as KnowledgeSourceVO[]) ?? [])
         else setList((res as AgentToolVO[]) ?? [])
       })
       .catch(() => {
         /* http 拦截器已提示 */
       })
-      .finally(() => setLoading(false))
-  }, [open, mode, kb])
+      .finally(() => { if (current) setLoading(false) })
+    return () => { current = false }
+  }, [open, mode, kb, packs])
 
-  const reads = list.filter((t) => !t.write)
+  const reads = list.filter(t => {
+    if (t.write) return false
+    const pack = ({ queryPartyMemberProgress: 'party', queryYouthWorkSummary: 'youth', queryVolunteerWorkSummary: 'volunteer' } as Record<string, string>)[t.name]
+    return !pack || (packs.split(',').includes(pack) && permissions?.includes(`${pack}:view`))
+  })
   const writes = list.filter((t) => t.write)
 
   const renderGroup = (title: string, items: AgentToolVO[]) =>

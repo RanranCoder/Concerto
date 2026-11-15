@@ -60,7 +60,7 @@ public final class AgentCatalog {
                         List.of("findMembers", "listOrgUnits", "getActivityDetail", "listPlanVersions", "readPlanDocument", "queryMyPendingWork", "queryActivityOverview", "queryActivityTasks",
                                 "searchMaterials", "readMaterialDocument", "searchArticles", "readArticleDocument", "getArticleReviewStatus", "getPlanReviewStatus", "queryActivityAgenda", "queryActivityScores", "queryActivitySchedules", "querySeatLayout", "queryAnnouncements", "searchKnowledgeEvidence", "readKnowledgeEvidence", "queryNotifications",
                                 "queryCommonFreeTime", "queryAttendance", "queryCreditRecords",
-                                "queryRosterSigninStats", "queryPartyMemberProgress", "recallConversation")),
+                                "queryRosterSigninStats", "queryPartyMemberProgress", "queryYouthWorkSummary", "queryVolunteerWorkSummary", "recallConversation")),
                 new Def(PLANNING, "策划专家",
                         "活动策划与策划书",
                         prompt(com.pams.module.agent.prompt.PromptResolver.Id.PLANNING),

@@ -42,7 +42,6 @@ import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUS_OPTIONS,
   ACTIVITY_TYPE_MAP,
-  ACTIVITY_TYPE_OPTIONS,
 } from '@/api/activityStatus'
 import { useHasPerm } from '@/components/glass/RequireRole'
 import { getDashboard, type ActivityStats } from '@/api/dashboard'
@@ -57,8 +56,9 @@ const NEXT_STATUS: Record<string, string> = {
 }
 
 // 活动类型中文展示（与 ActivityEdit/ActivityDetail 共用 ACTIVITY_TYPE_MAP 唯一来源）
+import { useActivityTypes } from '@/hooks/useActivityTypes'
+
 const TYPE_MAP = ACTIVITY_TYPE_MAP
-const TYPE_OPTIONS = ACTIVITY_TYPE_OPTIONS
 
 type ActivityRecord = ActivityVO & { key: number }
 
@@ -69,6 +69,7 @@ export default function ActivityList() {
   const hasPerm = useHasPerm()
   const screens = Grid.useBreakpoint()
   const compactFilters = screens.md === false
+  const typeOptions = useActivityTypes()
 
   const [data, setData] = useState<ActivityRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -223,7 +224,7 @@ export default function ActivityList() {
         className="activity-filter-select"
         placeholder="类型筛选"
         allowClear
-        options={TYPE_OPTIONS}
+        options={typeOptions}
         value={type}
         onChange={(value) => {
           setType(value)
@@ -428,7 +429,6 @@ export default function ActivityList() {
     <div className="activity-list-page">
       <PageHeader
         title="活动管理"
-        description="跟进策划、审核、执行与归档"
         extra={
           hasPerm('activity:create') && (
             <Button

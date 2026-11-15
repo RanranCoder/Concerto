@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useNotificationStore } from '@/stores/notification'
 import { useAuthStore } from '@/stores/auth'
 import { notificationRoute } from '@/utils/notificationRoute'
+import { useOrgStore } from '@/stores/org'
 import GlassCard from '@/components/glass/GlassCard'
 import FormSurface from '@/components/form/FormSurface'
 import { TYPE_LABEL, preferenceGroup } from '@/components/notification/notificationLabels'
@@ -39,6 +40,7 @@ interface NotificationRow {
 
 export default function NotificationList() {
   const canOperate = useAuthStore(s => s.user?.managementCapabilities?.includes('org:audit:view') ?? false)
+  const partyEnabled = useOrgStore(s => s.enabledPacks.includes('party'))
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedView = searchParams.get('view')
   const view = requestedView === 'pending' || (requestedView === 'operations' && canOperate) ? requestedView : 'messages'
@@ -51,6 +53,7 @@ export default function NotificationList() {
   const revision = useNotificationStore(s => s.revision)
   const { message } = App.useApp()
   const [typeFilter, setTypeFilter] = useState<string>()
+  const effectiveType = !partyEnabled && typeFilter === 'PARTY_SUMMARY' ? undefined : typeFilter
   const [data, setData] = useState<NotificationRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -64,7 +67,7 @@ export default function NotificationList() {
     setLoading(true)
     setError(false)
     let active = true
-    listNotificationsPage({ type: typeFilter, page, size })
+    listNotificationsPage({ type: effectiveType, page, size })
       .then((res) => {
         if (!active || token !== useAuthStore.getState().token) return
         setData((res.records ?? []).map((r) => ({ ...r, key: r.id })))
@@ -73,7 +76,7 @@ export default function NotificationList() {
       .catch(() => { if (active) setError(true) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [typeFilter, page, size])
+  }, [effectiveType, page, size, partyEnabled])
 
   useEffect(() => {
     return fetchList()
@@ -125,7 +128,7 @@ export default function NotificationList() {
   }
 
   return <div className="notification-page">
-    <PageHeader title="通知中心" description="集中查看协作消息，及时处理相关事项" extra={<>
+    <PageHeader title="通知中心" extra={<>
       <Button aria-label="通知设置" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>通知设置</Button>
       <Button icon={<CheckOutlined />} loading={markingAll} onClick={() => { setMarkingAll(true); void handleMarkAll().finally(() => setMarkingAll(false)) }}>全部已读</Button>
     </>} />
@@ -137,7 +140,7 @@ export default function NotificationList() {
     {view === 'operations' && canOperate && <div className="notification-operations"><NotificationOperations /></div>}
     {view === 'pending' && <GlassCard className="notification-pending"><PendingWorkList /></GlassCard>}
     {view === 'messages' && <section className="notification-inbox" aria-label="消息记录">
-      <div className="notification-toolbar"><Select aria-label="按类型筛选" placeholder="全部类型" allowClear value={typeFilter} onChange={value => { setTypeFilter(value); setPage(1) }} options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))} /><Button icon={<ReloadOutlined />} loading={loading} onClick={() => fetchList()}>刷新</Button></div>
+      <div className="notification-toolbar"><Select aria-label="按类型筛选" placeholder="全部类型" allowClear value={effectiveType} onChange={value => { setTypeFilter(value); setPage(1) }} options={Object.entries(TYPE_LABEL).filter(([type]) => partyEnabled || type !== 'PARTY_SUMMARY').map(([value, label]) => ({ value, label }))} /><Button icon={<ReloadOutlined />} loading={loading} onClick={() => fetchList()}>刷新</Button></div>
       {error && <Alert type="error" showIcon message="消息加载失败，请重试" action={<Button onClick={() => fetchList()}>重试</Button>} />}
       <Spin spinning={loading}>
         {!data.length ? <div className="notification-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error ? '暂时无法显示消息' : typeFilter ? '没有匹配的通知' : '暂无通知'} /></div> : <ul className="notification-list">{data.map(row => {
@@ -155,7 +158,7 @@ export default function NotificationList() {
       {prefsError ? <Alert type="error" message="通知设置加载失败" action={<Button onClick={fetchPrefs}>重试</Button>} /> : <Spin spinning={!prefsReady || prefLoading}>
         {prefsReady && !prefs.length && <Empty description="暂无可配置的通知" />}
         {['任务与活动', '新媒体与推文', '排班与签到', '组织与系统'].map(group => {
-          const items = prefs.filter(p => preferenceGroup(p.type) === group)
+          const items = prefs.filter(p => preferenceGroup(p.type) === group && (partyEnabled || p.type !== 'PARTY_SUMMARY'))
           return items.length > 0 && <section className="notification-pref-group" key={group}><h3>{group}</h3>{items.map(p => <div className="notification-pref-row" key={p.type}><span>{TYPE_LABEL[p.type] ?? p.type}{p.system && <small>系统必收</small>}</span><Switch aria-label={TYPE_LABEL[p.type] ?? p.type} size="small" checked={p.enabled} disabled={p.system || prefLoading} onChange={v => togglePref(p.type, v)} /></div>)}</section>
         })}<p className="notification-pref-note">密码重置等系统级通知不可关闭。</p>
       </Spin>}

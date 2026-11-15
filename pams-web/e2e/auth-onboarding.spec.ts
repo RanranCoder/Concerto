@@ -82,7 +82,7 @@ test('nested units can be added, edited and deleted, then submitted with their c
   await finishAdmin(page)
   await expect(page.locator('.register-review')).toContainText('现场分队')
   expect(submitted).toBeUndefined()
-  await page.getByRole('checkbox', { name: /党建包/ }).check()
+  await page.getByRole('checkbox', { name: /党建工作包/ }).check()
   await page.getByRole('button', { name: '创建组织', exact: true }).click()
   await expect(page.getByRole('heading', { name: '组织创建成功' })).toBeVisible()
   expect(submitted?.units).toEqual([

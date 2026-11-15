@@ -79,7 +79,7 @@ public class SnapshotGenerator {
         int totalWritten = 0;
         int totalSkipped = 0;
 
-        for (SnapshotSpec spec : registry.all()) {
+        for (SnapshotSpec spec : registry.enabledForCurrentOrg()) {
             int written = 0;
             int skipped = 0;
             for (SnapshotSpec.ScopeRef scope : safeScopes(spec)) {
@@ -151,7 +151,7 @@ public class SnapshotGenerator {
     @Transactional
     public int pruneOldSnapshots() {
         int removed = 0;
-        for (SnapshotSpec spec : registry.all()) {
+        for (SnapshotSpec spec : registry.enabledForCurrentOrg()) {
             for (SnapshotSpec.ScopeRef scope : safeScopes(spec)) {
                 List<Long> ids = snapshotRepository.findIdsNewestFirst(
                         spec.code(), spec.scopeType(), scope.id(),

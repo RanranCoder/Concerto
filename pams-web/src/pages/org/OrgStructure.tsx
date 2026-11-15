@@ -9,8 +9,9 @@ import FormSurface from '@/components/form/FormSurface'
 import LoginOrganization from '@/components/auth/LoginOrganization'
 import BrandIdentity from '@/components/BrandIdentity'
 import { useAuthStore } from '@/stores/auth'
-import { parsePacks, useOrgStore } from '@/stores/org'
-import { buildStructureIndex, filterStructure, ORG_TYPE_LABELS, PACK_LABELS } from '@/utils/orgStructure'
+import { useOrgStore } from '@/stores/org'
+import { EXTENSION_PACKS, EXTENSIONS_PATH, parsePacks } from '@/utils/extensionPacks'
+import { buildStructureIndex, filterStructure, ORG_TYPE_LABELS } from '@/utils/orgStructure'
 import { ProfileEditor, UnitEditor, orgError, type UnitEditorTarget } from './OrgEditors'
 import '@/styles/org-v6.css'
 
@@ -63,7 +64,8 @@ export default function OrgStructure() {
   const filtered = useMemo(() => filterStructure(units, query), [units, query])
   const missing = allNodes.filter(n => !n.leaderUserId || !accountMap.has(n.leaderUserId)).length
   const created = (location.state as { orgCreated?: number } | null)?.orgCreated === org?.id
-  const packs = org ? parsePacks(org.enabledPacks) : []
+  const enabled = org ? parsePacks(org.enabledPacks) : []
+  const packs = EXTENSION_PACKS.filter(pack => enabled.includes(pack.code)).map(pack => pack.name)
   const disabled = loading || !!loadError
 
   function select(id: number) { setParams(id ? { unit: String(id) } : {}); setTab('children'); setMobileOpen(false) }
@@ -118,7 +120,7 @@ export default function OrgStructure() {
   const related = <div className="org-next"><TeamOutlined /><div><h3>让分工与成员归属保持一致</h3><p>花名册在成员管理中维护；账号归属与角色在用户管理中设置。</p></div><Button type="link" onClick={() => setEntryOpen(true)}>成员与账号入口</Button></div>
 
   return <div className="ui-v6 org-v6">
-    <PageHeader title="组织架构" description="从组织到部门，让每一份分工和归属清晰可见。" extra={<>
+    <PageHeader title="组织架构" extra={<>
       <Button icon={<ReloadOutlined aria-hidden />} onClick={load} loading={loading}>刷新</Button><Button onClick={() => setPreviewOpen(true)} disabled={!org}>登录页预览</Button>
       {canStructure && <Button type="primary" icon={<PlusOutlined aria-hidden />} disabled={disabled} onClick={() => openCreate(null)}>添加一级节点</Button>}
     </>} />
@@ -126,7 +128,7 @@ export default function OrgStructure() {
     <Spin spinning={loading}>{org && data ? <>
       {created && <Alert type="info" showIcon className="org-created-notice" message={`${shortName}的架构已沿用创建时的设置。下一步可设置负责人，再添加组织成员。`} />}
       <section className="org-profile" aria-label="组织摘要"><span className="org-emblem">{org.logoUrl ? <img src={org.logoUrl} alt="" /> : <ApartmentOutlined />}</span>
-        <div className="org-profile-main"><h2>{org.name}</h2><p>{ORG_TYPE_LABELS[org.type] || org.type} · {packs.length ? packs.map(p => PACK_LABELS[p] || p).join('、') + '已启用' : '暂未启用扩展功能'}</p></div>
+        <div className="org-profile-main"><h2>{org.name}</h2><p>{ORG_TYPE_LABELS[org.type] || org.type} · {packs.length ? packs.join('、') + '已启用' : '暂未启用扩展功能'}</p>{canProfile && <Link to={EXTENSIONS_PATH}>管理扩展功能</Link>}</div>
         <div className="org-profile-meta"><div><b>{allNodes.length}</b><small>架构节点</small></div><div><b>{accounts.length}</b><small>组织账号</small></div><div><b className={missing ? 'org-pending' : ''}>{missing}</b><small>待设负责人</small></div></div>
         <Button type="link" onClick={() => { select(0); setTab('info') }}>组织资料</Button>
       </section>
@@ -161,7 +163,7 @@ export default function OrgStructure() {
           {tab === 'info' && <>{selected ? <Info pairs={[
             ['节点名称', selected.name], ['节点类型', selected.unitType], ['所属上级', selected.parentId ? index.byId.get(selected.parentId)?.name || shortName : `${shortName}（组织根节点）`], ['节点负责人', nameOf(accountMap.get(selected.leaderUserId ?? 0)) || '尚未设置'], ['显示排序', String(selected.sortOrder ?? 0)], ['完整路径', [shortName, ...(index.paths.get(currentId) ?? []).map(n => n.name)].join(' / ')],
           ]} /> : <Info pairs={[
-            ['组织全称', org.name], ['组织简称', org.shortName || '未填写'], ['组织类型', ORG_TYPE_LABELS[org.type] || org.type], ['组织主题色', primary], ['扩展功能', packs.length ? packs.map(p => PACK_LABELS[p] || p).join('、') : '未启用'],
+            ['组织全称', org.name], ['组织简称', org.shortName || '未填写'], ['组织类型', ORG_TYPE_LABELS[org.type] || org.type], ['组织主题色', primary], ['扩展功能', packs.length ? packs.join('、') : '未启用'],
           ]} />}<div className="org-next"><SafetyCertificateOutlined /><div><h3>{selected ? '从创建到日常维护，沿用同一份架构' : '登录展示与工作台使用同一份组织资料'}</h3><p>{selected ? '修改节点名称后，按部门关联的成员与工作资料继续归属原节点。' : '名称、简称与主题色修改后，可以打开登录页预览核对展示。'}</p></div>{!selected && canProfile && <Button type="link" disabled={disabled} onClick={() => setProfileOpen(true)}>编辑组织资料</Button>}</div></>}
         </div><footer className="org-detail-foot"><span>{selected ? '调整分工后，请同步核对成员归属与账号权限。' : '组织根节点代表当前组织，不能作为普通部门删除。'}</span>{selected && canStructure && <Button type="link" danger disabled={disabled} onClick={removeSelected}>删除节点</Button>}</footer>
       </section></div>

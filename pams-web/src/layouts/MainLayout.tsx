@@ -64,7 +64,7 @@ export default function MainLayout() {
   const preserveContentLayout = ['/knowledge', '/admin/benchmark'].some((path) =>
     location.pathname.startsWith(path),
   )
-  const mobile = screens.md === false
+  const compactNavigation = screens.lg === false
   const businessTheme = useMemo(() => buildBusinessTheme(), [])
 
   // 修改密码弹窗
@@ -135,6 +135,12 @@ export default function MainLayout() {
         label: term(terminology, 'partyLedger', '党务台账'),
         icon: <IdcardOutlined />,
       })
+    }
+    if (hasPerm('youth:view') && isPackEnabled(packs, 'youth')) {
+      items.push({ key: '/youth', label: '团务工作', icon: <ApartmentOutlined /> })
+    }
+    if (hasPerm('volunteer:view') && isPackEnabled(packs, 'volunteer')) {
+      items.push({ key: '/volunteer', label: '志愿服务', icon: <TeamOutlined /> })
     }
     if (hasPerm('member:view')) {
       items.push({
@@ -211,7 +217,7 @@ export default function MainLayout() {
       { label: '日常工作', keys: ['/', '/activities', 'routine'] },
       {
         label: '组织与资料',
-        keys: ['/party/members', '/members', 'content', 'archive'],
+        keys: ['/party/members', '/youth', '/volunteer', '/members', 'content', 'archive'],
       },
       { label: '智能协作', keys: ['/agent', '/knowledge', '/admin/benchmark'] },
       {
@@ -256,6 +262,7 @@ export default function MainLayout() {
       return '/routine/free-schedules'
     if (p.startsWith('/routine')) return '/routine/schedules'
     if (p.startsWith('/party')) return '/party/members'
+    if (p.startsWith('/volunteer')) return '/volunteer'
     if (p.startsWith('/members')) return '/members'
     if (p.startsWith('/content'))
       return p.startsWith('/content/news')
@@ -373,7 +380,7 @@ export default function MainLayout() {
       style={{ height: '100vh', overflow: 'hidden' }}
     >
       <NotificationToast />
-      {!mobile && (
+      {!compactNavigation && (
         <Sider width={216} className="app-sider">
           {navigation}
         </Sider>
@@ -383,7 +390,7 @@ export default function MainLayout() {
         title="导航"
         width={240}
         placement="left"
-        open={navOpen && mobile}
+        open={navOpen && compactNavigation}
         onClose={() => setNavOpen(false)}
         styles={{
           body: {
@@ -402,7 +409,7 @@ export default function MainLayout() {
           {/* 内层容器与 .content-inner 同宽同轴：右边缘与内容列右边缘对齐 */}
           <div className="app-header-inner">
             <div className="business-breadcrumb">
-              {mobile && (
+              {compactNavigation && (
                 <Button
                   type="text"
                   icon={<MenuOutlined />}

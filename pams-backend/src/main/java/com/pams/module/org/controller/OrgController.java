@@ -1,6 +1,7 @@
 package com.pams.module.org.controller;
 
 import com.pams.common.Result;
+import com.pams.common.BizException;
 import com.pams.module.org.dto.OrgRegisterRequest;
 import com.pams.module.org.dto.OrgUnitVO;
 import com.pams.module.org.dto.OrgUpdateRequest;
@@ -68,7 +69,7 @@ public class OrgController {
         vo.put("shortName", org.getShortName());
         vo.put("logoUrl", org.getLogoUrl());
         vo.put("themeJson", org.getThemeJson());
-        vo.put("enabledPacks", org.getEnabledPacks());
+        vo.put("enabledPacks", orgService.effectivePacks(org.getId()));
         vo.put("terminologyJson", org.getTerminologyJson());
         return Result.ok(vo);
     }
@@ -80,6 +81,15 @@ public class OrgController {
         orgService.updateCurrent(req.getName(), req.getShortName(), req.getLogoUrl(),
                 req.getThemeColor(), req.getEnabledPacks());
         return Result.ok(null);
+    }
+
+    public record PackChange(Boolean enabled) {}
+
+    @PutMapping("/current/packs/{code}")
+    @PreAuthorize("hasAuthority('org:manage')")
+    public Result<List<String>> updatePack(@PathVariable String code, @RequestBody PackChange change) {
+        if (change.enabled() == null) throw new BizException(400, "请选择是否启用组件包");
+        return Result.ok(orgService.updatePack(code, change.enabled()));
     }
 
     /** 架构树。 */

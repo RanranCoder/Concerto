@@ -18,7 +18,9 @@ class ToolInventoryTest {
             tools.add((AgentTool) constructor.newInstance(new Object[constructor.getParameterCount()]));
         }
         var registry = new ToolRegistry(tools);
-        assertThat(registry.all()).hasSize(50);
+        assertThat(registry.all()).hasSize(52);
+        assertThat(registry.find("queryYouthWorkSummary")).isPresent();
+        assertThat(registry.find("queryVolunteerWorkSummary")).isPresent();
         for(var definition:com.pams.module.agent.registry.AgentCatalog.defaults()) {
             if(definition.toolScope()!=null) for(String name:definition.toolScope())
                 assertThat(registry.find(name)).as("default scope tool %s",name).isPresent();
@@ -39,6 +41,6 @@ class ToolInventoryTest {
         var ctx=new ToolContext(null,List.of(),null,null);
         var prompt=com.pams.module.agent.prompt.PromptRenderer.executor(ctx,registry.all(),null,4);
         var messages=List.of(com.pams.module.agent.llm.LlmProvider.ChatMessage.text("system",prompt),com.pams.module.agent.llm.LlmProvider.ChatMessage.text("user","读取活动1详情"));
-        assertThatCode(()->new com.pams.module.agent.service.ContextBudget(props).fit(messages,specs)).as("47-tool menu must fit the default input window").doesNotThrowAnyException();
+        assertThatCode(()->new com.pams.module.agent.service.ContextBudget(props).fit(messages,specs)).as("complete tool menu must fit the default input window").doesNotThrowAnyException();
     }
 }

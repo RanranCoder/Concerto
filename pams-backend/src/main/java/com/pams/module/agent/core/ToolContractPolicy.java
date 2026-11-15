@@ -26,6 +26,7 @@ public record ToolContractPolicy(String objectAuthorization,String resultScope,S
             case "queryAttendance"->"AttendanceManageService: management permission for all records, otherwise native current-user self scope";
             case "queryCreditRecords"->"CreditService: quality:view permits management scope, otherwise current user only";
             case "queryPartyMemberProgress"->"PartyMemberService with mandatory ctx.isStaff masking; native stage/organization filtering";
+            case "queryYouthWorkSummary","queryVolunteerWorkSummary"->"Active organization pack and current view permission; organization-wide aggregate counts only";
             case "queryNotifications"->"NotificationService current user/role/department; never arbitrary recipient inbox";
             case "searchMaterials"->"MaterialService metadata page in current organization/current department; metadata is not file authorization";
             case "searchArticles"->"ArticleService metadata page with current content:view and matching organization; body excluded";

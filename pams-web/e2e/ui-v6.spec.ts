@@ -26,7 +26,7 @@ async function setup(page: Page, viewer = user) {
     const path = url.pathname
     let data: unknown = []
     if (path === '/api/auth/me') data = viewer
-    else if (path === '/api/orgs/current') data = { id: 1, name: '党建办公室', themeJson: '{"primaryColor":"#0034A2"}', enabledPacks: null, terminologyJson: null }
+    else if (path === '/api/orgs/current') data = { id: 1, name: '党建办公室', themeJson: '{"primaryColor":"#0034A2"}', enabledPacks: '["party"]', terminologyJson: null }
     else if (path === '/api/orgs/public') data = [{ id: 1, name: '党建办公室', shortName: '党建办公室', themeJson: null }]
     else if (path === '/api/notifications/unread-count') data = 0
     else if (path === '/api/dashboard') data = { activityStats: Object.fromEntries(['ASSIGNED', 'PLANNING', 'PLAN_REVIEW', 'EXECUTING', 'FINISHED', 'ARCHIVED'].map(status => [status, records.filter(a => a.status === status).length])), weekSchedules: 1, myTasks: tasks, recentArticles: [], recentMaterials: [material], recentAnnouncements: [] }

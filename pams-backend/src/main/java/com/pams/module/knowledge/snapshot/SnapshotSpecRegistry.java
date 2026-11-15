@@ -50,6 +50,10 @@ import java.util.Map;
 @Slf4j
 @Component
 public class SnapshotSpecRegistry {
+    public static final String PARTY_COMPOSITION = "party_composition";
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pams.module.permission.service.TenantAuthorizationService authorization;
 
     /**
      * 活动状态的中文标签。
@@ -102,6 +106,11 @@ public class SnapshotSpecRegistry {
     }
 
     public List<SnapshotSpec> all() { return specs; }
+
+    public List<SnapshotSpec> enabledForCurrentOrg() {
+        if (authorization.currentPackVersion(com.pams.common.OrgContext.getOrDefault()) > 0) return specs;
+        return specs.stream().filter(spec -> !PARTY_COMPOSITION.equals(spec.code())).toList();
+    }
 
     public SnapshotSpec byCode(String code) {
         return specs.stream().filter(s -> s.code().equals(code)).findFirst().orElse(null);
@@ -229,7 +238,7 @@ public class SnapshotSpecRegistry {
      */
     private SnapshotSpec partyComposition() {
         return new SnapshotSpec(
-                "party_composition",
+                PARTY_COMPOSITION,
                 "汇总党员队伍的发展阶段结构（入党申请人/积极分子/重点发展对象/预备党员/正式党员各多少人）。"
                         + "只有阶段计数，不含任何个人材料；"
                         + "可见性按 /party/* 路由的守卫口径设为「部长及以上」—— "

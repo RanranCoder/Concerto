@@ -1,0 +1,11 @@
+{
+  "version": 4,
+  "permissions": [
+    {"code":"youth:view","dependencies":[],"description":"查看本组织的团员、组织生活、教育评议与推优记录。","risk":false},
+    {"code":"youth:manage","dependencies":["youth:view"],"description":"维护团员档案、组织生活并提交评议或推优记录。","risk":false},
+    {"code":"youth:review","dependencies":["youth:view"],"description":"确认或退回评议、推优记录，并归档已审核评议。","risk":true},
+    {"code":"volunteer:view","dependencies":[],"description":"查看本组织的志愿活动和服务记录。","risk":false},
+    {"code":"volunteer:manage","dependencies":["volunteer:view"],"description":"关联活动、登记志愿者，依据签到核定并提交服务时长。","risk":false},
+    {"code":"volunteer:review","dependencies":["volunteer:view"],"description":"审核志愿服务时长并导出已确认记录。","risk":true}
+  ]
+}

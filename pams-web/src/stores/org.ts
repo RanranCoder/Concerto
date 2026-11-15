@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { getCurrentOrg } from '@/api/org'
 import { lightTokens, normalizePrimaryColor } from '@/styles/tokens'
+import { useAuthStore } from '@/stores/auth'
+import { parsePacks } from '@/utils/extensionPacks'
 
 /**
  * 默认主题色 —— 组织未配置 theme_json 时回退。
@@ -8,20 +10,20 @@ import { lightTokens, normalizePrimaryColor } from '@/styles/tokens'
  */
 export const DEFAULT_PRIMARY_COLOR = lightTokens.brand
 
-/** 已知领域包（A2）：组织未显式配置时视为全部启用（兼容默认组织）。 */
-export const ALL_PACKS = ['party', 'volunteer', 'club']
-
 interface OrgState {
   orgName: string | null
   primaryColor: string
-  /** 启用的领域包；未配置 = ALL_PACKS */
   enabledPacks: string[]
   /** 术语表：key → 展示名 */
   terminology: Record<string, string>
   loaded: boolean
+  loadFailed: boolean
   load: () => Promise<void>
+  applyPacks: (packs: string[]) => void
   reset: () => void
 }
+
+let requestVersion = 0
 
 function parsePrimaryColor(themeJson: string | null): string {
   if (!themeJson) return DEFAULT_PRIMARY_COLOR
@@ -32,16 +34,6 @@ function parsePrimaryColor(themeJson: string | null): string {
       : DEFAULT_PRIMARY_COLOR
   } catch {
     return DEFAULT_PRIMARY_COLOR
-  }
-}
-
-export function parsePacks(json: string | null): string[] {
-  if (!json || !json.trim()) return ALL_PACKS
-  try {
-    const a = JSON.parse(json) as unknown
-    return Array.isArray(a) ? a.map(String) : ALL_PACKS
-  } catch {
-    return ALL_PACKS
   }
 }
 
@@ -60,31 +52,42 @@ function parseTerminology(json: string | null): Record<string, string> {
 export const useOrgStore = create<OrgState>((set) => ({
   orgName: null,
   primaryColor: DEFAULT_PRIMARY_COLOR,
-  enabledPacks: ALL_PACKS,
+  enabledPacks: [],
   terminology: {},
   loaded: false,
+  loadFailed: false,
   load: async () => {
+    const version = ++requestVersion
+    const token = useAuthStore.getState().token
+    const current = () => version === requestVersion && token === useAuthStore.getState().token
     try {
       const org = await getCurrentOrg()
+      if (!current()) return
       set({
         orgName: org.name,
         primaryColor: parsePrimaryColor(org.themeJson),
         enabledPacks: parsePacks(org.enabledPacks),
         terminology: parseTerminology(org.terminologyJson),
         loaded: true,
+        loadFailed: false,
       })
     } catch {
-      /* 未登录或接口失败：保持默认 */
+      if (current()) set({ loaded: false, loadFailed: true, enabledPacks: [] })
     }
   },
-  reset: () => set({
-    orgName: null,
-    primaryColor: DEFAULT_PRIMARY_COLOR,
-    enabledPacks: ALL_PACKS,
-    terminology: {},
-    loaded: false,
-  }),
+  applyPacks: (enabledPacks) => {
+    requestVersion++
+    set({ enabledPacks, loaded: true, loadFailed: false })
+  },
+  reset: () => {
+    requestVersion++
+    set({ orgName: null, primaryColor: DEFAULT_PRIMARY_COLOR, enabledPacks: [], terminology: {}, loaded: false, loadFailed: false })
+  },
 }))
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.token !== previous.token) useOrgStore.getState().reset()
+})
 
 /** 领域包是否启用（组件内用 selector 取 enabledPacks 后调用）。 */
 export function isPackEnabled(packs: string[], pack: string): boolean {

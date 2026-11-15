@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
 import { useAgentStore } from '@/stores/agent'
 import type { AgentStreamEvent } from '@/api/agent'
 
@@ -19,7 +20,10 @@ export function useWebSocket() {
       heartbeatOutgoing: 10000,
       onConnect: () => {
         console.log('[WS] 已连接')
-        client.subscribe('/user/queue/authorization', () => { void refreshAuthorization().catch(() => {}) })
+        client.subscribe('/user/queue/authorization', () => {
+          void refreshAuthorization().catch(() => {})
+          void useOrgStore.getState().load()
+        })
         // 灵思过程事件流（D7）——厚载荷：携带工具名/耗时/状态，供前端渲染时间轴。
         // 与上面通知队列的"薄载荷 + 回拉 REST"策略有意不同。
         //

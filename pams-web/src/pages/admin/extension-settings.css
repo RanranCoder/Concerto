@@ -1,0 +1,70 @@
+.extension-panel .admin-panel-body {
+  padding-block: 4px;
+}
+
+.extension-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extension-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem 5.5rem;
+  align-items: center;
+  gap: 12px 16px;
+  min-height: 72px;
+  padding: 14px 0;
+}
+
+.extension-row + .extension-row {
+  border-top: 1px solid var(--border);
+}
+
+.extension-row h4, .extension-details h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-title);
+}
+
+.extension-row p, .extension-details p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.extension-details h3:not(:first-child) {
+  margin-top: 24px;
+}
+
+.extension-details ul {
+  padding-inline-start: 20px;
+}
+
+.extension-error {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .settings-v6 .admin-settings-layout > .admin-rail {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-v6 .admin-settings-layout > .admin-rail > button:not(.ant-btn) {
+    justify-content: center;
+    gap: 4px;
+    min-height: 44px;
+    padding-inline: 2px;
+  }
+
+  .extension-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .extension-row > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .extension-row .ant-btn {
+    min-height: 44px;
+  }
+}

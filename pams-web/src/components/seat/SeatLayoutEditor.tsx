@@ -1,4 +1,5 @@
 import FormSurface from '@/components/form/FormSurface'
+import { useOrgStore } from '@/stores/org'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
@@ -37,15 +38,18 @@ import {
 // 预设色板：分类 identity 色，集中定义在 styles/categoryColors.ts
 export const PRESET_COLORS = [
   { color: SEAT_ZONE_COLORS.guest, label: '嘉宾区' },
+  { color: SEAT_ZONE_COLORS.staff, label: '工作人员区' },
+  { color: SEAT_ZONE_COLORS.media, label: '媒体区' },
+  { color: SEAT_ZONE_COLORS.audience, label: '观众区' },
+  { color: SEAT_ZONE_COLORS.invited, label: '特邀区' },
+]
+
+const PARTY_COLORS = [
   { color: SEAT_ZONE_COLORS.party, label: '党员区' },
   { color: SEAT_ZONE_COLORS.activist, label: '积极分子区' },
   { color: SEAT_ZONE_COLORS.develop, label: '发展对象区' },
   { color: SEAT_ZONE_COLORS.probationary, label: '预备党员区' },
   { color: SEAT_ZONE_COLORS.full, label: '正式党员区' },
-  { color: SEAT_ZONE_COLORS.staff, label: '工作人员区' },
-  { color: SEAT_ZONE_COLORS.media, label: '媒体区' },
-  { color: SEAT_ZONE_COLORS.audience, label: '观众区' },
-  { color: SEAT_ZONE_COLORS.invited, label: '特邀区' },
 ]
 
 interface SeatLayoutEditorProps {
@@ -69,13 +73,21 @@ export default function SeatLayoutEditor({
   const [cells, setCells] = useState<Map<string, SeatCell>>(new Map())
   const [zoom, setZoom] = useState(100)
   const [layoutName, setLayoutName] = useState('我的座位表')
-  const [colorLabels, setColorLabels] = useState<ColorLabel[]>(PRESET_COLORS)
-  const [selectedColor, setSelectedColor] = useState<string>(
+  const [customColors, setColorLabels] = useState<ColorLabel[]>()
+  const partyEnabled = useOrgStore(s => s.enabledPacks.includes('party'))
+  const colorLabels = customColors ?? (partyEnabled ? [...PRESET_COLORS, ...PARTY_COLORS] : PRESET_COLORS)
+  const visibleColors = partyEnabled ? colorLabels : colorLabels.filter(label =>
+    !PARTY_COLORS.some(preset => preset.label === label.label),
+  )
+  const [chosenColor, setSelectedColor] = useState<string>(
     PRESET_COLORS[0].color,
   )
-  const [selectedLabel, setSelectedLabel] = useState<string>(
+  const [chosenLabel, setSelectedLabel] = useState<string>(
     PRESET_COLORS[0].label,
   )
+  const selected = visibleColors.find(label => label.color === chosenColor && label.label === chosenLabel)
+    ?? visibleColors[0] ?? PRESET_COLORS[0]
+  const { color: selectedColor, label: selectedLabel } = selected
   const [colorManageOpen, setColorManageOpen] = useState(false)
   const [savingLayout, setSavingLayout] = useState(false)
   const [newColor, setNewColor] = useState(SEAT_UNKNOWN_COLOR)
@@ -656,7 +668,7 @@ export default function SeatLayoutEditor({
                     gap: 6,
                   }}
                 >
-                  {colorLabels.map((p) => (
+                  {visibleColors.map((p) => (
                     <div
                       key={p.color}
                       onClick={() => selectColor(p)}
@@ -942,7 +954,7 @@ export default function SeatLayoutEditor({
       <div
         style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}
       >
-        {colorLabels.map((p) => (
+        {visibleColors.map((p) => (
           <span
             key={p.color}
             style={{
@@ -1122,7 +1134,7 @@ export default function SeatLayoutEditor({
           </Button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {colorLabels.map((c) => (
+          {visibleColors.map((c) => (
             <div
               key={c.color}
               style={{ display: 'flex', alignItems: 'center', gap: 8 }}

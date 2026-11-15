@@ -19,6 +19,9 @@ public class OrgStructureReferences {
             if (exists(table, "dept_id", id)) return true;
         for (String table : new String[]{"kb_document", "kb_chunk", "kb_snapshot"})
             if (exists(table, "owner_dept_id", id)) return true;
+        for (String table : new String[]{"youth_member", "youth_life", "youth_case"})
+            if (exists(table, "branch_id", id)) return true;
+        if (exists("youth_branch_change", "from_branch_id", id) || exists("youth_branch_change", "to_branch_id", id)) return true;
         if (exists("activity", "owner_unit_id", id) || exists("notification", "recipient_dept_id", id)
                 || exists("org_invitation", "org_unit_id", id)) return true;
         return jdbc.queryForObject("SELECT COUNT(*) FROM group_chat_department WHERE org_id=? AND department=?",

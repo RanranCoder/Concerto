@@ -5,11 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 import org.springframework.stereotype.Component;
 
-/** Versioned, shared business vocabulary. v2 resource is immutable migration input. */
+/** Versioned business vocabulary with immutable inputs for previous migrations. */
 @Component
 public class PermissionCatalog {
-  private final JsonNode root;
-  private final Map<String, JsonNode> definitions = new HashMap<>();
+  private record Definition(JsonNode permission, int catalogVersion) {}
+
+  private final Map<String, Definition> definitions = new HashMap<>();
   private static final Map<String, String> GROUPS =
       Map.ofEntries(
           Map.entry("activity", "活动管理"), Map.entry("task", "任务执行"),
@@ -18,6 +19,7 @@ public class PermissionCatalog {
           Map.entry("checkin", "活动签到"), Map.entry("schedule", "排班管理"),
           Map.entry("attendance", "考勤核验"), Map.entry("course", "课表与空闲"),
           Map.entry("member", "成员资料"), Map.entry("party", "党务台账"),
+          Map.entry("youth", "团务工作"), Map.entry("volunteer", "志愿服务"),
           Map.entry("content", "新闻与宣传"), Map.entry("article", "推文编审"),
           Map.entry("material", "材料档案"), Map.entry("template", "公共模板"),
           Map.entry("quality", "素拓加分"), Map.entry("chat", "群聊资料"),
@@ -25,9 +27,16 @@ public class PermissionCatalog {
           Map.entry("kb", "知识库"), Map.entry("notification", "业务通知"));
 
   public PermissionCatalog() {
-    try (var stream = getClass().getResourceAsStream("/authorization/permission-catalog-v3.json")) {
-      root = new ObjectMapper().readTree(Objects.requireNonNull(stream));
-      root.path("permissions").forEach(p -> definitions.put(p.path("code").asText(), p));
+    try {
+      var mapper = new ObjectMapper();
+      for (String name : List.of("permission-catalog-v3.json", "permission-catalog-v4.json")) {
+        try (var stream = getClass().getResourceAsStream("/authorization/" + name)) {
+          var catalog = mapper.readTree(Objects.requireNonNull(stream));
+          int version = catalog.path("version").asInt();
+          catalog.path("permissions").forEach(
+              p -> definitions.put(p.path("code").asText(), new Definition(p, version)));
+        }
+      }
       for (String code : definitions.keySet()) verify(code, new HashSet<>(), new HashSet<>());
     } catch (Exception e) {
       throw new IllegalStateException("权限目录无法加载", e);
@@ -38,7 +47,7 @@ public class PermissionCatalog {
     var definition = definitions.get(code);
     if (definition == null) throw new IllegalStateException("未定义的业务权限：" + code);
     List<String> result = new ArrayList<>();
-    definition.path("dependencies").forEach(p -> result.add(p.asText()));
+    definition.permission().path("dependencies").forEach(p -> result.add(p.asText()));
     return result;
   }
 
@@ -50,7 +59,7 @@ public class PermissionCatalog {
     if (done.contains(code)) return;
     if (!definitions.containsKey(code) || !visiting.add(code))
       throw new IllegalStateException("权限依赖缺失或循环：" + code);
-    var p = definitions.get(code);
+    var p = definitions.get(code).permission();
     if (!p.has("dependencies") || p.path("description").asText().isBlank())
       throw new IllegalStateException("权限缺少依赖或说明：" + code);
     p.path("dependencies").forEach(d -> verify(d.asText(), visiting, done));
@@ -59,8 +68,9 @@ public class PermissionCatalog {
   }
 
   public Map<String, Object> describe(String code, String module, Set<String> known) {
-    var p = definitions.get(code);
-    if (p == null) throw new IllegalStateException("未定义的业务权限：" + code);
+    var definition = definitions.get(code);
+    if (definition == null) throw new IllegalStateException("未定义的业务权限：" + code);
+    var p = definition.permission();
     boolean risk = p.path("risk").asBoolean();
     return Map.of(
         "groupName",
@@ -72,6 +82,6 @@ public class PermissionCatalog {
         "risk",
         risk,
         "catalogVersion",
-        3);
+        definition.catalogVersion());
   }
 }

@@ -246,7 +246,9 @@ public class KnowledgeAdminService {
     /** 快照模板清单（评审入口：系统会自动收录哪些聚合数据、给谁看） */
     public List<Map<String, Object>> snapshotSpecs() {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (SnapshotSpec s : specRegistry.all()) {
+        var context = com.pams.module.agent.core.ToolContext.current(null, null);
+        for (SnapshotSpec s : specRegistry.enabledForCurrentOrg()) {
+            if (SnapshotSpecRegistry.PARTY_COMPOSITION.equals(s.code()) && !context.hasPermission("party:view")) continue;
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("code", s.code());
             m.put("description", s.description());

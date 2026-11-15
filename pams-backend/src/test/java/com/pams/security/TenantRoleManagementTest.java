@@ -378,24 +378,28 @@ class TenantRoleManagementTest {
   }
 
   @Test
-  void reenablingPackDoesNotRestoreOldGrants() throws Exception {
+  void closingPackPreservesRecordsAndRestoresGrantsWhenReenabled() throws Exception {
     long role = create();
     draft(role, "party:view");
     apply(publishPreview(role), 200);
     assertThat(auth.rolePermissions(1, role)).contains("party:view");
-    auth.updatePacks(1, false);
+    long member = call("POST", "/api/party/members", Map.of("name", "党建组件包验收记录"), 200).asLong();
+    var before = call("GET", "/api/orgs/current", null, 200);
+    String pack = "/api/orgs/current/packs/party";
+    call("PUT", pack, Map.of("enabled", false), 200);
+    assertThat(call("GET", "/api/orgs/current", null, 200).path("enabledPacks").asText()).isEqualTo("[]");
     assertThat(auth.rolePermissions(1, role)).doesNotContain("party:view");
-    auth.updatePacks(1, true);
-    assertThat(auth.rolePermissions(1, role)).doesNotContain("party:view");
-    draft(role, "party:view"); // Explicit confirmation drops the obsolete activation version.
-    var preview =
-        call(
-            "POST",
-            "/api/roles/" + role + "/change-previews",
-            Map.of("action", "PUBLISH", "version", 1),
-            200);
-    apply(preview.path("id").asText(), 200);
+    call("GET", "/api/party/members/" + member, null, 403);
+    assertThat(db.queryForObject("SELECT deleted FROM party_member WHERE id=?", Integer.class, member)).isZero();
+    call("PUT", "/api/orgs/current/packs/club", Map.of("enabled", true), 400);
+    token = loginAs("staff");
+    call("PUT", pack, Map.of("enabled", true), 403);
+    token = loginAs("teacher");
+    call("PUT", pack, Map.of("enabled", true), 200);
     assertThat(auth.rolePermissions(1, role)).contains("party:view");
+    assertThat(call("GET", "/api/party/members/" + member, null, 200).path("name").asText())
+        .isEqualTo("党建组件包验收记录");
+    assertThat(call("GET", "/api/orgs/current", null, 200)).isEqualTo(before);
   }
 
   @Test

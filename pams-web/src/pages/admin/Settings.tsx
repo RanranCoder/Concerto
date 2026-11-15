@@ -4,6 +4,7 @@ import { ApartmentOutlined, BookOutlined, CheckOutlined, DatabaseOutlined, Folde
 import { useBlocker, useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import AiServices from './AiServices'
+import ExtensionSettings from './ExtensionSettings'
 import PageHeader from '@/components/glass/PageHeader'
 import FormSurface from '@/components/form/FormSurface'
 import { InfoList, LoadError, Panel, RelatedLink, StatusTag } from '@/components/admin/AdminSurface'
@@ -11,12 +12,11 @@ import { getSystemInfo, type SystemInfoVO } from '@/api/system'
 import { getCurrentOrg, type OrgInfo } from '@/api/org'
 import { kbStats, type KnowledgeStatsVO } from '@/api/knowledge'
 import { useAuthStore } from '@/stores/auth'
-import { parsePacks, useOrgStore } from '@/stores/org'
+import { useOrgStore } from '@/stores/org'
 import { usePreferencesStore, type ListDensity } from '@/stores/preferences'
 import { useThemeStore } from '@/stores/theme'
 
-const categories = [{key: 'overview', label: '运行概览', icon: <DatabaseOutlined aria-hidden="true" />}, {key: 'ai', label: 'AI 服务', icon: <SettingOutlined aria-hidden="true" />}, {key: 'organization', label: '组织与功能', icon: <ApartmentOutlined aria-hidden="true" />}, {key: 'preferences', label: '使用偏好', icon: <SkinOutlined aria-hidden="true" />}, {key: 'diagnostics', label: '存储与诊断', icon: <FolderOutlined aria-hidden="true" />}]
-const packNames: Record<string, string> = {party: '党建包 · 党务台账', volunteer: '志愿服务包', club: '社团包'}
+const categories = [{key: 'overview', label: '运行概览', icon: <DatabaseOutlined aria-hidden="true" />}, {key: 'ai', label: 'AI 服务', icon: <SettingOutlined aria-hidden="true" />}, {key: 'organization', label: '组织与功能', icon: <ApartmentOutlined aria-hidden="true" />}, {key: 'extensions', label: '扩展功能', icon: <FolderOutlined aria-hidden="true" />}, {key: 'preferences', label: '使用偏好', icon: <SkinOutlined aria-hidden="true" />}, {key: 'diagnostics', label: '存储与诊断', icon: <FolderOutlined aria-hidden="true" />}]
 
 export default function Settings() {
   const {message} = App.useApp(), navigate = useNavigate(), [params, setParams] = useSearchParams()
@@ -49,7 +49,10 @@ export default function Settings() {
     }).finally(() => {if (active) setLoading(false)})
     return () => {active = false}
   }, [refresh, canKnowledge])
-  const reload = () => setRefresh(v => v + 1)
+  const reload = () => {
+    setRefresh(v => v + 1)
+    if (tab === 'extensions') void useOrgStore.getState().load()
+  }
   const switchTab = (key: string) => setParams(old => {const next = new URLSearchParams(old); next.set('section', key); return next})
   const healthy = info?.ping?.toLowerCase() === 'pong'
   const health = <StatusTag tone={loading ? 'neutral' : healthy ? 'success' : 'warning'}>{loading ? '检查中' : info ? healthy ? '连接正常' : '响应异常' : '状态不可用'}</StatusTag>
@@ -57,21 +60,24 @@ export default function Settings() {
   const save = () => {saveDensity(density); message.success('偏好已保存到当前浏览器')}
   const basicInfo = <InfoList items={[{label: '产品名称', value: '协奏 Concerto · 学生组织智能工作台'}, {label: '所属组织', value: org?.name || orgName || user?.orgName}, {label: '应用版本', value: info?.version || '—'}, {label: '当前登录', value: <Space wrap>{user?.realName}<StatusTag>{user?.isOwner ? '组织所有者' : user?.managementCapabilities.length ? '组织管理员' : '普通用户'}</StatusTag></Space>}, {label: '界面主题', value: mode === 'dark' ? '深色' : '浅色'}]} />
   const links = <div className="admin-link-list">{canOrg && <RelatedLink title="组织架构" description="维护部门、下级小组和负责人" icon={<ApartmentOutlined aria-hidden="true" />} onClick={() => navigate('/org/structure')} />}{canUsers && <RelatedLink title="用户管理" description="账号状态、部门归属与业务主角色" icon={<UserOutlined aria-hidden="true" />} onClick={() => navigate('/admin/users')} />}{canKnowledge && <RelatedLink title="知识库" description="资料内容、事实快照与检索记录" icon={<BookOutlined aria-hidden="true" />} onClick={() => navigate('/knowledge')} />}</div>
-  return <div className="admin-v6 settings-v6"><PageHeader title="系统设置" description="查看系统运行情况，管理组织入口与个人使用偏好。" extra={<Button icon={<ReloadOutlined aria-hidden="true" />} loading={loading} onClick={reload}>刷新状态</Button>} />
+  return <div className="admin-v6 settings-v6"><PageHeader title="系统设置" extra={<Button icon={<ReloadOutlined aria-hidden="true" />} loading={loading} onClick={reload}>刷新状态</Button>} />
     <div className="admin-settings-layout"><nav className="admin-rail" aria-label="系统设置分类"><h3>设置分类</h3>{categories.map(item => <button key={item.key} aria-pressed={tab === item.key} onClick={() => switchTab(item.key)}>{item.icon}{item.label}</button>)}</nav><div className="admin-settings-content">
-      {info === null && <LoadError message="系统信息加载失败，运行状态暂不可用。" retry={reload} />}
+      {info === null && tab !== 'extensions' && <LoadError message="系统信息加载失败，运行状态暂不可用。" retry={reload} />}
+      {tab === 'extensions' && <ExtensionSettings />}
       {tab === 'ai' && <AiServices onDirty={setAiDirty} />}
       {tab === 'overview' && <>
         <section className="admin-panel"><div className="admin-running"><span className={`admin-health-icon ${healthy ? '' : 'warning'}`}>{healthy ? <CheckOutlined aria-hidden="true" /> : <WarningOutlined aria-hidden="true" />}</span><div><h3>{loading ? '正在检查系统服务' : healthy ? '系统基础健康检查通过' : '系统状态需要核对'}</h3><p>最近检查 {checkedAt || '—'} · 当前组织：{org?.shortName || org?.name || orgName || '—'}</p></div><Button type="link" onClick={() => switchTab('diagnostics')}>查看诊断</Button></div>
           <div className="admin-service-grid"><div><small>应用服务</small><strong>{health}</strong><small>基础响应检查</small></div><div><small>知识检索</small><strong>{kbStatus}</strong><small>维护与更新请前往知识库</small></div><div><small>文件存储</small><strong><StatusTag>{info?.uploadDir ? '目录已配置' : '配置未提供'}</StatusTag></strong><small>读写能力需单独核验</small></div></div></section>
-        <Panel title="系统信息" description="运行信息与当前会话。">{loading && !info ? <Skeleton active /> : basicInfo}</Panel>
-        <Panel title="常用管理入口" description="根据任务进入对应工作区。">{links}</Panel>
+        <Panel title="系统信息">{loading && !info ? <Skeleton active /> : basicInfo}</Panel>
+        <Panel title="常用管理入口">{links}</Panel>
       </>}
       {tab === 'organization' && <>
-        <Panel title="组织信息" description="组织资料与架构使用统一维护入口。" extra={canOrg && <Button onClick={() => navigate('/org/structure')}>前往组织架构</Button>}>
+        <Panel title="组织信息" extra={canOrg && <Button onClick={() => navigate('/org/structure')}>前往组织架构</Button>}>
           {org === null ? <LoadError message="组织信息读取失败" retry={reload} /> : <InfoList items={[{label: '组织名称', value: org?.name || orgName}, {label: '组织简称', value: org?.shortName}, {label: '组织类型', value: org?.type}, {label: '品牌颜色', value: <span className="admin-color-sample"><i style={{background: primary}} />{primary}</span>}]} />}
         </Panel>
-        <Panel title="功能与领域包" description="通用工作区与组织领域能力分开管理。"><ul className="admin-result-list"><li><span>活动、排班考勤、成员与档案</span><StatusTag tone="success">通用工作区</StatusTag></li><li><span>concerto与知识库</span><StatusTag tone="success">智能协作</StatusTag></li>{org && parsePacks(org.enabledPacks).map(pack => <li key={pack}><span>{packNames[pack] || pack}</span><StatusTag tone="brand">已启用</StatusTag></li>)}</ul><p className="admin-note">入口显示同时受领域包和账号权限控制。调整组织配置请前往组织管理核对。</p></Panel>
+        <Panel title="组织功能" description="活动、排班考勤、成员、档案与智能协作为基础能力。" extra={<Button onClick={() => switchTab('extensions')}>管理扩展功能</Button>}>
+          <p className="admin-note">按组织需要启用专项工作区。</p>
+        </Panel>
         {canRoles && <Panel title="授权管理"><RelatedLink title="角色与权限" description="业务授权、管理员身份与治理记录" icon={<SettingOutlined aria-hidden="true" />} onClick={() => navigate('/admin/permissions')} /></Panel>}
       </>}
       {tab === 'preferences' && <>
@@ -85,7 +91,7 @@ export default function Settings() {
       {tab === 'diagnostics' && <>
         <Panel title="文件存储" description="只读展示服务端配置。"><InfoList items={[{label: '上传目录', value: info?.uploadDir ? <Typography.Text copyable={{text: info.uploadDir}}>{info.uploadDir}</Typography.Text> : '未提供'}, {label: '目录来源', value: '部署环境配置'}, {label: '可用空间', value: '未提供监测数据'}, {label: '读写验证', value: '未执行文件读写测试'}]} /><p className="admin-note">目录路径不等于读写正常。如需调整目录，请由部署维护人员修改服务配置。</p></Panel>
         <Panel title="连接诊断" description={'最近检查 ' + (checkedAt || '—')} extra={<Button onClick={reload} loading={loading}>运行诊断</Button>}><div className="admin-diagnostic-row"><div><strong>系统信息</strong><small>应用版本与上传目录配置</small></div><StatusTag tone={info ? 'success' : 'warning'}>{info ? '可读取' : loading ? '检查中' : '读取失败'}</StatusTag></div><div className="admin-diagnostic-row"><div><strong>基础健康检查</strong><small>应用能够返回健康响应</small></div>{health}</div><div className="admin-diagnostic-row"><div><strong>数据库、磁盘与备份</strong><small>当前接口未提供专项监测</small></div><StatusTag>未检测</StatusTag></div><p className="admin-note">基础健康正常仅表明应用可响应，不能代替数据库、磁盘和备份检查。</p></Panel>
-        <Panel title="维护入口" description="按业务范围定位问题。">{links}</Panel>
+        <Panel title="维护入口">{links}</Panel>
       </>}
     </div></div>
     <FormSurface title={aiDirty ? '放弃未保存的 AI 服务配置？' : '离开前保存偏好？'} description={aiDirty ? '离开后，本次尚未保存的服务修改将丢失。' : '当前用户列表密度尚未保存。'} open={blocker.state === 'blocked'} onCancel={() => blocker.state === 'blocked' && blocker.reset()} footer={<Space wrap><Button onClick={() => blocker.state === 'blocked' && blocker.reset()}>继续编辑</Button><Button onClick={() => {setDensity(savedDensity); if (blocker.state === 'blocked') blocker.proceed()}}>放弃并离开</Button>{!aiDirty && <Button type="primary" onClick={() => {saveDensity(density); if (blocker.state === 'blocked') blocker.proceed()}}>保存并离开</Button>}</Space>}><p>{aiDirty ? '选择继续编辑，或放弃本次服务修改。' : '选择保存后离开，或放弃这次密度修改。'}</p></FormSurface>

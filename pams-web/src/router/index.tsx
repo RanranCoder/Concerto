@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import { useOrgStore } from '@/stores/org'
 import { useAuthorizationSync } from '@/hooks/useAuthorizationSync'
-import { meApi } from '@/api/auth'
 import MainLayout from '@/layouts/MainLayout'
 import DocumentTitle from '@/components/DocumentTitle'
 import { RequirePerm } from '@/components/glass/RequireRole'
@@ -47,21 +46,30 @@ const AgentHome = lazy(() => import('@/pages/agent/AgentHome'))
 const AgentBenchmark = lazy(() => import('@/pages/admin/AgentBenchmark'))
 const OrgRegister = lazy(() => import('@/pages/org/OrgRegister'))
 const OrgStructure = lazy(() => import('@/pages/org/OrgStructure'))
+const YouthWorkspace = lazy(() => import('@/pages/packs/YouthWorkspace'))
+const VolunteerWorkspace = lazy(() => import('@/pages/packs/VolunteerWorkspace'))
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   useAuthorizationSync()
   const token = useAuthStore((s) => s.token)
-  const refreshUser = useAuthStore((s) => s.refreshUser)
-  // 启动/刷新页面时用 JWT 换取最新 user+permissions，使权限管理页的变更刷新即生效（无需重新登录）
-  useEffect(() => {
-    if (token) {
-      meApi().then((u) => refreshUser(u)).catch(() => { /* 401 由 http 拦截器登出 */ })
-      // 拉取当前组织（品牌/主题色），驱动 App.tsx 的 colorPrimary
-      useOrgStore.getState().load()
-    }
-  }, [token, refreshUser])
   if (!token) return <Navigate to="/login" replace />
   return <>{children}</>
+}
+
+function PackRoute({ code, children }: { code: 'party' | 'youth' | 'volunteer'; children: ReactNode }) {
+  const enabled = useOrgStore(s => s.enabledPacks.includes(code))
+  const loaded = useOrgStore(s => s.loaded)
+  const loadFailed = useOrgStore(s => s.loadFailed)
+  if (loadFailed) return <div className="route-feedback" role="alert">
+    <h1>暂时无法读取扩展功能状态</h1>
+    <button type="button" onClick={() => void useOrgStore.getState().load()}>重试</button>
+  </div>
+  if (!loaded) return <div className="route-feedback" role="status">正在检查扩展功能…</div>
+  if (!enabled) return <div className="route-feedback">
+    <h1>当前组织未启用此功能</h1>
+    <Link to="/">返回工作台</Link>
+  </div>
+  return <RequirePerm codes={[`${code}:view`]}>{children}</RequirePerm>
 }
 
 /** 公共页面也包含 lazy 组件，必须在 MainLayout 之外设置加载边界。 */
@@ -145,13 +153,16 @@ export const router: ReturnType<typeof createBrowserRouter> = createBrowserRoute
           // 党务台账（敏感，部长及以上；干事读已脱敏，仍隐藏入口）
           {
             path: '/party',
-            element: <RequirePerm codes={['party:view']}><Outlet /></RequirePerm>,
+            element: <PackRoute code="party"><Outlet /></PackRoute>,
             children: [
               { path: 'members', element: <PartyMembers /> },
               { path: 'members/:id', element: <PartyMemberDetail /> },
               { path: 'rosters', element: <PartyRosters /> },
             ],
           },
+          { path: '/youth', element: <PackRoute code="youth"><YouthWorkspace /></PackRoute> },
+          { path: '/volunteer', element: <PackRoute code="volunteer"><VolunteerWorkspace /></PackRoute> },
+          { path: '/volunteer/:id', element: <PackRoute code="volunteer"><VolunteerWorkspace /></PackRoute> },
 
           // 内容宣传（推文干事可看；新闻稿入口部长及以上显示）
           { path: '/content/articles', element: <RequirePerm codes={['content:view']}><Articles /></RequirePerm> },

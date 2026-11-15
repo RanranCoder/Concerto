@@ -5,6 +5,7 @@ import { BellOutlined, CheckOutlined } from '@ant-design/icons'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNotificationStore } from '@/stores/notification'
+import { useOrgStore } from '@/stores/org'
 import type { NotificationVO } from '@/api/notification'
 import dayjs from 'dayjs'
 import { notificationRoute } from '@/utils/notificationRoute'
@@ -12,23 +13,14 @@ import { notificationRoute } from '@/utils/notificationRoute'
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
+  const partyEnabled = useOrgStore(s => s.enabledPacks.includes('party'))
   const navigate = useNavigate()
-  const { unreadCount, notifications, loading, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } =
+  const { unreadCount, notifications, loading, fetchUnreadCount, markAsRead, markAllAsRead } =
     useNotificationStore()
 
   useEffect(() => {
     fetchUnreadCount()
-  }, [fetchUnreadCount])
-
-  const handleOpenChange = useCallback(
-    (visible: boolean) => {
-      setOpen(visible)
-      if (visible) {
-        fetchNotifications()
-      }
-    },
-    [fetchNotifications],
-  )
+  }, [fetchUnreadCount, open, partyEnabled])
 
   const goToAll = useCallback(() => {
     setOpen(false)
@@ -69,7 +61,7 @@ export default function NotificationBell() {
       content={content}
       trigger="click"
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={setOpen}
       placement="bottomRight"
       arrow={false}
     >

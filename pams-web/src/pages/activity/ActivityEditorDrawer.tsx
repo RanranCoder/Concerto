@@ -8,7 +8,8 @@ import {
   updateActivity,
   type ActivitySave,
 } from '@/api/activity'
-import { ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
+import { ACTIVITY_TYPE_MAP } from '@/api/activityStatus'
+import { useActivityTypes } from '@/hooks/useActivityTypes'
 
 interface Values extends Omit<ActivitySave, 'startDate' | 'endDate'> {
   range?: [Dayjs, Dayjs]
@@ -31,6 +32,10 @@ export default function ActivityEditorDrawer({
     [saving, setSaving] = useState(false),
     [error, setError] = useState(false)
   const [locked, setLocked] = useState(false)
+  const types = useActivityTypes()
+  const initialType = initial?.type
+  const options = initialType && !types.some(option => option.value === initialType)
+    ? [...types, { value: initialType, label: ACTIVITY_TYPE_MAP[initialType] ?? initialType, disabled: true }] : types
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -164,7 +169,7 @@ export default function ActivityEditorDrawer({
                   <Input maxLength={200} />
                 </Form.Item>
                 <Form.Item name="type" label="活动类型">
-                  <Select options={ACTIVITY_TYPE_OPTIONS} />
+                  <Select options={options} />
                 </Form.Item>
               </FormSection>
               <FormSection title="时间与地点">

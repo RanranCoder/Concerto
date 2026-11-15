@@ -1,0 +1,30 @@
+.pack-workspace .admin-panel + .admin-panel { margin-top: 16px; }
+.pack-workspace .ant-tabs-nav { margin-bottom: 16px; }
+.pack-rows { list-style: none; padding: 0; margin: 0; }
+.pack-rows > li { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 14px 0; }
+.pack-rows > li + li { border-top: 1px solid color-mix(in srgb, var(--text-secondary) 22%, transparent); }
+.pack-rows > li:first-child { padding-top: 0; }
+.pack-rows > li:last-child { padding-bottom: 0; }
+.pack-rows h4 { margin: 0; font-size: var(--fs-title); overflow-wrap: anywhere; }
+.pack-rows p { margin: 5px 0 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.pack-row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.pack-row-actions > a { padding: 6px 2px; }
+.pack-pagination { display: flex; justify-content: flex-end; margin-top: 20px; }
+.pack-overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.pack-overview > div > .admin-panel:last-child { margin-bottom: 0; }
+.pack-fields { min-width: 0; border: 0; padding: 0; margin: 0; }
+.pack-fields .ant-input-number { width: 100%; }
+.pack-error { color: var(--danger); }
+.pack-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pack-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.pack-reading { display: grid; gap: 12px; }
+.pack-reading p { margin: 4px 0 0; }
+@media (min-width: 1100px) {
+  .pack-overview { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+@media (max-width: 767px) {
+  .pack-rows > li { align-items: flex-start; flex-direction: column; }
+  .pack-row-actions { justify-content: flex-start; }
+  .pack-row-actions .ant-btn { min-height: 44px; }
+  .pack-workspace .admin-panel > header { flex-wrap: wrap; }
+}

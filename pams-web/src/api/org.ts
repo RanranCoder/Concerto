@@ -91,6 +91,9 @@ export const listPublicOrgs = () => get<PublicOrg[]>('/orgs/public')
 
 export const getCurrentOrg = () => get<OrgInfo>('/orgs/current')
 
+export const updateExtensionPack = (code: string, enabled: boolean) =>
+  put<string[]>(`/orgs/current/packs/${code}`, { enabled })
+
 export const updateOrg = (data: {
   name?: string
   shortName?: string

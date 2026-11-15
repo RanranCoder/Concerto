@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
 
 export function notificationRoute(n: { entityType: string | null; entityId: number | null; activityId?: number | null }): string | null {
   if (!n.entityId || !n.entityType) return null
@@ -8,7 +9,10 @@ export function notificationRoute(n: { entityType: string | null; entityId: numb
   if (['QUALITY', 'QUALITY_DELETE'].includes(n.entityType)) return '/archive/credits'
   if (n.entityType === 'MEMBER_IMPORT') return '/members'
   if (n.entityType === 'SCHEDULE_IMPORT') return '/routine/free-schedules'
-  if (['PARTY_STAGE', 'PARTY_RECORD', 'PARTY_LETTER', 'PARTY_IMPORT'].includes(n.entityType)) return '/party/members'
+  if (n.entityType.startsWith('PARTY_')) {
+    return useOrgStore.getState().enabledPacks.includes('party') &&
+      useAuthStore.getState().user?.permissions.includes('party:view') ? '/party/members' : null
+  }
   if (n.entityType === 'ANNOUNCEMENT') return `/archive/announcements?id=${n.entityId}`
   if (n.entityType === 'PENDING_TASKS') return '/notifications?view=pending'
   if (n.entityType === 'SCHEDULE' && !useAuthStore.getState().user?.permissions?.includes('schedule:view')) return '/routine/my-schedules'

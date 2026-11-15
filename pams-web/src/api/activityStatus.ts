@@ -46,6 +46,7 @@ export const ACTIVITY_STATUS_COLOR: Record<string, string> = {
 export const ACTIVITY_TYPES = [
   'PARTY_LESSON',
   'DATE',
+  'YOUTH_LESSON',
   'PARTY_DAY',
   'COMPETITION',
   'VOLUNTEER',
@@ -58,6 +59,7 @@ export const ACTIVITY_TYPES = [
 export const ACTIVITY_TYPE_MAP: Record<string, string> = {
   PARTY_LESSON: '党课',
   DATE: '主题团日',
+  YOUTH_LESSON: '团课',
   PARTY_DAY: '主题党日',
   COMPETITION: '竞赛',
   VOLUNTEER: '志愿服务',

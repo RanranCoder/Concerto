@@ -1,8 +1,11 @@
 package com.pams.module.permission.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
+import com.pams.common.OrgContext;
+import com.pams.module.org.service.DomainPacks;
 import com.pams.security.LoginUser;
 import java.sql.*;
 import java.time.*;
@@ -418,7 +421,9 @@ public class TenantAuthorizationService {
   }
 
   private boolean packActive(long org, String code, Object version) {
-    if (!code.startsWith("party:")) return true;
+    String pack = DomainPacks.forPermission(code);
+    if (pack == null) return true;
+    if (!DomainPacks.PARTY.equals(pack)) return isPackEnabled(org, pack);
     var rows =
         db.queryForList(
             "SELECT enabled,activation_version FROM org_domain_pack WHERE org_id=? AND"
@@ -432,7 +437,14 @@ public class TenantAuthorizationService {
   public Set<String> business(long uid) {
     if (!valid(uid)) return Set.of();
     var u = identity(uid);
-    return rolePermissions(number(u.get("org_id")), number(u.get("role_id")));
+    long org = number(u.get("org_id"));
+    var permissions = rolePermissions(org, number(u.get("role_id")));
+    if (number(u.get("owner_user_id")) != uid) return permissions;
+    var active = enabledPacks(org);
+    for (String pack : List.of(DomainPacks.YOUTH, DomainPacks.VOLUNTEER)) {
+      if (active.contains(pack)) permissions.addAll(List.of(pack + ":view", pack + ":manage", pack + ":review"));
+    }
+    return permissions;
   }
 
   public Set<String> rolePermissions(long org, long role) {
@@ -493,15 +505,14 @@ public class TenantAuthorizationService {
   }
 
   public Set<String> grantable(long uid) {
-    if (owner(uid))
+    if (owner(uid)) {
+      var active = enabledPacks(number(identity(uid).get("org_id")));
       return db
           .queryForList("SELECT code FROM permission WHERE category='BUSINESS'", String.class)
           .stream()
-          .filter(
-              c ->
-                  !c.startsWith("party:")
-                      || currentPackVersion(number(identity(uid).get("org_id"))) > 0)
+          .filter(c -> DomainPacks.forPermission(c) == null || active.contains(DomainPacks.forPermission(c)))
           .collect(Collectors.toSet());
+    }
     var u = identity(uid);
     var rows =
         db.queryForList(
@@ -526,6 +537,16 @@ public class TenantAuthorizationService {
             Long.class,
             org);
     return rows.isEmpty() ? 0 : rows.getFirst();
+  }
+
+  public List<String> enabledPacks(long org) {
+    var enabled = db.queryForList("SELECT pack_code FROM org_domain_pack WHERE org_id=? AND enabled=1", String.class, org);
+    return DomainPacks.CODES.stream().filter(enabled::contains).toList();
+  }
+
+  public boolean isPackEnabled(long org, String code) {
+    return db.queryForObject("SELECT COUNT(*) FROM org_domain_pack WHERE org_id=? AND pack_code=? AND enabled=1",
+        Integer.class, org, code) > 0;
   }
 
   private long actor(String capability) {
@@ -747,7 +768,7 @@ public class TenantAuthorizationService {
     actor("role:assign");
     var r = role(org(uid), roleId);
     if (!"ACTIVE".equals(r.get("status"))
-        || !grantable(uid).containsAll(rolePermissions(org(uid), roleId)))
+        || !canAssignRole(uid, org(uid), roleId))
       throw new BizException(403, "该角色不可分配");
   }
 
@@ -806,6 +827,7 @@ public class TenantAuthorizationService {
   public List<Map<String, Object>> catalog() {
     long uid = actor("role:view");
     Set<String> allowed = grantable(uid);
+    List<String> activePacks = enabledPacks(org(uid));
     Set<String> known =
         new HashSet<>(
             db.queryForList("SELECT code FROM permission WHERE category='BUSINESS'", String.class));
@@ -814,6 +836,10 @@ public class TenantAuthorizationService {
             "SELECT id,code,name,module FROM permission WHERE category='BUSINESS' ORDER BY"
                 + " module,sort_order,id")
         .stream()
+        .filter(p -> {
+          String pack = DomainPacks.forPermission(p.get("code").toString());
+          return pack == null || DomainPacks.PARTY.equals(pack) || activePacks.contains(pack);
+        })
         .map(
             p -> {
               p.put("supportedScopes", List.of("ORG"));
@@ -1008,8 +1034,15 @@ public class TenantAuthorizationService {
         .filter(
             r ->
                 "ACTIVE".equals(r.get("status"))
-                    && grantable(uid).containsAll(rolePermissions(org(uid), number(r.get("id")))))
+                    && canAssignRole(uid, org(uid), number(r.get("id"))))
         .toList();
+  }
+
+  private boolean canAssignRole(long actor, long org, long roleId) {
+    if (owner(actor)) return true;
+    var grants = db.queryForList("SELECT p.code FROM role_grant g JOIN permission p ON p.id=g.permission_id "
+        + "WHERE g.org_id=? AND g.role_id=? AND p.category='BUSINESS'", String.class, org, roleId);
+    return grantable(actor).containsAll(grants);
   }
 
   private List<Map<String, Object>> listInternal(long org) {
@@ -1563,7 +1596,7 @@ public class TenantAuthorizationService {
     protectUser(uid, target);
     var r = role(org, roleId);
     if (!"ACTIVE".equals(r.get("status"))) throw new BizException(400, "目标角色未启用");
-    if (!grantable(uid).containsAll(rolePermissions(org, roleId)))
+    if (!canAssignRole(uid, org, roleId))
       throw new BizException(403, "无权分配整个目标角色");
     var u = identity(target);
     return storePreview(
@@ -1632,7 +1665,7 @@ public class TenantAuthorizationService {
       protectUser(uid, target);
       var r = role(org, number(p.get("roleId")));
       if (!"ACTIVE".equals(r.get("status"))
-          || !grantable(uid).containsAll(rolePermissions(org, number(p.get("roleId")))))
+          || !canAssignRole(uid, org, number(p.get("roleId"))))
         throw new BizException(403, "角色已失效或超出分配上限");
       if (number(r.get("config_version")) != number(p.get("roleVersion"))
           || number(identity(target).get("role_id")) != number(p.get("oldRoleId")))
@@ -1826,14 +1859,10 @@ public class TenantAuthorizationService {
   /** Called only from startup/provisioning, never exposed to clients. */
   @Transactional
   public void initializeOrg(long org) {
-    var o = one("SELECT enabled_packs FROM organization WHERE id=?", org);
-    String packs = Objects.toString(o.get("enabled_packs"), "[\"party\"]");
-    int enabled = packs.contains("party") ? 1 : 0;
-    if (db.queryForObject(
-            "SELECT COUNT(*) FROM org_domain_pack WHERE org_id=? AND pack_code='party'",
-            Integer.class,
-            org)
-        == 0) db.update("INSERT INTO org_domain_pack VALUES(?,'party',?,1)", org, enabled);
+    String packs = db.queryForObject("SELECT enabled_packs FROM organization WHERE id=?", String.class, org);
+    // Only registration reads the new pack choices. Legacy placeholder values must not activate packs on startup.
+    initializePack(org, DomainPacks.PARTY,
+        packs == null ? org == OrgContext.DEFAULT_ORG_ID : configuredPack(packs, DomainPacks.PARTY));
     for (var template :
         db.queryForList("SELECT code,name FROM role_template WHERE code NOT LIKE 'DUTY_%'")) {
       String code = template.get("code").toString();
@@ -1881,17 +1910,32 @@ public class TenantAuthorizationService {
     }
   }
 
+  private boolean configuredPack(String packs, String code) {
+    try {
+      JsonNode configured = json.readTree(packs);
+      if (configured != null && configured.isTextual()) configured = json.readTree(configured.asText());
+      if (configured == null || !configured.isArray()) return false;
+      for (JsonNode pack : configured) {
+        if (code.equals(pack.asText())) return true;
+      }
+      return false;
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      return false;
+    }
+  }
+
+  private void initializePack(long org, String code, boolean enabled) {
+    if (db.queryForObject("SELECT COUNT(*) FROM org_domain_pack WHERE org_id=? AND pack_code=?", Integer.class, org, code) == 0) {
+      db.update("INSERT INTO org_domain_pack(org_id,pack_code,enabled,activation_version) VALUES(?,?,?,1)", org, code, enabled ? 1 : 0);
+    }
+  }
+
   @Transactional
-  public void updatePacks(long org, boolean enabled) {
+  public void setPack(long org, String code, boolean enabled) {
     lockOrg(org);
-    var p = one("SELECT * FROM org_domain_pack WHERE org_id=? AND pack_code='party'", org);
-    boolean was = number(p.get("enabled")) == 1;
-    db.update(
-        "UPDATE org_domain_pack SET enabled=?,activation_version=activation_version+? WHERE"
-            + " org_id=? AND pack_code='party'",
-        enabled ? 1 : 0,
-        enabled && !was ? 1 : 0,
-        org);
+    if (isPackEnabled(org, code) == enabled) return;
+    initializePack(org, code, false);
+    db.update("UPDATE org_domain_pack SET enabled=? WHERE org_id=? AND pack_code=?", enabled ? 1 : 0, org, code);
     bump(org);
   }
 }

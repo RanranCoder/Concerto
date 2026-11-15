@@ -29,7 +29,7 @@ async function setup(page: Page, viewer = teacher) {
     const body = () => req.postDataJSON() as Record<string, unknown>
     if (method !== 'GET') writeRequests.push({ path, body: req.postData()?.startsWith('{') ? body() : {} })
     if (path === '/api/auth/me') data = viewer
-    else if (path === '/api/orgs/current') data = { id: 1, name: '党建办公室', enabledPacks: null, themeJson: null }
+    else if (path === '/api/orgs/current') data = { id: 1, name: '党建办公室', enabledPacks: '["party"]', themeJson: null }
     else if (path === '/api/notifications/unread-count') data = 0
     else if (path === '/api/depts') data = [{ id: 1, name: '文秘部' }, { id: 2, name: '组织部' }]
     else if (path === '/api/member-sessions') data = [{ id: 1, name: '2026—2027届', isCurrent: 1 }]

@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -46,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // 已禁用用户（status=0 或 null）即使持有有效 JWT 也不放行，保持匿名走 401。
                 // 与 AuthController.login 的 status 判定保持一致。
                 // isRevoked：审计 #3 用户级吊销水位——登出/改密后旧 token 同样不放行。
-                if (u != null && u.getRole()!=null && permissionService.validUser(u.getId()) && !isRevoked(claims, u)) {
+                if (u != null && u.getRole()!=null && permissionService.validUser(u.getId())
+                        && !JwtUtil.isRevoked(claims.getIssuedAt(), u.getTokenInvalidBefore())) {
                     String roleCode = u.getRole().getCode();
                     LoginUser lu = new LoginUser(
                             u.getId(), u.getUsername(), u.getRealName(),
@@ -76,19 +76,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Web 线程池复用，必须清理，否则串租户
             OrgContext.clear();
         }
-    }
-
-    /**
-     * 审计 #3：用户级 token 吊销水位——登出/改密会把 sys_user.token_invalid_before 推进到当前时刻，
-     * 签发时刻（iat，秒粒度）早于该水位的 token 视为已吊销：不注入认证，保持匿名走 Security 401。
-     * 与 JwtUtil.revocationWatermark（写入侧向上取整 + 单调推进）配套。
-     */
-    private boolean isRevoked(Claims claims, User u) {
-        LocalDateTime watermark = u.getTokenInvalidBefore();
-        if (watermark == null || claims.getIssuedAt() == null) {
-            return false;
-        }
-        return JwtUtil.epochSecond(claims.getIssuedAt()) < JwtUtil.epochSecond(watermark);
     }
 
     /**

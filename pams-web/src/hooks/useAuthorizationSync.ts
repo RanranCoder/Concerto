@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { meApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { useOrgStore } from '@/stores/org'
 
 let refreshing: Promise<void> | undefined
 export function refreshAuthorization() {
@@ -22,9 +23,12 @@ export function useAuthorizationSync() {
   useEffect(() => {
     if (!token) return
     const refresh = () => {
-      if (document.visibilityState !== 'hidden')
+      if (document.visibilityState !== 'hidden') {
         void refreshAuthorization().catch(() => {})
+        void useOrgStore.getState().load()
+      }
     }
+    refresh()
     const timer = window.setInterval(refresh, 30_000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)

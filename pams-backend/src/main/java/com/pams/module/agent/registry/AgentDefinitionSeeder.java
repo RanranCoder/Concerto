@@ -74,7 +74,9 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
         var completion=java.util.Set.of("findMembers","listOrgUnits","resolveNotificationAudience","getNotificationDeliveryStatus","prepareTaskPlanChange","readArticleDocument","getArticleReviewStatus","getPlanReviewStatus","prepareArticleRevision","prepareArticleSubmission","preparePlanSubmission","queryActivityAgenda","queryActivityScores","queryActivitySchedules","queryAnnouncements","searchKnowledgeEvidence","readKnowledgeEvidence","readMaterialDocument","querySeatLayout","prepareSchedulePublication");
         var prerequisites=AgentCatalog.DATA.equals(current.name())?java.util.Set.of("queryActivityTasks","getActivityDetail"):
                 AgentCatalog.SCHEDULING.equals(current.name())?java.util.Set.of("queryActivityOverview","getActivityDetail"):java.util.Set.<String>of();
-        var baseScope=current.toolScope()==null?null:current.toolScope().stream().filter(n->!completion.contains(n) && !prerequisites.contains(n)).toList();
+        var packReads = java.util.Set.of("queryYouthWorkSummary", "queryVolunteerWorkSummary");
+        var beforePacks = current.toolScope()==null?null:current.toolScope().stream().filter(n->!packReads.contains(n)).toList();
+        var baseScope=beforePacks==null?null:beforePacks.stream().filter(n->!completion.contains(n) && !prerequisites.contains(n)).toList();
         var priorBatch=baseScope==null?null:baseScope.stream().filter(n->!newReads.contains(n)
                 && !(current.name().equals(AgentCatalog.SCHEDULING) && n.equals("queryActivityTasks"))).toList();
         var previous = priorBatch == null ? null : priorBatch.stream().filter(n -> !n.equals("recallConversation")).toList();
@@ -94,8 +96,9 @@ public class AgentDefinitionSeeder implements ApplicationRunner {
             var beforeProgress = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(baseScope==null?null:baseScope.stream().filter(n->!n.equals("prepareTaskProgressUpdate") && !(current.name().equals(AgentCatalog.SCHEDULING) && n.equals("queryActivityTasks"))).toList()));
             var priorCompletion = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(baseScope));
             var sixth=java.util.Set.of("readArticleDocument","getArticleReviewStatus","getPlanReviewStatus","prepareArticleRevision","prepareArticleSubmission","preparePlanSubmission","queryActivityAgenda","queryActivityScores","queryActivitySchedules","queryAnnouncements","searchKnowledgeEvidence","readKnowledgeEvidence","readMaterialDocument","querySeatLayout","prepareSchedulePublication");
-            var beforeSixth=new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(current.toolScope()==null?null:current.toolScope().stream().filter(n->!sixth.contains(n) && !(current.name().equals(AgentCatalog.WRITING) && n.equals("searchArticles"))).toList()));
-            if ((expected.equals(old) || prior.equals(old) || priorReadBatch.equals(old) || beforeRevision.equals(old) || beforeProgress.equals(old) || priorCompletion.equals(old) || beforeSixth.equals(old)) && !toJson(current.toolScope()).equals(existing.getToolScope())) {
+            var beforeSixth=new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(beforePacks==null?null:beforePacks.stream().filter(n->!sixth.contains(n) && !(current.name().equals(AgentCatalog.WRITING) && n.equals("searchArticles"))).toList()));
+            var priorPackScope = new com.fasterxml.jackson.databind.ObjectMapper().readTree(toJson(beforePacks));
+            if ((expected.equals(old) || prior.equals(old) || priorReadBatch.equals(old) || beforeRevision.equals(old) || beforeProgress.equals(old) || priorCompletion.equals(old) || beforeSixth.equals(old) || priorPackScope.equals(old)) && !toJson(current.toolScope()).equals(existing.getToolScope())) {
                 existing.setToolScope(toJson(current.toolScope()));
                 existing.setUpdatedAt(LocalDateTime.now());
                 repository.save(existing);

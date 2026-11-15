@@ -38,7 +38,7 @@ import {
   type AttendanceFilter,
 } from '@/api/attendance'
 import { listActivities, type ActivityVO } from '@/api/activity'
-import { ACTIVITY_TYPE_OPTIONS } from '@/api/activityStatus'
+import { useActivityTypes } from '@/hooks/useActivityTypes'
 import { useAuthStore } from '@/stores/auth'
 import { downloadCsv } from '@/utils/routine'
 
@@ -54,6 +54,7 @@ function matchFilters(r: AttendanceVO, f: AttendanceFilter) {
   )
 }
 export default function AttendanceList() {
+  const typeOptions = useActivityTypes()
   const { message } = App.useApp(),
     permissions = useAuthStore((s) => s.user?.permissions) ?? []
   const canViewAll = permissions.some((p) =>
@@ -338,7 +339,7 @@ export default function AttendanceList() {
                 aria-label="考勤活动类型"
                 allowClear
                 placeholder="全部类型"
-                options={ACTIVITY_TYPE_OPTIONS}
+                options={typeOptions}
                 value={filters.type}
                 onChange={(type) => change({ type })}
               />
@@ -380,7 +381,7 @@ export default function AttendanceList() {
     <RoutineLayout>
       <PageHeader
         title={scope === 'mine' ? '我的考勤' : '考勤中心'}
-        description="查看排班对应的签到结果，人工修正保留原因和完整操作记录。"
+        help={{ label: '考勤修正说明', text: '人工修正会保留原因和操作记录。' }}
         extra={
           <Button
             icon={<DownloadOutlined />}

@@ -6,6 +6,7 @@ import com.pams.module.activity.dto.ActivityRequest;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.repository.ActivityRepository;
+import com.pams.module.org.service.PackWorkspace;
 import com.pams.security.LoginUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,6 +21,11 @@ import java.util.Map;
 
 @Service
 public class ActivityService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private PackWorkspace packWorkspace;
+
+    private static final Map<String, String> PACK_BY_TYPE = Map.of(
+            "PARTY_LESSON", "party", "PARTY_DAY", "party", "DATE", "youth", "YOUTH_LESSON", "youth", "VOLUNTEER", "volunteer");
     private final ActivityRepository repository;
     public ActivityService(ActivityRepository repository) { this.repository = repository; }
 
@@ -110,6 +116,7 @@ public class ActivityService {
 
     @Transactional
     public Long create(ActivityRequest req) {
+        requireActivityType(req.getType());
         Activity a = new Activity();
         a.setStatus(ActivityStatus.ASSIGNED);
         apply(a, req);
@@ -128,8 +135,14 @@ public class ActivityService {
         if (a.getStatus() == ActivityStatus.FINISHED || a.getStatus() == ActivityStatus.ARCHIVED) {
             throw new BizException(2008, "已结束或已归档的活动不可编辑");
         }
+        if (!java.util.Objects.equals(a.getType(), req.getType())) requireActivityType(req.getType());
         apply(a, req);
         repository.save(a);
+    }
+
+    private void requireActivityType(String type) {
+        String pack = type == null ? null : PACK_BY_TYPE.get(type);
+        if (pack != null && packWorkspace != null) packWorkspace.lockEnabled(pack);
     }
 
     @Transactional
