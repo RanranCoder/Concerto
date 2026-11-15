@@ -79,6 +79,16 @@ export default function LingsiMessageBody({
   }
   // 产物：优先取消息级（历史水合与确认回写都写在这里），仅在没有时回退到结果块上挂的
   const artifacts = msg.artifacts?.length ? msg.artifacts : (msg.notice?.artifacts ?? [])
+  const processItems = timeline.map(item => {
+    if (item.actionTaskId == null) return item
+    const taskId = item.actionTaskId
+    const action = msg.run?.actions.find(action => action.id === taskId)
+    const notice = msg.notice?.taskId === taskId ? msg.notice : undefined
+    const status = action?.status ?? notice?.status ?? (msg.plan?.planId === taskId ? 'PENDING_CONFIRM' : undefined)
+    const written = action?.artifacts ?? notice?.artifacts
+    return status ? { ...item, status, targets: written?.length
+      ? [...new Set(written.map(artifact => artifact.fileName || artifact.name))] : item.targets } : item
+  })
   // An earlier round may already have emitted text. A new live reasoning round
   // owns the process label until its own first answer chunk seals it.
   const hasLiveReasoning = timeline.some(item => item.kind === 'thinking' && item.detail && !item.completed)
@@ -94,7 +104,7 @@ export default function LingsiMessageBody({
   return (
     <div className="lingsi-turn">
       <div className="lingsi-turn-body">
-        <div className="lingsi-answer-heading"><LingsiAvatar size={30}/><span>concerto</span><small>{active ? '正在处理' : '内容与事实需核对'}</small></div>
+        <div className="lingsi-answer-heading"><LingsiAvatar size={30}/><span>concerto</span>{!active && <small>内容与事实需核对</small>}</div>
         {/*
           协作团队面板：仅在标准模式被判定升级为协作时才有内容（单 Agent 轮次整块不渲染）。
           位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，
@@ -103,24 +113,19 @@ export default function LingsiMessageBody({
         <LingsiRunOverview run={msg.run} items={timeline} active={active} onInspect={inspectWorkItems} />
 
         {/* ---------- 过程区（§7.1 上半段） ---------- */}
-        {(timeline.length > 0 || active) && <LingsiProcessZone items={timeline} active={active}
+        {(timeline.length > 0 || active) && <LingsiProcessZone items={processItems} active={active}
           teamOverview={Boolean(msg.run)} resultStarted={!hasLiveReasoning && Boolean(msg.reply || hasPlan || msg.form || msg.notice || artifacts.length)} />}
 
         {/* ---------- 结果区（§7.1 下半段）：文档流，无容器 ---------- */}
-        {msg.reply && (msg.run || timeline.length > 0) && <div className="lingsi-result-label">{msg.streaming ? '正在生成回复' : '回复内容'}</div>}
-        {msg.reply ? (
+        {msg.reply && !active && (msg.run || timeline.length > 0) && <div className="lingsi-result-label">回复内容</div>}
+        {msg.reply && (
           <LingsiMarkdown
             text={msg.reply}
             streaming={msg.streaming}
             citationIndices={citations.filter(c => !c.revoked).map(c => c.index)}
             onCite={onCite}
           />
-        ) : msg.streaming ? (
-          <div className="lingsi-reply lingsi-reply-pending">
-            正在整理结果…
-            <span className="lingsi-cursor" />
-          </div>
-        ) : null}
+        )}
 
         {msg.references?.length > 0 && <LingsiRefs references={msg.references} />}
 

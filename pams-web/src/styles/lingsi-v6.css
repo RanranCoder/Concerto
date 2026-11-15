@@ -56,12 +56,6 @@
 .lingsi-welcome-avatar{width:66px;height:66px;object-fit:contain;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--soft)}
 .lingsi-welcome-greeting h2{font-size:var(--fs-pageTitle);line-height:1.4;letter-spacing:-.5px;font-weight: calc(600 - var(--font-weight-compensation));margin:0}
 .lingsi-welcome-greeting p{font-size:var(--fs-body);color:var(--text-secondary);margin:7px 0 0}
-.lingsi-welcome-note{border-left:3px solid var(--brand-text);background:var(--soft);padding:12px 16px;font-size:var(--fs-caption);color:var(--text-secondary);margin-bottom:26px}
-.lingsi-welcome-note strong{font-weight: calc(500 - var(--font-weight-compensation));color:var(--text-primary)}
-.lingsi-welcome-note p{margin:4px 0 0}
-.lingsi-starter-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
-.lingsi-starter-heading h3{font-size:var(--fs-body);margin:0;font-weight: calc(600 - var(--font-weight-compensation))}
-.lingsi-starter-heading>span{font-size:var(--fs-caption);color:var(--text-secondary)}
 .lingsi-starters{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;border-top:1px solid var(--border)}
 .lingsi-starter{display:flex;gap:12px;align-items:flex-start;background:none;border:0;border-bottom:1px solid var(--border);padding:19px 5px;text-align:left;min-width:0;color:var(--text-primary);cursor:pointer}
 .lingsi-starter:hover{background:var(--soft)}
@@ -126,7 +120,7 @@
 .lingsi-v6-task-drawer .lingsi-sider{width:100%;flex:1;border:0;height:100%}
 .lingsi-v6-preview-drawer .lingsi-reply table{font-size:var(--fs-caption);min-width:0;display:table;width:100%}
 @media(min-width:1600px){.lingsi-v6 .lingsi-sider{width:232px;flex-basis:232px}.lingsi-v6 .lingsi-panel.lingsi-v6-panel{width:402px;flex-basis:402px}.lingsi-v6 .lingsi-scroll{padding-inline:40px}.lingsi-v6 .lingsi-composer{padding-inline:40px}}
-@media(max-width:767px){.lingsi-v6 .lingsi-main-head{min-height:63px;padding:10px 14px;gap:9px}.lingsi-main-title h1{font-size:var(--fs-body)}.lingsi-main-title small{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-main-head-actions{gap:5px}.lingsi-v6 .lingsi-main-head-actions .lingsi-icon-btn:has(span){padding:0 6px}.lingsi-v6 .lingsi-main-head-actions .lingsi-icon-btn span{display:none}.lingsi-v6 .lingsi-scroll{padding:20px 17px}.lingsi-v6 .lingsi-hero{margin:3px 0 0}.lingsi-welcome-greeting{gap:12px;margin-bottom:19px}.lingsi-welcome-avatar{width:48px;height:48px;border-radius:var(--r-xl)}.lingsi-welcome-greeting h2{font-size:var(--fs-symbol)}.lingsi-welcome-greeting p{font-size:var(--fs-caption);max-width:230px}.lingsi-welcome-note{font-size:var(--fs-caption);padding:10px 12px;margin-bottom:20px}.lingsi-starters{grid-template-columns:1fr;gap:0}.lingsi-starter{padding:14px 3px}.lingsi-welcome-recents{margin-top:17px}.lingsi-welcome-recents button{min-height:35px}.lingsi-v6 .lingsi-composer{padding:8px 13px 9px}.lingsi-v6 .lingsi-composer-ta{font-size:var(--fs-caption);padding:12px}.lingsi-v6 .lingsi-composer-bar{gap:7px;padding:0 9px 9px}.lingsi-v6-mode{min-height:36px}.lingsi-v6 .lingsi-composer-bar .lingsi-icon-btn,.lingsi-v6 .lingsi-send{width:36px;height:36px}.lingsi-v6 .lingsi-model-pill{display:none}.lingsi-v6 .lingsi-send{margin-left:auto}.lingsi-v6-collab{font-size:var(--fs-caption);min-height:36px}.lingsi-v6 .lingsi-composer-hint{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-composer-hint-r{display:none}.lingsi-v6 .lingsi-icon-btn{min-width:36px;min-height:36px}.lingsi-preview-scroll{padding:14px}.lingsi-preview-document{padding:21px 18px}.lingsi-preview-tabs button{min-height:44px}.lingsi-task-filters button{min-height:36px}.lingsi-v6 .lingsi-user-quote-text{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-conv-del{opacity:1}}
+@media(max-width:767px){.lingsi-v6 .lingsi-main-head{min-height:63px;padding:10px 14px;gap:9px}.lingsi-main-title h1{font-size:var(--fs-body)}.lingsi-main-title small{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-main-head-actions{gap:5px}.lingsi-v6 .lingsi-main-head-actions .lingsi-icon-btn:has(span){padding:0 6px}.lingsi-v6 .lingsi-main-head-actions .lingsi-icon-btn span{display:none}.lingsi-v6 .lingsi-scroll{padding:20px 17px}.lingsi-v6 .lingsi-hero{margin:3px 0 0}.lingsi-welcome-greeting{gap:12px;margin-bottom:19px}.lingsi-welcome-avatar{width:48px;height:48px;border-radius:var(--r-xl)}.lingsi-welcome-greeting h2{font-size:var(--fs-symbol)}.lingsi-welcome-greeting p{font-size:var(--fs-caption);max-width:230px}.lingsi-starters{grid-template-columns:1fr;gap:0}.lingsi-starter{padding:14px 3px}.lingsi-welcome-recents{margin-top:17px}.lingsi-welcome-recents button{min-height:35px}.lingsi-v6 .lingsi-composer{padding:8px 13px 9px}.lingsi-v6 .lingsi-composer-ta{font-size:var(--fs-caption);padding:12px}.lingsi-v6 .lingsi-composer-bar{gap:7px;padding:0 9px 9px}.lingsi-v6-mode{min-height:36px}.lingsi-v6 .lingsi-composer-bar .lingsi-icon-btn,.lingsi-v6 .lingsi-send{width:36px;height:36px}.lingsi-v6 .lingsi-model-pill{display:none}.lingsi-v6 .lingsi-send{margin-left:auto}.lingsi-v6-collab{font-size:var(--fs-caption);min-height:36px}.lingsi-v6 .lingsi-composer-hint{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-composer-hint-r{display:none}.lingsi-v6 .lingsi-icon-btn{min-width:36px;min-height:36px}.lingsi-preview-scroll{padding:14px}.lingsi-preview-document{padding:21px 18px}.lingsi-preview-tabs button{min-height:44px}.lingsi-task-filters button{min-height:36px}.lingsi-v6 .lingsi-user-quote-text{font-size:var(--fs-caption)}.lingsi-v6 .lingsi-conv-del{opacity:1}}
 @media(prefers-reduced-motion:reduce){.lingsi-v6 .lingsi-scroll{scroll-behavior:auto}.lingsi-v6 *, .lingsi-v6-panel-content *{animation:none!important;transition:none!important}}
 .lingsi-work-items{margin-block:16px;color:var(--text-primary);font-size:var(--fs-body)}
 .lingsi-work-items>details{border-block:1px solid var(--border);padding-block:12px}
@@ -196,22 +190,22 @@
 .lingsi-run-nodes>li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 0;border-top:0.5px solid var(--border)}
 .lingsi-run-task{min-width:0;line-height:1.6}
 .lingsi-run-task strong{font-weight:500;color:var(--text-primary)}
-.lingsi-run-task small{display:block;font-size:12px;color:var(--text-secondary);margin-top:3px}
+.lingsi-run-task small{display:block;font-size:var(--fs-caption);color:var(--text-secondary);margin-top:3px}
 .lingsi-run-task .lingsi-run-dependency{margin-top:5px}
-.lingsi-run-state{font-size:12px;line-height:1.6;white-space:nowrap;color:var(--text-secondary)}
-.lingsi-run-marker{font-size:14px;line-height:1.6;color:var(--text-secondary)}
+.lingsi-run-state{font-size:var(--fs-caption);line-height:1.6;white-space:nowrap;color:var(--text-secondary)}
+.lingsi-run-marker{font-size:var(--fs-body-lg);line-height:1.6;color:var(--text-secondary)}
 .lingsi-run-state.is-success,.lingsi-run-marker.is-success{color:var(--ok)}
 .lingsi-run-state.is-danger,.lingsi-run-marker.is-danger{color:var(--danger)}
 .lingsi-run-state.is-processing,.lingsi-run-marker.is-processing{color:var(--brand-text)}
 .lingsi-run-empty{margin:0;padding:0 12px 12px;color:var(--text-secondary)}
-.lingsi-result-label{font-size:12px;font-weight:500;color:var(--text-secondary);margin:20px 0 10px}
+.lingsi-result-label{font-size:var(--fs-caption);font-weight:500;color:var(--text-secondary);margin:20px 0 10px}
 .lingsi-process-label{margin-right:12px;font-weight:500;color:var(--text-primary)}
 .lingsi-work-target:focus-visible,.lingsi-run-overview button:focus-visible,.lingsi-team-head:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
 .lingsi-team-head{width:100%;border:0;background:none;text-align:start;min-height:40px;font-family:inherit}
 .lingsi-team-agent{min-height:36px;align-items:start;padding-block:5px}
 .lingsi-team-agent .lingsi-run-state{margin-left:auto}
 .lingsi-team-name{flex:1;min-width:0;overflow-wrap:anywhere}
-.lingsi-team-av{font-size:12px}
+.lingsi-team-av{font-size:var(--fs-caption)}
 @media(max-width:600px){
   .lingsi-run-overview>header{flex-wrap:wrap}
   .lingsi-run-toggle,.lingsi-run-inspect{min-height:44px}

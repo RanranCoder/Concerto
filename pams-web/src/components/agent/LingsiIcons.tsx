@@ -48,6 +48,15 @@ export function Book({ size = 16 }: IconProps) {
   )
 }
 
+export function Memory({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden>
+      <rect x="3" y="2" width="10" height="12" rx="1.5" />
+      <path d="M6 2v12M8.5 5.5h2.3M8.5 8h2.3" />
+    </svg>
+  )
+}
+
 /** 思考中（旋转弧） */
 export function Thinking({ size = 16 }: IconProps) {
   return (

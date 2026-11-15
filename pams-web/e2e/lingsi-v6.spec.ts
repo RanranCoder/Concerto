@@ -58,6 +58,122 @@ async function setup(page:Page) {
 }
 const task=(page:Page,title:string)=>page.locator('.lingsi-conv-select').filter({hasText:title})
 
+test('工具记录按调用显示真实文件名，确认后用回执更新状态', async ({ page }) => {
+  await setup(page)
+  await page.route(url => url.pathname === '/api/agent/conversations/2/messages', route => route.fulfill({ json: { code: 200, data: {
+    records: [
+      { id: 19, role: 'USER', content: '先检索资料，再保存策划书。' },
+      { id: 20, role: 'ASSISTANT', streamId: 'file-actions', content: '资料已检索，修订草稿已保存。', toolCalls: [
+        { tool: 'searchMaterials', label: '材料检索', status: 'OK', argsJson: '{"limit":10}',
+          resultSummary: '匹配到 4 项材料', targets: ['活动策划书.docx', '会议记录.pdf', '签到名单.xlsx', '活动总结.docx'] },
+        { tool: 'readMaterialDocument', label: '读取材料正文', status: 'OK', targets: ['活动策划书.docx'] },
+        { tool: 'preparePlanRevision', label: '准备策划书修订', status: 'OK', actionStatus: 'PENDING_CONFIRM', actionTaskId: 22 },
+      ], taskResult: { status: 'SUCCESS', taskId: 22, artifacts: [
+        { entityType: 'plan', entityId: 55, name: '修订草稿', fileName: '策划书修订草稿.docx' },
+      ] } },
+    ], total: 2,
+  } } }))
+  await task(page, '查询归档要求').click()
+  await page.getByRole('button', { name: /执行过程/ }).click()
+  const search = page.locator('.lingsi-tl-item').filter({ hasText: '材料检索' })
+  const read = page.locator('.lingsi-tl-item').filter({ hasText: '读取材料正文' })
+  const write = page.locator('.lingsi-tl-item').filter({ hasText: '准备策划书修订' })
+  await expect(search).toContainText('匹配到 4 项材料')
+  await expect(search.getByText('活动策划书.docx')).toBeVisible()
+  await expect(search.getByText('活动总结.docx')).toHaveCount(0)
+  await search.getByRole('button', { name: '查看其余 1 项' }).click()
+  await expect(search.getByText('活动总结.docx')).toBeVisible()
+  await expect(read.getByText('活动策划书.docx')).toBeVisible()
+  await expect(write).toContainText('已执行')
+  await expect(write.getByText('策划书修订草稿.docx')).toBeVisible()
+  await expect(page.getByText('查看入参')).toHaveCount(0)
+  await expect(page.locator('.lingsi-process pre')).toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(write.getByText('策划书修订草稿.docx')).toBeVisible()
+})
+
+test('后台受理后显示文字扫光，刷新会话后恢复推理摘要和最终答复', async ({ page }) => {
+  await setup(page)
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  let requestId = ''
+  let submissions = 0
+  let complete = false
+  const streamId = 'background-turn'
+  await page.route('**/api/agent/chat', async route => {
+    submissions += 1
+    const body = route.request().postDataJSON()
+    expect(body.background).toBe(true)
+    requestId = body.requestId
+    await route.fulfill({ json: { code: 200, data: { accepted: true, requestId, streamId } } })
+  })
+  await page.route('**/api/agent/requests/*', route => route.fulfill({ json: { code: 200, data: {
+    requestId, streamId, conversationId: 1, status: complete ? 'SUCCESS' : 'RUNNING', cancelled: false,
+    message: complete ? { id: 20, role: 'ASSISTANT', streamId, provider: 'openai_responses', content: '后台任务已完成。',
+      thinking: [{ round: 0, text: '先核对活动信息，再整理执行清单。' }] } : null,
+  } } }))
+  await page.route('**/api/agent/streams/*', route => route.fulfill({ json: { code: 200, data: { streamId, events: [] } } }))
+  await page.route(url => url.pathname === '/api/agent/conversations/1/messages', route => route.fulfill({ json: { code: 200, data: {
+    records: [{ id: 19, role: 'USER', content: '请核对活动信息。', streamId, activeRequestId: requestId }], total: 1,
+  } } }))
+  const editor = page.getByRole('textbox', { name: '任务内容' })
+  await editor.fill('请核对活动信息。')
+  await editor.press('Enter')
+  const status = page.locator('.lingsi-status-sweep')
+  await expect(status).toBeVisible()
+  await expect(status).toHaveText('正在执行…')
+  await expect(status).toHaveCSS('animation-name', 'lingsi-status-sweep')
+  const highlightPosition = async (progress: number) => {
+    await status.evaluate((element, position) => {
+      const [animation] = element.getAnimations()
+      animation.pause()
+      animation.currentTime = Number(animation.effect!.getComputedTiming().duration) * position
+    }, progress)
+    const png = await status.screenshot({ scale: 'css' })
+    // Measure the blue pixels in the rendered text, including their horizontal position.
+    return page.evaluate(async (base64) => {
+      const response = await fetch(`data:image/png;base64,${base64}`)
+      const bitmap = await createImageBitmap(await response.blob())
+      const { width, height } = bitmap
+      const context = new OffscreenCanvas(width, height).getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const { data } = context.getImageData(0, 0, width, height)
+      let count = 0
+      let position = 0
+      for (let offset = 0; offset < data.length; offset += 4) {
+        if (data[offset + 2] - data[offset] > 75 && data[offset + 2] - data[offset + 1] > 35) {
+          count++
+          position += (offset / 4) % width
+        }
+      }
+      return { count, position: position / Math.max(count, 1) / width }
+    }, png.toString('base64'))
+  }
+  for (const theme of ['light', 'dark']) {
+    await page.locator('html').evaluate((element, value) => element.setAttribute('data-theme', value), theme)
+    const left = await highlightPosition(0.3)
+    const right = await highlightPosition(0.7)
+    expect(left.count).toBeGreaterThan(5)
+    expect(right.count).toBeGreaterThan(5)
+    expect(right.position - left.position).toBeGreaterThan(0.25)
+  }
+  await expect.poll(() => requestId).not.toBe('')
+  await page.reload()
+  await task(page, '准备培训班策划初稿').click()
+  await expect(status).toBeVisible()
+  expect(submissions).toBe(1)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(status).toHaveCSS('animation-name', 'none')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(status).toBeVisible()
+  await expect(page.locator('.lingsi-cursor')).toHaveCount(0)
+  complete = true
+  await expect(page.locator('.lingsi-reply')).toHaveText('后台任务已完成。')
+  await expect(status).toHaveCount(0)
+  const process = page.getByRole('button', { name: /执行过程/ })
+  if (await process.getAttribute('aria-expanded') === 'false') await process.click()
+  await expect(page.locator('.lingsi-tl-label')).toHaveText('先核对活动信息，再整理执行清单。')
+})
+
 test('运行中可补充指令，失败重试保留文本和请求标识', async ({page}) => {
   const {agentModule,errors}=await setup(page)
   const submissions:{ inputId:string; text:string }[]=[]
@@ -184,13 +300,13 @@ for (const dark of [false, true]) test(`输入区交互配色跟随系统主题�
     const a = luminance(style.color), b = luminance(style.backgroundColor)
     return (Math.max(a, b) + .05) / (Math.min(a, b) + .05)
   })
-  const tools = page.getByRole('button', {name:'查看能力', exact:true})
-  await tools.hover()
+  const context = page.getByRole('button', {name:'附加上下文', exact:true})
+  await context.hover()
   await expect(page.getByRole('tooltip')).toBeVisible()
   expect(await contrast('.ant-tooltip-inner:visible')).toBeGreaterThanOrEqual(4.5)
   await expect(page.getByRole('tooltip')).toHaveCSS('background-color', palette['canvas-elevated'])
   await expect(page.getByRole('tooltip')).toHaveCSS('color', palette['text-primary'])
-  await expect(tools).toHaveCSS('background-color', palette['soft-strong'])
+  await expect(context).toHaveCSS('background-color', palette['soft-strong'])
   await capture('tooltip')
   const mode = page.getByRole('combobox', {name:'运行模式'})
   await mode.hover()
@@ -547,9 +663,9 @@ test('实时推理共用连续队列，展开收起不会重播已显示的文�
     }],outcomes:state.outcomes.map((o:object,i:number)=>i===state.outcomes.length-1 ? {...o,reply:'',streamId:'reveal-queue',streaming:true}:o)})
   },{text:reasoning,source:agentModule()})
   const headline = page.locator('.lingsi-tl-think-head .lingsi-tl-label').first()
-  await expect(page.getByRole('button',{name:'展开推理',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'展开摘要',exact:true})).toBeVisible()
   await expect.poll(()=>headline.evaluate(el=>el.firstChild?.nodeType)).toBe(3)
-  await page.getByRole('button',{name:'展开推理',exact:true}).click()
+  await page.getByRole('button',{name:'展开摘要',exact:true}).click()
   await page.evaluate(async source => {
     const {useAgentStore} = await import(source)
     useAgentStore.getState().applyStreamEvent({streamId:'reveal-queue',seq:2,type:'THINKING_DELTA',ts:2,payload:{round:0,text:'追加片段。'.repeat(60)}})
@@ -559,11 +675,11 @@ test('实时推理共用连续队列，展开收起不会重播已显示的文�
   // per-character animations created for that distant part of the queue.
   await expect(body.locator('.pams-stream-pending')).toContainText('追加片段。')
   expect(await body.locator('.pams-stream-char').count()).toBeLessThanOrEqual(12)
-  await page.getByRole('button',{name:'收起推理',exact:true}).click()
+  await page.getByRole('button',{name:'收起摘要',exact:true}).click()
   await expect(headline).toBeVisible()
   expect(await headline.evaluate(el=>getComputedStyle(el).opacity)).toBe('1')
   expect(await headline.evaluate(el=>el.firstChild?.nodeType)).toBe(3)
-  await page.getByRole('button',{name:'展开推理',exact:true}).click()
+  await page.getByRole('button',{name:'展开摘要',exact:true}).click()
   expect(await body.evaluate(el=>el.firstElementChild?.firstChild?.nodeType)).toBe(3)
 
   // A real tool transition must finish the preceding reveal before its status
@@ -606,16 +722,16 @@ test('推理折叠不露正文，展开后不重复摘要', async ({ page }) => 
   await page.locator('.lingsi-process-head').click()
   const body = page.locator('.lingsi-tl-think-body')
   await expect(body).not.toBeVisible()
-  await page.getByRole('button',{name:'展开推理',exact:true}).click()
+  await page.getByRole('button',{name:'展开摘要',exact:true}).click()
   await expect(body).toBeVisible()
   await expect(body).toHaveText(reasoning)
-  await expect(page.locator('.lingsi-tl-think-head .lingsi-tl-label:visible')).toHaveText('推理内容')
+  await expect(page.locator('.lingsi-tl-think-head .lingsi-tl-label:visible')).toHaveText('推理摘要')
   await page.setViewportSize({width:390,height:844})
   await expect(body).toBeVisible()
   const box = await body.boundingBox()
   expect(box!.x+box!.width).toBeLessThanOrEqual(390)
   await page.screenshot({path:resolve(output,'reasoning-expanded-fixed.png'),animations:'disabled'})
-  await page.getByRole('button',{name:'收起推理',exact:true}).click()
+  await page.getByRole('button',{name:'收起摘要',exact:true}).click()
   await expect(body).not.toBeVisible()
 })
 

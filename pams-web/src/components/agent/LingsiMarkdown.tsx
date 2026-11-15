@@ -4,7 +4,7 @@ import { renderMarkdown } from '@/utils/markdown'
 
 interface Props {
   text: string
-  /** 流式未完时在末尾追加光标 */
+  /** 使用流式文本呈现。 */
   streaming?: boolean
   /**
    * 依据条数。>0 时把正文里的 `[n]` 渲染成可点角标。
@@ -69,7 +69,6 @@ export default function LingsiMarkdown({ text, streaming, citeMax = 0, citationI
       }}
     >
       <span ref={contentRef} />
-      {streaming && <span className="lingsi-cursor" />}
     </div>
   )
 }

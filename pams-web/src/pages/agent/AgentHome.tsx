@@ -14,7 +14,7 @@ import LingsiScrollToBottom from '@/components/agent/LingsiScrollToBottom'
 import LingsiToolDrawer from '@/components/agent/LingsiToolDrawer'
 import LingsiMemoryDrawer from '@/components/agent/LingsiMemoryDrawer'
 import LingsiEntityPanel from '@/components/agent/LingsiEntityPanel'
-import { Menu, PanelRight, Toolbox } from '@/components/agent/LingsiIcons'
+import { Memory, Menu, PanelRight } from '@/components/agent/LingsiIcons'
 import { agentStatusLabels, conversationStatus } from '@/utils/agentTask'
 import type { AgentConversationStatus, AgentMode } from '@/api/agent'
 import { getAgentModelStatus, type AgentModelStatus } from '@/api/agentProviders'
@@ -338,7 +338,10 @@ export default function AgentHome() {
       onNew={handleNew}
       onSelect={handleSelect}
       onDelete={handleDelete}
-      onOpenTools={() => setToolsOpen(true)}
+      onOpenTools={() => {
+        setSiderOpen(false)
+        setToolsOpen(true)
+      }}
       onNavigate={() => setSiderOpen(false)}
     />
   )
@@ -372,7 +375,12 @@ export default function AgentHome() {
           )}
           <div className="lingsi-main-title"><h1>{conversation?.title || (currentConversationId ? userTexts[0]?.slice(0,22) || '当前任务' : '新任务')}</h1><small>{currentConversationId ? '当前组织资料与关联活动' : '组织工作，从一句话开始'}</small></div>
           <span className="lingsi-main-head-actions">
-            <button type="button" className="lingsi-icon-btn" onClick={() => setMemoryOpen(true)}>长期记忆</button>
+            <Tooltip title="管理跨会话偏好">
+              <button type="button" className="lingsi-memory-trigger" aria-haspopup="dialog" aria-expanded={memoryOpen} onClick={() => setMemoryOpen(true)}>
+                <Memory size={17} />
+                <span>长期记忆</span>
+              </button>
+            </Tooltip>
             {currentConversationId && <button type="button" className={`lingsi-status-chip status-${currentStatus}`} onClick={() => scrollRef.current?.querySelector('.lingsi-plan, .lingsi-form')?.scrollIntoView({ behavior:'smooth', block:'center' })}>{agentStatusLabels[currentStatus]}</button>}
             {showPanelToggle && (
               <Tooltip title={panelCollapsed ? '展开产物面板' : '收起产物面板'}>
@@ -387,7 +395,6 @@ export default function AgentHome() {
                 </button>
               </Tooltip>
             )}
-            <button type="button" className="lingsi-icon-btn" aria-label="能力与资料范围" title="能力与资料范围" onClick={() => setToolsOpen(true)}><Toolbox size={16}/></button>
           </span>
         </div>
 
@@ -398,7 +405,7 @@ export default function AgentHome() {
                 <Spin />
               </div>
             ) : isEmpty ? (
-              <LingsiEmptyState onPick={handleStarter} onOpenTools={() => setToolsOpen(true)} mode={mode} recent={conversations} onSelect={handleSelect}/>
+              <LingsiEmptyState onPick={handleStarter} mode={mode} recent={conversations} onSelect={handleSelect}/>
             ) : (
               rows.map((r, i) => {
                 const msg = r.outcomeIdx >= 0 ? outcomes[r.outcomeIdx] : undefined
@@ -458,7 +465,6 @@ export default function AgentHome() {
             }
             : undefined}
           onStop={() => void stop()}
-          onOpenTools={() => setToolsOpen(true)}
         />
         </div>
       </div>

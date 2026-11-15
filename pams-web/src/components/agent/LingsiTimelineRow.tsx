@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { EditOutlined } from '@ant-design/icons'
+import { EditOutlined, FileTextOutlined } from '@ant-design/icons'
 import type { TimelineItem } from '@/stores/agent'
 import { agentColorOf, agentShortOf } from '@/styles/categoryColors'
 import { formatDuration } from '@/utils/thinking'
@@ -15,24 +15,10 @@ interface Props {
 /** 长推理、换行或已被标题裁剪的推理需要展开；完整短句直接展示。 */
 const EXPAND_THRESHOLD = 120
 
-/** 进行中的三点脉冲（共用同一套动画；不放 spinner，避免每行都在转） */
-function PendingDots() {
-  return (
-    <span className="lingsi-dots" aria-hidden="true">
-      <span className="lingsi-dot" />
-      <span className="lingsi-dot" />
-      <span className="lingsi-dot" />
-    </span>
-  )
-}
-
-/** 入参 JSON 美化；解析失败就原样显示（后端理论上给 JSON，但不能因此白屏） */
-function prettyArgs(raw: string): string {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
+const TOOL_STATUS: Record<string, string> = {
+  FORM: '待补充信息', WAITING_INPUT: '待补充信息', PENDING_CONFIRM: '待确认', SUCCESS: '已执行', PARTIAL: '部分完成',
+  FAILED: '失败', DENIED: '未获授权', TIMEOUT: '超时', CANCELLED: '已取消', SKIPPED: '已跳过',
+  NEEDS_RECONCILE: '结果待核对',
 }
 
 function icon(item: TimelineItem) {
@@ -41,8 +27,10 @@ function icon(item: TimelineItem) {
       return <Thinking />
     case 'tool':
       // FORM：等用户在弹窗里补全参数（D2.5），琥珀色笔形提示，不算成功也不算失败
-      if (item.completed && item.status === 'FORM') return <EditOutlined />
-      return item.completed ? (item.error ? <Cross /> : <Check />) : <Tool />
+      if (item.completed && (item.status === 'FORM' || item.status === 'WAITING_INPUT')) return <EditOutlined />
+      if (item.status === 'PENDING_CONFIRM') return <Plan />
+      if (item.status === 'CANCELLED' || item.status === 'SKIPPED') return <Aborted />
+      return item.completed ? (toolFailed(item) ? <Cross /> : <Check />) : <Tool />
     case 'plan':
       return <Plan />
     case 'error':
@@ -58,6 +46,10 @@ function icon(item: TimelineItem) {
     default:
       return <Tool />
   }
+}
+
+function toolFailed(item: TimelineItem): boolean {
+  return Boolean(item.error) || ['FAILED', 'DENIED', 'TIMEOUT'].includes(item.status ?? '')
 }
 
 /** 协作者头像：单字 + 身份色（与团队面板、消息身份标识同一套色） */
@@ -102,7 +94,6 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
         <div className="lingsi-tl-think-head" data-expandable={expandable}>
           <span className="lingsi-tl-label" ref={headlineRef} hidden={expanded} />
           {expanded && <span className="lingsi-tl-label">推理摘要</span>}
-          {!finished && <PendingDots />}
           {expandable && (
             <button
               type="button"
@@ -132,7 +123,6 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
  * 过程区的一行。
  *
  * 展示规则（灵思 §7.1）：
- * - 思考中：三点脉冲，不用 spinner（避免每行都在转，视觉噪声大）
  * - 工具执行中：显示「正在…」，完成后补耗时
  * - 失败：**用语义色 --danger**（此前用主色 --brand 表示失败，与"蓝色只做记号"的原则冲突）
  * - 耗时一律走 formatDuration：此前摘要用秒、行内用毫秒原文，同一个数字两种写法
@@ -147,12 +137,12 @@ function ThinkingRow({ item, visible = true, settled = false }: Props) {
  * （其中 agent/collab 行在团队面板同时渲染时由 LingsiProcessZone 让位，避免同一屏出现两遍）
  */
 export default function LingsiTimelineRow({ item, visible = true, settled }: Props) {
-  // 入参下钻的展开态：必须在所有 return 之前声明（hooks 不能放在条件分支后）
-  const [argsOpen, setArgsOpen] = useState(false)
+  const [targetsOpen, setTargetsOpen] = useState(false)
+  const targetsId = useId()
 
   const running = !item.completed
-  const failed = Boolean(item.error)
-  const awaitingInput = item.completed && item.status === 'FORM'
+  const failed = toolFailed(item)
+  const statusLabel = item.kind === 'tool' && item.status ? TOOL_STATUS[item.status] : undefined
 
   // 思维链行单独渲染：它是唯一"内容比标题长"的行类型（可展开读原文）
   if (item.kind === 'thinking' && (item.detail || item.label)) {
@@ -183,10 +173,8 @@ export default function LingsiTimelineRow({ item, visible = true, settled }: Pro
 
   const agentName = item.kind === 'agent' ? item.agent ?? '' : ''
   const duration = formatDuration(item.durationMs)
-  // V36：只有后端下发了入参（normal 级工具）才有下钻入口；null/空串都视为不可下钻。
-  // 结果（result）按设计不落库（agent_tool_call 不含结果内容），所以这里只展示入参
-  const argsRaw = (item.argsJson ?? '').trim()
-  const canDrill = argsRaw.length > 0
+  const targets = item.targets ?? []
+  const more = targets.length - 3
 
   return (
     <div className={`lingsi-tl-item${failed ? ' lingsi-tl-row-failed' : ''}`}>
@@ -196,33 +184,35 @@ export default function LingsiTimelineRow({ item, visible = true, settled }: Pro
         </span>
         <span
           className={`lingsi-tl-label${running || failed ? ' lingsi-tl-label-active' : ''}${
-            failed || awaitingInput ? '' : ' lingsi-tl-label-clamp'
+            failed ? '' : ' lingsi-tl-label-clamp'
           }`}
         >
           {item.label}
           {item.kind === 'collab' && item.status && <span className="lingsi-tl-mode">{item.status}</span>}
-          {running && (item.kind === 'tool' || item.kind === 'agent') && <PendingDots />}
-          {failed && <span className="lingsi-tl-error"> · {item.error}</span>}
-          {awaitingInput && <span className="lingsi-tl-warn"> · 等待填写表单</span>}
-          {canDrill && (
-            <button
-              type="button"
-              className="lingsi-tl-args-toggle"
-              onClick={() => setArgsOpen((v) => !v)}
-              aria-expanded={argsOpen}
-            >
-              {argsOpen ? '收起入参' : '查看入参'}
-            </button>
-          )}
+          {statusLabel && <span className="lingsi-tl-tool-status" data-status={item.status}>{statusLabel}</span>}
+          {item.error && <span className="lingsi-tl-error"> {item.error}</span>}
         </span>
-        {item.completed && !failed && !awaitingInput && duration && (
+        {item.completed && duration && (
           <span className="lingsi-tl-meta">{duration}</span>
         )}
       </div>
-      {canDrill && argsOpen && (
-        <pre className="lingsi-tl-args" aria-label={`${item.label} 的调用入参`}>
-          {prettyArgs(argsRaw)}
-        </pre>
+      {(item.resultSummary || targets.length > 0) && (
+        <div className="lingsi-tl-result">
+          {item.resultSummary && <p>{item.resultSummary}</p>}
+          {targets.length > 0 && (
+            <ul id={targetsId} aria-label={`${item.label}的相关对象`}>
+              {(targetsOpen ? targets : targets.slice(0, 3)).map(name => (
+                <li key={name}><FileTextOutlined aria-hidden="true" /><span>{name}</span></li>
+              ))}
+            </ul>
+          )}
+          {more > 0 && (
+            <button type="button" className="lingsi-tl-target-toggle" aria-expanded={targetsOpen} aria-controls={targetsId}
+              onClick={() => setTargetsOpen(open => !open)}>
+              {targetsOpen ? '收起' : `查看其余 ${more} 项`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

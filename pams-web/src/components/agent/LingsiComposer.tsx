@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { AgentChatRef, AgentMode } from '@/api/agent'
 import { listActivities } from '@/api/activity'
 import type { ActivityVO } from '@/api/activity'
-import { ArrowUp, Close, Plan, Plus, Rules, Sparkles, Stop, Toolbox } from './LingsiIcons'
+import { ArrowUp, Close, Plan, Plus, Rules, Sparkles, Stop } from './LingsiIcons'
 import GlassSelect from '@/components/glass/GlassSelect'
 import type { GlassSelectOption } from '@/components/glass/GlassSelect'
 import type { AgentModelStatus } from '@/api/agentProviders'
@@ -41,7 +41,6 @@ interface Props {
   onSend: (text: string) => void
   onInstruct?: (text: string, inputId: string) => Promise<unknown>
   onStop: () => void
-  onOpenTools: () => void
 }
 
 interface ActivityOption {
@@ -88,7 +87,6 @@ export default function LingsiComposer({
   onSend,
   onInstruct,
   onStop,
-  onOpenTools,
 }: Props) {
   const [value, setValue] = useState('')
   const [instructionPending, setInstructionPending] = useState(false)
@@ -292,12 +290,6 @@ export default function LingsiComposer({
                   </button>
                 </Tooltip>
               </Popover>
-
-              <Tooltip title="我当前会做什么">
-                <button type="button" className="lingsi-composer-tool" aria-label="查看能力" onClick={onOpenTools}>
-                  <Toolbox size={16} /><span>工具</span>
-                </button>
-              </Tooltip>
             </div>
 
             <div className="lingsi-composer-settings">

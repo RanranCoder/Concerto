@@ -32,7 +32,7 @@ const FAILED_STATUSES = new Set(['FAILED', 'TIMEOUT', 'DENIED'])
 export default function LingsiMetaBar({ provider, degraded, durationMs, toolCalls }: Props) {
   const isStub = provider === 'stub' || degraded
   const toolCount = toolCalls?.length ?? 0
-  const failed = toolCalls?.filter((t) => t.status && FAILED_STATUSES.has(t.status)).length ?? 0
+  const failed = toolCalls?.filter((t) => FAILED_STATUSES.has(t.actionStatus ?? t.status)).length ?? 0
 
   if (!isStub && toolCount === 0 && durationMs <= 0) return null
 

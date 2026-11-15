@@ -5,7 +5,7 @@ import {
   hasTeamPanel,
   summarizeTimeline,
 } from '@/utils/thinking'
-import { Caret, Thinking } from './LingsiIcons'
+import { Caret } from './LingsiIcons'
 import LingsiTimelineRow from './LingsiTimelineRow'
 
 interface Props {
@@ -26,7 +26,7 @@ function groupTitles(groups: ReturnType<typeof groupTimeline>): string[] {
     if (group.kind === 'narration') return '编排'
     if (group.kind === 'reasoning') {
       reasoning += 1
-      return `第 ${reasoning} 段推理`
+      return `推理摘要 ${reasoning}`
     }
     return '执行'
   })
@@ -78,11 +78,8 @@ export default function LingsiProcessZone({ items, active, resultStarted = false
     return (
       <div className="lingsi-process">
         <span className="lingsi-process-head lingsi-process-head-live" aria-live="polite">
-          <span className="lingsi-process-slot" aria-hidden="true">
-            <Thinking size={13} />
-          </span>
           <span className="lingsi-process-slot" aria-hidden="true" />
-          <span>{resultStarted ? '正在生成结果…' : '正在理解你的问题…'}</span>
+          <span className="lingsi-status-sweep">{resultStarted ? '正在生成结果…' : '正在执行…'}</span>
         </span>
       </div>
     )
@@ -92,7 +89,10 @@ export default function LingsiProcessZone({ items, active, resultStarted = false
   const visible = teamPanel ? items.filter((i) => i.kind !== 'agent' && i.kind !== 'collab') : items
   const groups = groupTimeline(visible)
   const titles = groupTitles(groups)
-  const summary = (active && resultStarted ? '正在生成结果…' : summarizeTimeline(visible, active))
+  const last = visible.at(-1)
+  const summary = (active && resultStarted ? '正在生成结果…'
+    : active && last?.kind === 'thinking' && last.detail && !last.completed ? '正在推理…'
+    : summarizeTimeline(visible, active))
     .replaceAll(' · ', ' / ').replace(/^已完成/, teamOverview ? '已记录' : '已完成')
 
   return (
@@ -104,12 +104,8 @@ export default function LingsiProcessZone({ items, active, resultStarted = false
         aria-expanded={open}
         aria-controls={bodyId}
       >
-        {/* 固定槽位：进行中放脉冲图标、结束后留空 —— 图标出现/消失不再推动文字左右跳 */}
-        <span className="lingsi-process-slot" aria-hidden="true">
-          {active ? <Thinking size={13} /> : null}
-        </span>
         <Caret size={13} open={open} />
-        <span><span className="lingsi-process-label">执行过程</span> {summary}</span>
+        <span><span className="lingsi-process-label">执行过程</span> <span className={active ? 'lingsi-status-sweep' : undefined}>{summary}</span></span>
       </button>
 
       <div className="pams-collapse" data-open={open} aria-hidden={!open} {...(!open ? { inert: '' } : {})}>

@@ -163,15 +163,17 @@ describe('timelineFromMessage：历史回放同时含推理与工具', () => {
     expect(built.map((i) => i.label)).toEqual(['第一段', '第二段'])
   })
 
-  it('入参下钻只认后端给的 argsJson：null 就是不可下钻', () => {
+  it('历史时间轴展示工具返回的文件和结果摘要', () => {
     const built = timelineFromMessage({
       toolCalls: [
-        { tool: 'query', label: '查询活动', status: 'SUCCESS', durationMs: 10, write: false, sensitivity: 'NORMAL', argsJson: '{"activityId":7}' },
+        { tool: 'searchMaterials', label: '材料检索', status: 'OK', durationMs: 10, write: false, sensitivity: 'NORMAL',
+          argsJson: '{"limit":10}', resultSummary: '匹配到 1 项材料', targets: ['活动策划书.docx'] },
         { tool: 'queryParty', label: '查党员', status: 'SUCCESS', durationMs: 10, write: false, sensitivity: 'SENSITIVE', argsJson: null },
       ],
     })
-    expect(built[0].argsJson).toBe('{"activityId":7}')
-    expect(built[1].argsJson, 'sensitive 级后端给 null → 前端不猜、不给入口').toBeUndefined()
+    expect(built[0]).toMatchObject({ resultSummary: '匹配到 1 项材料', targets: ['活动策划书.docx'] })
+    expect(built[0]).not.toHaveProperty('argsJson')
+    expect(built[1].targets).toBeUndefined()
   })
 
   it('hasTeamPanel 与团队面板渲染条件同源（否则过程区会把信息藏掉）', () => {
