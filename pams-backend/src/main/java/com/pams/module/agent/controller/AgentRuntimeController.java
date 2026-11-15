@@ -65,13 +65,14 @@ public class AgentRuntimeController {
         out.put("instructionsConsumed", request.getSteeringConsumed());
         if(request.getRunId()!=null) out.put("run",scheduler.view(request.getRunId(),ToolContext.current(null,null)));
         if(request.getStreamId()!=null) out.put("actions",tasks.findByStreamIdAndUserIdOrderByIdAsc(request.getStreamId(),user.getId()).stream().map(t->gate.detail(t.getId(),user.getId())).toList());
-        if(request.getConversationId()!=null) {
-            var page=conversations.messages(request.getConversationId(),user.getId(),1,100,ToolContext.current(request.getConversationId(),request.getStreamId()));
-            out.put("message",page.getRecords().stream().filter(m->"ASSISTANT".equals(m.get("role")) && Objects.equals(request.getStreamId(),m.get("streamId"))).reduce((a,b)->b).orElse(null));
-            if(out.get("message")!=null && "RUNNING".equals(request.getStatus())) out.put("status","SUCCESS");
+        if(request.getConversationId()!=null && request.getStreamId()!=null) {
+            out.put("message", conversations.requestMessage(request.getConversationId(), user.getId(), request.getStreamId(),
+                    ToolContext.current(request.getConversationId(), request.getStreamId())));
         }
-        if("RUNNING".equals(request.getStatus()) && request.getRunId()==null && request.getUpdatedAt().isBefore(RuntimeIdentity.STARTED) && out.get("message")==null) {
-            requests.finish(request.getStreamId(),"INTERRUPTED");out.put("status","INTERRUPTED");
+        if ("RUNNING".equals(request.getStatus()) && request.getRunId() == null && request.getUpdatedAt().isBefore(RuntimeIdentity.STARTED)) {
+            String recovered = out.get("message") == null ? "INTERRUPTED" : "SUCCESS";
+            requests.finish(request.getStreamId(), recovered);
+            out.put("status", recovered);
         }
         return Result.ok(out);
     }

@@ -66,12 +66,7 @@ public class AgentController {
 
     /* ================================================================= 对话 */
 
-    /**
-     * 提问（同步返回最终答复；过程事件经 WebSocket 实时推送）。
-     *
-     * <p>同步是刻意的：过程可见性由 {@code /user/queue/agent/stream} 保证，
-     * 不必为了"看起来是异步"而牺牲"返回值就是答案"的简单性。
-     */
+    /** 网页可先获取受理回执，再通过请求状态接口和 WebSocket 跟踪执行。 */
     @PostMapping("/chat")
     @PreAuthorize("isAuthenticated()")
     public Result<Map<String, Object>> chat(@RequestBody Map<String, Object> body,
@@ -90,8 +85,12 @@ public class AgentController {
         Object collabRaw = body.get("collab");
         boolean collab = !(collabRaw instanceof Boolean) || (Boolean) collabRaw;
 
-        return Result.ok(orchestrator.chatSync(message, conversationId,
-                ctx(user, conversationId, str(body.get("mode"))).withRequestId(str(body.get("requestId"))).withTimezone(str(body.get("timezone"))), extractRefs(body.get("refs")), collab));
+        ToolContext context = ctx(user, conversationId, str(body.get("mode")))
+                .withRequestId(str(body.get("requestId"))).withTimezone(str(body.get("timezone")));
+        var refs = extractRefs(body.get("refs"));
+        return Result.ok(Boolean.TRUE.equals(body.get("background"))
+                ? orchestrator.submitChat(message, conversationId, context, refs, collab)
+                : orchestrator.chatSync(message, conversationId, context, refs, collab));
     }
 
     /** 中止一次进行中的回答（编排器在下一个阶段边界退出） */

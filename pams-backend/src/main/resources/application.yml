@@ -61,10 +61,10 @@ pams:
   # 若两者都为空，LlmConfig 会自动降级为 stub 规则模式（不阻塞启动，离线可演示）。
   agent:
     provider: openai
-    protocol: ${PAMS_AGENT_PROTOCOL:openai_chat_completions}
+    protocol: ${PAMS_AGENT_PROTOCOL:openai_responses}
     base-url: ${PAMS_AGENT_BASE_URL:https://api.openai.com/v1}
     model: ${PAMS_AGENT_MODEL:}
-    timeout-ms: 30000
+    timeout-ms: ${PAMS_AGENT_TIMEOUT_MS:120000}
     word-renderer: ${PAMS_AGENT_WORD_RENDERER:}
     word-pdf-text: ${PAMS_AGENT_WORD_PDF_TEXT:}
     max-tokens: 8192

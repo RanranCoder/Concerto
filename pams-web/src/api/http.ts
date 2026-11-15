@@ -3,6 +3,12 @@ import type { AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { message } from '@/utils/feedback'
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    silentError?: boolean
+  }
+}
+
 export class ApiError extends Error {
   code: number
   constructor(code: number, msg: string) {
@@ -35,12 +41,14 @@ http.interceptors.response.use(
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }
-    message.error(err.response?.data?.message ?? err.message)
+    if (!err.config?.silentError) message.error(err.response?.data?.message ?? err.message)
     return Promise.reject(err)
   },
 )
 
-export function get<T>(url: string, params?: object) { return http.get(url, { params }) as unknown as Promise<T> }
+export function get<T>(url: string, params?: object, config?: AxiosRequestConfig) {
+  return http.get(url, { ...config, params }) as unknown as Promise<T>
+}
 export function post<T>(url: string, data?: object, config?: AxiosRequestConfig) {
   return http.post(url, data, config) as unknown as Promise<T>
 }

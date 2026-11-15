@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AxiosError } from 'axios'
 import * as api from '@/api/agent'
 import { flushStreamDeltas, useAgentStore } from './agent'
 import type { AgentChatResponse, AgentMessageVO, AgentTaskVO, AgentRunView } from '@/api/agent'
@@ -10,6 +11,53 @@ beforeEach(()=>{
   vi.mocked(api.listConversations).mockResolvedValue({records:[],total:0,current:1,size:50,pendingTaskCount:0})
 })
 describe('灵思任务切换与停止',()=>{
+  it('并行调用同一个工具时，结束事件将文件归到对应的调用', async () => {
+    let finish!: (value: AgentChatResponse) => void
+    vi.mocked(api.agentChat).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const pending = useAgentStore.getState().sendMessage('分别读取两份材料')
+    const { activeRequestId, applyStreamEvent } = useAgentStore.getState()
+    const common = { requestId: activeRequestId, tool: 'readMaterialDocument' }
+    const base = { streamId: 'tool-stream', ts: 1 }
+    applyStreamEvent({ ...base, seq: 1, type: 'TOOL_START', payload: { ...common, label: '正在读取附件…' } })
+    applyStreamEvent({ ...base, seq: 2, type: 'TOOL_START', payload: { ...common, label: '正在读取附件…' } })
+    applyStreamEvent({ ...base, seq: 3, type: 'TOOL_END', payload: { ...common, startSeq: 1,
+      label: '读取材料正文', status: 'OK', targets: ['方案.docx'] } })
+    applyStreamEvent({ ...base, seq: 4, type: 'TOOL_END', payload: { ...common, startSeq: 2,
+      label: '读取材料正文', status: 'OK', targets: ['总结.docx'] } })
+    expect(useAgentStore.getState().timeline).toMatchObject([
+      { seq: 1, label: '读取材料正文', targets: ['方案.docx'] },
+      { seq: 2, label: '读取材料正文', targets: ['总结.docx'] },
+    ])
+    finish(reply(1, '已读两份材料'))
+    await pending
+  })
+
+  it.each(['accepted', 'timeout'])('受理回执为 %s 时继续跟踪同一请求并恢复最终结果', async receipt => {
+    vi.mocked(api.agentChat).mockImplementationOnce(async (_message, _conversation, _mode, _refs, _collab, requestId) => {
+      if (receipt === 'timeout') throw new AxiosError('timeout of 30000ms exceeded', 'ECONNABORTED')
+      return { accepted: true, requestId: requestId!, streamId: 'background-turn' }
+    })
+    vi.mocked(api.getAgentRequest).mockImplementation(async requestId => ({
+      requestId, streamId: 'background-turn', conversationId: 1, status: 'RUNNING', cancelled: false,
+    }))
+    vi.mocked(api.agentStreamSince).mockResolvedValue({ streamId: 'background-turn', since: 0, events: [] })
+    await useAgentStore.getState().sendMessage('继续等候结果')
+    await vi.waitFor(() => expect(useAgentStore.getState().currentConversationId).toBe(1))
+    expect(useAgentStore.getState().thinking).toBe(true)
+    const requestId = useAgentStore.getState().activeRequestId!
+    vi.mocked(api.getAgentRequest).mockResolvedValue({
+      requestId, streamId: 'background-turn', conversationId: 1, status: 'SUCCESS', cancelled: false,
+      message: { id: 10, role: 'ASSISTANT', content: '已保存的结果', thinking: [{ round: 0, text: '公开摘要' }] } as AgentMessageVO,
+    })
+    vi.mocked(api.agentStreamSince).mockResolvedValue({ streamId: 'background-turn', since: 0, events: [{
+      streamId: 'background-turn', seq: 1, type: 'MESSAGE_DONE', ts: 1, payload: { requestId, messageId: 10, reply: '实时完整结果' },
+    }] })
+    await useAgentStore.getState().reconcileConnection()
+    expect(useAgentStore.getState().outcomes[0]).toMatchObject({ reply: '实时完整结果', streaming: false, thinking: [{ text: '公开摘要' }] })
+    expect(useAgentStore.getState().thinking).toBe(false)
+    expect(api.agentChat).toHaveBeenCalledTimes(1)
+  })
+
   it('刷新未完成的会话后恢复同一个请求，并保留补充指令',async()=>{
     vi.mocked(api.listMessages).mockResolvedValue({records:[{
       role:'USER',content:'查询资料',streamId:'steering-stream',activeRequestId:'steering-request',

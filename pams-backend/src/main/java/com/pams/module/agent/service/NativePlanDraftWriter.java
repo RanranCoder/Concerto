@@ -33,6 +33,8 @@ public class NativePlanDraftWriter {
         this.pageReview = pageReview;
     }
 
+    public static final String FILE_NAME = "策划书草稿.docx";
+
     public record SavedDraft(ActivityPlan plan, WordPageReview.Report pageReview) {}
 
     @Transactional(rollbackFor = Exception.class)
@@ -149,7 +151,7 @@ public class NativePlanDraftWriter {
 
     private record DocumentFile(byte[] bytes) implements MultipartFile {
         public String getName() { return "document"; }
-        public String getOriginalFilename() { return "策划书草稿.docx"; }
+        public String getOriginalFilename() { return FILE_NAME; }
         public String getContentType() { return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; }
         public boolean isEmpty() { return bytes.length == 0; }
         public long getSize() { return bytes.length; }

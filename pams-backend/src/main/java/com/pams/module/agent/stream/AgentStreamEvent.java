@@ -3,6 +3,7 @@ package com.pams.module.agent.stream;
 import com.pams.module.agent.registry.AgentCatalog;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -219,6 +220,15 @@ public record AgentStreamEvent(String streamId, int seq, String type,
         p.put("durationMs", durationMs);
         if (error != null) p.put("error", error);
         return of(streamId, seq, TOOL_END, p);
+    }
+
+    public static AgentStreamEvent toolEnd(String streamId, int seq, int startSeq, Map<String, Object> call) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("startSeq", startSeq);
+        for (String key : List.of("tool", "label", "status", "durationMs", "error", "actionStatus", "actionTaskId", "resultSummary", "targets")) {
+            if (call.containsKey(key)) payload.put(key, call.get(key));
+        }
+        return of(streamId, seq, TOOL_END, payload);
     }
 
     public static AgentStreamEvent planReady(String streamId, int seq, Map<String, Object> plan) {

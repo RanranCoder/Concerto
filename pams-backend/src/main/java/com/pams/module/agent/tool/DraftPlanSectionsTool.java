@@ -224,7 +224,8 @@ public class DraftPlanSectionsTool implements WriteAgentTool {
 
             List<Map<String, Object>> refs = new ArrayList<>();
             refs.add(ToolArgs.map("type", "activity", "id", activityId,
-                    "label", "活动 " + activityId + " 策划书", "link", "/activities/" + activityId + "?tab=plan&planId=" + saved.getId()));
+                    "label", "活动 " + activityId + " 策划书", "fileName", word == null ? null : com.pams.module.agent.service.NativePlanDraftWriter.FILE_NAME,
+                    "link", "/activities/" + activityId + "?tab=plan&planId=" + saved.getId()));
 
             return new CommitResult("SUCCESS", 1, 0,
                     "已生成策划书草稿（第 " + saved.getVersion() + " 版，草稿状态），"

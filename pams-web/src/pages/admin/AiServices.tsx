@@ -8,11 +8,10 @@ import { activateProvider, deleteProvider, listProviders, resetProvider, savePro
   type ProviderDraft, type ProviderListing, type ProviderTest, type ProviderView } from '@/api/agentProviders'
 import './ai-services.css'
 
-const protocols = [{ value: 'openai_chat_completions', label: 'Chat Completions' }, { value: 'openai_responses', label: 'Responses' }]
-const protocolName = (value?: string) => protocols.find(p => p.value === value)?.label || '—'
+const protocolName = (value?: string) => value === 'openai_responses' ? 'Responses' : value === 'openai_chat_completions' ? 'Chat Completions（旧配置）' : '—'
 const contextWindows = [128, 262, 500, 1000].map(k => ({ value: k * 1000, label: `${k}k` }))
 const windowName = (value?: number | null) => contextWindows.find(option => option.value === value)?.label ?? value?.toLocaleString('zh-CN') ?? '—'
-const blank: ProviderDraft = { displayName: '', protocol: 'openai_chat_completions', baseUrl: '', modelId: '', apiKey: '', summaryEnabled: false, contextWindowTokens: 128000 }
+const blank: ProviderDraft = { displayName: '', protocol: 'openai_responses', baseUrl: '', modelId: '', apiKey: '', summaryEnabled: false, contextWindowTokens: 128000 }
 
 export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => void }) {
   const { message, modal } = App.useApp()
@@ -21,7 +20,7 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
   const [busy, setBusy] = useState(false), [testing, setTesting] = useState(false), [result, setResult] = useState<ProviderTest>()
   const [formError, setFormError] = useState(''), [form] = Form.useForm<ProviderDraft>()
   const revision = useRef(0), alive = useRef(true)
-  const protocol = Form.useWatch('protocol', form)
+  const summaryEnabled = Form.useWatch('summaryEnabled', form)
   const opened = editing !== undefined
   const reportError = (e: unknown) => errorText(e, '操作失败，请重试')
   const reload = async () => {
@@ -42,11 +41,10 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
     if (dirty) modal.confirm({ title: '放弃未保存的服务配置？', content: '尚未保存的修改将丢失。', okText: '放弃修改', cancelText: '继续编辑', onOk: discard })
     else discard()
   }
-  const changed = (values: Partial<ProviderDraft>) => {
+  const changed = () => {
     revision.current++; setDirty(true); setResult(undefined); setFormError('')
-    if (values.protocol === 'openai_chat_completions') form.setFieldValue('summaryEnabled', false)
   }
-  const draft = async () => ({ ...await form.validateFields(), id: editing?.id, version: editing?.version })
+  const draft = async () => ({ ...await form.validateFields(), protocol: blank.protocol, id: editing?.id, version: editing?.version })
   const requireStorage = async () => {
     if (data?.encryptionReady) return true
     const current = await listProviders()
@@ -104,6 +102,7 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
           { label: '当前服务', value: <Space wrap><strong>{active?.displayName || '部署配置'}</strong><StatusTag tone={active || data.deploymentAvailable ? 'success' : 'neutral'}>{active ? '组织默认' : data.deploymentAvailable ? '部署默认' : '规则模式'}</StatusTag></Space> },
           { label: '接口协议', value: protocolName(active?.protocol || data.deploymentProtocol) },
           { label: '请求模型', value: active?.modelId || (data.deploymentAvailable ? data.deploymentModel : '—') },
+          ...(active ? [{ label: '思考展示', value: active.summaryEnabled ? '已开启' : '已关闭' }] : []),
           { label: '上下文窗口', value: windowName(active?.contextWindowTokens ?? data.deploymentContextWindowTokens) },
           { label: '最近测试', value: active?.testedAt ? `${dayjs(active.testedAt).format('YYYY-MM-DD HH:mm:ss')} · ${active.testStatus === 'PASSED' ? '测试通过' : '测试失败'}` : '未提供测试记录' },
         ]} />
@@ -113,7 +112,7 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
     </Panel>
     {error && <LoadError message={error} retry={() => void reload()} />}
     {data && !data.encryptionReady && <Alert showIcon type="warning" message="密钥存储尚未就绪" description="系统自动初始化未完成，请检查服务端存储状态。可以先新增并填写信息，存储恢复后重试。" />}
-    <Panel title="服务配置" description="选择原生接口协议，填写服务端点和请求模型。" extra={<Space wrap><Button aria-label="刷新服务配置" icon={<ReloadOutlined />} disabled={busy || testing} loading={loading} onClick={() => void reload()} /><Button type="primary" icon={<PlusOutlined />} disabled={busy || testing} onClick={() => startEdit(null)}>新增服务</Button></Space>}>
+    <Panel title="服务配置" description="填写支持 Responses 的服务地址和请求模型。" extra={<Space wrap><Button aria-label="刷新服务配置" icon={<ReloadOutlined />} disabled={busy || testing} loading={loading} onClick={() => void reload()} /><Button type="primary" icon={<PlusOutlined />} disabled={busy || testing} onClick={() => startEdit(null)}>新增服务</Button></Space>}>
       {loading && !data ? <Skeleton active /> : data?.items.length ? <div className="ai-service-list">{data.items.map(item => <article className="ai-service-record" key={item.id}>
         <div className="ai-service-record-heading"><strong>{item.displayName}</strong><Space wrap>{item.id === data.defaultId && <StatusTag tone="brand">默认服务</StatusTag>}<StatusTag tone={item.testStatus === 'PASSED' ? 'success' : item.testStatus === 'FAILED' ? 'danger' : 'neutral'}>{item.testStatus === 'PASSED' ? '测试通过' : item.testStatus === 'FAILED' ? '测试失败' : '未验证'}</StatusTag></Space></div>
         <dl className="ai-service-fields"><div><dt>接口协议</dt><dd>{protocolName(item.protocol)}</dd></div><div><dt>请求模型</dt><dd>{item.modelId}</dd></div><div className="ai-service-url"><dt>Base URL</dt><dd>{item.baseUrl}</dd></div></dl>
@@ -129,8 +128,10 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
       <Form form={form} layout="vertical" disabled={busy || testing} initialValues={blank} onValuesChange={changed} autoComplete="off">
         <FormSection title="服务信息" description="显示名称用于系统标识，请求模型 ID 原样发送给服务。">
           <Form.Item name="displayName" label="显示名称" rules={[{ required: true, whitespace: true, message: '请填写显示名称' }, { max: 50 }]}><Input maxLength={50} placeholder="例如：组织智能助手" /></Form.Item>
-          <Form.Item name="protocol" label="接口协议" rules={[{ required: true }]}><Select options={protocols} /></Form.Item>
-          <Form.Item name="baseUrl" label="Base URL" extra={`填写 API 根地址；系统追加 ${protocol === 'openai_responses' ? '/responses' : '/chat/completions'}。`} rules={[{ required: true, whitespace: true, message: '请填写 API 根地址' }, { max: 2048 }, { validator: (_, value: string) => {
+          <Form.Item label="接口协议" htmlFor="ai-service-protocol" extra={editing?.protocol === 'openai_chat_completions' ? '保存此配置会切换到 Responses。请先验证当前服务地址和模型。' : undefined}>
+            <Input id="ai-service-protocol" value="Responses" readOnly />
+          </Form.Item>
+          <Form.Item name="baseUrl" label="Base URL" extra="填写 API 根地址，系统自动追加 /responses。" rules={[{ required: true, whitespace: true, message: '请填写 API 根地址' }, { max: 2048 }, { validator: (_, value: string) => {
             if (!value) return Promise.resolve()
             try { const url = new URL(value.trim()); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || /\/(chat\/completions|responses)\/?$/.test(url.pathname)) throw new Error(); return Promise.resolve() }
             catch { return Promise.reject(new Error('请填写有效 API 根地址，不包含完整接口路径或查询参数')) }
@@ -140,12 +141,12 @@ export default function AiServices({ onDirty }: { onDirty: (dirty: boolean) => v
           <Form.Item name="contextWindowTokens" label="上下文窗口" extra="设置 Agent 的本地预算上限。请选择所用模型支持的档位。">
             <Select options={contextWindows} placeholder={`沿用部署配置（${windowName(data?.deploymentContextWindowTokens)}）`} />
           </Form.Item>
-          {protocol === 'openai_responses' && <Form.Item name="summaryEnabled" label="请求推理摘要" valuePropName="checked" extra="仅支持此能力的模型可返回摘要；摘要不是完整思维链。"><Switch /></Form.Item>}
+          <Form.Item name="summaryEnabled" label="开启思考展示" valuePropName="checked" extra="在 Agent 执行过程中显示模型返回的推理摘要。需要模型和服务支持。"><Switch aria-label="开启思考展示" /></Form.Item>
         </FormSection>
       </Form>
       <p className="admin-note">测试将发送少量固定内容并验证流式响应与工具调用，可能产生少量费用，不发送组织业务资料。保存后可在列表中设为默认。</p>
       {formError && <Alert type="error" showIcon message={formError} />}
-      {result && <Alert showIcon type={result.success ? 'success' : 'error'} message={result.message} description={`${result.durationMs} ms${protocol === 'openai_responses' ? ` · 推理摘要${result.summaryAvailable ? '已返回' : '未返回'}` : ''}${result.success ? ' · 请保存当前配置以保留测试结果' : ''}`} />}
+      {result && <Alert showIcon type={result.success ? 'success' : 'error'} message={result.message} description={`${result.durationMs} ms${summaryEnabled ? ` / 推理摘要${result.summaryAvailable ? '已返回' : '未返回'}` : ''}${result.success ? ' / 请保存当前配置以保留测试结果' : ''}`} />}
     </FormSurface>
   </div>
 }

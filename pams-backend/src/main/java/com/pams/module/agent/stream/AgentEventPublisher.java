@@ -160,7 +160,6 @@ public class AgentEventPublisher {
         }
         if(sid!=null && java.util.Set.of("MESSAGE_DONE","ERROR","ABORTED").contains(event.type())) {
             finished.add(sid);
-            if(requests!=null && identities.containsKey(sid)) requests.finish(sid,"ABORTED".equals(event.type())?"CANCELLED":"ERROR".equals(event.type())?"FAILED":"SUCCESS");
         }
     }
 

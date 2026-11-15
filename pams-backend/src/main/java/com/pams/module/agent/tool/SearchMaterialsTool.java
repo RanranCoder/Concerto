@@ -90,11 +90,11 @@ public class SearchMaterialsTool implements AgentTool {
                         "id", id,
                         "name", name,
                         "bizType", m.get("bizType"),
-                        "fileName", m.get("fileName"),
+                        "fileName", m.get("originFilename"),
                         "createdAt", m.get("createdAt")
                 ));
                 if (name != null) names.add(String.valueOf(name));
-                refs.add(ToolArgs.map("type", "material", "id", id, "label", name,
+                refs.add(ToolArgs.map("type", "material", "id", id, "label", name, "fileName", m.get("originFilename"),
                         "link", "/archive/material?id=" + id));
             }
 

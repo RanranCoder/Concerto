@@ -95,4 +95,11 @@ public interface AgentTaskRepository extends JpaRepository<AgentTask, Long> {
     @Query("update AgentTask t set t.status = :status, t.resultJson = :result, t.finishedAt = :ts, t.rowVersion = t.rowVersion + 1 where t.id = :id")
     void finish(@Param("id") Long id, @Param("status") String status,
                 @Param("result") String result, @Param("ts") LocalDateTime ts);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("update AgentTask t set t.status = :status, t.resultJson = :result, t.finishedAt = :ts, t.rowVersion = t.rowVersion + 1 "
+            + "where t.id = :id and t.status = 'RUNNING' and t.executionOwner = :owner")
+    int finishOwned(@Param("id") Long id, @Param("owner") String owner, @Param("status") String status,
+                    @Param("result") String result, @Param("ts") LocalDateTime ts);
 }

@@ -54,12 +54,18 @@ public class PlanAttachmentService {
     }
     /** Called only after PlanService.getEntity has enforced the version's read policy. */
     public org.springframework.core.io.Resource documentResource(ActivityPlan plan) {
+        var path=storage.physicalPath(documentRecord(plan).getPath());
+        if(!Files.isRegularFile(path)) throw new BizException(4001,"文件不存在");
+        return new org.springframework.core.io.FileSystemResource(path);
+    }
+    public String documentFilename(ActivityPlan plan) {
+        return documentRecord(plan).getFilename();
+    }
+    private com.pams.module.archive.entity.FileRecord documentRecord(ActivityPlan plan) {
         if(plan.getDocumentFileId()==null) throw new BizException(4001,"此版本尚无原生文档");
         var rec=records.findById(plan.getDocumentFileId()).orElseThrow(() -> new BizException(4001,"文件不存在"));
         if(!Objects.equals(rec.getOrgId(),plan.getOrgId())) throw new BizException(4001,"文件不存在");
-        var path=storage.physicalPath(rec.getPath());
-        if(!Files.isRegularFile(path)) throw new BizException(4001,"文件不存在");
-        return new org.springframework.core.io.FileSystemResource(path);
+        return rec;
     }
     public void validate(PlanRequest request,ToolContext ctx) {
         var ids=new HashSet<Long>();

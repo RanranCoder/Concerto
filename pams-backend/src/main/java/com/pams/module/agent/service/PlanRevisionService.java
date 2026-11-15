@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 /** Snapshot-bound Word revision, version check and durable save receipt. */
 @Service
 public class PlanRevisionService {
+    private static final String REVISION_FILENAME = "策划书修订草稿.docx";
     private static final String BLOCK_EDITS = "BLOCK_EDITS";
     private final com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
     private final JdbcTemplate db;
@@ -200,7 +201,8 @@ public class PlanRevisionService {
         var detail = ToolArgs.map("planId", id, "version", p.getVersion());
         if (reviewJson != null) detail.put("wordPageReview", json.readValue(reviewJson, Map.class));
         return new WriteAgentTool.CommitResult("SUCCESS",1,0,"已创建 Word 修订草稿，原稿保留。",detail,
-                List.of(ToolArgs.map("type","activity","id",p.getActivityId(),"label","策划书修订草稿","link","/activities/"+p.getActivityId()+"?tab=plan&planId="+id)));
+                List.of(ToolArgs.map("type","activity","id",p.getActivityId(),"label","策划书修订草稿",
+                        "fileName", REVISION_FILENAME, "link","/activities/"+p.getActivityId()+"?tab=plan&planId="+id)));
     }
     /** Read the durable business receipt independently of expired source snapshots. Never commits a revision. */
     @Transactional(readOnly=true)
@@ -220,7 +222,7 @@ public class PlanRevisionService {
         return Optional.of(receipt(result.getId(), (String)row.get("page_review_json")));
     }
     private record BytesFile(byte[] bytes) implements org.springframework.web.multipart.MultipartFile {
-        public String getName(){return "document";}public String getOriginalFilename(){return "策划书修订草稿.docx";}
+        public String getName(){return "document";}public String getOriginalFilename(){return REVISION_FILENAME;}
         public String getContentType(){return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";}
         public boolean isEmpty(){return bytes.length==0;}public long getSize(){return bytes.length;}
         public byte[] getBytes(){return bytes.clone();}public InputStream getInputStream(){return new ByteArrayInputStream(bytes);}

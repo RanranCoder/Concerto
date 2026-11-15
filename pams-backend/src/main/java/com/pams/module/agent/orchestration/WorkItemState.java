@@ -26,6 +26,7 @@ public class WorkItemState {
     private final AgentTaskRepository tasks;
     private final AgentMessageRepository messages;
     private final ApplicationEventPublisher events;
+    private final RuntimeLease runtimeLease;
     private final ObjectMapper json = new ObjectMapper();
     private final PolicyGuard policy = new PolicyGuard();
     @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.registry.AgentRegistry agentRegistry;
@@ -35,8 +36,10 @@ public class WorkItemState {
     @org.springframework.beans.factory.annotation.Autowired private com.pams.module.agent.service.AgentRequestService requests;
 
     public WorkItemState(AgentRunRepository runs, AgentWorkItemRepository items, AgentStepRepository steps,
-                         AgentTaskRepository tasks, AgentMessageRepository messages, ApplicationEventPublisher events) {
+                         AgentTaskRepository tasks, AgentMessageRepository messages, ApplicationEventPublisher events,
+                         RuntimeLease runtimeLease) {
         this.runs=runs; this.items=items; this.steps=steps; this.tasks=tasks; this.messages=messages; this.events=events;
+        this.runtimeLease=runtimeLease;
     }
     public AgentRun owned(Long id, Long uid) {
         AgentRun run=runs.findByIdAndUserId(id,uid).orElseThrow(()->new BizException(4004,"协作任务不存在"));
@@ -265,8 +268,7 @@ public class WorkItemState {
     public void recover(Long runId,Long userId) {
         owned(runId,userId); AgentRun run=lock(runId);
         if(run.getDispatchToken()!=null) {
-            boolean previousProcess=run.getDispatchOwner()!=null && !RuntimeIdentity.ID.equals(run.getDispatchOwner()) && run.getDispatchStartedAt()!=null && run.getDispatchStartedAt().isBefore(RuntimeIdentity.STARTED);
-            if(!previousProcess && run.getDispatchStartedAt()!=null && run.getDispatchStartedAt().isAfter(LocalDateTime.now().minusMinutes(30))) return;
+            if (!dispatchExpired(run)) return;
             run.setDispatchToken(null); run.setDispatchOwner(null); run.setDispatchStartedAt(null);
             for(var n:nodes(runId)) if("RUNNING".equals(n.getStatus()) && n.getActionTaskId()==null) {
                 n.setStatus("FAILED"); n.setOutputText("执行中断，可手动重试此步骤。"); items.save(n);
@@ -446,9 +448,13 @@ public class WorkItemState {
         if(run.isCancelRequested() || run.getStreamId()!=null && requests.byStream(run.getStreamId()).map(AgentRequest::isCancelled).orElse(false))
             throw new java.util.concurrent.CancellationException("本次执行已停止");
     }
-    private boolean uncertain(AgentTask action) {
-        return "RESULT_UNKNOWN".equals(action.getStatus()) || AgentTask.RUNNING.equals(action.getStatus()) && (action.getExecutionOwner()!=null && !RuntimeIdentity.ID.equals(action.getExecutionOwner())
-            || action.getConfirmedAt()!=null && action.getConfirmedAt().isBefore(RuntimeIdentity.STARTED) && action.getExecutionOwner()==null);
+    public boolean dispatchExpired(AgentRun run) {
+        return run.getDispatchToken() != null && runtimeLease.expired(run.getDispatchOwner(), run.getDispatchStartedAt());
+    }
+
+    public boolean uncertain(AgentTask action) {
+        return "RESULT_UNKNOWN".equals(action.getStatus()) || AgentTask.RUNNING.equals(action.getStatus())
+                && runtimeLease.expired(action.getExecutionOwner(), action.getConfirmedAt());
     }
     @Transactional
     public String cancel(Long id,Long uid) {

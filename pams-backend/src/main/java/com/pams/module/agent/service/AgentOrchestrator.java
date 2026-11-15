@@ -159,31 +159,54 @@ public class AgentOrchestrator {
         return managed(message,conversationId,ctx,streamId,refs,collabEnabled);
     }
 
-    /** 发起异步编排（用于显式要求后台执行的场景），立即返回 streamId */
     public String chatAsync(String message, Long conversationId, ToolContext ctx) {
-        String streamId = publisher.newStream("st", ctx == null ? null : ctx.getUserId());
-        agentExecutor.execute(() -> {
-            try {
-                managed(message, conversationId, ctx, streamId, List.of(), true);
-            } catch (Exception e) {
-                log.error("灵思异步编排失败：stream={}", streamId, e);
-            }
-        });
-        return streamId;
+        return (String) submitChat(message, conversationId, ctx, List.of(), true).get("streamId");
+    }
+
+    public Map<String, Object> submitChat(String message, Long conversationId, ToolContext ctx,
+                                          List<Map<String, Object>> refs, boolean collab) {
+        if (conversationId != null) conversations.require(conversationId, ctx.getUserId());
+        String streamId = publisher.newStream("st", ctx.getUserId());
+        ToolContext bound = publisher.bind(streamId, ctx);
+        try {
+            agentExecutor.execute(() -> {
+                try {
+                    executeTurn(message, conversationId, bound, streamId, refs, collab);
+                } catch (RuntimeException failure) {
+                    log.error("灵思异步编排失败：stream={}", streamId, failure);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException rejected) {
+            if (requests != null) requests.finish(streamId, "FAILED");
+            publisher.clear(streamId);
+            throw new com.pams.common.BizException(429, "当前执行队列已满，请稍后重试");
+        }
+        return Map.of("accepted", true, "requestId", bound.getRequestId(), "streamId", streamId);
     }
 
     /* ===================================================================== 主流程 */
     private Map<String,Object> managed(String message,Long conversationId,ToolContext ctx,String streamId,List<Map<String,Object>> refs,boolean collab) {
-        ToolContext bound=publisher.bind(streamId,ctx);
+        return executeTurn(message, conversationId, publisher.bind(streamId, ctx), streamId, refs, collab);
+    }
+
+    private Map<String, Object> executeTurn(String message, Long conversationId, ToolContext bound,
+                                            String streamId, List<Map<String, Object>> refs, boolean collab) {
+        String status = "FAILED";
         try {
             if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
-            return run(message,conversationId,bound,streamId,refs,collab);
+            if (requests != null && !requests.live(requests.owned(bound.getRequestId(), bound.getUserId()))) {
+                throw new com.pams.common.BizException(403, "请求权限已变化，请基于当前权限重新发起");
+            }
+            var result = run(message,conversationId,bound,streamId,refs,collab);
+            status = "FAILED".equals(result.get("executionState")) ? "FAILED" : "SUCCESS";
+            return result;
         } catch(java.util.concurrent.CancellationException cancelled) {
+            status = "CANCELLED";
             String reply="本次生成已停止。已提交的业务动作请查看执行结果。";
             var request=requests==null?null:requests.byStream(streamId).orElse(null);
             Long actualConversation=request==null?conversationId:request.getConversationId();
             Long messageId=null;
-            if(actualConversation!=null && messageRows!=null) {
+            if(actualConversation!=null && messageRows!=null && !messageRows.findByStreamIdAndRole(streamId,AgentMessage.ROLE_USER).isEmpty()) {
                 var existing=messageRows.findByStreamIdAndRole(streamId,AgentMessage.ROLE_ASSISTANT);
                 if(existing.isEmpty()) {
                     var saved=conversations.save(actualConversation,AgentMessage.ROLE_ASSISTANT,reply,Sensitivity.NORMAL,reply,null,List.of(),streamId,"",0,bound.getMode(),null);
@@ -196,7 +219,12 @@ public class AgentOrchestrator {
             out.put("conversationId",actualConversation);out.put("messageId",messageId);out.put("executionState","CANCELLED");out.put("reply",reply);return out;
         } catch(RuntimeException failure) {
             emit(bound,AgentStreamEvent.error(streamId,publisher.nextSeq(streamId),"请求未完成，请恢复请求状态后重试。"));throw failure;
-        } finally { thinkingTrace.clear(streamId);publisher.clear(streamId);llmCaller.endTask(streamId); }
+        } finally {
+            thinkingTrace.clear(streamId);
+            publisher.clear(streamId);
+            llmCaller.endTask(streamId);
+            if (requests != null) requests.finish(streamId, status);
+        }
     }
 
     private Map<String, Object> run(String message, Long conversationId, ToolContext ctx, String streamId,
@@ -396,26 +424,39 @@ public class AgentOrchestrator {
                     // 留存档位取本轮最严：碰过敏感数据的轮次，答复与思维链都不再按 NORMAL 全量留存
                     turnSensitivity = Sensitivity.max(turnSensitivity, tool.sensitivity());
 
-                    emit(ctx, AgentStreamEvent.toolEnd(streamId, publisher.nextSeq(streamId),
-                            tool.name(), tool.label(), result.status(), cost, result.error()));
                     recordToolRow(convId, ctx, streamId, tool, call, result.status(), cost, result.error());
                     // 审计是旁路：任何异常都不得影响主链路（outcome 已产出，用户不该因为
                     // "审计写不进去"而看不到结果）
                     safeAudit(ctx, tool, call, result);
 
-                    toolCallVo.add(toolCallEntry(tool, result.status(), cost, result.error(), call.arguments()));
+                    var toolEntry = toolCallEntry(tool, result.status(), cost, result.error(), call.arguments());
+                    toolCallVo.add(toolEntry);
                     if (result.references() != null && !result.references().isEmpty()) {
                         allReferences.addAll(result.references());
                     }
 
-                    if(publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
-                    if (!pendingInstructions(streamId, steeringCursor, false).isEmpty()
-                            && (result.plan() != null || result.needsInput())) {
+                    ToolOutcomeHandler.PendingAction action = null;
+                    try {
+                        if (publisher.isAborted(streamId)) throw new java.util.concurrent.CancellationException();
+                        if ((result.plan() == null && !result.needsInput()) || pendingInstructions(streamId, steeringCursor, false).isEmpty()) {
+                            action = outcomeHandler.prepare(ctx, tool, result, call);
+                        } else {
+                            toolEntry.put("actionStatus", "SKIPPED");
+                        }
+                    } catch (java.util.concurrent.CancellationException cancelled) {
+                        toolEntry.put("actionStatus", "CANCELLED");
+                        throw cancelled;
+                    } catch (RuntimeException failure) {
+                        toolEntry.put("actionStatus", "FAILED");
+                        throw failure;
+                    } finally {
+                        ToolCallDisplay.attach(toolEntry, tool, result, action, policyGuard);
+                        emit(ctx, AgentStreamEvent.toolEnd(streamId, publisher.nextSeq(streamId), seq, toolEntry));
+                    }
+                    if (action == null) {
                         messages.add(LlmProvider.ChatMessage.toolResult(call.id(), "收到用户的新指令，旧方案未提交。"));
                         continue;
                     }
-                    // Both execution strategies share the same action persistence and event contract.
-                    ToolOutcomeHandler.PendingAction action = outcomeHandler.prepare(ctx,tool,result,call);
                     if (action.receipt() != null) {
                         Object receipt = action.receipt().get("result");
                         if (receipt instanceof Map<?,?> details && details.get("references") instanceof List<?> references) {
@@ -488,10 +529,8 @@ public class AgentOrchestrator {
         } catch (java.util.concurrent.CancellationException cancelled) { throw cancelled;
         } catch (Exception e) {
             log.error("灵思编排失败：stream={}", streamId, e);
-            emit(ctx, AgentStreamEvent.error(streamId, publisher.nextSeq(streamId),
-                    e.getMessage() == null ? "服务异常" : e.getMessage()));
-            reply = "抱歉，处理时出现异常：" + (e.getMessage() == null ? "未知错误" : e.getMessage())
-                    + "\n\n你可以换一种问法，或稍后再试。";
+            collaborationState = "FAILED";
+            reply = "处理时出现异常，请稍后重试。";
         }
 
         // ===== ⑧ 落库 + 收官事件 =====
@@ -523,6 +562,7 @@ public class AgentOrchestrator {
         conversations.touch(convId);
 
         Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("messageId", saved.getId());
         extra.put("degraded", degraded);
         extra.put("provider", providerName);
         extra.put("executionState", collaborationState);

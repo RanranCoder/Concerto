@@ -87,6 +87,28 @@ class OpenAiNativeProtocolsTest {
         assertThat(text.toString()).isEqualTo("回答"); assertThat(summary.toString()).isEqualTo("摘要");
         assertThat(response.nativeItems()).hasSize(2); assertThat(text.toString()+summary).doesNotContain("opaque-state");
     }
+    @Test void responsesUsesFinalSummaryWhenStreamingEventsAreMissing() {
+        contentType = "text/event-stream";
+        replies.add("data: {\"type\":\"response.completed\",\"response\":" + nativeOutput().replace("\n", "") + "}\n\n");
+        var summary = new StringBuilder();
+        new OpenAiResponsesProvider(endpoint("openai_responses"), 3000, local)
+                .chatStream(request(List.of()), piece -> {}, summary::append);
+        assertThat(summary).hasToString("公开摘要");
+        assertThat(requests.getFirst().path("reasoning").path("summary").asText()).isEqualTo("auto");
+    }
+    @Test void responsesIgnoresUnsolicitedSummaryWhenDisplayIsDisabled() {
+        contentType = "text/event-stream";
+        replies.add("data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"摘要\"}\n\n"
+                + "data: {\"type\":\"response.completed\",\"response\":" + nativeOutput().replace("\n", "") + "}\n\n");
+        var enabled = endpoint("openai_responses");
+        var disabled = new ModelEndpoint(enabled.protocol(), enabled.baseUrl(), enabled.apiKey(), enabled.model(), false);
+        var summary = new StringBuilder();
+        var response = new OpenAiResponsesProvider(disabled, 3000, local)
+                .chatStream(request(List.of()), piece -> {}, summary::append);
+        assertThat(summary).isEmpty();
+        assertThat(response.reasoningContent()).isNull();
+        assertThat(requests.getFirst().has("reasoning")).isFalse();
+    }
     @Test void truncatedStreamsFailInsteadOfReportingSuccess() {
         contentType="text/event-stream";replies.add("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n");
         assertThatThrownBy(()->new OpenAiResponsesProvider(endpoint("openai_responses"),3000,local)

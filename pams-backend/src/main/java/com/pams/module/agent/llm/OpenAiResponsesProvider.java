@@ -43,36 +43,58 @@ public final class OpenAiResponsesProvider implements LlmProvider {
     public ChatResponse chat(ChatRequest request) { return parse(transport.send("/responses", body(request, false), null)); }
     private ChatResponse parse(JsonNode root) {
         if (!"completed".equals(root.path("status").asText())) throw new IllegalStateException("Responses 响应未完成");
-        var text = new StringBuilder(); var summary = new StringBuilder();
+        var text = new StringBuilder(); var summary = new StringJoiner("\n\n");
         var calls = new ArrayList<ToolCallRequest>(); var items = new ArrayList<Map<String,Object>>();
         if (!root.path("output").isArray()) throw new IllegalStateException("Responses 响应缺少 output");
         for (var item : root.path("output")) {
             items.add(JSON.convertValue(item, new com.fasterxml.jackson.core.type.TypeReference<>() {}));
             switch (item.path("type").asText()) {
                 case "message" -> { for (var part : item.path("content")) if ("output_text".equals(part.path("type").asText())) text.append(part.path("text").asText()); }
-                case "reasoning" -> { for (var part : item.path("summary")) if ("summary_text".equals(part.path("type").asText())) summary.append(part.path("text").asText()); }
+                case "reasoning" -> {
+                    if (endpoint.summary()) for (var part : item.path("summary")) {
+                        String value = part.path("text").asText();
+                        if ("summary_text".equals(part.path("type").asText()) && !value.isBlank()) summary.add(value);
+                    }
+                }
                 case "function_call" -> calls.add(new ToolCallRequest(item.path("call_id").asText(), item.path("name").asText(), OpenAiTransport.arguments(item.path("arguments"))));
                 default -> throw new IllegalStateException("Responses 返回未启用的输出类型");
             }
         }
         var u = root.path("usage"); Usage usage = u.has("input_tokens") ? new Usage(u.path("input_tokens").asLong(), u.path("output_tokens").asLong(),
                 u.path("input_tokens_details").has("cached_tokens") ? u.path("input_tokens_details").path("cached_tokens").asLong() : null, null) : null;
-        return new ChatResponse(text.toString(), calls, name(), false, summary.isEmpty() ? null : summary.toString(), usage,
+        return new ChatResponse(text.toString(), calls, name(), false, summary.length() == 0 ? null : summary.toString(), usage,
                 root.path("model").asText(endpoint.model()), "completed", List.copyOf(items));
     }
     public ChatResponse chatStream(ChatRequest request, Consumer<String> output) { return chatStream(request, output, null); }
     public ChatResponse chatStream(ChatRequest request, Consumer<String> output, Consumer<String> summary) {
         JsonNode[] completed = {null};
+        var summaryParts = new HashSet<SummaryPart>();
         transport.send("/responses", body(request, true), event -> {
-            switch (event.path("type").asText()) {
+            String type = event.path("type").asText();
+            switch (type) {
                 case "response.output_text.delta" -> output.accept(event.path("delta").asText());
-                case "response.reasoning_summary_text.delta" -> { if (summary != null) summary.accept(event.path("delta").asText()); }
+                case "response.reasoning_summary_text.delta", "response.reasoning_summary_text.done" -> {
+                    if (!endpoint.summary() || summary == null) break;
+                    boolean delta = type.endsWith(".delta");
+                    String piece = event.path(delta ? "delta" : "text").asText();
+                    if (piece.isEmpty()) break;
+                    var part = new SummaryPart(event.path("output_index").asInt(), event.path("summary_index").asInt());
+                    boolean separate = !summaryParts.isEmpty();
+                    boolean first = summaryParts.add(part);
+                    if (first || delta) summary.accept(first && separate ? "\n\n" + piece : piece);
+                }
                 case "response.completed" -> completed[0] = event.path("response");
                 case "response.failed", "response.incomplete", "error" -> throw new IllegalStateException("Responses 流返回失败或不完整状态");
                 default -> { /* Other lifecycle events do not contain display text. */ }
             }
         });
         if (completed[0] == null) throw new IllegalStateException("Responses 流提前结束");
-        return parse(completed[0]);
+        var response = parse(completed[0]);
+        if (summary != null && summaryParts.isEmpty() && response.reasoningContent() != null) {
+            summary.accept(response.reasoningContent());
+        }
+        return response;
     }
+
+    private record SummaryPart(int outputIndex, int summaryIndex) {}
 }

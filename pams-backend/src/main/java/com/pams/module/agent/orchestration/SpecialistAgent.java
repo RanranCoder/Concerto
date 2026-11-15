@@ -105,7 +105,8 @@ public class SpecialistAgent {
                     invocations.add(new ToolInvocation(call.name(),call.name(),"DENIED","工具不可用或超出专家作用域",0));
                     messages.add(LlmProvider.ChatMessage.toolResult(call.id(),"工具不可用或超出专家作用域")); state="FAILED"; continue;
                 }
-                emit(ctx,streamId,AgentStreamEvent.toolStart(streamId,publisher.nextSeq(streamId),tool.name(),tool.runningLabel()));
+                int startSeq = publisher.nextSeq(streamId);
+                emit(ctx,streamId,AgentStreamEvent.toolStart(streamId,startSeq,tool.name(),tool.runningLabel()));
                 long start=System.currentTimeMillis();
                 ToolResult result;
                 try { result=ToolOutcomeHandler.execute(toolRegistry,ctx,call); }
@@ -119,16 +120,22 @@ public class SpecialistAgent {
                 Map<String,Object> row=new LinkedHashMap<>();
                 row.put("tool",tool.name()); row.put("label",tool.label()); row.put("status",result.status());
                 row.put("durationMs",duration); row.put("write",tool.writeOperation()); row.put("sensitivity",tool.sensitivity().name().toLowerCase());
+                if (result.error() != null) row.put("error", result.error());
                 row.put("argsJson",policy.egressArgs(tool.sensitivity(),audit.toJson(call.arguments()))); row.put("ts",start);
                 rows.add(row);
                 publisher.recordToolCall(ctx.getConversationId(),null,streamId,publisher.nextSeq(streamId),ctx.getUserId(),tool.name(),tool.label(),
                     audit.toJson(call.arguments()),tool.sensitivity().name().toLowerCase(),tool.writeOperation()?"WRITE":"READ",duration,result.status(),result.error());
                 try { audit.log(ctx,tool.name(),call.arguments(),tool.writeOperation()?"PREVIEW":"READ",tool.sensitivity(),result.status()); }
                 catch(Exception ignored) { /* audit is independent of a successful preview */ }
-                emit(ctx,streamId,AgentStreamEvent.toolEnd(streamId,publisher.nextSeq(streamId),tool.name(),tool.label(),result.status(),duration,result.error()));
-                if(aborted(streamId)) { state="CANCELLED"; break; }
-                if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break rounds; }
-                ToolOutcomeHandler.PendingAction pending=outcomes.prepare(ctx,tool,result,call);
+                ToolOutcomeHandler.PendingAction pending = null;
+                try {
+                    if (aborted(streamId)) { state = "CANCELLED"; break; }
+                    if (boundary.superseded().getAsBoolean()) { state = "CANCELLED"; text = "收到补充指令，原步骤已停止。"; break rounds; }
+                    pending = outcomes.prepare(ctx, tool, result, call);
+                } finally {
+                    ToolCallDisplay.attach(row, tool, result, pending, policy);
+                    emit(ctx, streamId, AgentStreamEvent.toolEnd(streamId, publisher.nextSeq(streamId), startSeq, row));
+                }
                 if(pending.waiting()) return new Result(agent,safe,invocations,pending.form()!=null?"WAITING_INPUT":"WAITING_CONFIRM",
                     provider,degraded,sensitivity,pending.plan(),pending.form(),refs,rows);
                 messages.add(LlmProvider.ChatMessage.toolResult(call.id(),safe));

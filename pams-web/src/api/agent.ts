@@ -93,14 +93,12 @@ export interface AgentToolCallEntry {
   write: boolean
   sensitivity: string
   error?: string
+  actionStatus?: string
+  actionTaskId?: number
+  resultSummary?: string
+  targets?: string[]
   /**
-   * 本次调用的入参（V36 工具行下钻）。
-   *
-   * - 值是**遮罩后的明文**（后端 `PolicyGuard.sanitizeArgs`：idCard/phone/mobile 键置 `***`，
-   *   字符串值里的证件/手机/学号过 mask）
-   * - **只有 `sensitivity === 'normal'` 才有值**；sensitive / restricted 一律 `null`
-   * - 因此前端只认这一个字段：`null` = 不可下钻，**不要自己按 sensitivity 猜**
-   * - 流式进行中天然拿不到（回合结束才随消息回来），这是正常的
+   * 兼容旧客户端的脱敏调用参数。执行过程读取结果摘要与工具返回的对象名称。
    */
   argsJson?: string | null
   /**
@@ -200,6 +198,7 @@ export interface AgentArtifact {
   entityType: string
   entityId: number | string | null
   name: string
+  fileName?: string
   path?: string | null
 }
 
@@ -322,6 +321,7 @@ export interface AgentConversationsPage {
 }
 
 export interface AgentMessageVO {
+  runUnavailable?: boolean
   activeRequestId?: string
   instructions?: { id: string; text: string }[]
   instructionsConsumed?: number
@@ -424,6 +424,12 @@ export const getAgentDiagnostics = (mode: AgentMode) => get<AgentDiagnostics>('/
 
 /* ---------------------------------------------------------------- 对话 */
 
+interface AgentChatAccepted {
+  accepted: true
+  requestId: string
+  streamId: string
+}
+
 export const agentChat = (
   message: string,
   conversationId?: number | null,
@@ -435,7 +441,10 @@ export const agentChat = (
    */
   collab: boolean = true,
   requestId?: string,
-) => post<AgentChatResponse>('/agent/chat', { message, conversationId: conversationId ?? null, mode, refs, collab, requestId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+) => post<AgentChatAccepted | AgentChatResponse>('/agent/chat', {
+  message, conversationId: conversationId ?? null, mode, refs, collab, requestId, background: true,
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+}, { silentError: true })
 
 export const agentAbort = (streamId: string) =>
   post<{ streamId: string; aborted: boolean }>(`/agent/chat/${streamId}/abort`)
@@ -445,6 +454,7 @@ export const agentStreamSince = (streamId: string, since = 0) =>
   get<{ streamId: string; since: number; requiresSnapshot?: boolean; lastSeq?: number; events: AgentStreamEvent[] }>(
     `/agent/streams/${streamId}`,
     { since },
+    { silentError: true, timeout: 5000 },
   )
 
 /* ---------------------------------------------------------------- 会话 */
@@ -544,7 +554,7 @@ export interface AgentRequestSnapshot {
 export const instructAgentRequest = (id: string, inputId: string, text: string) =>
   post<{ position: number }>(`/agent/requests/${id}/instructions`, { inputId, text })
 export const abortAgentRequest = (id: string) => post<{ status: string; runId?: number; aborted: boolean }>(`/agent/requests/${id}/abort`)
-export const getAgentRequest = (id: string) => get<AgentRequestSnapshot>(`/agent/requests/${id}`)
+export const getAgentRequest = (id: string) => get<AgentRequestSnapshot>(`/agent/requests/${id}`, undefined, { silentError: true })
 export const cancelAgentRun = (id: number) => post<AgentRunView>(`/agent/team/runs/${id}/cancel`)
 export const getAgentRunEvents = (id: number, since = 0) => get<{ requiresSnapshot: boolean; lastSeq: number; hasMore: boolean; events: { eventSeq: number }[] }>(`/agent/team/runs/${id}/events`, { since })
 

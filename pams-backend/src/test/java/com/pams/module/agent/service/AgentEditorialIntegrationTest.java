@@ -83,7 +83,7 @@ class AgentEditorialIntegrationTest {
         assertThat(reconciliation.reconcile(p.planId(),ctx)).containsEntry("reconciled",false);assertThat(articles.findById(article.getId()).orElseThrow().getContent()).contains("2500");
     }
     @Test void interruptedOrdinaryActionBecomesExplicitUnknownWithoutReplaying()throws Exception{
-        var p=pending(revisionTool,revisionTool.execute(ctx,patch()));actions.claimOwned(p.planId(),"PENDING_CONFIRM","RUNNING",com.pams.module.agent.orchestration.RuntimeIdentity.STARTED.minusSeconds(1),"previous-process");
+        var p=pending(revisionTool,revisionTool.execute(ctx,patch()));actions.claimOwned(p.planId(),"PENDING_CONFIRM","RUNNING",java.time.LocalDateTime.now().minusMinutes(31),"previous-process");
         assertThat(reconciliation.reconcile(p.planId(),ctx)).containsEntry("reconciled",false).containsEntry("status","RESULT_UNKNOWN");
         assertThat(actions.findById(p.planId()).orElseThrow().getStatus()).isEqualTo("RESULT_UNKNOWN");assertThat(articles.findById(article.getId()).orElseThrow().getContent()).contains("2500");
     }

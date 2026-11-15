@@ -86,7 +86,7 @@ public class AgentProviderService {
         return input.trim();
     }
     private ModelEndpoint endpoint(Draft d, Stored old) {
-        String protocol = text(d.protocol, 40, "协议");
+        String protocol = d.protocol == null || d.protocol.isBlank() ? "openai_responses" : text(d.protocol, 40, "协议");
         if (!Set.of("openai_chat_completions", "openai_responses").contains(protocol)) throw new BizException(4400, "不支持的协议");
         String url = urls.validate(text(d.baseUrl, 2048, "Base URL"));
         String key = d.apiKey == null || d.apiKey.isBlank() ? old == null ? null : secrets.decrypt(old.ciphertext) : text(d.apiKey, 4096, "API Key");
@@ -137,7 +137,7 @@ public class AgentProviderService {
         long start = System.nanoTime();
         try {
             var provider = create(endpoint); var cancellation = new LlmCancellation();
-            return cancellation.call(null, () -> false, props.getTimeoutMs() * 3L, () -> {
+            return cancellation.call(null, () -> false, Math.min(90_000L, props.getTimeoutMs() * 3L), () -> {
                 var prompt = List.of(LlmProvider.ChatMessage.text("user", "Reply with OK."));
                 var plain = provider.chat(new LlmProvider.ChatRequest(prompt, List.of(), 0, 1024));
                 if (plain.content().isBlank()) throw new IllegalStateException("普通请求未返回正文");

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isAxiosError } from 'axios'
 import type {
   AgentActionPlan,
   AgentArtifact,
@@ -31,6 +32,7 @@ let requestTimer: ReturnType<typeof setTimeout> | undefined
 const receivedSeqs = new Set<number>()
 let streamCursor = 0
 let reconcilingVersion: number | undefined
+let uncertainSubmission: { version: number; deadline: number } | undefined
 
 /**
  * 收到这些事件就说明"这一轮的推理已经结束"：模型要么开始调工具、要么开始出正文、要么收官。
@@ -63,6 +65,7 @@ export interface TimelineItem {
    */
   kind: 'thinking' | 'tool' | 'plan' | 'error' | 'aborted' | 'agent' | 'review' | 'collab'
   tool?: string
+  actionTaskId?: number
   label: string
   /**
    * 思维链原文（V35）：kind==='thinking' 时的模型推理正文（可展开阅读）。
@@ -72,11 +75,8 @@ export interface TimelineItem {
   detail?: string
   /** 该行所属的 LLM 调用轮次（thinking 行必有；工具行跟随其所在段） */
   round?: number
-  /**
-   * 工具行的入参（V36 下钻）。**只有后端给了才有值**（`normal` 级工具），
-   * 值为遮罩后的明文；`undefined` 就表示不可下钻 —— 前端不自己按 sensitivity 猜。
-   */
-  argsJson?: string
+  resultSummary?: string
+  targets?: string[]
   status?: string
   durationMs?: number
   error?: string
@@ -140,11 +140,35 @@ export interface OutcomeMessage {
   artifacts: AgentArtifact[]
 }
 
+function retireSupersededCards(outcomes: OutcomeMessage[], index: number) {
+  const { plan, form, run } = outcomes[index]
+  const taskId = form?.taskId ?? plan?.planId
+  for (let i = 0; i < index; i++) {
+    const previous = outcomes[i]
+    if (taskId != null && previous.form?.taskId === taskId) outcomes[i] = { ...previous, form: null }
+    if (plan && !run && previous.plan && !previous.run) {
+      outcomes[i] = {
+        ...outcomes[i], plan: null,
+        notice: { level: 'info', status: 'CANCELLED', text: `已被新的清单「${plan.summary}」取代，未执行`, taskId: previous.plan.planId },
+      }
+    }
+  }
+}
+
+function failedSubmission(state: AgentState, requestId: string, reply: string): Partial<AgentState> {
+  return {
+    thinking: false, stopping: false, activeRequestId: null, activeStreamId: null,
+    outcomes: state.outcomes.map(outcome => outcome.requestId === requestId
+      ? { ...outcome, streaming: false, status: 'failed', reply } : outcome),
+  }
+}
+
 /** 结果块等级（决定配色与图标） */
 export type NoticeLevel = 'success' | 'failed' | 'partial' | 'info'
 
 export interface AgentResultNotice {
   level: NoticeLevel
+  status?: string
   text: string
   /** 关联任务 id（= planId）：用于「确认按钮 REST 返回」与「WS 完成事件」之间的去重 */
   taskId?: number
@@ -212,6 +236,7 @@ function sanitizeArtifacts(raw: unknown): AgentArtifact[] {
       entityType: String(o.entityType ?? o.type ?? 'entity'),
       entityId: (o.entityId ?? o.id ?? null) as AgentArtifact['entityId'],
       name,
+      ...(typeof o.fileName === 'string' && o.fileName.trim() ? { fileName: o.fileName } : {}),
       path: (o.path ?? o.link ?? null) as string | null,
     })
   }
@@ -261,6 +286,7 @@ function noticeFromStatus(
   const body = String(src.message ?? src.summary ?? '').trim()
   return {
     level,
+    status,
     text: body ? `${head}：${body}` : head,
     taskId: src.taskId,
     artifacts: sanitizeArtifacts(src.artifacts),
@@ -367,7 +393,7 @@ interface AgentState {
  * - THINKING_DELTA → **不新起行**：同 round 的推理片段就地拼进已有 thinking 行的 detail，
  *   标题随原文重算。这是"思维链"能读的前提 —— 每个片段一行的话，一次回答会刷出上百行
  * - TOOL_START → 该 seq 预留一行（completed=false，前端显示"进行中"）
- * - TOOL_END → 用 tool 名匹配最近一条未完成的 tool 行并补全
+ * - TOOL_END → 按 startSeq 补全该次调用，旧事件按工具名恢复
  * - seq 单调递增，按 seq 排序 → 乱序到达不错位
  */
 function mergeTimeline(list: TimelineItem[], e: AgentStreamEvent): TimelineItem[] {
@@ -414,6 +440,7 @@ function mergeTimeline(list: TimelineItem[], e: AgentStreamEvent): TimelineItem[
       return next
     }
     case 'TOOL_START':
+      if (list.some(item => item.kind === 'tool' && item.seq === e.seq)) return list
       return [
         ...list,
         {
@@ -428,34 +455,25 @@ function mergeTimeline(list: TimelineItem[], e: AgentStreamEvent): TimelineItem[
       ]
     case 'TOOL_END': {
       const tool = String(p.tool ?? '')
-      // 从后往前找最近的、同名且未完成的工具行（并发同名工具也能正确配对）
-      const idx = [...list].reverse().findIndex((x) => x.kind === 'tool' && x.tool === tool && !x.completed)
-      if (idx === -1) {
-        return [
-          ...list,
-          {
-            key: `tool-${e.seq}`,
-            seq: e.seq,
-            kind: 'tool',
-            tool,
-            label: String(p.label ?? tool),
-            status: String(p.status ?? ''),
-            durationMs: Number(p.durationMs ?? 0),
-            error: p.error ? String(p.error) : undefined,
-            completed: true,
-            ts: e.ts,
-          },
-        ]
-      }
-      const realIdx = list.length - 1 - idx
-      const next = [...list]
-      next[realIdx] = {
-        ...next[realIdx],
-        status: String(p.status ?? ''),
-        durationMs: Number(p.durationMs ?? 0),
+      const startSeq = typeof p.startSeq === 'number' && p.startSeq > 0 ? p.startSeq : undefined
+      const offset = [...list].reverse().findIndex(item => item.kind === 'tool' && !item.completed &&
+        (startSeq == null ? item.tool === tool : item.seq === startSeq))
+      const index = offset === -1 ? -1 : list.length - 1 - offset
+      const previous = list[index]
+      const seq = previous?.seq ?? startSeq ?? e.seq
+      const completed: TimelineItem = {
+        key: `tool-${seq}`, seq, kind: 'tool', tool,
+        label: String(p.label ?? previous?.label ?? tool),
+        status: String(p.actionStatus ?? p.status ?? ''), durationMs: Number(p.durationMs ?? 0),
+        actionTaskId: typeof p.actionTaskId === 'number' ? p.actionTaskId : undefined,
         error: p.error ? String(p.error) : undefined,
-        completed: true,
+        resultSummary: typeof p.resultSummary === 'string' ? p.resultSummary : undefined,
+        targets: Array.isArray(p.targets) ? p.targets.filter((name): name is string => typeof name === 'string') : undefined,
+        completed: true, ts: previous?.ts ?? e.ts,
       }
+      if (index === -1) return [...list, completed]
+      const next = [...list]
+      next[index] = completed
       return next
     }
     case 'ERROR':
@@ -566,9 +584,12 @@ export function timelineFromToolCalls(toolCalls: AgentToolCallEntry[]): Timeline
     kind: 'tool' as const,
     tool: t.tool,
     label: t.label || t.tool,
-    status: t.status,
+    status: t.actionStatus ?? t.status,
+    actionTaskId: t.actionTaskId,
     durationMs: t.durationMs ?? 0,
     error: t.error,
+    resultSummary: t.resultSummary,
+    targets: t.targets,
     completed: true,
     ts: 0,
   }))
@@ -887,6 +908,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         content, get().currentConversationId, get().mode, refs, get().autoCollab, requestId,
       )
       if (version !== requestVersion) return
+      if ('accepted' in res) {
+        set(s => ({
+          activeStreamId: s.thinking ? res.streamId : s.activeStreamId,
+          outcomes: s.outcomes.map(o => o.requestId === requestId ? { ...o, streamId: res.streamId } : o),
+        }))
+        void get().reconcileConnection()
+        return
+      }
       if (requestTimer) clearTimeout(requestTimer)
       set((s) => {
         // 用真实结果替换最后那条占位
@@ -928,38 +957,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
             streaming: false,
           }
         }
-        // Natural-language input continuation returns the same durable task.
-        // Retire its old form instead of leaving two competing input surfaces.
-        const resumedTaskId = res.form?.taskId ?? res.plan?.planId
-        if (resumedTaskId != null) for (let i = 0; i < placeholderIdx; i++) {
-          if (list[i].form?.taskId === resumedTaskId) list[i] = { ...list[i], form: null }
-        }
-        // 多轮「接续」（用户反馈 item 3）：本轮出了新清单 → 会话里旧的确认卡原地退役。
-        // 后端创建新清单时已把旧任务置 CANCELLED；这里让旧卡立刻显式变成"已被取代"，
-        // 避免"首轮确认按钮还在、但上下文已经走了"的错位感（会话中始终只有一张可确认卡）。
-        if (res.plan && !list[placeholderIdx]?.run) {
-          const newSummary = res.plan.summary
-          for (let i = 0; i < list.length - 1; i += 1) {
-            const o = list[i]
-            if (o.plan && !o.run) {
-              list[i] = {
-                ...o,
-                plan: null,
-                notice: {
-                  level: 'info',
-                  text: `已被新的清单「${newSummary}」取代，未执行`,
-                  taskId: o.plan.planId,
-                },
-              }
-            }
-          }
-        }
+        if (placeholderIdx >= 0) retireSupersededCards(list, placeholderIdx)
         return {
           outcomes: list,
           thinking: false,
-          activeRequestId: requestId,
-  stopping: false,
-  activeStreamId: null,
+          activeRequestId: null,
+          stopping: false,
+          activeStreamId: null,
           currentConversationId: res.conversationId,
           pendingPlan: list[placeholderIdx]?.run ? null : res.plan ?? null,
           pendingTaskCount: res.pendingTaskCount ?? s.pendingTaskCount,
@@ -968,16 +972,17 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       void get().fetchConversations()
       const boundRun = get().outcomes.find(o => o.requestId === (res.requestId ?? requestId))?.run
       if (boundRun) void get().refreshRun(boundRun.id)
-    } catch {
+    } catch (error) {
       if (version !== requestVersion) return
-      set((s) => {
-        const list = [...s.outcomes]
-        const idx = list.length - 1
-        if (idx >= 0 && list[idx].streaming) {
-          list[idx] = { ...list[idx], streaming: false, status:'failed', reply: '请求失败，请稍后重试。' }
-        }
-        return { outcomes: list, thinking: false }
-      })
+      const code = isAxiosError(error) ? error.response?.status : undefined
+      if (get().activeStreamId || (isAxiosError(error) && (code == null || code >= 500 || code === 409))) {
+        uncertainSubmission = { version, deadline: Date.now() + 15_000 }
+        void get().reconcileConnection()
+        return
+      }
+      if (requestTimer) clearTimeout(requestTimer)
+      const detail = isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : error instanceof Error ? error.message : undefined
+      set(state => failedSubmission(state, requestId, detail || '请求未受理，请稍后重试。'))
     }
   },
 
@@ -1086,7 +1091,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       }
       if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') {
         next.stopping = false
-        next.thinking = false
+        next.thinking = e.type === 'MESSAGE_DONE' && typeof e.payload?.messageId === 'number'
         next.deltaRound = null
         if(e.type!=='MESSAGE_DONE') next.outcomes=s.outcomes.map((o,i)=>i===s.outcomes.length-1?{...o,streaming:false,status:e.type==='ABORTED'?'stopped':'failed'}:o)
       }
@@ -1098,6 +1103,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           const idx = list.length - 1
           if (idx >= 0) {
             list[idx] = { ...list[idx],
+              messageId: typeof e.payload?.messageId === 'number' ? e.payload.messageId : list[idx].messageId,
+              degraded: typeof e.payload?.degraded === 'boolean' ? e.payload.degraded : list[idx].degraded,
               reply: typeof e.payload?.reply === 'string' ? e.payload.reply : list[idx].reply,
               streaming: false,
               citations: Array.isArray(cits) ? cits as AgentCitation[] : [],
@@ -1115,6 +1122,10 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       // （见文件上方的 deltaBuffer / flushStreamDeltas）
       return next as AgentState
     })
+    if (e.type === 'MESSAGE_DONE' && typeof e.payload?.messageId === 'number' && reconcilingVersion !== requestVersion) {
+      if (requestTimer) clearTimeout(requestTimer)
+      requestTimer = setTimeout(() => { void get().reconcileConnection() }, 0)
+    }
   },
 
   /**
@@ -1164,10 +1175,10 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const requestId = get().activeRequestId
     const conversation = get().currentConversationId
     if (requestTimer) clearTimeout(requestTimer)
-    const stillCurrent = () => requestVersion === version && get().currentConversationId === conversation
+    const stillCurrent = () => requestVersion === version && get().activeRequestId === requestId
     try {
-      // Snapshots first, then events newer than their durable cursor.
-      for (const outcome of get().outcomes) if (outcome.run) {
+      // Requests already include their bound run. Refresh other runs on reconnect.
+      for (const outcome of get().outcomes) if (!get().thinking && outcome.run && (!requestId || outcome.requestId !== requestId)) {
         await get().refreshRun(outcome.run.id)
         if (!stillCurrent()) return
         const run = get().outcomes.find(o=>o.run?.id===outcome.run!.id)?.run
@@ -1179,35 +1190,77 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       }
       if (!requestId) return
       const snapshot = await api.getAgentRequest(requestId)
-      if (!stillCurrent() || get().activeRequestId !== requestId) return
+      if (!stillCurrent()) return
+      if (uncertainSubmission?.version === version) uncertainSubmission = undefined
       const existingRun=get().outcomes.find(o=>o.requestId===requestId)?.run
       const recoveredRun=(snapshot.run?.stateVersion ?? 0) >= (existingRun?.stateVersion ?? 0) ? snapshot.run ?? existingRun : existingRun
       const state = recoveredRun?.status ?? snapshot.status
-      const generating = ['CREATED','RUNNING','STOPPING'].includes(state)
-      set(s => ({ currentConversationId:snapshot.conversationId ?? s.currentConversationId,
-        stopping:state==='STOPPING', thinking:generating,
-        activeStreamId:generating ? snapshot.streamId : null,
-        outcomes:s.outcomes.map(o=>o.requestId!==requestId?o:{...o,
-          streamId:snapshot.streamId, run:recoveredRun ?? o.run, executionState:state,
-          ...(snapshot.message ? {
-            messageId:snapshot.message.id, reply:snapshot.message.content,
-            references:snapshot.message.references ?? [],citations:snapshot.message.citations ?? [],
-            artifacts:snapshot.message.artifacts ?? [],plan:snapshot.run?null:snapshot.message.plan,form:snapshot.run?null:snapshot.message.form,
-            timeline:timelineFromMessage(snapshot.message),toolCalls:snapshot.message.toolCalls ?? [],
-          } : {}),
-          ...(generating ? {} : {streaming:false,notice:undefined,
-            status:snapshot.cancelled?'stopped':state==='INTERRUPTED'?'failed':o.status,
-            reply:snapshot.message?.content ?? (o.reply || (snapshot.cancelled?'本次生成已停止。':'执行已中断，请核对结果后重新发起。'))}),
-        }) }))
-      // A snapshot may bind the newly created conversation; guard with request identity from here on.
-      if (snapshot.streamId && generating && !snapshot.cancelled) {
-        const replay=await api.agentStreamSince(snapshot.streamId,streamCursor)
-        if (version !== requestVersion || get().activeRequestId!==requestId) return
-        if (!replay.requiresSnapshot) for(const event of replay.events) get().applyStreamEvent(event)
+      const generating = ['CREATED', 'RUNNING', 'STOPPING'].includes(snapshot.status)
+      const message = generating ? null : snapshot.message
+      if (snapshot.streamId && !snapshot.cancelled && (generating || message)) {
+        try {
+          const replay = await api.agentStreamSince(snapshot.streamId, streamCursor)
+          if (!stillCurrent()) return
+          for (const event of replay.events) {
+            if (!replay.requiresSnapshot || event.type === 'MESSAGE_DONE') get().applyStreamEvent(event)
+          }
+        } catch { /* The stored snapshot still resolves a completed request. */ }
       }
-      if (generating) requestTimer=setTimeout(()=>{void get().reconcileConnection()},2000)
-    } catch { /* Preserve the last known state, and retry while a request is active. */
-      if (stillCurrent() && (get().thinking || get().stopping)) requestTimer=setTimeout(()=>{void get().reconcileConnection()},3000)
+      if (!stillCurrent()) return
+      const failed = ['FAILED', 'INTERRUPTED'].includes(snapshot.status)
+      set(s => {
+        const index = s.outcomes.findIndex(o => o.requestId === requestId)
+        if (index < 0) return {}
+        const outcomes = [...s.outcomes]
+        const outcome = outcomes[index]
+        const hasLiveResult = message && outcome.messageId === message.id && !message.runUnavailable
+        const streaming = generating && outcome.streaming
+        const savedTimeline = message && timelineFromMessage(message).map(item => {
+          const live = item.detail && s.timeline.find(row => row.detail && row.round === item.round)
+          return live ? { ...item, key: live.key } : item
+        })
+        outcomes[index] = {
+          ...outcome, streamId: snapshot.streamId, run: recoveredRun ?? outcome.run,
+          executionState: message?.executionState ?? state, streaming,
+          ...(message ? {
+            messageId: message.id, reply: hasLiveResult ? outcome.reply : message.content,
+            references: message.references ?? [], citations: message.citations ?? [],
+            artifacts: sanitizeArtifacts(message.artifacts), plan: recoveredRun ? null : message.plan ?? null,
+            form: recoveredRun ? null : message.form ?? null, toolCalls: message.toolCalls ?? [],
+            provider: message.provider ?? '', degraded: hasLiveResult ? outcome.degraded : message.provider === 'stub', durationMs: message.durationMs ?? 0,
+            thinking: message.thinking ?? [], thinkingNotes: message.thinkingNotes ?? [],
+            timeline: savedTimeline || [],
+            notice: message.taskResult ? noticeFromStatus(message.taskResult.status, message.taskResult) : undefined,
+          } : {}),
+          ...(!generating && !message ? {
+            status: snapshot.cancelled ? 'stopped' : failed ? 'failed' : outcome.status,
+            reply: snapshot.cancelled ? '本次生成已停止。' : failed ? '本次执行未完成，请稍后重试。' : outcome.reply,
+          } : {}),
+          ...(!generating && message && (snapshot.cancelled || failed) ? {
+            status: snapshot.cancelled ? 'stopped' : 'failed',
+          } : {}),
+        }
+        if (message) retireSupersededCards(outcomes, index)
+        return {
+          outcomes, currentConversationId: snapshot.conversationId ?? s.currentConversationId,
+          stopping: snapshot.status === 'STOPPING', thinking: generating,
+          activeRequestId: generating ? requestId : null,
+          activeStreamId: streaming ? snapshot.streamId : null,
+          pendingPlan: message ? outcomes[index].plan : s.pendingPlan,
+          timeline: message?.runUnavailable || savedTimeline?.length ? savedTimeline || [] : s.timeline,
+        }
+      })
+      if ((!conversation && snapshot.conversationId) || !generating) void get().fetchConversations()
+      if (generating) requestTimer = setTimeout(() => { void get().reconcileConnection() }, 2000)
+      else if (recoveredRun && ['RUNNING', 'STOPPING'].includes(recoveredRun.status)) void get().refreshRun(recoveredRun.id)
+    } catch (error) {
+      if (!stillCurrent() || !requestId) return
+      const code = isAxiosError(error) ? error.response?.status : undefined
+      if (code === 403 || (code === 404 && uncertainSubmission?.version === version && Date.now() >= uncertainSubmission.deadline)) {
+        set(state => failedSubmission(state, requestId, code === 403 ? '请求权限已变化，请重新发起。' : '未确认任务是否受理，请查看会话后重试。'))
+      } else {
+        requestTimer = setTimeout(() => { void get().reconcileConnection() }, 3000)
+      }
     } finally { if(reconcilingVersion===version) reconcilingVersion=undefined }
   },
 
@@ -1320,7 +1373,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set((s) => ({
       outcomes: s.outcomes.map((o) =>
         o.plan && o.plan.planId === planId
-          ? { ...o, plan: null, executionState: 'CANCELLED', notice: { level: 'info', text: '已取消该操作，未执行写入', taskId: planId, skipped: o.plan.skipped } }
+          ? { ...o, plan: null, executionState: 'CANCELLED', notice: { level: 'info', status: 'CANCELLED', text: '已取消该操作，未执行写入', taskId: planId, skipped: o.plan.skipped } }
           : o,
       ),
       pendingPlan: null,

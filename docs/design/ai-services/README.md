@@ -6,7 +6,9 @@
 
 - 移除 DeepSeekProvider 及其专用请求、推理字段解析／回传逻辑。
 - Chat Completions 与 Responses 分别使用原生请求体、工具调用结构和 SSE 事件；不做协议互转或厂商字段映射。
+- AI 服务表单固定为 Responses。已有 Chat Completions 配置继续按原协议运行，编辑保存时可切换到 Responses。
 - Responses 使用 `store:false`、原生 output items 和加密 reasoning 状态延续工具循环；展示的推理摘要与不透明状态分离。推理摘要可选，未返回摘要不视为失败。
+- 在 AI 服务表单开启「开启思考展示」后，新任务会请求并展示支持该能力的模型返回的推理摘要。
 - 当前组织管理员管理多份服务配置；支持连接测试、设为默认、恢复部署配置、编辑、删除和版本冲突处理。
 - API Key 使用 AES-256-GCM 加密，读取接口只返回 hasApiKey，编辑留空保留。测试凭据绑定组织、配置版本及连接字段，有效期 30 分钟。
 - 普通响应、SSE、虚拟工具调用及工具结果回传全部通过才允许启用。测试内容固定，不发送组织业务资料。
@@ -25,7 +27,8 @@
 | `PAMS_AI_ENCRYPTION_KEY` | 可选显式主密钥；留空时自动生成。已有显式密钥的部署保持原值，所有实例必须一致 |
 | `PAMS_AI_KEY_FILE` | 可选自动密钥文件位置，默认 `./data/secrets/ai-provider.key`；Docker 中使用独立持久化卷 |
 | `PAMS_AI_INTERNAL_HOSTS` | 可选，逗号分隔的内网模型主机白名单，精确匹配；默认空 |
-| `PAMS_AGENT_PROTOCOL` | 部署默认协议：`openai_chat_completions` 或 `openai_responses` |
+| `PAMS_AGENT_PROTOCOL` | 默认 `openai_responses`。旧服务可显式配置 `openai_chat_completions` |
+| `PAMS_AGENT_TIMEOUT_MS` | 单次模型调用的超时，默认 `120000` 毫秒 |
 | `PAMS_AGENT_BASE_URL` | 部署默认 API 根地址，默认 `https://api.openai.com/v1` |
 | `PAMS_AGENT_MODEL` | 部署默认请求模型 ID，需显式填写 |
 | `PAMS_AGENT_API_KEY` | 部署默认 API Key |

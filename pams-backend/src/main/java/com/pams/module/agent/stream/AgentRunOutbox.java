@@ -47,13 +47,11 @@ public class AgentRunOutbox {
             scanCursor=run.getId();Long previous=OrgContext.get();OrgContext.set(run.getOrgId());
             try {
                 var nodes=state.nodes(run.getId()); if(nodes.isEmpty()) continue;
-                boolean staleLease=run.getDispatchToken()!=null && (run.getDispatchStartedAt()!=null && run.getDispatchStartedAt().isBefore(LocalDateTime.now().minusMinutes(30))
-                    || run.getDispatchOwner()!=null && !RuntimeIdentity.ID.equals(run.getDispatchOwner()));
+                boolean staleLease=state.dispatchExpired(run);
                 boolean mismatch=false;
                 for(var n:nodes) if(n.getActionTaskId()!=null) {
                     var a=tasks.findById(n.getActionTaskId()).orElseThrow();
-                    boolean unknown=AgentTask.RUNNING.equals(a.getStatus()) && (a.getExecutionOwner()!=null && !RuntimeIdentity.ID.equals(a.getExecutionOwner())
-                        || a.getExecutionOwner()==null && a.getConfirmedAt()!=null && a.getConfirmedAt().isBefore(RuntimeIdentity.STARTED));
+                    boolean unknown=state.uncertain(a);
                     String status=unknown?"NEEDS_RECONCILE":AgentTask.PENDING_CONFIRM.equals(a.getStatus())?"WAITING_CONFIRM":a.getStatus();
                     if(!status.equals(n.getStatus())) mismatch=true;
                 }

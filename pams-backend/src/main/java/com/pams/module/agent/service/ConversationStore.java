@@ -24,10 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * 会话与上下文（业务设计方案 D8）。
@@ -377,13 +380,34 @@ public class ConversationStore {
         // V26 历史恢复：按 stream_id 一次查出本页消息关联的任务（避免 N+1），
         // 把仍可交互的确认卡/表单卡挂回产生它的那条 assistant 消息
         Map<String, AgentTask> taskByStream = loadInteractiveTasks(conversationId, content, userId);
+        List<Map<String, Object>> records = messageViews(content, taskByStream, ctx);
 
+        PageResult<Map<String, Object>> r = new PageResult<>();
+        r.setRecords(records);
+        r.setTotal(p.getTotalElements());
+        r.setCurrent(page);
+        r.setSize(size);
+        return r;
+    }
+
+    public Map<String, Object> requestMessage(Long conversationId, Long userId, String streamId, ToolContext ctx) {
+        require(conversationId, userId);
+        var message = messageRepository.findByStreamIdAndRole(streamId, AgentMessage.ROLE_ASSISTANT).stream()
+                .filter(row -> Objects.equals(row.getConversationId(), conversationId))
+                .max(Comparator.comparing(AgentMessage::getId));
+        if (message.isEmpty()) return null;
+        var rows = List.of(message.get());
+        return messageViews(rows, loadInteractiveTasks(conversationId, rows, userId), ctx).getFirst();
+    }
+
+    private List<Map<String, Object>> messageViews(List<AgentMessage> content, Map<String, AgentTask> taskByStream,
+                                                    ToolContext ctx) {
         List<Map<String, Object>> records = new ArrayList<>();
         for (AgentMessage m : content) {
             Map<String, Object> vo = toVo(m);
             if (requests != null && AgentMessage.ROLE_USER.equals(m.getRole())) {
                 requests.forMessage(m.getStreamId(), m.getConversationId(), ctx).ifPresent(request -> {
-                    if (request.isSteeringOpen() && !request.isCancelled() && "RUNNING".equals(request.getStatus())
+                    if (Set.of("RUNNING", "STOPPING").contains(request.getStatus())
                             && !request.getUpdatedAt().isBefore(com.pams.module.agent.orchestration.RuntimeIdentity.STARTED)
                             && requests.live(request)) {
                         vo.put("activeRequestId", request.getId());
@@ -433,12 +457,7 @@ public class ConversationStore {
         // 权限收紧必须能撤回历史（方案 G8 / R21）
         revokeUnauthorizedCitations(records, ctx);
 
-        PageResult<Map<String, Object>> r = new PageResult<>();
-        r.setRecords(records);
-        r.setTotal(p.getTotalElements());
-        r.setCurrent(page);
-        r.setSize(size);
-        return r;
+        return records;
     }
 
     /**

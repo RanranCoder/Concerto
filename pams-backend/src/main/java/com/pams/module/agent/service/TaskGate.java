@@ -475,12 +475,14 @@ public class TaskGate {
         if (!registry.visibleTo(tool, ctx)) {
             boolean readonly = ctx.isReadonly() && tool.writeOperation();
             String why = readonly ? "只读模式下不执行写操作" : "确认时权限校验未通过";
-            repository.finish(taskId, AgentTask.FAILED, "{\"message\":\"" + why + "\"}", LocalDateTime.now());
+            repository.finishOwned(taskId, com.pams.module.agent.orchestration.RuntimeIdentity.ID,
+                    AgentTask.FAILED, "{\"message\":\"" + why + "\"}", LocalDateTime.now());
             throw new BizException(4403, readonly ? "当前为只读模式，已阻止该写操作" : "无权限执行该操作");
         }
 
         if (!(tool instanceof WriteAgentTool writeTool)) {
-            repository.finish(taskId, AgentTask.FAILED, "{\"message\":\"该工具不是写类工具\"}", LocalDateTime.now());
+            repository.finishOwned(taskId, com.pams.module.agent.orchestration.RuntimeIdentity.ID,
+                    AgentTask.FAILED, "{\"message\":\"该工具不是写类工具\"}", LocalDateTime.now());
             throw new BizException(4400, "该任务不可执行");
         }
 
@@ -512,12 +514,16 @@ public class TaskGate {
         } catch (Exception e) {
             resultJson = "{\"status\":\"" + status + "\"}";
         }
-        repository.finish(taskId, status, resultJson, LocalDateTime.now());
+        int finishedCount = repository.finishOwned(taskId, com.pams.module.agent.orchestration.RuntimeIdentity.ID,
+                status, resultJson, LocalDateTime.now());
+
+        // Record the actual outcome even if reconciliation already changed the task state.
+        auditService.logWrite(ctx, task, result.affectedCount(), status);
+        if (finishedCount == 0) {
+            return toResultVo(repository.findById(taskId).orElseThrow(), false);
+        }
 
         String executionState = task.getRunId() == null ? null : runService.actionSettled(task,status);
-
-        // 审计留痕（D9，写操作 100% 覆盖）
-        auditService.logWrite(ctx, task, result.affectedCount(), status);
 
         // 推任务完成事件（D7 长任务；前端 useWebSocket 加一个订阅即可）
         Map<String, Object> done = new LinkedHashMap<>();
@@ -720,6 +726,7 @@ public class TaskGate {
             a.put("entityType", r.get("type"));
             a.put("entityId", r.get("id"));
             a.put("name", r.get("label"));
+            if (r.get("fileName") instanceof String filename) a.put("fileName", filename);
             a.put("path", r.get("link") instanceof String link ? com.pams.module.agent.core.BusinessLinks.normalize(link) : null);
             out.add(a);
         }

@@ -74,7 +74,12 @@ public class S5RuntimeProcess {
                 var rows=mapper.readTree(Files.readString(checkpoint));
                 if(rows==null || !rows.isArray() || rows.size()!=2)throw new IllegalStateException("Missing recovery checkpoint cases");
                 var outbox=app.getBean(AgentRunOutbox.class);
-                // Recovery uses the changed JVM identity and persisted action state.
+                var lease=app.getBean(com.pams.module.agent.orchestration.RuntimeLease.class);
+                for (var row : rows) {
+                    if (row.path("uncertain").asBoolean()) {
+                        awaitExpiredLease(lease, tasks.findById(row.path("taskId").asLong()).orElseThrow());
+                    }
+                }
                 for(int i=0;i<10;i++)outbox.reconcile();
                 var evidence=new ArrayList<Map<String,Object>>();
                 for(var row:rows) {
@@ -94,6 +99,15 @@ public class S5RuntimeProcess {
                 Files.writeString(checkpoint.resolveSibling("verified.json"),mapper.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of("status","PASS","actualJvmKilled",true,"cases",evidence)));
             } else throw new IllegalArgumentException(phase);
         } finally {SecurityContextHolder.clearContext();OrgContext.clear();app.close();}
+    }
+
+    static void awaitExpiredLease(com.pams.module.agent.orchestration.RuntimeLease lease, AgentTask task)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(40);
+        while (!lease.expired(task.getExecutionOwner(), task.getConfirmedAt())) {
+            if (System.nanoTime() >= deadline) throw new IllegalStateException("Killed runtime still has a live lease");
+            Thread.sleep(250);
+        }
     }
     private static String hash(String text) throws Exception { return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
 }

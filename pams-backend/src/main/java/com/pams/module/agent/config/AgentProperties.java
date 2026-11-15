@@ -9,11 +9,11 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "pams.agent")
 public class AgentProperties {
     private String provider = "openai";
-    private String protocol = "openai_chat_completions";
+    private String protocol = "openai_responses";
     private boolean summaryEnabled = false;
     private String baseUrl = "https://api.openai.com/v1";
     private String model = "";
-    private int timeoutMs = 30000;
+    private int timeoutMs = 120000;
     private int maxTokens = 8192;
     private double temperature = 0.3;
     private int contextRounds = 6;

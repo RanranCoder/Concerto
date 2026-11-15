@@ -19,6 +19,7 @@ public class ActionReconciliationService {
     private final TaskGate gate;
     private final PlanRevisionService revisions;
     private final AgentRunService runs;
+    private final RuntimeLease runtimeLease;
     private final ObjectMapper json=new ObjectMapper();
     @org.springframework.beans.factory.annotation.Autowired private TaskProgressActionService progress;
     @org.springframework.beans.factory.annotation.Autowired private AgentTaskPlanService taskPlans;
@@ -35,8 +36,9 @@ public class ActionReconciliationService {
         }
         return switch(tool){case "prepareTaskProgressUpdate"->progress.confirmedReceipt(ctx,action);case "prepareTaskPlanChange","generateActivityTasks"->taskPlans.confirmedReceipt(ctx,action,tool);case "sendNotification"->notifications.confirmedReceipt(ctx,action);default->revisions.confirmedReceipt(ctx,action);};
     }
-    public ActionReconciliationService(AgentTaskRepository tasks,ToolRegistry registry,TaskGate gate,PlanRevisionService revisions,AgentRunService runs) {
+    public ActionReconciliationService(AgentTaskRepository tasks,ToolRegistry registry,TaskGate gate,PlanRevisionService revisions,AgentRunService runs,RuntimeLease runtimeLease) {
         this.tasks=tasks;this.registry=registry;this.gate=gate;this.revisions=revisions;this.runs=runs;
+        this.runtimeLease=runtimeLease;
     }
     @Transactional
     public Map<String,Object> reconcile(Long id,ToolContext ctx) throws Exception {
@@ -49,8 +51,8 @@ public class ActionReconciliationService {
                 return response(task,false,"任务保存过成功结果，但当前业务回执无法核实，请人工核对");
             return response(task,true,"已保存实际成功回执");
         }
-        boolean interrupted=AgentTask.RUNNING.equals(task.getStatus()) && task.getConfirmedAt()!=null
-                && task.getConfirmedAt().isBefore(RuntimeIdentity.STARTED) && !RuntimeIdentity.ID.equals(task.getExecutionOwner());
+        boolean interrupted=AgentTask.RUNNING.equals(task.getStatus())
+                && runtimeLease.expired(task.getExecutionOwner(), task.getConfirmedAt());
         if(!"RESULT_UNKNOWN".equals(task.getStatus()) && !interrupted) throw new BizException(409,"仅可核对结果未知或前次进程中断的已提交动作");
         if(interrupted){
             if(tasks.markInterruptedUnknown(id,ctx.getUserId(),task.getRowVersion())!=1)throw new BizException(409,"任务状态已变化，请刷新后核对");

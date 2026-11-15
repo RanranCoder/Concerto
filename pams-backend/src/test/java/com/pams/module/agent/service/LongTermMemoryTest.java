@@ -1,23 +1,29 @@
 package com.pams.module.agent.service;
 
+import com.jayway.jsonpath.JsonPath;
 import com.pams.common.*;
 import com.pams.module.agent.core.*;
 import com.pams.module.agent.entity.AgentMessage;
 import com.pams.module.agent.repository.AgentMessageRepository;
 import com.pams.module.agent.llm.LlmProvider;
+import com.pams.security.JwtUtil;
 import com.pams.security.LoginUser;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest @ActiveProfiles("test") @Transactional
+@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Transactional
 class LongTermMemoryTest {
     @Autowired LongTermMemory memory;
     @Autowired ConversationStore conversations;
@@ -25,6 +31,8 @@ class LongTermMemoryTest {
     @Autowired ContextAssembler assembler;
     @Autowired AgentOrchestrator orchestrator;
     @Autowired JdbcTemplate db;
+    @Autowired MockMvc mvc;
+    @Autowired JwtUtil jwt;
     @MockitoBean AgentLlmCaller caller;
     @MockitoBean com.pams.module.knowledge.service.KnowledgeQuery knowledge;
     @BeforeEach void tenant(){OrgContext.set(1L);}
@@ -109,6 +117,45 @@ class LongTermMemoryTest {
             return LlmProvider.ChatResponse.text("详细解释","test");
         });
         assertThat(orchestrator.chatSync("这次请详细解释",null,ctx(),List.of(),false).get("reply")).isEqualTo("详细解释");
+    }
+    @Test void memorySavedThroughManagementApiIsReadByNewChatUntilDisabled() throws Exception {
+        Long user = db.queryForObject("SELECT id FROM sys_user WHERE username='teacher'", Long.class);
+        String auth = "Bearer " + jwt.generate(user, "teacher", "TEACHER");
+        mvc.perform(post("/api/agent/memories").header("Authorization", auth).contentType("application/json")
+                        .content("""
+                                {"scope":"USER","key":"风格","content":"优先使用三列表格","consent":true,"days":90}
+                                """))
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        List<Boolean> preferenceSeen = new ArrayList<>();
+        when(caller.callLlm(anyList(), anyList(), any(), any(), anyInt())).thenAnswer(call -> {
+            List<LlmProvider.ChatMessage> input = call.getArgument(0);
+            preferenceSeen.add(input.stream().anyMatch(message -> message.content() != null
+                    && message.content().contains("优先使用三列表格")));
+            return LlmProvider.ChatResponse.text("已整理", "test");
+        });
+        String question = """
+                {"message":"请整理准备事项","mode":"standard","collab":false}
+                """;
+        var usageRequest = get("/api/agent/memories/metrics").header("Authorization", auth);
+        Number initialHits = JsonPath.read(mvc.perform(usageRequest).andReturn().getResponse().getContentAsString(),
+                "$.data.memoryHits");
+        mvc.perform(post("/api/agent/chat").header("Authorization", auth).contentType("application/json").content(question))
+                .andExpect(jsonPath("$.data.reply").value("已整理"));
+        mvc.perform(usageRequest).andExpect(jsonPath("$.data.memoryHits").value(initialHits.intValue() + 1));
+
+        mvc.perform(put("/api/agent/memories/settings").header("Authorization", auth).contentType("application/json")
+                        .content("{\"enabled\":false}"))
+                .andExpect(jsonPath("$.code").value(200));
+        mvc.perform(post("/api/agent/chat").header("Authorization", auth).contentType("application/json").content(question))
+                .andExpect(jsonPath("$.data.reply").value("已整理"));
+        assertThat(preferenceSeen).containsExactly(true, false);
+        mvc.perform(usageRequest).andExpect(jsonPath("$.data.memoryHits").value(initialHits.intValue() + 1));
+
+        mvc.perform(get("/api/agent/memories").header("Authorization", auth))
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.records[0].content").value("优先使用三列表格"));
     }
     @Test void contextIsBounded() {
         for(int i=0;i<10;i++)memory.save(ctx(),"USER","条目"+i,"内容".repeat(100),true,null,null,90);

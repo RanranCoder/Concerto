@@ -50,6 +50,8 @@ class DagSchedulerTest {
     @Autowired org.springframework.transaction.PlatformTransactionManager tx;
     @Autowired ToolRegistry toolRegistry;
     @Autowired AgentOrchestrator orchestrator;
+    @Autowired com.pams.module.agent.controller.AgentController chatController;
+    @Autowired com.pams.module.agent.controller.AgentRuntimeController runtimeController;
     @Autowired AgentMessageRepository messageRows;
     @Autowired ArtifactLedger artifactLedger;
     @Autowired ArtifactEditor artifactEditor;
@@ -210,7 +212,14 @@ class DagSchedulerTest {
         state.acquire(run.getId(),"crashed");
         var node=state.begin(run.getId(),state.nodes(run.getId()).getFirst().getId(),"crashed");
         var persisted=runs.findById(run.getId()).orElseThrow();
-        persisted.setDispatchStartedAt(java.time.LocalDateTime.now().minusMinutes(31)); runs.saveAndFlush(persisted);
+        persisted.setDispatchOwner("other-live-jvm");
+        runs.saveAndFlush(persisted);
+        db.update("INSERT INTO agent_runtime_lease(owner_id, expires_at) VALUES (?, TIMESTAMPADD(SECOND, 30, CURRENT_TIMESTAMP))",
+                persisted.getDispatchOwner());
+        state.recover(run.getId(),1L);
+        assertThat(state.nodes(run.getId()).getFirst().getStatus()).isEqualTo("RUNNING");
+        db.update("UPDATE agent_runtime_lease SET expires_at = TIMESTAMPADD(SECOND, -1, CURRENT_TIMESTAMP) WHERE owner_id = ?",
+                persisted.getDispatchOwner());
         state.recover(run.getId(),1L);
         assertThat(state.nodes(run.getId()).getFirst().getStatus()).isEqualTo("FAILED");
         assertThat(steps.findByRunIdOrderBySeqAsc(run.getId())).extracting(AgentStep::getStatus).containsExactly("FAILED");
@@ -260,6 +269,32 @@ class DagSchedulerTest {
         assertThatThrownBy(()->requests.begin(id,"duplicate",ctx)).isInstanceOf(BizException.class);
         assertThatThrownBy(()->requests.owned(id,2L)).isInstanceOf(BizException.class);
         db.update("delete from agent_request where id=?",id);
+    }
+
+    @Test void backgroundChatReturnsBeforeModelExecutionAndPersistsTheFinalMessage() {
+        String id = UUID.randomUUID().toString();
+        String stream = null;
+        try {
+            when(caller.callLlm(anyList(), anyList(), any(), any(), anyInt()))
+                    .thenReturn(LlmProvider.ChatResponse.text("已完成背景任务", "test"));
+            var receipt = chatController.chat(Map.of("message", "核对资料", "requestId", id, "background", true,
+                    "collab", false), ctx.getLoginUser()).getData();
+            stream = (String) receipt.get("streamId");
+            assertThat(receipt).containsEntry("accepted", true).containsEntry("requestId", id).doesNotContainKey("reply");
+            verify(caller, never()).callLlm(anyList(), anyList(), any(), any(), anyInt());
+            assertThat(runtimeController.request(id, ctx.getLoginUser()).getData()).containsEntry("status", "RUNNING");
+
+            queue.remove().run();
+            var snapshot = runtimeController.request(id, ctx.getLoginUser()).getData();
+            assertThat(snapshot).containsEntry("status", "SUCCESS").containsEntry("streamId", stream);
+            assertThat(snapshot.get("message")).isInstanceOfSatisfying(Map.class,
+                    message -> assertThat(message.get("content")).isEqualTo("已完成背景任务"));
+        } finally {
+            var request = stream == null ? null : requests.byStream(stream).orElse(null);
+            db.update("delete from agent_message where stream_id=?", stream);
+            db.update("delete from agent_request where id=?", id);
+            if (request != null) db.update("delete from agent_conversation where id=?", request.getConversationId());
+        }
     }
     @Test void criticalEventAndNodeStateRollBackTogether() {
         var run=initialize(node(1,"atomic"));long before=runs.findById(run.getId()).orElseThrow().getEventSeq();

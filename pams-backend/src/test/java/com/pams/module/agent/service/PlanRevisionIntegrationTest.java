@@ -207,7 +207,7 @@ class PlanRevisionIntegrationTest {
     @Test void interruptedPriorProcessCanBeSettledFromReceiptWithoutReplayingCommit() throws Exception {
         var prepared=tool.execute(ctx,args());var action=task(prepared.plan());revisions.commit(ctx,action);
         long count=plans.count();var old=tasks.findById(action.planId()).orElseThrow();
-        old.setConfirmedAt(com.pams.module.agent.orchestration.RuntimeIdentity.STARTED.minusSeconds(1));old.setExecutionOwner("previous-process");tasks.saveAndFlush(old);
+        old.setConfirmedAt(java.time.LocalDateTime.now().minusMinutes(31));old.setExecutionOwner("previous-process");tasks.saveAndFlush(old);
         assertThat(reconciliation.reconcile(action.planId(),ctx)).containsEntry("reconciled",true);
         assertThat(plans.count()).isEqualTo(count);
     }

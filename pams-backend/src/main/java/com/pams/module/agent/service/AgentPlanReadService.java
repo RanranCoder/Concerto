@@ -61,7 +61,8 @@ public class AgentPlanReadService {
         if(offset>0 && (expected==null || expected.isBlank())) return error("VALIDATION_ERROR","续读必须携带上一页 baseline");
         if(!authorized(ctx,true)) return invisible();
         var plan=plans.findById(id).filter(p->access.canRead(p,ctx)).orElse(null);
-        if(plan==null || activity(plan.getActivityId(),ctx)==null) return invisible();
+        var activity = plan == null ? null : activity(plan.getActivityId(), ctx);
+        if (activity == null) return invisible();
         try {
             byte[] bytes; PlanDocumentReader.Document doc;
             if(plan.getDocumentFileId()!=null) {
@@ -93,6 +94,8 @@ public class AgentPlanReadService {
             if(offset>doc.blocks().size()) return error("VALIDATION_ERROR","cursor 超出文档范围");
             int end=Math.min(offset+4,doc.blocks().size());
             var snapshot=snapshots==null?null:snapshots.record(ctx,id,baseline,bytes,doc,offset,end);
+            String title = activity.getName() + "策划书（第 " + plan.getVersion() + " 版）";
+            String filename = plan.getDocumentFileId() == null ? null : attachments.documentFilename(plan);
             return ToolResult.ok("已读取指定版本原文页。局部修订只能修改已读取的 Word 块；预算校验模式需要完整覆盖。",ToolArgs.map(
                     "planId",id,"versionLabel",plan.getVersion(),"baseline",baseline,
                     "documentRef",snapshot==null?null:snapshot.id(),
@@ -101,7 +104,9 @@ public class AgentPlanReadService {
                             "hasMore",end<doc.blocks().size(),"truncated",false,"returnedFrom",offset,"returnedTo",end,"totalBlocks",doc.blocks().size()),
                     "unsupportedElements",doc.unsupportedElements(),
                     "revisionEligible",snapshot!=null && snapshot.eligible() && snapshot.covered()==snapshot.total(),
-                    "coveredThrough",snapshot==null?null:snapshot.covered(),"asOf",Instant.now().toString()));
+                    "coveredThrough",snapshot==null?null:snapshot.covered(),"asOf",Instant.now().toString()),
+                    List.of(ToolArgs.map("type", "plan", "id", id, "label", title, "fileName", filename,
+                            "link", "/activities/" + activity.getId() + "?tab=plan&planId=" + id)));
         } catch(Exception e) {return error("UNSUPPORTED_FORMAT","无法可靠读取该文档；请使用原生编辑器查看");}
     }
     private ToolResult invisible() {return error("NOT_FOUND_OR_NOT_VISIBLE","对象不存在或不可见");}

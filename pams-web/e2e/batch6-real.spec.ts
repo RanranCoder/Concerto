@@ -84,10 +84,14 @@ test('real model Word creation, sequential edits and version recovery', async ({
     await editor.press('Enter')
     const body = await (await pending).json()
     expect(body.code, JSON.stringify(body)).toBe(200)
-    expect(body.data.degraded, body.data.reply).toBe(false)
-    expect(body.data.plan == null, body.data.reply).toBe(true)
-    expect(body.data.provider).not.toBe('stub')
-    return body.data
+    expect(body.data.accepted).toBe(true)
+    const path = `/api/agent/requests/${body.data.requestId}`
+    await expect.poll(async () => (await get(page, path)).status, { timeout: 120_000 }).toBe('SUCCESS')
+    const result = await get(page, path)
+    expect(result.message.plan == null, result.message.content).toBe(true)
+    expect(result.message.provider).not.toBe('stub')
+    await expect(page.locator('.lingsi-status-sweep')).toHaveCount(0)
+    return result
   }
   const latest = async () => (await get(page, `/api/plans/workspace?activityId=${row.activityId}`)).latest
   const loadWord = async (id: number, name: string) => {

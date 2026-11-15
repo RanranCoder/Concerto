@@ -98,9 +98,12 @@ public class AgentLlmCaller {
                 }
                 DeltaBatch output=batch; ReasoningBatch thoughts=reasoning;
                 LlmProvider.ChatResponse resp = cancellation.call(streamId,()->streamId!=null && publisher.isAborted(streamId),props.getTimeoutMs(),
-                    ()->observed(streamId,req,r->primaryProvider.chatStream(r,output::accept,thoughts::accept)));
-                batch.flush();
+                    ()->observed(streamId,req,r->primaryProvider.chatStream(r, piece -> {
+                        thoughts.flush();
+                        output.accept(piece);
+                    }, thoughts::accept)));
                 reasoning.finish();
+                batch.flush();
                 return resp;
             } catch (AgentEvaluationMeter.LimitExceeded e) { throw e;
             } catch (java.util.concurrent.CancellationException e) {
