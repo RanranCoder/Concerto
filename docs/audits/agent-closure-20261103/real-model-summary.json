@@ -1,0 +1,249 @@
+{
+  "quality": {
+    "model": "deepseek-flash",
+    "scenarioCount": 28,
+    "sampleCount": 56,
+    "automatedPassed": 56,
+    "metrics": {
+      "samples": 56,
+      "elapsedMs": 203066,
+      "attempts": 111,
+      "reportedCalls": 111,
+      "inputTokens": 1175532,
+      "outputTokens": 19174,
+      "failures": 0,
+      "degraded": 0
+    },
+    "semanticReview": "KNOWN_ISSUES_SEPARATELY_RECORDED_NOT_FULL_QUALITY_PASS",
+    "byPath": {
+      "ordinary": {
+        "samples": 28,
+        "elapsedMs": 98583,
+        "attempts": 55,
+        "reportedCalls": 55,
+        "inputTokens": 580143,
+        "outputTokens": 8845,
+        "failures": 0,
+        "degraded": 0
+      },
+      "specialist": {
+        "samples": 28,
+        "elapsedMs": 104483,
+        "attempts": 56,
+        "reportedCalls": 56,
+        "inputTokens": 595389,
+        "outputTokens": 10329,
+        "failures": 0,
+        "degraded": 0
+      }
+    }
+  },
+  "execution": {
+    "plannedPairs": 6,
+    "validPairs": 3,
+    "pairs": [
+      {
+        "case": "E01",
+        "valid": true,
+        "paths": {
+          "rules": {
+            "completed": true,
+            "tools": [
+              "getActivityDetail"
+            ],
+            "samples": 1,
+            "elapsedMs": 2946,
+            "attempts": 2,
+            "reportedCalls": 2,
+            "inputTokens": 11133,
+            "outputTokens": 294,
+            "failures": 0,
+            "degraded": 0
+          },
+          "controlled": {
+            "completed": true,
+            "tools": [
+              "getActivityDetail"
+            ],
+            "samples": 1,
+            "elapsedMs": 2998,
+            "attempts": 1,
+            "reportedCalls": 1,
+            "inputTokens": 4374,
+            "outputTokens": 315,
+            "failures": 0,
+            "degraded": 0
+          }
+        }
+      },
+      {
+        "case": "E02",
+        "valid": true,
+        "paths": {
+          "rules": {
+            "completed": true,
+            "tools": [
+              "queryActivityAgenda",
+              "getActivityDetail"
+            ],
+            "samples": 1,
+            "elapsedMs": 20599,
+            "attempts": 4,
+            "reportedCalls": 4,
+            "inputTokens": 16295,
+            "outputTokens": 2915,
+            "failures": 0,
+            "degraded": 0
+          },
+          "controlled": {
+            "completed": true,
+            "tools": [
+              "queryActivityAgenda",
+              "getActivityDetail"
+            ],
+            "samples": 1,
+            "elapsedMs": 4156,
+            "attempts": 1,
+            "reportedCalls": 1,
+            "inputTokens": 4598,
+            "outputTokens": 666,
+            "failures": 0,
+            "degraded": 0
+          }
+        }
+      },
+      {
+        "case": "E03",
+        "valid": true,
+        "paths": {
+          "rules": {
+            "completed": true,
+            "tools": [
+              "getActivityDetail",
+              "queryActivityScores"
+            ],
+            "samples": 1,
+            "elapsedMs": 4572,
+            "attempts": 2,
+            "reportedCalls": 2,
+            "inputTokens": 11531,
+            "outputTokens": 619,
+            "failures": 0,
+            "degraded": 0
+          },
+          "controlled": {
+            "completed": true,
+            "tools": [
+              "getActivityDetail",
+              "queryActivityScores"
+            ],
+            "samples": 1,
+            "elapsedMs": 5238,
+            "attempts": 1,
+            "reportedCalls": 1,
+            "inputTokens": 4413,
+            "outputTokens": 796,
+            "failures": 0,
+            "degraded": 0
+          }
+        }
+      },
+      {
+        "case": "E04",
+        "valid": false,
+        "paths": {
+          "rules": {
+            "completed": false,
+            "tools": [
+              "queryActivityOverview"
+            ],
+            "samples": 1,
+            "elapsedMs": 900,
+            "attempts": 6,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 4,
+            "degraded": 2
+          },
+          "controlled": {
+            "completed": false,
+            "tools": [],
+            "samples": 1,
+            "elapsedMs": 1005,
+            "attempts": 1,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 1,
+            "degraded": 0
+          }
+        }
+      },
+      {
+        "case": "E05",
+        "valid": false,
+        "paths": {
+          "rules": {
+            "completed": false,
+            "tools": [],
+            "samples": 1,
+            "elapsedMs": 830,
+            "attempts": 3,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 2,
+            "degraded": 1
+          },
+          "controlled": {
+            "completed": false,
+            "tools": [],
+            "samples": 1,
+            "elapsedMs": 400,
+            "attempts": 1,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 1,
+            "degraded": 0
+          }
+        }
+      },
+      {
+        "case": "E06",
+        "valid": false,
+        "paths": {
+          "rules": {
+            "completed": false,
+            "tools": [],
+            "samples": 1,
+            "elapsedMs": 835,
+            "attempts": 3,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 2,
+            "degraded": 1
+          },
+          "controlled": {
+            "completed": false,
+            "tools": [],
+            "samples": 1,
+            "elapsedMs": 432,
+            "attempts": 1,
+            "reportedCalls": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "failures": 1,
+            "degraded": 0
+          }
+        }
+      }
+    ],
+    "interruption": "PROVIDER_HTTP_402_DURING_E04; LATER_PAIRS_NOT_VALID_QUALITY_COMPARISONS",
+    "benefitVerdict": "NOT_ESTABLISHED",
+    "releaseEligible": false
+  },
+  "priceOrInvoiceCost": null
+}

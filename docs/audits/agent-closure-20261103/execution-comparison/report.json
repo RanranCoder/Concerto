@@ -1,0 +1,632 @@
+{
+  "samples" : [ {
+    "case" : "E01",
+    "goal" : "只查询活动1详情。",
+    "path" : "rules",
+    "status" : "SUCCESS",
+    "runId" : 1,
+    "successfulCapabilities" : [ "getActivityDetail" ],
+    "requiredCapabilities" : [ "getActivityDetail" ],
+    "toolCalls" : 1,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 2946,
+    "usage" : [ {
+      "attempts" : 2,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 2,
+      "usageComplete" : true,
+      "reportedInputTokens" : 11133,
+      "reportedOutputTokens" : 294,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 939,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5443,
+          "outputTokens" : 58,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      }, {
+        "durationMs" : 1874,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5690,
+          "outputTokens" : 236,
+          "cacheHitTokens" : 5120,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E01",
+    "goal" : "只查询活动1详情。",
+    "path" : "controlled",
+    "planningStatus" : "MODEL_PLAN_VALIDATED",
+    "status" : "SUCCESS",
+    "runId" : 2,
+    "successfulCapabilities" : [ "getActivityDetail" ],
+    "requiredCapabilities" : [ "getActivityDetail" ],
+    "toolCalls" : 1,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 2998,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 4374,
+      "reportedOutputTokens" : 315,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 2916,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 4374,
+          "outputTokens" : 315,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E02",
+    "goal" : "先读取活动1详情，再查该活动的已登记议程，只读，不写策划。",
+    "path" : "rules",
+    "status" : "SUCCESS",
+    "runId" : 3,
+    "successfulCapabilities" : [ "queryActivityAgenda", "getActivityDetail" ],
+    "requiredCapabilities" : [ "getActivityDetail", "queryActivityAgenda" ],
+    "toolCalls" : 2,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 20599,
+    "usage" : [ {
+      "attempts" : 4,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 4,
+      "usageComplete" : true,
+      "reportedInputTokens" : 16295,
+      "reportedOutputTokens" : 2915,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 1298,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5473,
+          "outputTokens" : 99,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      }, {
+        "durationMs" : 3066,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5946,
+          "outputTokens" : 393,
+          "cacheHitTokens" : 5120,
+          "cacheMissTokens" : null
+        }
+      }, {
+        "durationMs" : 4938,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 2844,
+          "outputTokens" : 705,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      }, {
+        "durationMs" : 11090,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 2032,
+          "outputTokens" : 1718,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E02",
+    "goal" : "先读取活动1详情，再查该活动的已登记议程，只读，不写策划。",
+    "path" : "controlled",
+    "planningStatus" : "MODEL_PLAN_VALIDATED",
+    "status" : "SUCCESS",
+    "runId" : 4,
+    "successfulCapabilities" : [ "queryActivityAgenda", "getActivityDetail" ],
+    "requiredCapabilities" : [ "getActivityDetail", "queryActivityAgenda" ],
+    "toolCalls" : 2,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 4156,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 4598,
+      "reportedOutputTokens" : 666,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 4074,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 4598,
+          "outputTokens" : 666,
+          "cacheHitTokens" : 2816,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E03",
+    "goal" : "先读取活动1详情，再查该活动已录入的评分汇总，只读。",
+    "path" : "rules",
+    "status" : "SUCCESS",
+    "runId" : 5,
+    "successfulCapabilities" : [ "getActivityDetail", "queryActivityScores" ],
+    "requiredCapabilities" : [ "getActivityDetail", "queryActivityScores" ],
+    "toolCalls" : 2,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 4572,
+    "usage" : [ {
+      "attempts" : 2,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 2,
+      "usageComplete" : true,
+      "reportedInputTokens" : 11531,
+      "reportedOutputTokens" : 619,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 1643,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 5469,
+          "outputTokens" : 205,
+          "cacheHitTokens" : 384,
+          "cacheMissTokens" : null
+        }
+      }, {
+        "durationMs" : 2869,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 6062,
+          "outputTokens" : 414,
+          "cacheHitTokens" : 5120,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E03",
+    "goal" : "先读取活动1详情，再查该活动已录入的评分汇总，只读。",
+    "path" : "controlled",
+    "planningStatus" : "MODEL_PLAN_VALIDATED",
+    "status" : "SUCCESS",
+    "runId" : 6,
+    "successfulCapabilities" : [ "getActivityDetail", "queryActivityScores" ],
+    "requiredCapabilities" : [ "getActivityDetail", "queryActivityScores" ],
+    "toolCalls" : 2,
+    "requiredReceiptsObserved" : true,
+    "unexpectedActions" : 0,
+    "completed" : true,
+    "elapsedMs" : 5238,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 1,
+      "usageComplete" : true,
+      "reportedInputTokens" : 4413,
+      "reportedOutputTokens" : 796,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ "deepseek-flash" ],
+      "calls" : [ {
+        "durationMs" : 5149,
+        "failed" : false,
+        "provider" : "openai_responses",
+        "model" : "deepseek-flash",
+        "finishReason" : "completed",
+        "usage" : {
+          "inputTokens" : 4413,
+          "outputTokens" : 796,
+          "cacheHitTokens" : 2816,
+          "cacheMissTokens" : null
+        }
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E04",
+    "goal" : "查询活动1详情、已登记议程和已录入评分汇总，不写建议、不做修改。",
+    "path" : "rules",
+    "status" : "PARTIAL",
+    "runId" : 7,
+    "successfulCapabilities" : [ "queryActivityOverview" ],
+    "requiredCapabilities" : [ "queryActivityScores", "getActivityDetail", "queryActivityAgenda" ],
+    "toolCalls" : 1,
+    "requiredReceiptsObserved" : false,
+    "unexpectedActions" : 0,
+    "completed" : false,
+    "elapsedMs" : 900,
+    "usage" : [ {
+      "attempts" : 6,
+      "failures" : 4,
+      "degradedResponses" : 2,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 390,
+        "failed" : true
+      }, {
+        "durationMs" : 421,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      }, {
+        "durationMs" : 0,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E04",
+    "goal" : "查询活动1详情、已登记议程和已录入评分汇总，不写建议、不做修改。",
+    "path" : "controlled",
+    "planningStatus" : "RULE_BASELINE",
+    "completed" : false,
+    "failureType" : "IllegalStateException",
+    "elapsedMs" : 1005,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 1,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 998,
+        "failed" : true
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E05",
+    "goal" : "查询活动1的筹备任务及已登记排班，只读。",
+    "path" : "rules",
+    "status" : "PARTIAL",
+    "runId" : 8,
+    "successfulCapabilities" : [ ],
+    "requiredCapabilities" : [ "queryActivityTasks", "queryActivitySchedules" ],
+    "toolCalls" : 0,
+    "requiredReceiptsObserved" : false,
+    "unexpectedActions" : 0,
+    "completed" : false,
+    "elapsedMs" : 830,
+    "usage" : [ {
+      "attempts" : 3,
+      "failures" : 2,
+      "degradedResponses" : 1,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 399,
+        "failed" : true
+      }, {
+        "durationMs" : 385,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E05",
+    "goal" : "查询活动1的筹备任务及已登记排班，只读。",
+    "path" : "controlled",
+    "planningStatus" : "RULE_BASELINE",
+    "completed" : false,
+    "failureType" : "IllegalStateException",
+    "elapsedMs" : 400,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 1,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 393,
+        "failed" : true
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E06",
+    "goal" : "先读取活动1详情，然后查询其已登记议程、筹备任务和已登记排班；仅核实事实。",
+    "path" : "rules",
+    "status" : "PARTIAL",
+    "runId" : 9,
+    "successfulCapabilities" : [ ],
+    "requiredCapabilities" : [ "queryActivityAgenda", "queryActivityTasks", "getActivityDetail", "queryActivitySchedules" ],
+    "toolCalls" : 0,
+    "requiredReceiptsObserved" : false,
+    "unexpectedActions" : 0,
+    "completed" : false,
+    "elapsedMs" : 835,
+    "usage" : [ {
+      "attempts" : 3,
+      "failures" : 2,
+      "degradedResponses" : 1,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 399,
+        "failed" : true
+      }, {
+        "durationMs" : 392,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  }, {
+    "case" : "E06",
+    "goal" : "先读取活动1详情，然后查询其已登记议程、筹备任务和已登记排班；仅核实事实。",
+    "path" : "controlled",
+    "planningStatus" : "RULE_BASELINE",
+    "completed" : false,
+    "failureType" : "IllegalStateException",
+    "elapsedMs" : 432,
+    "usage" : [ {
+      "attempts" : 0,
+      "failures" : 0,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    }, {
+      "attempts" : 1,
+      "failures" : 1,
+      "degradedResponses" : 0,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 424,
+        "failed" : true
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ]
+  } ],
+  "provider" : {
+    "baseUrl" : "https://api.deepseek.com",
+    "sourceAccess" : "READ_ONLY_LOCAL_CONFIG",
+    "protocol" : "openai_responses",
+    "model" : "deepseek-flash",
+    "targetDatabase" : "ISOLATED_IN_MEMORY_H2"
+  },
+  "businessWriteComparison" : "NOT_ASSESSED",
+  "factSemanticsReview" : "PENDING",
+  "commonBudget" : {
+    "maxCalls" : 6,
+    "perCallOutputTokens" : 2048
+  },
+  "releaseEligible" : false
+}

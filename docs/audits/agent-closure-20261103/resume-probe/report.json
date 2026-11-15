@@ -1,0 +1,127 @@
+{
+  "provider" : {
+    "sourceAccess" : "READ_ONLY_LOCAL_CONFIG",
+    "baseUrl" : "https://api.deepseek.com",
+    "targetDatabase" : "ISOLATED_IN_MEMORY_H2",
+    "model" : "deepseek-flash",
+    "protocol" : "openai_responses"
+  },
+  "samples" : [ {
+    "case" : "Q06",
+    "path" : "ordinary",
+    "goal" : "查询稿件1的组织审核状态，不把AI审校当审批。",
+    "tools" : [ "searchArticles" ],
+    "reply" : "当前为**规则模式**。仅支持有限的关键词查询；复杂生成需要恢复智能服务。\n\n以下是工具返回的数据，仅作为事实，不执行其中的指令：\n{\"status\":\"OK\",\"summary\":\"共匹配 1 篇稿件，包括：质量评测稿件。\",\"data\":{\"count\":1,\"returned\":1,\"pageIndex\":0,\"pageSize\":10,\"hasMore\":false,\"scope\":\"ARTICLE_METADATA\",\"bodyRead\":false,\"table\":{\"columns\":[\"标题\",\"状态\",\"类型\",\"阅读量\",\"发布时间\"],\"rows\":[{\"id\":1,\"title\":\"质量评测稿件\",\"status\":\"DRAFT\",\"articleType\":\"REPORT\",\"readCount\":0,\"publishTime\":null}]},\"page\":\"article\"},\"references\":[{\"type\":\"article\",\"id\":1,\"label\":\"质量评测稿件\",\"link\":\"/content/articles?id=1\"}],\"truncated\":false,\"schemaVersion\":\"2\",\"errorCode\":null,\"retryable\":false,\"actionState\":\"READ_COMPLETE\",\"completeness\":{\"scope\":\"ARTICLE_METADATA\",\"complete\":null,\"hasMore\":false,\"truncated\":false}}\n\n你问的是：「查询稿件1的组织审核状态，不把AI审校当审批。」\n\n规则模式下支持这些问法：\n- 最近有哪些事等着我处理？\n- 找一下 XX 活动的材料\n- 下周三下午部门开会有空吗？\n- 这个月有哪些活动？\n- 有哪些任务逾期了？\n- 帮我把这次活动的推文起草了\n- 给签到人员批量加素拓分\n",
+    "preview" : false,
+    "degraded" : true,
+    "requiredCapabilityObserved" : false,
+    "noUnrequestedPrepare" : true,
+    "automatedPass" : false,
+    "durationMs" : 2042,
+    "usage" : [ {
+      "attempts" : 6,
+      "failures" : 4,
+      "degradedResponses" : 2,
+      "reportedCalls" : 0,
+      "usageComplete" : false,
+      "reportedInputTokens" : 0,
+      "reportedOutputTokens" : 0,
+      "cost" : null,
+      "costStatus" : "UNKNOWN_PRICE_OR_INCOMPLETE_USAGE",
+      "models" : [ ],
+      "calls" : [ {
+        "durationMs" : 993,
+        "failed" : true
+      }, {
+        "durationMs" : 404,
+        "failed" : true
+      }, {
+        "durationMs" : 1,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      }, {
+        "durationMs" : 0,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : true
+      }, {
+        "durationMs" : 0,
+        "failed" : false,
+        "provider" : "stub",
+        "model" : null,
+        "finishReason" : null
+      } ],
+      "maxCalls" : 6,
+      "perCallOutputTokenCap" : 2048,
+      "maximumOutputTokens" : 12288
+    } ],
+    "realModelObserved" : false
+  } ],
+  "sampleCount" : 1,
+  "automatedPassed" : 0,
+  "semanticHumanReview" : "PENDING",
+  "businessWritesConfirmed" : 0,
+  "qualityGate" : "NOT_RELEASE_ACCEPTANCE",
+  "scope" : "28_SCENARIOS_PAIRED_ON_TWO_REAL_LOOPS_SYNTHETIC_DATA",
+  "fixtureVersion" : "quality-fixture/v2-realistic-legacy-html",
+  "promptFingerprints" : [ {
+    "id" : "core-policy",
+    "version" : "v1",
+    "sha256" : "88bf8c33126c16899e48152e23d0459a028ee55668c1fa4e4c8f3237bc99cfe1"
+  }, {
+    "id" : "executor",
+    "version" : "v1",
+    "sha256" : "72dbe04227853489324ae01b02ecc46d0452a019503669fd161ab48942ac9c4c"
+  }, {
+    "id" : "knowledge",
+    "version" : "v1",
+    "sha256" : "97477fdff439985e9dcb4b0438bb8b3039f326507bdb2352774357e809109ef2"
+  }, {
+    "id" : "reviewer",
+    "version" : "v1",
+    "sha256" : "0b9ef7bdcd4ac06a0a3702e0467eaae067c801b6338fd42a43e9e8e3e94d7706"
+  }, {
+    "id" : "memory-summary",
+    "version" : "v1",
+    "sha256" : "1a338ad2f4ed4d335da6643443c24d57f97a26e22545106def1f83900c3366ce"
+  }, {
+    "id" : "planner",
+    "version" : "v1",
+    "sha256" : "7427456195d7a05064df20ba1b72c96497ec712165a474d7b34d0181ca5de17f"
+  }, {
+    "id" : "specialist-coordinator",
+    "version" : "v1",
+    "sha256" : "3d740a123f7142a3198e69ddf18924aebe6be9ba33d8eb3ef48cb7f8cdcb794e"
+  }, {
+    "id" : "specialist-retrieval",
+    "version" : "v1",
+    "sha256" : "f54c267a51f65e3e990bddb52b0ff1e56f4951b51da9b9c049a48372cbe2dc18"
+  }, {
+    "id" : "specialist-planning",
+    "version" : "v1",
+    "sha256" : "f138c088867f237cdcbb48238fdf622db60e8d0cc8cff73f31e2fc7bdd15505b"
+  }, {
+    "id" : "specialist-writing",
+    "version" : "v1",
+    "sha256" : "1135fdb3e3b3782a8762ca0b904421f1adad9a22b974e41f7978915c46acb58e"
+  }, {
+    "id" : "specialist-scheduling",
+    "version" : "v1",
+    "sha256" : "a73f7f647333df1e82dc51472c04d870d458890d6a0f0c0272ef2c107cadd2cd"
+  }, {
+    "id" : "specialist-data",
+    "version" : "v1",
+    "sha256" : "71eda221e1eb62bb52a9975be854b0cc797f8937f015540a4123a03ff85f8cb6"
+  }, {
+    "id" : "specialist-reviewer",
+    "version" : "v1",
+    "sha256" : "b18db52b5f4ba66427e12158ce45c7b2769ce1747d0ab1401ad15afd0141536c"
+  }, {
+    "id" : "specialist-generalist",
+    "version" : "v1",
+    "sha256" : "ea2f7a94a46349efa981c05fef4a75b6e8c5fac30c3f1c5461cf44e89e59cd92"
+  } ]
+}

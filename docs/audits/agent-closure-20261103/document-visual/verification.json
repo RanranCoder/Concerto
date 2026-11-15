@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "renderer": "WPS 文字",
+  "renderTransport": "Word.Application COM ExportAsFixedFormat",
+  "microsoftWordVerified": false,
+  "pages": 1,
+  "changedPackageParts": [
+    "word/document.xml"
+  ],
+  "textChanges": [
+    [
+      "预算总额为2500元",
+      "预算总额为3000元"
+    ]
+  ],
+  "changedPixelsBoundingBox": [
+    307,
+    292,
+    330,
+    311
+  ],
+  "unchangedPixelsOutsideBudgetDigits": true,
+  "sourceSHA256": "cfb91914805775ac44fe1a69dc1cebc2203db9548b0c8033c31554a209de1705",
+  "revisedSHA256": "ba009ba76ca154333072eb35d2ad52cd83a2870bdff110a28fc961bcf0e914cd",
+  "scope": "SYNTHETIC_SUPPORTED_PARAGRAPH_DOCX_NOT_GENERAL_DOCUMENT_SUPPORT",
+  "visualInspection": "PENDING"
+}

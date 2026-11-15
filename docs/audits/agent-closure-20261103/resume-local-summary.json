@@ -1,0 +1,45 @@
+{
+  "totals": {
+    "tests": 37,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0
+  },
+  "reports": [
+    {
+      "name": "ToolInventoryTest",
+      "tests": 1,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "ToolResultTextTest",
+      "tests": 4,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "AgentNotificationIntegrationTest",
+      "tests": 9,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "AgentEditorialIntegrationTest",
+      "tests": 11,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "PlanRevisionIntegrationTest",
+      "tests": 12,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 
 协奏把活动筹备、排班考勤、成员资料、内容宣传和档案归集放进同一个工作台，并通过「灵思」AI 助手连接资料检索与业务操作。项目起源于信息与智能工程学院党建办公室的党务管理场景，现已支持多组织注册、数据隔离、组织主题和领域包配置。
 
-本文更新于 **2026-10-30**，对应 **`Concerto` 分支**，覆盖 UI v6、Word 策划书、灵思任务工作区与长期记忆、租户角色权限及通知管线。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。源码能力与生产部署可能不同步，部署状态以相应发布记录为准。
+本文以 `Concerto` 分支为准。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。源码能力与生产部署可能不同步，部署状态以相应发布记录为准。
 
 [快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
@@ -34,9 +34,9 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 | 前端 | React 18、TypeScript 5.7、Vite 7、Ant Design 5、Zustand、React Router 6 |
 | 后端 | Java 21、Spring Boot 4.0.2、Spring Data JPA、Spring Security、JWT |
 | 数据 | MySQL 8、Flyway；测试使用 H2 的 MySQL 兼容模式 |
-| 实时通信 | 通知使用 SSE；聊天等场景使用 WebSocket、STOMP、SockJS |
+| 实时通信 | 通知中心使用 SSE，灵思事件与权限刷新使用 WebSocket、STOMP、SockJS |
 | 文档编辑 | SuperDoc 2.24.0 原生 DOCX 编辑、导入、保存与下载 |
-| AI | DeepSeek 接入、stub 规则模式、工具注册与确认门禁、多 Agent 编排 |
+| AI | OpenAI Chat Completions / Responses 协议、组织级 AI 服务、stub 规则模式、工具确认与多 Agent 编排 |
 | 资料处理 | 关键词检索、MySQL ngram 全文索引及 LIKE 降级，Excel 与 Word 文档处理 |
 | 验证与部署 | JUnit / MockMvc、Vitest、Playwright、Docker Compose、Nginx |
 
@@ -44,7 +44,7 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 
 ### 1. 准备环境与依赖
 
-本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.12+ 和 MySQL 8**，并确保相关命令已加入 PATH。
+本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.20+（22.x）和 MySQL 8**，并确保相关命令已加入 PATH。
 
 ```bash
 git clone --branch Concerto git@github.com:RanranCoder/PAMS.git
@@ -57,7 +57,7 @@ cd ..
 
 ### 2. 配置本地环境
 
-在 Git Bash 或其他 Bash 终端复制配置示例，随后编辑 `.env`：
+Windows 上的 Bash 命令使用 Git Bash（`C:\dev\Git\bin\bash.exe`），PowerShell 代码块在 PowerShell 中执行。复制配置示例后编辑 `.env`。
 
 ```bash
 cp .env.example .env
@@ -69,7 +69,8 @@ cp .env.example .env
 # 本地开发：连接 localhost:3306，默认用户 root
 DB_PASSWORD=your_local_mysql_password
 
-# 可选：启用灵思真实模型；不填时使用 stub 规则模式
+# 可选：部署默认真实模型，同时填写模型 ID 与密钥
+PAMS_AGENT_MODEL=
 PAMS_AGENT_API_KEY=
 ```
 
@@ -113,6 +114,8 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 ### 演示账号与新组织
 
+登录页的协奏演示账号预设对应[独立演示库](scripts/concerto-demo/README.md)。默认开发库的初始化账号如下。
+
 开发 / 测试环境首次初始化基础部门与角色时，会创建以下演示账号，密码均为 **`123456`**：
 
 | 用户名 | 初始业务角色 |
@@ -151,13 +154,13 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 - **资料可追溯**：知识库覆盖制度文档、公告、推文、策划书、事实快照和成员名册，检索与查看来源时检查访问权限。当前使用关键词检索，并非向量数据库方案。
 - **实验入口**：`/admin/benchmark` 提供单 Agent / 多 Agent 对比，访问受权限守卫控制。
 
-未配置 `PAMS_AGENT_API_KEY` 时，后端自动使用 stub 规则模式，业务页面仍可启动；规则模式不能替代真实模型的开放式问答能力。模型、超时、输出长度和思考开关由 `pams.agent.*` 配置控制，具体值见 [application.yml](pams-backend/src/main/resources/application.yml)。
+拥有 `org:manage` 的账号可在「系统设置 → AI 服务」（`/admin/settings?section=ai`）测试并启用本组织的默认服务。组织没有启用服务时使用部署配置，部署配置缺少模型 ID 或 API Key 时使用 stub 规则模式。部署协议、超时及输出上限见 [application.yml](pams-backend/src/main/resources/application.yml)，组织配置与密钥保存见 [AI 服务设置](docs/design/ai-services/README.md)。
 
 ### 任务恢复与协作开关
 
-任务、执行检查点、待确认清单和成果版本持久化保存。恢复时沿用原任务状态；业务已提交但回执尚未完成的动作需要核对，不能无条件重新执行。详情与隔离验收方法见 [S5 验收说明](scripts/agent-s5/README.md)。
+任务、执行检查点、待确认清单和成果版本持久化保存。恢复会核对持久化回执，避免重复提交业务写入。V71 为运行实例增加数据库租约，供恢复流程判断原执行实例是否仍存活。详情与隔离验收方法见 [S5 验收说明](scripts/agent-s5/README.md)。
 
-`pams.agent.collaboration-enabled=false` 可将新请求切回单 Agent 路径；`pams.agent.collaboration-org-ids` 非空时限定协作组织。基准评估默认关闭，启用 `pams.agent.benchmark-enabled` 时还需设置 `pams.agent.benchmark-org-ids`。配置变更需重启应用，已有任务和清单继续保留。
+`pams.agent.collaboration-enabled=false` 可将新请求切回单 Agent 路径；`pams.agent.collaboration-org-ids` 非空时限定协作组织。基准评估默认关闭，启用 `pams.agent.benchmark-enabled` 时还需设置 `pams.agent.benchmark-org-ids`。配置变更需重启应用，已有任务和清单继续保留。受控规划与受控执行默认关闭。受控执行要求两个开关均启用，且当前组织列在 `pams.agent.controlled-planning-org-ids` 中。
 
 ### 上下文与长期记忆
 
@@ -190,7 +193,7 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 ## 组织与权限
 
-业务数据按组织隔离，Hibernate 租户过滤、请求上下文和异步任务上下文共同传递组织身份。组织可配置主题色、术语及领域包（`party` / `volunteer` / `club`），控制业务入口与文案。
+业务数据按组织隔离，Hibernate 租户过滤、请求上下文和异步任务上下文共同传递组织身份。组织可配置主题色和术语，并在系统设置的扩展功能中启用党建（`party`）、团务（`youth`）与志愿服务（`volunteer`）。业务入口同时受功能开关和账号权限控制。
 
 当前授权模型将**业务主角色**与**组织治理身份**分开：
 
@@ -212,9 +215,11 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 | `SPRING_DATASOURCE_URL` | 通过系统环境变量覆盖数据库连接地址 |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | 通过系统环境变量覆盖数据库账号与密码 |
 | `PAMS_JWT_SECRET` | JWT 签名密钥；本地未设置时随机生成，生产需显式配置 |
-| `PAMS_AGENT_API_KEY` | 灵思模型密钥；未配置时降级 stub |
-| `PAMS_AGENT_PROVIDER` | 模型提供方，可设为 `stub` 显式使用规则模式 |
-| `PAMS_AGENT_MODEL` | 覆盖后端默认模型标识，按实际供应商与部署配置填写 |
+| `PAMS_AGENT_PROTOCOL` / `PAMS_AGENT_BASE_URL` | 部署默认协议与 API 根地址，默认 `openai_responses` 和 `https://api.openai.com/v1`。旧服务可显式配置 `openai_chat_completions` |
+| `PAMS_AGENT_TIMEOUT_MS` | 单次模型调用的超时，默认 `120000` 毫秒 |
+| `PAMS_AGENT_MODEL` / `PAMS_AGENT_API_KEY` | 部署默认模型 ID 与密钥，两项都需要填写 |
+| `PAMS_AGENT_PROVIDER` | 可设为 `stub` 使部署默认服务使用规则模式 |
+| `PAMS_AI_ENCRYPTION_KEY` / `PAMS_AI_KEY_FILE` | 组织 AI 服务密钥的加密主密钥或自动生成的密钥文件路径 |
 | `PAMS_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads`，相对于后端进程工作目录 |
 | `VITE_SUPERDOC_LICENSE_KEY` | 前端构建时注入的 SuperDoc 许可证配置，修改后需重新构建前端 |
 | `MYSQL_ROOT_PASSWORD` / `MYSQL_USER` / `MYSQL_PASSWORD` | Docker Compose 中 MySQL 初始化与应用连接配置 |
@@ -223,18 +228,18 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 ### Docker Compose
 
-编辑根目录 `.env`，替换 `.env.example` 中的数据库凭据和 JWT 密钥。需要真实模型时另加 `PAMS_AGENT_API_KEY`，然后运行：
+编辑根目录 `.env`，替换 `.env.example` 中的数据库凭据和 JWT 密钥。需要部署默认真实模型时配置协议、API 根地址、模型 ID 与密钥。启动命令如下。
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据和上传文件分别保存到 `pams-mysql-data`、`pams-uploads` 命名卷。
+编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据、上传文件和自动生成的 AI 服务加密密钥分别保存到 `pams-mysql-data`、`pams-uploads` 和 `pams-ai-secrets` 命名卷。备份组织 AI 配置时同时保留加密主密钥。
 
-当前源码迁移已到 **V58**，包括 V37 租户授权、V41 DOCX 文档关联、V42–V46 Agent 执行与评估、V47–V48 授权补全、V50–V56 通知管线、V57 会话摘要和 V58 长期记忆。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
+当前 Flyway 迁移最高为 **V72**。V59、V60 加入 AI 服务配置和密钥状态，后续迁移扩展了业务回执、受控规划、提示词快照和请求级写入状态。V71 增加 Agent 实例租约，V72 加入团务与志愿服务的数据表和权限。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
 
-仓库的镜像构建工作流在推送 `main` 或手动触发时运行；推送 `Concerto` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
+仓库的镜像构建工作流在推送 `main` 或手动触发时运行；当前工作流定义要求 Maven 后端测试和前端 `npm test` 通过后才构建并推送镜像。推送 `Concerto` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
 
 ## 开发与验证
 
@@ -301,14 +306,15 @@ PAMS/
 
 | 主题 | 文档 |
 | --- | --- |
-| 产品与规划 | [总体设计](docs/PAMS设计方案.md)、[PRD v5 开发规划](docs/PRD-v5-开发规划.md)、[通用化与多 Agent 策划](docs/PAMS-通用化与多Agent协作改造策划.md) |
+| 当前使用与接口 | [业务操作手册](docs/协奏PAMS-当前业务功能与使用流程说明.md)、[API 接口清单](docs/API-inventory.md)、[AI 服务设置](docs/design/ai-services/README.md) |
+| 历史设计与规划 | [总体设计](docs/PAMS设计方案.md)、[PRD v5 开发规划](docs/PRD-v5-开发规划.md)、[通用化与多 Agent 策划](docs/PAMS-通用化与多Agent协作改造策划.md) |
 | 品牌与 UI | [协奏品牌标识](docs/design/协奏-品牌标识设计说明.md)、[UI v6 设计规范](docs/design/PAMS-UI-设计方案-v6-行业规范修订.md)、[表单工作面](docs/design/PAMS-表单工作面重设计.md) |
 | 业务界面落地 | [排班考勤](docs/design/PAMS-UI-v6-排班考勤落地记录.md)、[组织宣传档案与党务](docs/design/PAMS-UI-v6-组织宣传档案与党务台账落地记录.md)、[登录与注册](docs/design/PAMS-登录与组织注册-改版与修复.md) |
 | 灵思与资料 | [Agent 业务方案](docs/PAMS-Agent业务设计方案.md)、[灵思 v6 落地记录](docs/design/PAMS-UI-v6-灵思Agent落地记录.md)、[知识库问答方案](docs/PAMS-灵思知识库问答方案-v1.md) |
 | 灵思运行与记忆 | [升级方案](docs/design/PAMS-灵思Agent升级优化方案.md)、[S5 联调评估](docs/design/PAMS-灵思Agent-S5联调评估报告.md)、[上下文管理](docs/design/PAMS-Agent上下文管理落地说明.md)、[长期记忆](docs/design/PAMS-Agent长期记忆落地说明.md)、[记忆产品化验收](docs/design/PAMS-Agent记忆产品化验收.md) |
 | Word 与通知 | [SuperDoc 接入](docs/design/PAMS-SuperDoc-接入与验收.md)、[通知策略与指标](docs/design/PAMS-消息通知管线-v1-通知策略与指标落地记录.md)、[通知上线演练](docs/design/PAMS-消息通知管线-v1-上线验收演练记录.md) |
 | 授权模型 | [角色权限与租户管理方案](docs/PAMS-用户角色权限与多租户管理设计方案-v1.md)、[管理员业务设计](docs/PAMS-管理员角色权限管理业务设计-v1.md)、[首版落地记录](docs/PAMS-角色权限与租户管理-首版落地记录.md) |
-| 接口与变更 | [API 文档](docs/API.md)、[代码审计记录](docs/代码审计报告-2026-10-14.md)、[分支与分批推送记录](docs/分支梳理与分批推送记录-2026-10-16.md) |
+| 审计与历史资料 | [文档索引](docs/README.md)、[2026-11-11 代码审计及修复记录](docs/audits/code-audit-2026-11-11.md) |
 
 设计方案包含后续规划；判断当前可用能力时，以本分支代码、相应落地记录及实际授权配置为准。
 

@@ -1,0 +1,47 @@
+{
+  "modelCalls" : 0,
+  "readOnly" : true,
+  "cases" : [ {
+    "file" : "毕业实践综合项目-协奏设计说明书-Agent治理版.docx",
+    "sha256" : "a7e93f219317d9a1d8474e82653e9b52339eeaa7a5ba0f3c035e778c64fd06c4",
+    "bytes" : 1388871,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: docProps/"
+  }, {
+    "file" : "毕业实践综合项目-协奏设计说明书-Agent重点版.docx",
+    "sha256" : "59f1512b931a34b06a580a7d7454655ec474a9ebd0cae0a468a935a3de16095f",
+    "bytes" : 1315488,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: docProps/"
+  }, {
+    "file" : "毕业实践综合项目-协奏设计说明书-完整版.docx",
+    "sha256" : "604a4b3bbe48ff72f4fe5495a5b443b5a36e395cd5ddee6f6531a341d34607fa",
+    "bytes" : 454866,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: docProps/"
+  }, {
+    "file" : "毕业实践综合项目-协奏设计说明书-权限管理版.docx",
+    "sha256" : "08273e91125c6a7d3c2c1acf5723ee8ccf329417e2c3bc6201a9073ebc6f2e96",
+    "bytes" : 1658901,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: docProps/"
+  }, {
+    "file" : "毕业实践综合项目-协奏设计说明书.docx",
+    "sha256" : "d55841348ddd03b598d6075d6d0ee3f6880feaafeeb64a564c42eaa9ea73dbf4",
+    "bytes" : 31080,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: docProps/"
+  }, {
+    "file" : "毕业实践综合项目-报告书.docx",
+    "sha256" : "3c6f3d62ff84ae1c4b5a7bc537c8f2fe1582aabc2b157c27ab8553909938818d",
+    "bytes" : 102117,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: word/footer3.xml"
+  }, {
+    "file" : "original.docx",
+    "sha256" : "c82d80565a8667c1c8703f6c1c716fccd936ab6f13d19067d029e3bd4f1dd4d5",
+    "bytes" : 37036,
+    "revisionEligibleFormat" : false,
+    "reason" : "Unsupported DOCX package part: word/stylesWithEffects.xml"
+  } ]
+}
