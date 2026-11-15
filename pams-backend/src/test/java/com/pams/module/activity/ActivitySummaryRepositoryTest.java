@@ -1,13 +1,22 @@
 package com.pams.module.activity;
 
+import com.pams.common.BizException;
+import com.pams.module.activity.controller.AgendaController;
+import com.pams.module.activity.dto.AgendaRequest;
+import com.pams.module.activity.dto.ScoreRecordRequest;
+import com.pams.module.activity.dto.ScoreRuleRequest;
+import com.pams.module.activity.dto.SeatRequest;
 import com.pams.module.activity.entity.Activity;
 import com.pams.module.activity.entity.ActivityStatus;
 import com.pams.module.activity.repository.ActivityRepository;
 import com.pams.module.activity.service.ActivityService;
+import com.pams.module.activity.service.ScoreService;
+import com.pams.module.activity.service.SeatService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +24,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Exercise the actual Hibernate queries, including tenant and soft-delete predicates. */
 @SpringBootTest
@@ -24,6 +34,9 @@ class ActivitySummaryRepositoryTest {
     @Autowired ActivityRepository repository;
     @Autowired ActivityService service;
     @Autowired JdbcTemplate jdbc;
+    @Autowired AgendaController agendas;
+    @Autowired SeatService seats;
+    @Autowired ScoreService scores;
 
     private Activity activity(String name, String date, String organizer) {
         Activity activity = new Activity();
@@ -74,5 +87,51 @@ class ActivitySummaryRepositoryTest {
         var descending = service.page("V6查询负责人", null, null, "V6筛选单位", "desc", 1, 10);
         assertThat(descending.getRecords()).extracting(row -> row.get("id")).containsExactly(later.getId(), earlier.getId());
         assertThat(repository.organizers()).contains("V6筛选单位").doesNotContain("V6隐藏单位");
+    }
+
+    @Test
+    @WithMockUser(authorities = "agenda:manage")
+    void childWritesRejectForeignAndDeletedParents() {
+        var local = activity("本组织活动", "2026-11-10", "本组织");
+        jdbc.update("INSERT INTO activity(name,type,status,deleted,org_id) VALUES ('外组织活动','OTHER','PLANNING',0,999999)");
+        Long foreignId = jdbc.queryForObject("SELECT id FROM activity WHERE name='外组织活动'", Long.class);
+        var deleted = activity("已删除活动", "2026-11-10", "本组织");
+        service.delete(deleted.getId());
+        repository.flush();
+
+        var agenda = new AgendaRequest();
+        agenda.setTitle("准备");
+        agenda.setStepNo(1);
+        var seat = new SeatRequest();
+        seat.setZone("A");
+        var rule = new ScoreRuleRequest();
+        rule.setDimensionName("表现");
+        rule.setFullMarks(10);
+        var record = new ScoreRecordRequest();
+        record.setTeamName("第一组");
+        agenda.setActivityId(local.getId());
+        seat.setActivityId(local.getId());
+        rule.setActivityId(local.getId());
+        record.setActivityId(local.getId());
+        Long ruleId = scores.createRule(rule);
+        record.setDimensionScores("{\"" + ruleId + "\":10}");
+        assertThat(agendas.create(agenda).getData().getOrgId()).isEqualTo(local.getOrgId());
+        assertThat(seats.create(seat).getOrgId()).isEqualTo(local.getOrgId());
+        assertThat(scores.createRecord(record)).isNotNull();
+
+        for (Long id : List.of(foreignId, deleted.getId())) {
+            agenda.setActivityId(id);
+            seat.setActivityId(id);
+            rule.setActivityId(id);
+            record.setActivityId(id);
+            assertThatThrownBy(() -> agendas.create(agenda)).isInstanceOf(BizException.class);
+            assertThatThrownBy(() -> seats.create(seat)).isInstanceOf(BizException.class);
+            assertThatThrownBy(() -> scores.createRule(rule)).isInstanceOf(BizException.class);
+            assertThatThrownBy(() -> scores.createRecord(record)).isInstanceOf(BizException.class);
+            for (String table : List.of("activity_agenda", "seat_map", "score_rule", "score_record")) {
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE activity_id = ?", Long.class, id))
+                        .isZero();
+            }
+        }
     }
 }

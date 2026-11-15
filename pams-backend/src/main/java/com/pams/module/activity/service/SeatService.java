@@ -16,7 +16,12 @@ import java.util.stream.Collectors;
 @Service
 public class SeatService {
     private final SeatMapRepository repository;
-    public SeatService(SeatMapRepository repository) { this.repository = repository; }
+    private final ActivityService activities;
+
+    public SeatService(SeatMapRepository repository, ActivityService activities) {
+        this.repository = repository;
+        this.activities = activities;
+    }
 
     /** 按 zone 分组返回：{"zone": [座位...]}，保持 zone 出现顺序 */
     public Map<String, List<SeatMap>> listByActivity(Long activityId) {
@@ -27,8 +32,10 @@ public class SeatService {
 
     @Transactional
     public SeatMap create(SeatRequest req) {
+        var activity = activities.lockForChildWrite(req.getActivityId());
         SeatMap s = new SeatMap();
-        s.setActivityId(req.getActivityId());
+        s.setActivityId(activity.getId());
+        s.setOrgId(activity.getOrgId());
         s.setRoomName(req.getRoomName());
         s.setZone(req.getZone());
         s.setRowNo(req.getRowNo());

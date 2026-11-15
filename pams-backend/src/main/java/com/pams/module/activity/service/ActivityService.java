@@ -145,10 +145,15 @@ public class ActivityService {
 
     @Transactional
     public void delete(Long id) {
-        Activity a = getEntity(id);
+        Activity a = lockForChildWrite(id);
         a.setDeleted(1);
         a.setUpdatedAt(LocalDateTime.now());
         repository.save(a);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Activity lockForChildWrite(Long id) {
+        return repository.lockById(id).orElseThrow(() -> new BizException(2001, "活动不存在"));
     }
 
     private void apply(Activity a, ActivityRequest req) {

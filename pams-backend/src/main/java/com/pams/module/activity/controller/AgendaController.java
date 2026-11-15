@@ -5,8 +5,10 @@ import com.pams.common.Result;
 import com.pams.module.activity.dto.AgendaRequest;
 import com.pams.module.activity.entity.ActivityAgenda;
 import com.pams.module.activity.repository.ActivityAgendaRepository;
+import com.pams.module.activity.service.ActivityService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -16,7 +18,12 @@ import java.util.List;
 @RequestMapping("/api/agendas")
 public class AgendaController {
     private final ActivityAgendaRepository repository;
-    public AgendaController(ActivityAgendaRepository repository) { this.repository = repository; }
+    private final ActivityService activities;
+
+    public AgendaController(ActivityAgendaRepository repository, ActivityService activities) {
+        this.repository = repository;
+        this.activities = activities;
+    }
 
     @GetMapping
     public Result<List<ActivityAgenda>> list(@RequestParam Long activityId) {
@@ -26,9 +33,12 @@ public class AgendaController {
     /** 议程的增删改限干部（activity:edit），登录即可查询 */
     @PreAuthorize("hasAuthority('agenda:manage')")
     @PostMapping
+    @Transactional
     public Result<ActivityAgenda> create(@Valid @RequestBody AgendaRequest req) {
+        var activity = activities.lockForChildWrite(req.getActivityId());
         ActivityAgenda a = new ActivityAgenda();
-        a.setActivityId(req.getActivityId());
+        a.setActivityId(activity.getId());
+        a.setOrgId(activity.getOrgId());
         a.setStepNo(req.getStepNo());
         a.setTitle(req.getTitle());
         a.setRemark(req.getRemark());

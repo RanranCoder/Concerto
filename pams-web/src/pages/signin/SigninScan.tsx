@@ -3,16 +3,8 @@ import { Alert, App, Button, Form, Input, InputNumber, Typography } from 'antd'
 import { useParams } from 'react-router-dom'
 import { getScanConfig, scanSignin, type SigninFieldConfigVO } from '@/api/signin'
 
-interface FieldValue {
-  key: string
-  fieldName: string
-  required: boolean
-  fieldType: string
-  value?: string | number
-}
-
 interface ScanFormValues {
-  fields: FieldValue[]
+  fields?: Array<{ value?: string | number | null }>
 }
 
 // 活动未配置核验字段时的默认表单：姓名（必填）+ 学号（选填）
@@ -86,9 +78,10 @@ export default function SigninScan() {
     setSaving(true)
     try {
       const fields: Record<string, string> = {}
-      for (const f of values.fields ?? []) {
-        if (f.value !== undefined && f.value !== null && String(f.value).trim() !== '') {
-          fields[f.fieldName] = String(f.value).trim()
+      for (const [index, { fieldName }] of fieldConfigs.entries()) {
+        const value = String(values.fields?.[index]?.value ?? '').trim()
+        if (value !== '') {
+          fields[fieldName] = value
         }
       }
       await scanSignin({ token, fields, signTime: localIso() })
