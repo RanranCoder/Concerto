@@ -459,7 +459,6 @@ export default function PartyMemberList() {
     <div className="records-page">
       <PageHeader
         title="党务台账"
-        description="围绕个人发展历程维护台账，集中查阅名册与专项记录。"
         extra={
           isMinisterOrAbove && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

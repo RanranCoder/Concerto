@@ -105,9 +105,6 @@ export default function FormSurface({
         <div className="form-workspace-body">{children}</div>
         {actions && (
           <footer className="form-workspace-footer">
-            <span className="form-surface-required-note">
-              标有 * 的为必填项
-            </span>
             <div>{actions}</div>
           </footer>
         )}

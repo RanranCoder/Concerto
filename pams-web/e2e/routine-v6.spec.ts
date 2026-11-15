@@ -21,9 +21,14 @@ const manager = {
   permissions: [
     'activity:view',
     'schedule:view',
+    'schedule:self:view',
     'schedule:manage',
     'schedule:generate',
+    'schedule:publish',
+    'schedule:export',
     'schedule:free_table',
+    'course:self:manage',
+    'course:manage',
     'attendance:view',
     'attendance:manage',
     'checkin:view',
@@ -38,6 +43,8 @@ const member = {
     'activity:view',
     'schedule:view',
     'schedule:free_table',
+    'course:self:manage',
+    'attendance:self:view',
     'checkin:view',
   ],
 }
@@ -532,21 +539,29 @@ async function screenshot(page: Page, name: string) {
 
 test('六页布局、明暗主题、手机滚动和未标日期班次可访问', async ({ page }) => {
   const state = await setup(page)
+  await page.goto('/routine/schedules')
+  const navigation = page.getByRole('navigation', { name: '主导航' })
+  const moduleNavigation = page.getByRole('navigation', {
+    name: '排班考勤页面',
+    includeHidden: true,
+  })
   const pages = [
-    ['schedules', '排班'],
-    ['my-schedules', '我的排班'],
-    ['activity-schedules?activityId=1', '活动排班'],
-    ['attendance', '考勤中心'],
-    ['course-schedule', '无课表制作'],
-    ['free-schedules', '无课表'],
+    ['schedules', '排班', '排班'],
+    ['my-schedules', '我的排班', '我的排班'],
+    ['activity-schedules', '活动排班', '活动排班'],
+    ['attendance', '考勤', '考勤中心'],
+    ['course-schedule', '课表制作', '无课表制作'],
+    ['free-schedules', '无课表', '无课表'],
   ]
-  for (const [path, title] of pages) {
-    await page.goto('/routine/' + path)
+  for (const [path, menuLabel, title] of pages) {
+    await navigation
+      .getByRole('menuitem', { name: menuLabel, exact: true })
+      .click()
     await expect(
       page.getByRole('heading', { name: title, exact: true }),
     ).toBeVisible()
-    await expect(page.locator('.routine-module-nav a')).toHaveCount(6)
-    await screenshot(page, path.split('?')[0] + '-light')
+    await expect(moduleNavigation).toHaveCount(0)
+    await screenshot(page, path + '-light')
   }
   await page.goto('/routine/my-schedules')
   await page
@@ -567,8 +582,10 @@ test('六页布局、明暗主题、手机滚动和未标日期班次可访问',
     )
     .toBe(true)
   await screenshot(page, 'schedules-mobile-dark')
-  await page.goto('/routine/course-schedule')
+  await page.getByRole('button', { name: '打开导航' }).click()
+  await navigation.getByRole('menuitem', { name: '课表制作', exact: true }).click()
   await expect(page.getByRole('heading', { name: '无课表制作' })).toBeVisible()
+  await expect(moduleNavigation).toHaveCount(0)
   await expect
     .poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),

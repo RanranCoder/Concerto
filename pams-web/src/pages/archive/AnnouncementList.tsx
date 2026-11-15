@@ -17,7 +17,6 @@ import {
 import type { TableColumnsType } from 'antd'
 import { BellOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import GlassCard from '@/components/glass/GlassCard'
 import GlassModal from '@/components/glass/GlassModal'
 import GlassTable from '@/components/glass/GlassTable'
 import PageHeader from '@/components/glass/PageHeader'
@@ -217,6 +216,7 @@ export default function AnnouncementList() {
             render: (_: unknown, r: AnnouncementVO) => (
               <Popconfirm
                 title="确认删除该公告？"
+                description="删除后，成员将无法再查看这条公告。"
                 onConfirm={() => handleDelete(r.id)}
                 okText="删除"
                 cancelText="取消"
@@ -240,7 +240,10 @@ export default function AnnouncementList() {
     <div className="records-page">
       <PageHeader
         title="通知公告"
-        description="党建办公室通知发布（部长以上可发布，删除限老师/主任），已读状态跟随账号"
+        help={{
+          label: '公告权限说明',
+          text: hasPerm('notice:publish') ? '公告的已读状态按账号保存。' : '你的账号没有发布权限。公告的已读状态按账号保存。',
+        }}
         extra={
           hasPerm('notice:publish') ? (
             <Button
@@ -255,16 +258,6 @@ export default function AnnouncementList() {
       />
       <RecordsNav section="archive" />
 
-      {!hasPerm('notice:publish') && (
-        <GlassCard
-          className="records-toolbar"
-          style={{ padding: 16, marginBottom: 16 }}
-        >
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            您当前仅可查看公告，发布需部长及以上权限。
-          </Typography.Text>
-        </GlassCard>
-      )}
 
       <GlassTable<AnnouncementVO>
         scroll={{ x: 900 }}

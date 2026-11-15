@@ -610,7 +610,6 @@ export default function ActivityScheduleList() {
     <RoutineLayout>
       <PageHeader
         title="活动排班"
-        description="把无课人员安排到活动各节次，复核草稿后发布并进入考勤。"
         extra={
           <>
             {canManage && (

@@ -759,7 +759,6 @@ export default function CourseSchedulePage() {
     <RoutineLayout>
       <PageHeader
         title="无课表制作"
-        description="维护个人课表，查找共同空闲，或批量制作部门无课表。"
       />
       <Tabs
         className="routine-tabs"

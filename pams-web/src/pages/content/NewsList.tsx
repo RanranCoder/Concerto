@@ -323,7 +323,6 @@ export default function NewsList() {
     <div className="records-page">
       <PageHeader
         title="内容宣传"
-        description="独立维护活动新闻稿，保存草稿与登记发布。"
         extra={
           isMinisterOrAbove && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

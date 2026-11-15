@@ -449,7 +449,6 @@ export default function MemberList() {
     <div className="records-page member-records">
       <PageHeader
         title="成员管理"
-        description="按届别维护组织成员，衔接账号、排班与工作履历。"
         extra={
           <Space wrap>
             {hasPerm('member:manage') && (

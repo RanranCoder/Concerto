@@ -94,7 +94,7 @@ export default function MyScheduleList() {
     <RoutineLayout>
       <PageHeader
         title="我的排班"
-        description={`${user?.realName ?? ''} · ${user?.deptName ?? '当前组织'}，查看自己的值班与活动安排。`}
+        description={[user?.realName, user?.deptName].filter(Boolean).join(' · ')}
         extra={
           <Button disabled={!user?.permissions.includes('attendance:self:view')} onClick={() => navigate('/routine/attendance?scope=mine')}>
             查看我的考勤

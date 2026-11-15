@@ -1,34 +1,7 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
-import { useAuthStore } from '@/stores/auth'
 
 export default function RoutineLayout({ children }: { children: ReactNode }) {
-  const permissions = useAuthStore((s) => s.user?.permissions) ?? []
-  const pages = [
-    ...(permissions.includes('course:self:manage') || permissions.includes('course:manage') ? [['/routine/course-schedule','课表制作']] : []),
-    ...(permissions.includes('schedule:view') ? [['/routine/schedules', '排班'], ['/routine/activity-schedules', '活动排班']] : []),
-    ...(permissions.includes('schedule:self:view') ? [['/routine/my-schedules', '我的排班']] : []),
-
-    ...(permissions.includes('attendance:view') || permissions.includes('attendance:self:view') ? [['/routine/attendance', '考勤']] : []),
-    ...(permissions.includes('schedule:free_table')
-      ? [
-
-          ['/routine/free-schedules', '无课表'],
-        ]
-      : []),
-  ]
-  return (
-    <div className="routine-v6">
-      <nav className="routine-module-nav" aria-label="排班考勤页面">
-        {pages.map(([to, name]) => (
-          <NavLink key={to} to={to}>
-            {name}
-          </NavLink>
-        ))}
-      </nav>
-      {children}
-    </div>
-  )
+  return <div className="routine-v6">{children}</div>
 }
 
 export function RoutineSummary({

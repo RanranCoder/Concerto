@@ -94,7 +94,6 @@ export default function FreeScheduleList() {
     <RoutineLayout>
       <PageHeader
         title="无课表"
-        description="查看部门本学期最新无课结果，按周次核对可参与人员。"
         extra={
           canManage && (
             <Button onClick={() => navigate(courseUrl)}>重新制作无课表</Button>

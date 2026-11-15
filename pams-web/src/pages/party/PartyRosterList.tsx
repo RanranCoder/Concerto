@@ -252,7 +252,6 @@ export default function PartyRosterList() {
     <div className="records-page">
       <PageHeader
         title="党务台账"
-        description="推优 / 通过 / 汇总 / 发展对象 / 转移名单"
         extra={
           isMinisterOrAbove && (
             <Space>

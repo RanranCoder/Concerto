@@ -102,7 +102,7 @@
 .workbench-date strong { font-size: var(--fs-display); font-weight: calc(600 - var(--font-weight-compensation)); line-height: 1.2; }
 .workbench-date span { font-size: var(--fs-caption); margin-top: var(--sp-0); }
 .workbench-today-copy { display: flex; flex-direction: column; justify-content: center; padding: var(--sp-3) var(--sp-5); flex-shrink: 0; }
-.workbench-today-copy h3 { font-size: var(--fs-body-lg); color: var(--brand-text); font-weight: calc(600 - var(--font-weight-compensation)); }
+.workbench-today-copy h2 { font-size: var(--fs-body-lg); color: var(--brand-text); font-weight: calc(600 - var(--font-weight-compensation)); }
 .workbench-today-copy p { font-size: var(--fs-caption); color: var(--text-secondary); margin-top: var(--sp-0); }
 .workbench-today-events { display: flex; align-items: center; min-width: 0; flex: 1; padding: var(--sp-3) 0; }
 .workbench-today-events button { display: block; text-align: left; padding: 0 var(--sp-5); border: 0; border-left: 1px solid var(--border); background: transparent; min-width: 0; max-width: 45%; cursor: pointer; }
@@ -211,7 +211,6 @@
   .workbench-grid > div:last-child { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); align-items: start; }
   .workbench-shortcuts { margin-top: 0; }
   .workbench-today-events button { max-width: 100%; }
-  .workbench-today-events button:last-child:not(:first-child) { display: none; }
 }
 @media (max-width: 767px) {
   .business-navigation .sidebar-navigation .ant-menu-item,
@@ -229,7 +228,20 @@
   .business-metric > div { gap: var(--sp-1); }
   .workbench-today-copy { padding: var(--sp-3); }
   .workbench-date { min-width: 76px; padding: var(--sp-3); }
-  .workbench-today-events { display: none; }
+  .workbench-today { flex-wrap: wrap; }
+  .workbench-today-events:not(:empty) {
+    flex: 1 1 100%;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+  }
+  .workbench-today-events:empty { display: none; }
+  .workbench-today-events button {
+    min-height: 44px;
+    padding: var(--sp-1) var(--sp-3);
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
   .business-section-head { padding: var(--sp-3); }
   .workbench-legend { padding-left: var(--sp-3); }
   .workbench-mobile-days { display: flex; gap: var(--sp-0); margin: 0 var(--sp-2) var(--sp-2); }

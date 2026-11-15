@@ -223,7 +223,6 @@ export default function CreditList() {
     <div className="records-page">
       <PageHeader
         title="素拓加分"
-        description="活动素拓加分台账：记录参与 / 答题等加分，汇总人次与总分值"
         extra={
           canAdd ? (
             <Space>

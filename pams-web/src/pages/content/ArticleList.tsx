@@ -664,7 +664,6 @@ export default function ArticleList() {
     <div className="records-page">
       <PageHeader
         title="内容宣传"
-        description="围绕活动准备宣传内容，跟进审稿、发布与传播记录。"
         extra={
           canCreate ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>

@@ -206,7 +206,7 @@
   bottom: 0;
   z-index: 5;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 16px;
   padding: 16px 24px;
@@ -215,10 +215,6 @@
   border-radius: var(--r-lg);
   background: var(--canvas);
   box-shadow: 0 -4px 16px rgb(0 0 0 / 3%);
-}
-.form-surface-required-note {
-  font-size: var(--fs-caption);
-  color: var(--text-secondary);
 }
 .form-section + .form-section {
   margin-top: 10px;
@@ -299,9 +295,6 @@
   }
   .form-workspace-footer > div {
     margin-left: auto;
-  }
-  .form-surface-required-note {
-    display: none;
   }
   .form-surface-drawer .ant-drawer-header {
     padding: 20px;

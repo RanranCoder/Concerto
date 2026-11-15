@@ -1,25 +1,32 @@
-import { Space } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
+import { Button, Space, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
   title: string
   description?: ReactNode
+  help?: { label: string; text: string }
   extra?: ReactNode
 }
 
 /**
- * 页面标题区。统一为「无容器」形态：标题 + 描述 + 右侧操作，
- * 靠下边框与间距与内容分区，不再套一层卡片（设计方案 §6 B/C/D 模式）。
- * 样式在 global.css 的 .page-header 中，避免内联值与 token 脱节。
+ * 页面标题、可选的业务元数据和页面操作。
  */
-export default function PageHeader({ title, description, extra }: PageHeaderProps) {
+export default function PageHeader({ title, description, help, extra }: PageHeaderProps) {
   return (
-    <div className="page-header">
+    <header className="page-header">
       <div className="page-header-main">
-        <h2 className="page-header-title">{title}</h2>
+        <div className="page-header-title-row">
+          <h1 className="page-header-title">{title}</h1>
+          {help && (
+            <Tooltip title={help.text} placement="bottom" trigger={['hover', 'focus', 'click']}>
+              <Button type="text" icon={<InfoCircleOutlined aria-hidden="true" />} aria-label={help.label} />
+            </Tooltip>
+          )}
+        </div>
         {description && <p className="page-header-desc">{description}</p>}
       </div>
       {extra && <Space wrap>{extra}</Space>}
-    </div>
+    </header>
   )
 }

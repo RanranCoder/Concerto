@@ -219,7 +219,6 @@ export default function ScheduleList() {
     <RoutineLayout>
       <PageHeader
         title="排班"
-        description="按教学周安排例行事务，明确每班责任人与协作人员。"
         extra={
           <>
             {permissions.includes('schedule:export') && (

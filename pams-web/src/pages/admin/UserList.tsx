@@ -79,7 +79,10 @@ export default function UserList() {
   ]
   const counts = {all: summary?.total, ENABLED: summary?.enabled, PENDING: summary?.pendingActivation, DISABLED: summary?.disabled}
   return <div className="admin-v6 users-v6">
-    <PageHeader title="用户管理" description="管理本组织登录账号、部门归属和主角色，核对账号的实际访问权限。" extra={<>
+    <PageHeader title="用户管理" help={{
+      label: '账号与权限说明',
+      text: '业务权限由主角色决定。所有者和管理员身份单独授予。',
+    }} extra={<>
       <Button icon={<ReloadOutlined aria-hidden="true" />} onClick={reload} loading={loading}>刷新</Button>{caps.includes('role:view') && <Button onClick={() => navigate('/admin/permissions')}>角色与权限</Button>}
       {canManage && <MemberAccountImport onCreated={reload} />}{canManage && canAssign && <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setEditing({})}>新增用户</Button>}
     </>} />
@@ -89,14 +92,13 @@ export default function UserList() {
     <section className="admin-workspace"><Tabs activeKey={accountStatus || 'all'} onChange={key => setAccountStatus(key === 'all' ? undefined : key as StatusFilter)} items={[['all', '全部账号'], ['ENABLED', '启用'], ['PENDING', '待设密'], ['DISABLED', '停用']].map(([key, label]) => ({key, label: <>{label} <small>{counts[key as keyof typeof counts] ?? '—'}</small></>}))} />
       <div className="admin-toolbar"><Input prefix={<SearchOutlined aria-hidden="true" />} aria-label="搜索姓名、用户名或学号" placeholder="搜索姓名、用户名或学号" allowClear value={keyword} onChange={e => setKeyword(e.target.value)} />
         <label>部门<Select aria-label="部门筛选" allowClear placeholder="全部部门" value={dept} options={depts.map(d => ({value: d.id, label: d.name}))} onChange={setDept} /></label>
-        <label>角色<Select aria-label="角色筛选" allowClear placeholder="全部角色" value={roleId} options={summary?.roles.map(r => ({value: r.id, label: r.name}))} onChange={setRoleId} /></label>
+        <label>角色<Select aria-label="角色筛选" allowClear placeholder="全部角色" value={roleId} options={summary?.roles?.map(r => ({value: r.id, label: r.name}))} onChange={setRoleId} /></label>
         <label>身份<Select aria-label="管理身份筛选" allowClear placeholder="全部身份" value={managementSource} options={(['OWNER', 'DELEGATED', 'NONE'] as const).map(value => ({value, label: managementLabel(value)}))} onChange={setManagementSource} /></label><Button type="link" onClick={reset}>重置</Button>
       </div>
       {selected.length > 0 && <div className="admin-batch"><strong>已选择 {selected.length} 个账号</strong><Button type="link" onClick={() => requestStatus(selected, 1)}>启用账号</Button><Button type="link" onClick={() => requestStatus(selected, 0)}>停用账号</Button><Button type="link" onClick={() => setSelected([])}>取消选择</Button></div>}
       <AdminTable rows={data} total={total} {...paging} loading={loading} error={error} retry={reload} onPage={(page, size) => setPaging({page, size})} columns={columns} compact={density === 'compact'} rowSelection={canManage ? {selectedRowKeys: selected.map(u => u.id), preserveSelectedRowKeys: true, onChange: (_, rows) => selectRows(rows), getCheckboxProps: user => ({disabled: !selectable(user), 'aria-label': `选择${user.realName}`})} : undefined}
         renderMobile={user => <><div className="admin-mobile-user">{canManage && <Checkbox aria-label={`选择${user.realName}`} disabled={!selectable(user)} checked={selected.some(p => p.id === user.id)} onChange={e => selectRows(e.target.checked ? [...selected, user] : selected.filter(p => p.id !== user.id))} />}{name(user)}</div><div className="admin-mobile-meta"><span>部门：{user.deptName || '未分配部门'}</span><StatusTag tone="brand">{user.roleName || '未分配角色'}</StatusTag><span>{managementLabel(user.managementSource)}</span>{userStatus(user)}</div><div className="admin-mobile-actions">{actions(user)}</div></>}
         empty={<Empty description="没有匹配的账号"><Button onClick={reset}>清除筛选</Button></Empty>} />
-      <p className="admin-table-note">业务主角色决定工作权限，所有者与管理员身份单独授予。停用会阻止登录，成员档案仍保留。</p>
     </section>
     {editing && <UserEditor user={editing.user} depts={depts} onClose={() => setEditing(undefined)} onSaved={() => {setEditing(undefined); setPaging(p => ({...p, page: 1})); setSelected([]); reload()}} />}
     {detail && <UserDetails user={detail} canEdit={editable(detail)} canManage={mutable(detail)} canChangeStatus={selectable(detail)} onClose={() => setDetail(undefined)} onEdit={() => {setEditing({user: detail}); setDetail(undefined)}} onStatus={() => {requestStatus([detail], detail.status === 1 ? 0 : 1); setDetail(undefined)}} onDelete={() => {setDeleting(detail); setConfirmation(''); setOperationError(''); setDetail(undefined)}} />}

@@ -132,14 +132,23 @@ export default function Dashboard() {
   if (loading || dataIdentity !== accountToken) return <div aria-busy="true"><PageHeader title="工作台" description="正在加载工作安排…" /><Skeleton active paragraph={{ rows: 12 }} /></div>
 
   return <div className="workbench-v6">
-    <PageHeader title="工作台" description="查看本周安排，跟进活动与待处理事项" extra={hasPerm('activity:create') && <Button aria-label="新增活动" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/activities', { state: { create: true } })}>新增活动</Button>} />
+    <PageHeader title="工作台" extra={hasPerm('activity:create') && <Button aria-label="新增活动" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/activities', { state: { create: true } })}>新增活动</Button>} />
     <section className="workbench-today" aria-label="今日安排">
       <div className="workbench-date"><strong>{today.date()}</strong><span>{today.month() + 1}月 / {WEEKDAY_NAMES[weekday]}</span></div>
-      <div className="workbench-today-copy"><h3>今天的安排</h3><p>{currentEvents.length ? currentEvents.length + ' 项安排' : '今天暂无安排'}</p></div>
+      <div className="workbench-today-copy"><h2>今日安排</h2><p>{currentEvents.length ? currentEvents.length + ' 项' : '暂无安排'}</p></div>
       <div className="workbench-today-events">{currentEvents.slice(0, 2).map(event => <button key={event.key} onClick={() => navigate(event.path)}><strong>{event.title}</strong><small>{event.time} / {event.meta}</small></button>)}</div>
     </section>
     <section className="business-summary" aria-label="工作摘要">
-      {[['活动总数', total, '全部活动'], ['执行中', data?.activityStats?.EXECUTING ?? 0, '持续跟进'], ['本周排班', data?.weekSchedules ?? 0, '本周时段'], ['我的待办', data?.pendingWork?.total ?? tasks.length, '待处理事项']].map(([label, value, note], index) => <div key={label} className={index === 3 ? 'business-metric attention' : 'business-metric'}><span>{label}</span><div><strong>{value}</strong><small>{note}</small></div></div>)}
+      {[
+        ['活动总数', total],
+        ['执行中', data?.activityStats?.EXECUTING ?? 0],
+        ['本周排班', data?.weekSchedules ?? 0],
+        ['我的待办', data?.pendingWork?.total ?? tasks.length],
+      ].map(([label, value]) => (
+        <div key={label} className={label === '我的待办' ? 'business-metric attention' : 'business-metric'}>
+          <span>{label}</span><div><strong>{value}</strong></div>
+        </div>
+      ))}
     </section>
     <div className="workbench-grid"><div>
       <GlassCard className="workbench-calendar"><div className="business-section-head"><div><h3>本周安排</h3><small>{week[0].date.format('YYYY年MM月DD日')} — {week[6].date.format('MM月DD日')}</small></div><Segmented size="small" aria-label="日历范围" options={[{ label: '工作日', value: 5 }, { label: '全周', value: 7 }]} value={range} onChange={value => { const days = Number(value); setRange(days); if (selectedDay >= days) setSelectedDay(0) }} /></div>

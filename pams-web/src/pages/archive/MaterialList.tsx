@@ -164,7 +164,6 @@ export default function MaterialList() {
     <div className="records-page">
       <PageHeader
         title="材料与档案"
-        description="按活动与业务类型归集材料，复用模板，查阅组织工作档案。"
         extra={
           hasPerm('material:upload') && (
             <Button

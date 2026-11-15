@@ -167,7 +167,6 @@ export default function TemplateList() {
     <div className="records-page">
       <PageHeader
         title="模板库"
-        description="活动常用模板资产：策划书 / 座位表 / 议程表 / 签到表 / 水牌 / LOGO / 党徽 / 新闻稿"
         extra={
           hasPerm('template:manage') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>

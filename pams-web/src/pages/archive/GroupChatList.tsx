@@ -449,7 +449,6 @@ export default function GroupChatList() {
     <div className="records-page">
       <PageHeader
         title="群聊管理"
-        description="统一管理党务工作微信群：分类、关联活动/部门、负责人与二维码"
         extra={
           <Space>
             {hasPerm('chat:category') && (
