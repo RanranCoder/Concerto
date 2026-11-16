@@ -121,9 +121,8 @@
 }
 
 .lingsi-starter-categories button[aria-pressed='true'] {
-  border-color: var(--border);
-  color: var(--text-primary);
-  box-shadow: var(--focus-ring);
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
 }
 
 .lingsi-category-icon {

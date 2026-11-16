@@ -59,6 +59,101 @@ async function setup(page:Page, options: { permissions?: string[]; packs?: strin
 }
 const task=(page:Page,title:string)=>page.locator('.lingsi-conv-select').filter({hasText:title})
 
+test('输出期间侧栏保持可用，切回原任务后继续显示同一轮输出', async ({ page }) => {
+  const { agentModule, errors } = await setup(page)
+  const first = task(page, '准备培训班策划初稿')
+  const second = task(page, '查询归档要求')
+  const list = page.locator('.lingsi-sider-list')
+  const reply = page.locator('.lingsi-reply').last()
+  const streamId = 'switching-turn'
+  let requestId = ''
+  let completed = false
+  let refreshCount = 0
+  let releaseRefresh!: () => void
+  const refreshPending = new Promise<void>(resolve => { releaseRefresh = resolve })
+  const finalMessage = { id: 201, role: 'ASSISTANT', streamId, content: '原任务已继续运行并完成。' }
+
+  await first.click()
+  await expect(reply).toContainText('已整理初稿')
+  await expect(page.locator('.agent-content-inner')).toHaveCSS('animation-name', 'none')
+  await second.hover()
+  const hover = await second.locator('..').evaluate(row => getComputedStyle(row).backgroundColor)
+  const selected = await first.locator('..').evaluate(row => getComputedStyle(row).backgroundColor)
+  await expect(page.getByRole('button', { name: '全部', exact: true })).toHaveCSS('background-color', selected)
+  expect(hover).toBe('rgb(240, 240, 238)')
+  expect(selected).not.toBe(hover)
+  await expect(first.locator('..')).toHaveCSS('box-shadow', 'none')
+  await page.getByRole('button', { name: '已完成', exact: true }).hover()
+  await expect(page.getByRole('button', { name: '已完成', exact: true })).toHaveCSS('background-color', hover)
+
+  await page.route('**/api/agent/chat', route => {
+    requestId = route.request().postDataJSON().requestId
+    return route.fulfill({ json: { code: 200, data: { accepted: true, requestId, streamId } } })
+  })
+  await page.route('**/api/agent/requests/*', route => route.fulfill({ json: { code: 200, data: {
+    requestId, streamId, conversationId: 1, status: completed ? 'SUCCESS' : 'RUNNING', cancelled: false,
+    message: completed ? finalMessage : null,
+  } } }))
+  const deltaEvent = () => ({ streamId, seq: 1, ts: 1, type: 'MESSAGE_DELTA', payload: { requestId, round: 0, text: '正在核对活动材料。' } })
+  await page.route('**/api/agent/streams/*', route => route.fulfill({ json: { code: 200, data: { streamId, events: [deltaEvent()] } } }))
+  await page.route(url => url.pathname === '/api/agent/conversations/1/messages', route => route.fulfill({ json: { code: 200, data: {
+    records: [
+      { id: 200, role: 'USER', content: '核对活动材料', streamId, activeRequestId: completed ? undefined : requestId },
+      ...(completed ? [finalMessage] : []),
+    ],
+  } } }))
+  await page.route(url => url.pathname === '/api/agent/conversations', async route => {
+    refreshCount++
+    await refreshPending
+    await route.fallback()
+  })
+
+  const editor = page.getByRole('textbox', { name: '任务内容' })
+  await editor.fill('核对活动材料')
+  await editor.press('Enter')
+  await expect(reply).toHaveText('正在核对活动材料。')
+  await expect(page.getByRole('button', { name: '停止任务' })).toBeEnabled()
+
+  const secondBeforeRefresh = (await second.elementHandle())!
+  try {
+    await page.evaluate(async url => {
+      const { useAgentStore } = await import(url)
+      useAgentStore.getState().applyTaskDone({ runId: 999, conversationId: 3 })
+    }, agentModule())
+    await expect.poll(() => refreshCount).toBe(1)
+    await expect(list.locator('.lingsi-sider-loading')).toHaveCount(0)
+    await second.click()
+    await expect(second).toHaveAttribute('aria-current', 'page')
+    await expect(reply).toContainText('需要归档策划')
+    expect(await secondBeforeRefresh.evaluate(element => element.isConnected)).toBe(true)
+
+    await first.click()
+    await expect(reply).toHaveText('正在核对活动材料。')
+    await expect(page.getByRole('button', { name: '停止任务' })).toBeEnabled()
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: '打开任务列表' }).click()
+    await second.click()
+    await expect(list).toBeHidden()
+    await expect(reply).toContainText('需要归档策划')
+
+    completed = true
+    await page.evaluate(async ({ url, streamId, requestId }) => {
+      const { useAgentStore } = await import(url)
+      useAgentStore.getState().applyStreamEvent({ streamId, seq: 2, ts: 2, type: 'MESSAGE_DONE', payload: { requestId, messageId: 201 } })
+    }, { url: agentModule(), streamId, requestId })
+    await expect.poll(() => refreshCount).toBe(2)
+    await expect(reply).toContainText('需要归档策划')
+  } finally {
+    releaseRefresh()
+  }
+
+  await page.getByRole('button', { name: '打开任务列表' }).click()
+  await first.click()
+  await expect(reply).toHaveText(finalMessage.content)
+  expect(errors).toEqual([])
+})
+
 test('工具记录按调用显示真实文件名，确认后用回执更新状态', async ({ page }) => {
   await setup(page)
   await page.route(url => url.pathname === '/api/agent/conversations/2/messages', route => route.fulfill({ json: { code: 200, data: {
@@ -1034,6 +1129,8 @@ for(const phone of [false,true]) test(`S4 成果版本编辑、对比与确认�
   await expect(page.locator('.lingsi-version-diff-removed')).toContainText('2025-11-20')
   await expect(page.locator('.lingsi-version-diff-added')).toContainText('2026-11-20')
   await page.screenshot({path:resolve(output,phone?'s4-workbench-dark-mobile.png':'s4-workbench-light-desktop.png'),animations:'disabled'})
+  await page.getByRole('tab', { name: '参考资料', exact: true }).click()
+  await expect(page.getByRole('tabpanel')).toContainText('请准备培训班报道。')
   await page.getByRole('combobox',{name:'成果版本'}).selectOption('1')
   await page.getByRole('tab',{name:'内容预览',exact:true}).click()
   await expect(page.locator('.lingsi-preview-document')).toContainText('2025-11-20')

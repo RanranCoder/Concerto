@@ -197,8 +197,8 @@ export default function LingsiComposer({
       </span>
     </Tooltip>
   ) : (
-    <Tooltip title={provider ? `当前使用 ${provider === 'deepseek' ? 'DeepSeek' : provider}` : '发送消息，开始与concerto协作'}>
-      <span className="lingsi-model-pill"><Sparkles size={12} />{provider === 'deepseek' ? 'DeepSeek' : provider || 'concerto就绪'}</span>
+    <Tooltip title={provider ? `当前使用 ${provider === 'deepseek' ? 'DeepSeek' : provider}` : '发送消息，开始与Concerto协作'}>
+      <span className="lingsi-model-pill"><Sparkles size={12} />{provider === 'deepseek' ? 'DeepSeek' : provider || 'Concerto就绪'}</span>
     </Tooltip>
   )
 
@@ -264,7 +264,7 @@ export default function LingsiComposer({
                 ? '正在加载会话…'
                 : kb
                   ? '输入想核对的资料问题…'
-                  : welcome ? '描述你要办理的事项，或使用上方的任务模板…' : '把你想推进的事，交给concerto…'
+                  : welcome ? '描述你要办理的事项，或使用上方的任务模板…' : '把你想推进的事，交给Concerto…'
             }
             autoSize={{ minRows: 2, maxRows: 6 }}
             disabled={disabled}

@@ -10,8 +10,8 @@
 .pams-superdoc-error button { font:inherit; padding:8px 12px; cursor:pointer; }
 .pams-superdoc [inert] { opacity:.75; }
 .pams-ribbon-tabs { display:flex; align-items:center; gap:4px; padding:0 12px; border-bottom:1px solid #e4eaf2; min-height:38px; }
-.pams-ribbon-tabs [role=tab] { appearance:none; border:0; border-bottom:2px solid transparent; padding:10px 16px 8px; background:transparent; color:#52647d; font:inherit; cursor:pointer; }
-.pams-ribbon-tabs [role=tab][aria-selected=true] { color:#1677ff; border-bottom-color:#1677ff; font-weight:calc(600 - var(--font-weight-compensation)); }
+.pams-ribbon-tabs [role=tab] { appearance:none; border:0; border-radius:var(--r-md); padding:7px 16px; background:transparent; color:#52647d; font:inherit; cursor:pointer; }
+.pams-ribbon-tabs [role=tab][aria-selected=true] { background:var(--tab-selected-bg); color:var(--on-brand); font-weight:calc(600 - var(--font-weight-compensation)); }
 .pams-ribbon-mode { margin-left:auto; color:#7b889b; font-size: var(--fs-caption); white-space:nowrap; }
 .pams-ribbon-mode.is-suggesting { color:#a06310; }
 .pams-ribbon-panel { display:flex; align-items:stretch; min-height:106px; padding:8px 8px 4px; overflow-x:auto; scrollbar-width:thin; }
@@ -65,7 +65,7 @@
 .activity-plan-inline-editor:fullscreen .pams-superdoc-canvas { flex:1; min-height:0; height:auto; }
 @media(max-width:800px) {
   .pams-ribbon-tabs { padding:0 4px; gap:0; }
-  .pams-ribbon-tabs [role=tab] { padding:10px 12px 8px; }
+  .pams-ribbon-tabs [role=tab] { padding:7px 12px; }
   .pams-ribbon-mode { font-size: var(--fs-caption); padding-right:6px; }
   .pams-ribbon-panel { min-height:106px; }
   .pams-superdoc-canvas { height:70dvh; }

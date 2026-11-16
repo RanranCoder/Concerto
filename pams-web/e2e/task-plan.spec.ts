@@ -336,17 +336,7 @@ async function setup(
     if (pathname === '/api/orgs/tree') return ok([])
     return ok([])
   })
-  await page.route('**/ws/**', (route) =>
-    route.fulfill({
-      status: 200,
-      json: {
-        websocket: false,
-        origins: ['*:*'],
-        cookie_needed: false,
-        entropy: 1,
-      },
-    }),
-  )
+  await page.route((url) => url.pathname.startsWith('/ws/'), (route) => route.abort())
   return { state, date, tasks: () => tasks }
 }
 const drawer = (page: Page) => page.locator('.task-plan-drawer')

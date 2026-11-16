@@ -1,37 +1,4 @@
 /* Activity task planning: shared design tokens keep organization color and dark mode consistent. */
-.activity-detail-tabs
-  > .ant-tabs-nav
-  .ant-tabs-tab:has(.activity-task-plan-tab) {
-  align-self: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.activity-detail-tabs > .ant-tabs-nav .activity-task-plan-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 7px 16px;
-  border-radius: var(--r-lg);
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 600;
-  line-height: 1.5;
-}
-.activity-detail-tabs
-  > .ant-tabs-nav
-  .ant-tabs-tab-active
-  .activity-task-plan-tab,
-.activity-detail-tabs > .ant-tabs-nav .activity-task-plan-tab:hover {
-  background: var(--brand-hover);
-  color: var(--on-brand);
-}
-.activity-detail-tabs
-  > .ant-tabs-nav:has(.ant-tabs-tab-active .activity-task-plan-tab)
-  .ant-tabs-ink-bar {
-  visibility: hidden;
-}
 .task-plan {
   min-width: 0;
   color: var(--text-primary);
@@ -118,8 +85,9 @@
   cursor: pointer;
 }
 .task-plan-filters button[aria-pressed='true'] {
-  color: var(--brand-text);
-  box-shadow: var(--focus-ring);
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
+  border-color: transparent;
 }
 .task-plan-filters b {
   font-variant-numeric: tabular-nums;
@@ -883,10 +851,6 @@
 @media (max-width: 700px) {
   .task-plan-actions .ant-btn {
     min-height: 40px;
-  }
-  .activity-detail-tabs > .ant-tabs-nav .activity-task-plan-tab {
-    min-height: 40px;
-    padding: 8px 14px;
   }
   .task-plan-summary {
     gap: 13px;

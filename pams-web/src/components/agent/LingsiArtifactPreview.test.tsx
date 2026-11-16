@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import LingsiArtifactPreview from './LingsiArtifactPreview'
 import { getAgentArtifact, type AgentArtifactDetail, type AgentArtifactSummary } from '@/api/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
@@ -11,6 +11,33 @@ const detail = (value: AgentArtifactSummary, selected = value.currentVersion): A
 beforeEach(() => { vi.resetAllMocks(); useAgentPanel.getState().closeAll(); useAgentPanel.setState({ drafts: {} }) })
 afterEach(cleanup)
 describe('成果动作状态', () => {
+  it('变更清单缺失时仍能切换标签并显示参考资料', async () => {
+    const summary = artifact()
+    vi.mocked(getAgentArtifact).mockResolvedValue({
+      ...detail(summary),
+      plan: null,
+      sources: [{ label: '任务要求', text: '核对活动报名人数' }],
+    })
+    render(<LingsiArtifactPreview artifact={summary} onClose={() => {}} />)
+    await screen.findByText('确认后提交审核')
+    fireEvent.click(screen.getByRole('tab', { name: '本次变更' }))
+    expect(screen.getByText('本版暂无可显示的业务变更明细。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: '参考资料' }))
+    expect(screen.getByText('核对活动报名人数')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: '内容预览' }))
+    expect(screen.getByText('确认后提交审核')).toBeTruthy()
+  })
+
+  it('旧接口返回资料节点元数据时在面板内提示', async () => {
+    const summary = artifact()
+    const response = { ...detail(summary), sources: { array: true, nodeType: 'ARRAY' } }
+    vi.mocked(getAgentArtifact).mockResolvedValue(response as unknown as AgentArtifactDetail)
+    render(<LingsiArtifactPreview artifact={summary} onClose={() => {}} />)
+    await screen.findByText('确认后提交审核')
+    fireEvent.click(screen.getByRole('tab', { name: '参考资料' }))
+    expect(screen.getByText('参考资料暂不可用，请刷新后重试。')).toBeTruthy()
+  })
+
   it('成功回执到达后，在详情请求完成前撤去旧待提交状态和编辑入口', async () => {
     vi.mocked(getAgentArtifact).mockResolvedValueOnce(detail(artifact()))
     const view = render(<LingsiArtifactPreview artifact={artifact()} onClose={() => {}} />)

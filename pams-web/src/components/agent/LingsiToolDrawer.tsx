@@ -102,7 +102,7 @@ export default function LingsiToolDrawer({ open, onClose }: Props) {
     )
 
   return (
-    <Drawer title="concerto当前会做什么" open={open} onClose={onClose} width={460}>
+    <Drawer title="Concerto当前会做什么" open={open} onClose={onClose} width={460}>
       {kb ? (
         <>
           <Alert

@@ -105,7 +105,7 @@ export default function AgentHome() {
   }, [])
 
   useEffect(() => {
-    void fetchConversations()
+    void fetchConversations(true)
     return () => {
       // 离开页面清掉过程态，避免下次进入看到上一轮的残影
       useAgentStore.setState({ timeline: [], thinking: false })
@@ -228,6 +228,7 @@ export default function AgentHome() {
 
   const handleSelect = useCallback(
     (id: number) => {
+      if (useAgentStore.getState().currentConversationId === id) return
       setAnchoredTurn(null)
       useAgentPanel.getState().closeAll()
       setSeed({ text:'', nonce:Date.now() })
@@ -242,6 +243,12 @@ export default function AgentHome() {
     setSeed({ text:'', nonce:Date.now() })
     void selectConversation(null)
   }, [selectConversation])
+
+  const closeTaskList = useCallback(() => setSiderOpen(false), [])
+  const openTools = useCallback(() => {
+    setSiderOpen(false)
+    setToolsOpen(true)
+  }, [])
 
   const handleDelete = useCallback(
     async (id: number) => {
@@ -340,15 +347,12 @@ export default function AgentHome() {
       currentId={currentConversationId}
       pendingTaskCount={pendingTaskCount}
       currentStatus={currentStatus}
-      busy={thinking || messagesLoading}
+      deleteDisabled={thinking || messagesLoading}
       onNew={handleNew}
       onSelect={handleSelect}
       onDelete={handleDelete}
-      onOpenTools={() => {
-        setSiderOpen(false)
-        setToolsOpen(true)
-      }}
-      onNavigate={() => setSiderOpen(false)}
+      onOpenTools={openTools}
+      onNavigate={closeTaskList}
     />
   )
 

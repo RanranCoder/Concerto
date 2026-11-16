@@ -144,10 +144,9 @@
   align-items: center;
   gap: 5px;
   min-height: 36px;
-  margin-bottom: -1px;
   padding: 0 10px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -157,9 +156,8 @@
 }
 .memory-status-filters button:hover { color: var(--text-primary); background: var(--soft); }
 .memory-status-filters button[aria-pressed='true'] {
-  border-radius: var(--r-sm);
-  box-shadow: var(--focus-ring);
-  color: var(--brand-text);
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
   font-weight: calc(600 - var(--font-weight-compensation));
 }
 .memory-status-filters button span {
@@ -169,6 +167,9 @@
   background: var(--soft-strong);
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+.memory-status-filters button[aria-pressed='true'] span {
+  background: transparent;
 }
 
 .memory-list { margin: 0; padding: 0; list-style: none; }

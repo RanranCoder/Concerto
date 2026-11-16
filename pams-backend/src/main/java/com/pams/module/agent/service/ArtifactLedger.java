@@ -115,11 +115,20 @@ public class ArtifactLedger {
             var run=runs.findById(artifact.getRunId()).orElseThrow();editable=editable && !run.isCancelRequested() && run.getDispatchToken()==null;
         }
         out.put("editable",editable);out.put("artifacts",TaskGate.toArtifacts(task.getResultJson()==null?null:object(task.getResultJson())));
-        out.put("sources",selected.getSourcesJson()==null?List.of():tree(selected.getSourcesJson()));
+        out.put("sources",readSources(selected.getSourcesJson()));
         out.put("sourceNotice","本次任务与业务工具的读取结果；没有外部出处时不推造引用。");
         if(artifact.getRunId()!=null) out.put("issues",reviewIssues.findByRunIdOrderByIdAsc(artifact.getRunId()).stream().filter(i->Objects.equals(i.getWorkItemId(),artifact.getWorkItemId()) && Objects.equals(i.getRevision(),selected.getWorkItemRevision()) && Objects.equals(i.getAttempt(),selected.getAttempt())).map(i->Map.of("id",i.getId(),"severity",i.getSeverity(),"location",i.getLocation(),"quote",i.getQuoteText(),"reason",i.getReason())).toList());
         else out.put("issues",List.of());
         return out;
+    }
+    private List<?> readSources(String stored) {
+        if (stored == null) return List.of();
+        var sources = tree(stored);
+        if (sources.isNull()) return List.of();
+        if (!sources.isArray()) throw new BizException(4400, "成果来源记录损坏，请刷新后核对");
+        // Return plain Java values so Spring's Jackson 3 serializes sources as an
+        // array, rather than serializing the Jackson 2 tree's bean properties.
+        return json.convertValue(sources, List.class);
     }
     public Map<String,Object> object(String value) {return value==null?Map.of():readObject(value);}
     private com.fasterxml.jackson.databind.JsonNode tree(String value) {try {return AgentJson.readTree(json,value);} catch(Exception e) {throw new BizException(4400,"成果来源记录损坏，请刷新后核对");}}

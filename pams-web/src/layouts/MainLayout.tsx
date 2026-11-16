@@ -16,7 +16,7 @@ import {
 } from 'antd'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Suspense, useEffect, useMemo, startTransition, useState } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, startTransition, useRef, useState } from 'react'
 import {
   ApartmentOutlined,
   BookOutlined,
@@ -46,6 +46,78 @@ import BrandIdentity from '@/components/BrandIdentity'
 import HeaderStaff from '@/components/HeaderStaff'
 
 const { Sider, Header, Content } = Layout
+
+function SidebarNavigation(props: MenuProps) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLSpanElement>(null)
+  const previousRef = useRef<HTMLElement | null>(null)
+  const slideRef = useRef<Animation | null>(null)
+
+  useLayoutEffect(() => {
+    const track = trackRef.current
+    const highlight = highlightRef.current
+    if (!track || !highlight) return
+
+    const active = track.querySelector<HTMLElement>('.ant-menu-item-selected')
+    const previous = previousRef.current
+    previousRef.current = active
+    if (active && active === previous && active.getClientRects().length) return
+
+    const clearSlide = () => {
+      slideRef.current?.cancel()
+      slideRef.current = null
+      delete track.dataset.sliding
+      highlight.hidden = true
+    }
+
+    if (
+      !active?.getClientRects().length ||
+      !previous?.getClientRects().length ||
+      active.closest('.ant-menu-sub') !== previous.closest('.ant-menu-sub') ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      clearSlide()
+      return
+    }
+
+    // A quick second click starts from the background's current position.
+    const from = (slideRef.current ? highlight : previous).getBoundingClientRect()
+    const to = active.getBoundingClientRect()
+    const bounds = track.getBoundingClientRect()
+    clearSlide()
+    if (from.top === to.top && from.left === to.left) return
+
+    highlight.style.width = `${to.width}px`
+    highlight.style.height = `${to.height}px`
+    highlight.hidden = false
+    track.dataset.sliding = 'true'
+    const position = (rect: DOMRect) =>
+      `translate(${rect.left - bounds.left}px, ${rect.top - bounds.top}px)`
+    const slide = highlight.animate(
+      [{ transform: position(from) }, { transform: position(to) }],
+      {
+        duration: 280,
+        easing: getComputedStyle(track).getPropertyValue('--ease').trim() || 'ease-out',
+        fill: 'both',
+      },
+    )
+    slideRef.current = slide
+    slide.onfinish = () => {
+      if (slideRef.current === slide) clearSlide()
+    }
+  })
+
+  useEffect(() => () => slideRef.current?.cancel(), [])
+
+  return (
+    <nav className="sidebar-navigation" aria-label="主导航">
+      <div className="sidebar-menu-track" ref={trackRef}>
+        <span className="sidebar-selection-travel" ref={highlightRef} aria-hidden="true" hidden />
+        <Menu {...props} />
+      </div>
+    </nav>
+  )
+}
 
 export default function MainLayout() {
   const { message } = App.useApp()
@@ -104,7 +176,7 @@ export default function MainLayout() {
       { key: '/', label: '工作台', icon: <DashboardOutlined /> },
       // 灵思对所有登录用户可见；能做什么由工具层权限决定，不看菜单权限。
       // 「协作」不再单独占一个菜单项：它已内聚为灵思标准模式里自动启用的执行策略。
-      { key: '/agent', label: 'concerto', icon: <RobotOutlined /> },
+      { key: '/agent', label: 'Concerto', icon: <RobotOutlined /> },
     ]
     // 知识库（V27）：灵思「对话」档位能检索到的资料。
     // kb:read 种子给了全部角色 —— 与 /agent 同一立场：问答人人可用，
@@ -215,11 +287,11 @@ export default function MainLayout() {
   const groupedMenuItems = useMemo<MenuProps['items']>(() => {
     const groups = [
       { label: '日常工作', keys: ['/', '/activities', 'routine'] },
+      { label: '智能协作', keys: ['/agent', '/knowledge', '/admin/benchmark'] },
       {
         label: '组织与资料',
         keys: ['/party/members', '/youth', '/volunteer', '/members', 'content', 'archive'],
       },
-      { label: '智能协作', keys: ['/agent', '/knowledge', '/admin/benchmark'] },
       {
         label: '系统管理',
         keys: ['admin', '/admin/settings', '/org/structure'],
@@ -327,21 +399,19 @@ export default function MainLayout() {
         </small>
         <strong>{orgName || '当前组织'}</strong>
       </div>
-      <nav className="sidebar-navigation" aria-label="主导航">
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          openKeys={navOpenKeys}
-          onOpenChange={setNavOpenKeys}
-          onClick={(event) => {
-            navigate(event.key)
-            setNavOpen(false)
-          }}
-          items={groupedMenuItems}
-          inlineIndent={12}
-          style={{ borderInlineEnd: 'none' }}
-        />
-      </nav>
+      <SidebarNavigation
+        mode="inline"
+        selectedKeys={[selectedKey]}
+        openKeys={navOpenKeys}
+        onOpenChange={setNavOpenKeys}
+        onClick={(event) => {
+          navigate(event.key)
+          setNavOpen(false)
+        }}
+        items={groupedMenuItems}
+        inlineIndent={12}
+        style={{ borderInlineEnd: 'none' }}
+      />
       <div className="sidebar-account">
         <Avatar
           size={29}

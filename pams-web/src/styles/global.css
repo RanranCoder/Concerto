@@ -37,7 +37,6 @@ body {
    否则内容不足一屏、或滚到底时会露出没有底色的空白。 */
 .app-sider {
   background: var(--sider-bg) !important;
-  border-right: 1px solid var(--sider-border);
   height: 100vh;
   overflow: hidden;           /* 内部滚动区自己滚，整块不跟着滚 */
   display: flex;
@@ -177,14 +176,7 @@ body {
   color: inherit !important;
 }
 
-/* 主导航选中态使用与表单控件相同的描边。 */
-.app-sider .ant-menu-item-selected {
-  background: transparent !important;
-  color: var(--sider-text) !important;
-  font-weight: calc(600 - var(--font-weight-compensation));
-  box-shadow: var(--focus-ring);
-}
-/* 展开的父级：与选中项同样权重 */
+/* 展开的父级通过字重标记。 */
 .app-sider .ant-menu-submenu-selected > .ant-menu-submenu-title {
   color: var(--sider-text) !important;
   font-weight: calc(600 - var(--font-weight-compensation));

@@ -577,7 +577,7 @@ export interface AgentArtifactDetail {
   origin: string
   preview: string | null
   fields: Record<string,string>
-  plan: Partial<AgentActionPlan>
+  plan?: Partial<AgentActionPlan> | null
   reviewStatus: string
   editable: boolean
   status: string

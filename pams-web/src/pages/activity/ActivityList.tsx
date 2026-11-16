@@ -510,17 +510,19 @@ export default function ActivityList() {
                 setPage(1)
               }}
             >
-              {option.label}{' '}
-              <small>
-                {stats
-                  ? option.value
-                    ? stats[option.value as keyof ActivityStats]
-                    : Object.values(stats).reduce(
-                        (sum, value) => sum + value,
-                        0,
-                      )
-                  : '—'}
-              </small>
+              <span className="business-status-tab-label">
+                {option.label}{' '}
+                <small>
+                  {stats
+                    ? option.value
+                      ? stats[option.value as keyof ActivityStats]
+                      : Object.values(stats).reduce(
+                          (sum, value) => sum + value,
+                          0,
+                        )
+                    : '—'}
+                </small>
+              </span>
             </button>
           ))}
         </div>

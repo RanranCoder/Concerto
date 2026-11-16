@@ -38,6 +38,7 @@ export default function LingsiEntityPanel() {
     </div></aside>
   if(active.kind==='version' && active.artifact) return frame(<LingsiArtifactPreview key={active.id} artifact={active.artifact} initialVersion={active.selectedVersion} onClose={()=>setCollapsed(true)}/>)
   const tabs = [['content','内容预览'],['changes','本次变更'],['sources','参考资料']]
+  const plan = active.plan
   const showBusinessPage = (item: PanelItem) => { if (item.path) { setCollapsed(true); navigate(agentBusinessLink(item.path)!) } }
   const content = <div className="lingsi-v6-panel-content">
     <header className="lingsi-preview-header"><div><h2>{active.title}</h2><small>与对话对照核对</small></div><button type="button" className="lingsi-icon-btn" aria-label="关闭工作成果预览" onClick={() => setCollapsed(true)}><Close size={16}/></button></header>
@@ -46,9 +47,15 @@ export default function LingsiEntityPanel() {
       let next = index
       if(e.key==='ArrowRight') next=(index+1)%3; else if(e.key==='ArrowLeft') next=(index+2)%3; else if(e.key==='Home') next=0; else if(e.key==='End') next=2; else return
       e.preventDefault();setTab(tabs[next][0]);document.getElementById(`lingsi-preview-tab-${tabs[next][0]}`)?.focus()
-    }}>{title}</button>)}</div>
+    }}><span>{title}</span></button>)}</div>
     <div className="lingsi-preview-scroll" id="lingsi-preview-content" role="tabpanel" aria-labelledby={`lingsi-preview-tab-${tab}`} tabIndex={0}>
-      {tab==='sources' ? active.source || active.citations?.length ? <LingsiSources citations={active.citations?.length?active.citations:[active.source!]}/> : <div className="lingsi-preview-empty">本次结果没有返回资料出处。请根据业务资料核对内容。</div> : tab==='changes' ? active.plan ? <><h3>{active.plan.summary}</h3><p>{result?.text || `待确认 / ${active.plan.total} 项`}</p><ul className="lingsi-preview-change-list">{active.plan.items.map((it,i) => <li key={i}><strong>{it.label}</strong><span>{it.sub}</span></li>)}</ul><p>{stripArgsMarker(active.plan.detailLines).join('\n')}</p>{active.plan.skipped.length>0 && <div className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{active.plan.skipped.map((s,i) => <p key={i}>{s.label}：{s.reason}</p>)}</div>}<p className="lingsi-preview-empty">确认入口保留在对话中。</p></> : <div className="lingsi-preview-empty">{active.kind==='artifact'?'已产生业务变更，完整详情请打开业务页面查看。':'这是一份资料片段，没有待执行变更。'}</div> : active.kind==='text' ? <>
+      {tab==='sources' ? active.source || active.citations?.length ? <LingsiSources citations={active.citations?.length?active.citations:[active.source!]}/> : <div className="lingsi-preview-empty">本次结果没有返回资料出处。请根据业务资料核对内容。</div> : tab==='changes' ? plan ? <>
+        <h3>{plan.summary}</h3><p>{result?.text || `待确认 / ${plan.total} 项`}</p>
+        {Array.isArray(plan.items) && plan.items.length > 0 && <ul className="lingsi-preview-change-list">{plan.items.map((it,i) => <li key={i}><strong>{it.label}</strong><span>{it.sub}</span></li>)}</ul>}
+        <p>{stripArgsMarker(plan.detailLines).join('\n')}</p>
+        {Array.isArray(plan.skipped) && plan.skipped.length > 0 && <div className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{plan.skipped.map((s,i) => <p key={i}>{s.label}：{s.reason}</p>)}</div>}
+        <p className="lingsi-preview-empty">确认入口保留在对话中。</p>
+      </> : <div className="lingsi-preview-empty">{active.kind==='artifact'?'已产生业务变更，完整详情请打开业务页面查看。':'这是一份资料片段，没有待执行变更。'}</div> : active.kind==='text' ? <>
         <div className="lingsi-preview-document-meta"><span>{active.source ? '资料片段' : result ? '已处理' : '待核对内容'}</span><LingsiCopyButton key={active.id} text={active.text || ''} label="复制预览全文" /></div>
         {active.source && <div className="lingsi-preview-empty">{active.source.sourceTitle}{active.source.path?` / ${active.source.path}`:''}{active.source.asOf?` / 数据截至 ${active.source.asOf}`:''}</div>}
         <article className="lingsi-preview-document"><LingsiMarkdown text={active.source ? citationSnippet({ ...active.source, snippet: active.text || '' }) : active.text || ''}/></article>

@@ -161,17 +161,17 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
       },
       Tabs: {
         itemColor: t.textSecondary,
-        itemSelectedColor: t.textPrimary,
+        itemSelectedColor: t.onBrand,
         itemHoverColor: t.textPrimary,
-        inkBarColor: t.brand,
+        inkBarColor: 'transparent',
         titleFontSize: 13,
       },
       Pagination: {
         itemActiveBg: t.brandSoft,
       },
       Segmented: {
-        itemSelectedBg: t.canvas,
-        itemSelectedColor: t.textPrimary,
+        itemSelectedBg: 'var(--tab-selected-bg)',
+        itemSelectedColor: t.onBrand,
         trackBg: t.soft,
       },
       Tooltip: {

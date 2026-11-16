@@ -1,8 +1,12 @@
 /* PAMS refinement: surface tone, quiet type, and motion that answers an action. */
 :root {
   --font-weight-compensation: 0;
+  --tab-selected-bg: var(--brand);
 }
-:root[data-theme='dark'] { --font-weight-compensation: 40; }
+:root[data-theme='dark'] {
+  --font-weight-compensation: 40;
+  --tab-selected-bg: color-mix(in srgb, var(--brand) 90%, transparent);
+}
 
 :root,
 .ant-input-status-error, .ant-input-number-status-error, .ant-picker-status-error,
@@ -13,9 +17,23 @@
   --focus-ring: inset 0 0 0 1px var(--focus), var(--focus-shadow);
 }
 
-.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
-.ant-segmented .ant-segmented-item-selected {
+.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
   box-shadow: var(--focus-ring);
+}
+
+.ant-tabs .ant-tabs-tab-btn {
+  padding: 4px 10px;
+  border-radius: var(--r-md);
+}
+.ant-tabs .ant-tabs-tab .ant-tabs-tab-btn[role='tab'][aria-selected='true'],
+.ant-tabs-dropdown .ant-tabs-dropdown-menu-item-selected:not(.ant-tabs-dropdown-menu-item-disabled) {
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
+  text-shadow: none;
+}
+.ant-segmented .ant-segmented-item-selected,
+.ant-segmented .ant-segmented-thumb {
+  box-shadow: none;
 }
 
 body {

@@ -104,7 +104,7 @@ export default function LingsiMessageBody({
   return (
     <div className="lingsi-turn">
       <div className="lingsi-turn-body">
-        <div className="lingsi-answer-heading"><LingsiAvatar size={30}/><span>concerto</span>{!active && <small>内容与事实需核对</small>}</div>
+        <div className="lingsi-answer-heading"><LingsiAvatar size={30}/><span>Concerto</span>{!active && <small>内容与事实需核对</small>}</div>
         {/*
           协作团队面板：仅在标准模式被判定升级为协作时才有内容（单 Agent 轮次整块不渲染）。
           位置在过程区之上 —— 它是「这轮派了哪些专家」的汇总层，

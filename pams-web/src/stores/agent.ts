@@ -25,6 +25,8 @@ const COLLAB_EVENT_TYPES = new Set([
   'COLLAB_DECISION', 'AGENT_START', 'AGENT_END', 'AGENT_DELEGATE', 'REVIEW_RESULT',
 ])
 let requestVersion = 0
+let conversationListVersion = 0
+let sessionVersion = 0
 const runRequests = new Map<number, number>()
 const runTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const stoppedStreams = new Set<string>()
@@ -360,7 +362,7 @@ interface AgentState {
   pendingTaskCount: number
 
   /* 动作 */
-  fetchConversations: () => Promise<void>
+  fetchConversations: (showInitialLoading?: boolean) => Promise<void>
   selectConversation: (id: number | null) => Promise<void>
   removeConversation: (id: number) => Promise<void>
 
@@ -724,12 +726,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       ),
     })),
 
-  fetchConversations: async () => {
-    const version = requestVersion
-    set({ conversationsLoading: true })
+  fetchConversations: async (showInitialLoading = false) => {
+    // The task list has its own lifetime. Switching chats invalidates message
+    // requests, while a list refresh can finish without replacing existing rows.
+    const version = ++conversationListVersion
+    if (showInitialLoading && get().conversations.length === 0) set({ conversationsLoading: true })
     try {
       const res = await api.listConversations(1, 50)
-      if (version !== requestVersion) return
+      if (version !== conversationListVersion) return
       set({
         conversations: res?.records ?? [],
         pendingTaskCount: res?.pendingTaskCount ?? 0,
@@ -737,21 +741,27 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     } catch {
       // http 拦截器已提示
     } finally {
-      if (version === requestVersion) set({ conversationsLoading: false })
+      if (version === conversationListVersion && get().conversationsLoading) set({ conversationsLoading: false })
     }
   },
 
   selectConversation: async (id) => {
     const version = ++requestVersion
-    if (get().activeStreamId) stoppedStreams.add(get().activeStreamId!)
+    if (requestTimer) clearTimeout(requestTimer)
+    const streamId = get().activeStreamId
+    if (streamId) {
+      stoppedStreams.add(streamId)
+      if (stoppedStreams.size > 256) stoppedStreams.delete(stoppedStreams.values().next().value!)
+    }
     flushStreamDeltas()
+    deltaParts.clear()
+    deltaStream = null
     set({
       currentConversationId: id,
-      conversationsLoading: false,
       thinking: false,
       activeRequestId: null,
-  stopping: false,
-  activeStreamId: null,
+      stopping: false,
+      activeStreamId: null,
       outcomes: [],
       timeline: [],
       pendingPlan: null,
@@ -763,7 +773,6 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       messagesLoading: id != null,
     })
     if (id == null) return
-    set({ messagesLoading: true })
     try {
       const res = await api.listMessages(id, 1, 100)
       if (version !== requestVersion || get().currentConversationId !== id) return
@@ -835,9 +844,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   removeConversation: async (id) => {
+    const session = sessionVersion
     await api.deleteConversation(id)
+    if (session !== sessionVersion) return
+    // An older list response may still contain the deleted conversation.
+    conversationListVersion++
     set((s) => ({
       conversations: s.conversations.filter((c) => c.id !== id),
+      conversationsLoading: false,
       currentConversationId: s.currentConversationId === id ? null : s.currentConversationId,
       outcomes: s.currentConversationId === id ? [] : s.outcomes,
       timeline: s.currentConversationId === id ? [] : s.timeline,
@@ -848,8 +862,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   sendMessage: async (text) => {
     const content = text.trim()
     if (!content) return
-    if (get().thinking) return
+    if (get().thinking || get().messagesLoading) return
     const version = ++requestVersion
+    const session = sessionVersion
     const requestId = createRequestId()
     receivedSeqs.clear(); streamCursor = 0
     if (requestTimer) clearTimeout(requestTimer)
@@ -907,7 +922,10 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const res = await api.agentChat(
         content, get().currentConversationId, get().mode, refs, get().autoCollab, requestId,
       )
-      if (version !== requestVersion) return
+      if (version !== requestVersion) {
+        if (session === sessionVersion) void get().fetchConversations()
+        return
+      }
       if ('accepted' in res) {
         set(s => ({
           activeStreamId: s.thinking ? res.streamId : s.activeStreamId,
@@ -1014,10 +1032,13 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   applyStreamEvent: (e) => {
-    if (stoppedStreams.has(e.streamId)) return
     const current = get()
     const eventRequest = e.payload?.requestId
-    if (eventRequest != null && eventRequest !== current.activeRequestId) return
+    if (eventRequest != null && eventRequest !== current.activeRequestId) {
+      if (e.type === 'MESSAGE_DONE' || e.type === 'ERROR' || e.type === 'ABORTED') void current.fetchConversations()
+      return
+    }
+    if (stoppedStreams.has(e.streamId)) return
     if (e.payload?.protocolVersion === 2 && !eventRequest) return
     if (e.seq <= streamCursor || receivedSeqs.has(e.seq)) return
     if (!current.outcomes.at(-1)?.streaming) return
@@ -1415,6 +1436,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   reset: () => {
+    sessionVersion++
+    conversationListVersion++
     if (requestTimer) clearTimeout(requestTimer)
     requestTimer=undefined; receivedSeqs.clear(); streamCursor=0; reconcilingVersion=undefined
     deltaParts.clear();deltaStream=null;deltaStartSeq=0

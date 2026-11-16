@@ -54,6 +54,10 @@
   color: var(--text-secondary);
   font-size: var(--fs-caption);
 }
+.ant-tabs-tab-active .activity-tab-count {
+  background: transparent;
+  color: inherit;
+}
 .activity-panel-head {
   display: flex;
   align-items: center;
@@ -210,7 +214,6 @@
   line-height: 1;
 }
 .activity-list-page .business-status-tabs small {
-  margin-left: 4px;
   font-size: var(--fs-caption);
   color: inherit;
 }
@@ -533,16 +536,16 @@
 }
 .activity-signin-tabs button {
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--r-md);
   background: none;
   font: inherit;
-  padding: 12px 0;
+  padding: 8px 12px;
   color: var(--text-secondary);
   cursor: pointer;
 }
 .activity-signin-tabs button[aria-pressed='true'] {
-  color: var(--brand-text);
-  box-shadow: var(--focus-ring);
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
 }
 .activity-score-rules {
   display: grid;

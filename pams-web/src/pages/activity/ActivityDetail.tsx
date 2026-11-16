@@ -816,7 +816,7 @@ export default function ActivityDetail({
   const tabItems = [
     {
       key: 'gantt',
-      label: <span className="activity-task-plan-tab">任务计划</span>,
+      label: '任务计划',
       children: detail ? <TaskPlanTab key={activityId} activity={detail.activity} active={activeTab === 'gantt'} onTab={changeTab} focusTaskId={focusTaskId} onTaskOpened={() => setFocusTaskId(undefined)} onChanged={(rows: TaskVO[]) => setDetail(current => current?.activity.id === activityId ? { ...current, tasks: rows } : current)} /> : null,
     },
     {

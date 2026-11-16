@@ -63,8 +63,8 @@
   font: inherit;
 }
 .permission-module-nav button[aria-pressed='true'] {
-  background: var(--brand-soft);
-  color: var(--brand-text);
+  background: var(--tab-selected-bg);
+  color: var(--on-brand);
   font-weight: 600;
 }
 .permission-module-nav button:focus-visible {

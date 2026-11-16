@@ -145,7 +145,7 @@ export default function LingsiEmptyState({ onPick, mode, recent, onSelect }: Pro
       <div className="lingsi-welcome-heading">
         <LingsiAvatar size={48} />
         <div>
-          <h2>concerto 工作台</h2>
+          <h2>Concerto 工作台</h2>
           <p>{kb ? '从组织资料中查找答案和出处。' : '查待办、了解活动进展，或准备下一项工作。'}</p>
         </div>
       </div>

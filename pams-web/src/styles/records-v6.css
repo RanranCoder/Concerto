@@ -96,8 +96,8 @@
 .records-directory button:hover {
   background:var(--soft)}
 .records-directory button[aria-pressed=true] {
-  box-shadow:var(--focus-ring);
-  color:var(--brand-text);
+  background:var(--tab-selected-bg);
+  color:var(--on-brand);
   font-weight: calc(600 - var(--font-weight-compensation))}
 .records-directory small {
   font-size:var(--fs-micro);
@@ -233,13 +233,14 @@
 .records-stage-filters button:last-child {
   border:0}
 .records-stage-filters button[aria-pressed=true] {
-  color:var(--brand-text);
-  box-shadow:var(--focus-ring)}
+  background:var(--tab-selected-bg);
+  color:var(--on-brand)}
 .records-stage-filters span {
   display:block;
   font-size:var(--fs-micro);
   color:var(--text-secondary);
   margin-bottom:5px}
+.records-stage-filters button[aria-pressed=true] span {color:inherit}
 .records-stage-filters b {
   display:block;
   margin-top:6px;

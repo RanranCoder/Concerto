@@ -71,6 +71,9 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
   const editable=Boolean(detail?.editable && current && !loading && ['PENDING_CONFIRM','REVIEW_REQUIRED'].includes(lifecycle ?? ''))
   const status=lifecycle==='SUCCESS' && ['draftPlanSections','draftArticleFromActivity'].includes(artifact.toolName)?'已保存业务草稿'
     : lifecycle==='SUCCESS' && artifact.toolName==='publishAnnouncement'?'已发布':statusNames[lifecycle ?? ''] ?? ''
+  const items = detail?.plan?.items
+  const skipped = detail?.plan?.skipped
+  const sources = detail?.sources
   const tabs=[['content','内容预览'],['changes','本次变更'],['sources','参考资料']]
   return <div className="lingsi-v6-panel-content">
     <header className="lingsi-preview-header"><h2>{artifact.title}</h2><button type="button" className="lingsi-icon-btn" aria-label="关闭工作成果预览" onClick={onClose}><Close size={16}/></button></header>
@@ -86,7 +89,7 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
     <div className="lingsi-preview-tabs" role="tablist" aria-label="成果内容">{tabs.map(([key,label],i)=><button key={key} type="button" role="tab" id={`artifact-${artifact.id}-${key}`} aria-selected={tab===key} tabIndex={tab===key?0:-1} aria-controls={`artifact-body-${artifact.id}`} onClick={()=>setTab(key)} onKeyDown={e=>{
       const next=e.key==='ArrowRight'?(i+1)%3:e.key==='ArrowLeft'?(i+2)%3:e.key==='Home'?0:e.key==='End'?2:-1
       if(next<0)return;e.preventDefault();setTab(tabs[next][0]);document.getElementById(`artifact-${artifact.id}-${tabs[next][0]}`)?.focus()
-    }}>{label}</button>)}</div>
+    }}><span>{label}</span></button>)}</div>
     <div className="lingsi-preview-scroll" id={`artifact-body-${artifact.id}`} role="tabpanel" aria-labelledby={`artifact-${artifact.id}-${tab}`}>
       {loading && <p role="status">正在加载成果…</p>}
       {error && <p role="alert">{error}{!detail && <button type="button" onClick={()=>setReload(v=>v+1)}>重新加载成果</button>}</p>}
@@ -99,7 +102,9 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
           <div className="lingsi-draft-actions"><button type="button" disabled={saving} onClick={()=>{useAgentPanel.getState().discardDraft(artifact.id);setFields(detail.fields);setEditing(false)}}>放弃修改</button><button type="submit" disabled={saving || mode!=='standard' || !editable}>{saving?'正在复核…':'保存新版本并复核'}</button></div>
         </form> : <>
           {detail.preview && <><div className="lingsi-preview-document-meta"><span>第 {selected} 版</span><LingsiCopyButton text={detail.preview} label="复制预览全文"/></div><article className="lingsi-preview-document"><LingsiMarkdown text={detail.preview}/></article></>}
-          {!detail.preview && <table className="lingsi-artifact-table"><thead><tr><th>对象</th><th>变更内容</th></tr></thead><tbody>{detail.plan.items?.map((row,i)=><tr key={i}><th>{row.label}</th><td>{row.sub}</td></tr>)}</tbody></table>}
+          {!detail.preview && (Array.isArray(items) && items.length > 0
+            ? <table className="lingsi-artifact-table"><thead><tr><th>对象</th><th>变更内容</th></tr></thead><tbody>{items.map((row,i)=><tr key={i}><th>{row.label}</th><td>{row.sub}</td></tr>)}</tbody></table>
+            : <p className="lingsi-preview-empty">本版暂无可预览的内容。</p>)}
           {editable && <button type="button" disabled={mode!=='standard'} onClick={()=>{setFields(detail.fields);setEditing(true);useAgentPanel.getState().rememberDraft(artifact.id,selected,detail.fields)}}>修改正文</button>}
         </>}
         {detail.issues?.length>0 && <section className="lingsi-artifact-issues" aria-label="本版审查问题"><h3>需核对的问题</h3>{detail.issues.map(i=><div key={i.id}><p>{i.location}</p><blockquote>{i.quote}</blockquote><p>{i.reason}</p></div>)}</section>}
@@ -107,12 +112,20 @@ export default function LingsiArtifactPreview({artifact,initialVersion,onClose}:
       </>}
       {detail && tab==='changes' && <>
         {selected>1 ? previous ? <><h3>与第 {selected-1} 版对比</h3>{artifactDiff(previous.preview ?? '',detail.preview ?? '').map((row,i)=><div key={i} className={`lingsi-version-diff lingsi-version-diff-${row.kind}`}><span>{row.kind==='added'?'新增':row.kind==='removed'?'移除':'保留'}</span><pre>{row.text}</pre></div>)}</> : <p>正在加载前一版本…</p> : <p>这是首个成果版本。</p>}
-        <h3>业务变更范围</h3><ul>{detail.plan.items?.map((row,i)=><li key={i}>{row.label}：{row.sub}</li>)}</ul>
-        {!!detail.plan.skipped?.length && <section className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{detail.plan.skipped.map((row,i)=><p key={i}>{row.label}：{row.reason}</p>)}</section>}
+        <h3>业务变更范围</h3>
+        {Array.isArray(items) && items.length > 0
+          ? <ul>{items.map((row,i)=><li key={i}>{row.label}：{row.sub}</li>)}</ul>
+          : <p className="lingsi-preview-empty">本版暂无可显示的业务变更明细。</p>}
+        {Array.isArray(skipped) && skipped.length > 0 && <section className="lingsi-preserved-skips"><strong>未执行与待补事项</strong>{skipped.map((row,i)=><p key={i}>{row.label}：{row.reason}</p>)}</section>}
       </>}
-      {detail && tab==='sources' && <><p>{detail.sourceNotice}</p>{detail.sources.map((source,i)=><section key={i}><h3>{source.label}</h3>{source.text && <p>{source.text}</p>}{source.artifactId!=null && <button type="button" onClick={()=>{
-        getAgentArtifact(source.artifactId!,source.version).then(value=>useAgentPanel.getState().openVersion(value.artifact,source.version)).catch(()=>setError('来源暂不可访问。'))
-      }}>{source.title}，第 {source.version} 版</button>}</section>)}</>}
+      {detail && tab==='sources' && <>
+        {detail.sourceNotice && <p>{detail.sourceNotice}</p>}
+        {Array.isArray(sources) && sources.length > 0
+          ? sources.map((source,i)=><section key={i}><h3>{source.label}</h3>{source.text && <p>{source.text}</p>}{source.artifactId!=null && <button type="button" onClick={()=>{
+            getAgentArtifact(source.artifactId!,source.version).then(value=>useAgentPanel.getState().openVersion(value.artifact,source.version)).catch(()=>setError('来源暂不可访问。'))
+          }}>{source.title}，第 {source.version} 版</button>}</section>)
+          : <p className="lingsi-preview-empty">{sources != null && !Array.isArray(sources) ? '参考资料暂不可用，请刷新后重试。' : '本次成果没有可显示的参考资料。'}</p>}
+      </>}
       {detail?.artifacts?.map((a,i)=>a.path?<a className="lingsi-business-link" key={i} href={agentBusinessLink(a.path)!}>打开{a.name}</a>:null)}
     </div>
     <footer className="lingsi-preview-footer"><span>{editing?'有未保存的修改':status || '请核对内容和变更范围'}</span><button type="button" onClick={onClose}>回到对话</button></footer>

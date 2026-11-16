@@ -446,6 +446,7 @@ class DagSchedulerTest {
         assertThat(action.getArtifactVersion()).isEqualTo(1);Long artifactId=action.getArtifactId();
         var initial=artifactLedger.detail(artifactId,1,ctx);
         assertThat(initial.get("editable")).isEqualTo(true);
+        assertThat(initial.get("sources")).asList().containsExactly(Map.of("label", "任务要求", "text", "起草推文"));
         @SuppressWarnings("unchecked") var fields=new LinkedHashMap<>((Map<String,String>)initial.get("fields"));
         fields.put("title","用户核对后的标题");fields.put("content","用户核对后的正文\n\n保留活动事实，补充现场信息。");
         long count=db.queryForObject("select count(*) from article",Long.class);
