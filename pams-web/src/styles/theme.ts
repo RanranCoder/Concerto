@@ -125,7 +125,7 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
         colorBgElevated: t.canvas,
       },
       Input: {
-        activeShadow: `inset 0 0 0 1px ${t.focus}, 0 0 0 3px ${t.brandSoft}`,
+        activeShadow: 'var(--focus-ring)',
         activeBorderColor: 'transparent',
         hoverBorderColor: t.brandHover,
         // 凹陷面：输入框比卡片更深，视觉上「可填入」（参考站搜索框即比导航栏深）
@@ -135,7 +135,7 @@ export function buildAntdTheme(mode: ThemeMode, primary?: string): ThemeConfig {
         colorBgContainer: t.sunken,
       },
       Select: {
-        optionSelectedBg: t.brandSoft,
+        optionSelectedBg: t.soft,
         optionSelectedColor: t.brandText,
         optionSelectedFontWeight: isDark ? 560 : 600,
         optionActiveBg: t.softStrong,

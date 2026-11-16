@@ -204,7 +204,7 @@
   opacity: 0.8;
 }
 
-/* 任务项：两行（标题 + 相对时间）；选中态 = 白底 + 左侧主色竖条 */
+/* 任务项：两行（标题 + 相对时间） */
 .lingsi-conv {
   position: relative;
   padding: 7px 10px 7px 12px;
@@ -218,19 +218,7 @@
 }
 .lingsi-conv-active {
   background: var(--soft);
-  box-shadow: 0 1px 2px rgba(11, 11, 10, 0.05);
-}
-.lingsi-conv-active::before {
-  /* 主色用途 ②：定位当前任务。原设计方案 §3.3 写了这条但实现里漏了，
-     导致选中态与 hover 态在视觉上几乎分不出来 */
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 2.5px;
-  border-radius: var(--r-sm);
-  background: var(--brand);
+  box-shadow: var(--focus-ring);
 }
 
 .lingsi-conv-title {
@@ -1483,10 +1471,6 @@
   border-radius: var(--r-lg);
   background: var(--soft);
   transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
-}
-.lingsi-composer-box:focus-within {
-  border-color: var(--brand-hover);
-  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 /* 待附加的上下文 chip：挂在输入框上方，随消息一起发出后从输入区消失、

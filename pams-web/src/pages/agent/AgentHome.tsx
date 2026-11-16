@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Drawer, Spin, Tooltip } from 'antd'
 import { useAgentStore } from '@/stores/agent'
 import { useAgentPanel } from '@/stores/agentPanel'
+import { useOrgStore } from '@/stores/org'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { AgentActionPlan, TaskInputResult } from '@/api/agent'
 import { instructAgentRequest } from '@/api/agent'
@@ -36,6 +37,7 @@ import { getAgentModelStatus, type AgentModelStatus } from '@/api/agentProviders
  */
 export default function AgentHome() {
   const [modelStatus, setModelStatus] = useState<AgentModelStatus | null>(null)
+  const orgName = useOrgStore(s => s.orgName)
   const conversations = useAgentStore((s) => s.conversations)
   const conversationsLoading = useAgentStore((s) => s.conversationsLoading)
   const currentConversationId = useAgentStore((s) => s.currentConversationId)
@@ -144,14 +146,20 @@ export default function AgentHome() {
       })),
     [outcomes, userTexts],
   )
+  const isEmpty = rows.length === 0
 
   // A history load starts at the newest message, regardless of the previous scroll position.
   // Run before paint and only on entry/load completion; subsequent updates respect manual reading.
   useLayoutEffect(() => {
     const el = scrollRef.current
-    if (!el || messagesLoading || currentConversationId === null || anchoredTurn !== null) return
+    if (!el || messagesLoading || anchoredTurn !== null) return
+    if (isEmpty) {
+      el.scrollTo({ top: 0, behavior: 'instant' })
+      return
+    }
+    if (currentConversationId === null) return
     el.scrollTo({ top:el.scrollHeight, behavior:'instant' })
-  }, [currentConversationId, messagesLoading, anchoredTurn])
+  }, [currentConversationId, messagesLoading, anchoredTurn, isEmpty])
 
   // 自动滚到底（流式过程中持续跟随）—— 但只在用户本来就在底部附近时才跟随。
   // 字符流会高频触发本 effect，无条件置底会把"往上翻看过程"的用户一次次拽回来。
@@ -159,10 +167,10 @@ export default function AgentHome() {
     const el = scrollRef.current
     // Once a send is anchored, new process/reply chunks must not pull the
     // question back down or interrupt the user's manual reading position.
-    if (!el || anchoredTurn !== null) return
+    if (!el || isEmpty || anchoredTurn !== null) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     if (nearBottom) el.scrollTop = el.scrollHeight
-  }, [rows.length, outcomes, timeline.length, anchoredTurn])
+  }, [rows.length, isEmpty, outcomes, timeline.length, anchoredTurn])
 
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -294,15 +302,13 @@ export default function AgentHome() {
 
   /** 「编辑并重新发送」：把原文放回输入框，不自动发送 */
   const handleEdit = useCallback((text: string) => {
-    setSeed({ text, nonce: Date.now() })
+    setSeed(previous => ({ text, nonce: (previous?.nonce ?? 0) + 1 }))
   }, [])
 
   const handleStarter = (text: string, target?: AgentMode) => {
     if (target) void setMode(target)
-    setSeed({ text, nonce: Date.now() })
+    handleEdit(text)
   }
-
-  const isEmpty = rows.length === 0
 
   // The composer describes the current configuration; message metadata describes past execution.
   useEffect(() => {
@@ -364,7 +370,7 @@ export default function AgentHome() {
         siderNode
       )}
 
-      <div className="lingsi-main">
+      <div className={`lingsi-main${isEmpty && !messagesLoading ? ' lingsi-main-welcome' : ''}`}>
         <div className="lingsi-main-head">
           {isPhone && (
             <Tooltip title="任务列表">
@@ -373,7 +379,10 @@ export default function AgentHome() {
               </button>
             </Tooltip>
           )}
-          <div className="lingsi-main-title"><h1>{conversation?.title || (currentConversationId ? userTexts[0]?.slice(0,22) || '当前任务' : '新任务')}</h1><small>{currentConversationId ? '当前组织资料与关联活动' : '组织工作，从一句话开始'}</small></div>
+          <div className="lingsi-main-title">
+            <h1>{conversation?.title || (currentConversationId ? userTexts[0]?.slice(0, 22) || '当前任务' : '新任务')}</h1>
+            {orgName && <small title={orgName}>{orgName}</small>}
+          </div>
           <span className="lingsi-main-head-actions">
             <Tooltip title="管理跨会话偏好">
               <button type="button" className="lingsi-memory-trigger" aria-haspopup="dialog" aria-expanded={memoryOpen} onClick={() => setMemoryOpen(true)}>
@@ -439,9 +448,10 @@ export default function AgentHome() {
         </div>
 
         <div className="lingsi-composer-dock">
-        <LingsiScrollToBottom scrollRef={scrollRef} generating={thinking || Boolean(lastOutcome?.streaming)} />
+        {!isEmpty && <LingsiScrollToBottom scrollRef={scrollRef} generating={thinking || Boolean(lastOutcome?.streaming)} />}
         <LingsiComposer
           busy={thinking}
+          welcome={isEmpty}
           canStop={Boolean(activeRequestId || activeStreamId) && !stopping}
           disabled={messagesLoading}
           mode={mode}

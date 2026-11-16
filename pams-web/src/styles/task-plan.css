@@ -118,9 +118,8 @@
   cursor: pointer;
 }
 .task-plan-filters button[aria-pressed='true'] {
-  background: var(--brand-soft);
   color: var(--brand-text);
-  border-color: var(--brand-text);
+  box-shadow: var(--focus-ring);
 }
 .task-plan-filters b {
   font-variant-numeric: tabular-nums;

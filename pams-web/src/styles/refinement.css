@@ -1,9 +1,22 @@
 /* PAMS refinement: surface tone, quiet type, and motion that answers an action. */
 :root {
   --font-weight-compensation: 0;
-  --focus-ring: inset 0 0 0 1px var(--focus), 0 0 0 3px color-mix(in srgb, var(--focus) 16%, transparent);
 }
 :root[data-theme='dark'] { --font-weight-compensation: 40; }
+
+:root,
+.ant-input-status-error, .ant-input-number-status-error, .ant-picker-status-error,
+.ant-select-status-error, .ant-form-item-has-error,
+.ant-input-status-warning, .ant-input-number-status-warning, .ant-picker-status-warning,
+.ant-select-status-warning, .ant-form-item-has-warning {
+  --focus-shadow: 0 0 5px color-mix(in srgb, var(--focus) 15%, transparent);
+  --focus-ring: inset 0 0 0 1px var(--focus), var(--focus-shadow);
+}
+
+.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+.ant-segmented .ant-segmented-item-selected {
+  box-shadow: var(--focus-ring);
+}
 
 body {
   font-weight: calc(400 - var(--font-weight-compensation));
@@ -36,9 +49,9 @@ body {
 .ant-select-focused.ant-select-outlined:not(.ant-select-customize-input) .ant-select-selector,
 .glass-select-trigger:focus-visible, .glass-select-trigger[aria-expanded='true'],
 .auth-form .ant-input-affix-wrapper:focus-within, .auth-form .ant-input:focus,
-.login-card .ant-input-affix-wrapper:focus-within,
-.lingsi-v6 .lingsi-composer-box:focus-within {
-  outline: none !important;
+.login-card .ant-input-affix-wrapper:focus-within {
+  outline: 1px solid transparent !important;
+  outline-offset: -1px;
   border-color: transparent !important;
   box-shadow: var(--focus-ring) !important;
 }
@@ -46,16 +59,14 @@ body {
 .ant-input-affix-wrapper > input.ant-input:focus,
 .lingsi-composer-ta:focus { outline: none !important; box-shadow: none !important; }
 input:not(.ant-input):focus-visible, textarea:not(.ant-input):focus-visible,
-select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+select:focus-visible { outline: 1px solid transparent; outline-offset: -1px; box-shadow: var(--focus-ring); }
 .ant-input-status-error, .ant-input-number-status-error, .ant-picker-status-error,
 .ant-select-status-error, .ant-form-item-has-error {
   --focus: var(--danger);
-  --focus-ring: inset 0 0 0 1px var(--danger), 0 0 0 3px var(--danger-soft);
 }
 .ant-input-status-warning, .ant-input-number-status-warning, .ant-picker-status-warning,
 .ant-select-status-warning, .ant-form-item-has-warning {
   --focus: var(--warn);
-  --focus-ring: inset 0 0 0 1px var(--warn), 0 0 0 3px var(--warn-soft);
 }
 
 .pams-stream-char {

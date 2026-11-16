@@ -12,6 +12,7 @@ import { createRequestId } from '@/utils/requestId'
 interface Props {
   modelStatus?: AgentModelStatus | null
   busy: boolean
+  welcome?: boolean
   canStop?: boolean
   disabled?: boolean
   /** 运行模式（UI v2 §E）：只读 / 标准，由 store 持有 */
@@ -71,6 +72,7 @@ const MODE_OPTIONS: GlassSelectOption<AgentMode>[] = [
  */
 export default function LingsiComposer({
   busy,
+  welcome = false,
   canStop = true,
   disabled,
   mode,
@@ -93,6 +95,7 @@ export default function LingsiComposer({
   const [instructionNotice, setInstructionNotice] = useState('')
   const instruction = useRef<{ text: string; id: string } | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
+  const wasBusy = useRef(false)
 
   const [pickerOpen, setPickerOpen] = useState(false)
   const [options, setOptions] = useState<ActivityOption[]>([])
@@ -102,8 +105,9 @@ export default function LingsiComposer({
 
   // 请求结束后把焦点还给输入框（连续提问体验）
   useEffect(() => {
-    if (!busy) ref.current?.focus()
-  }, [busy])
+    if (!busy && (!welcome || wasBusy.current)) ref.current?.focus()
+    wasBusy.current = busy
+  }, [busy, welcome])
 
   // 「编辑并重新发送」：填入草稿并聚焦（不发送）
   useEffect(() => {
@@ -259,8 +263,8 @@ export default function LingsiComposer({
               disabled
                 ? '正在加载会话…'
                 : kb
-                  ? '问一个资料问题，例如：活动结束后要归档哪些材料？'
-                  : '把你想推进的事，交给concerto…'
+                  ? '输入想核对的资料问题…'
+                  : welcome ? '描述你要办理的事项，或使用上方的任务模板…' : '把你想推进的事，交给concerto…'
             }
             autoSize={{ minRows: 2, maxRows: 6 }}
             disabled={disabled}

@@ -542,7 +542,7 @@
 }
 .activity-signin-tabs button[aria-pressed='true'] {
   color: var(--brand-text);
-  border-color: var(--brand);
+  box-shadow: var(--focus-ring);
 }
 .activity-score-rules {
   display: grid;

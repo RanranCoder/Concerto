@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -8,7 +8,8 @@ const user={id:1,username:'teacher',realName:'林老师',roleCode:'TEACHER',role
 const skipped=[{label:'10月16日 16:00–17:40',sub:'未分配',reason:'空闲人员不足，尚缺 2 人'}]
 const plan={planId:10,summary:'培训班 · 保存策划草稿',total:2,items:[{id:null,label:'活动目的',sub:'专题学习与交流'},{id:null,label:'准备事项',sub:'场地、名单与会务'}],skipped,detailLines:['关联活动：第四十期培训班','__args__:{"internal":"hidden"}'],reversible:true,confirmToken:'test-one-time-token',needsConfirm:true,preview:'## 第四十期培训班策划初稿\n\n### 活动目的\n专题学习与交流。\n\n### 准备事项\n核对场地、名单与会务。'}
 const form={taskId:30,formKey:'generateSchedule',toolName:'generateActivitySchedule',title:'补充排班条件',description:'请选择日期、时段和参与部门',fields:[{name:'startDate',label:'开始日期',type:'date',required:true},{name:'endDate',label:'结束日期',type:'date',required:true},{name:'department',label:'参与部门',type:'text',required:true}],values:{startDate:'2026-10-15',endDate:'2026-10-16',department:'文秘部'}}
-async function setup(page:Page) {
+async function setup(page:Page, options: { permissions?: string[]; packs?: string[] } = {}) {
+  const account = { ...user, permissions: options.permissions ?? user.permissions }
   const requests:{path:string,body:Record<string,unknown>}[]=[]
   // Import the same store instance as the page, including Vite's HMR version.
   let agentModuleURL = ''
@@ -18,10 +19,10 @@ async function setup(page:Page) {
   let status='PENDING_CONFIRM', formPending=true
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
   await page.clock.setFixedTime(new Date('2026-10-14T10:00:00+08:00'))
-  await page.addInitScript(user=>{
-    localStorage.setItem('pams_token',JSON.stringify({state:{token:'test-token',user},version:1}))
+  await page.addInitScript(account=>{
+    localStorage.setItem('pams_token',JSON.stringify({state:{token:'test-token',user:account},version:1}))
     localStorage.setItem('pams_theme',JSON.stringify({state:{mode:'light'},version:0}))
-  },user)
+  },account)
   const baseMessage={id:100,conversationId:1,role:'ASSISTANT',sensitivity:'normal',streamId:'stream-1',provider:'deepseek',durationMs:800,createdAt:'2026-10-14T09:31:00',toolCalls:[{tool:'queryActivityOverview',label:'查询活动概览',status:'OK',durationMs:120,write:false,sensitivity:'normal',argsJson:'{"activityName":"第四十期培训班"}'}],thinking:[{round:0,text:'先核对已有资料，再整理本期需要准备的内容。',ts:1}],thinkingNotes:[],references:[],artifacts:[],citations:[],form:null,plan:null}
   const artifact={entityType:'plan',entityId:5,name:'培训班策划书',path:'/activities/1?tab=plan'}
   const result={status,taskId:10,message:status==='CANCELLED'?'已取消该操作':'策划草稿已保存',skipped,artifacts:[artifact]}
@@ -29,8 +30,8 @@ async function setup(page:Page) {
     const req=route.request(),url=new URL(req.url()),path=url.pathname
     if(req.method()==='POST')requests.push({path,body:req.postDataJSON()||{}})
     let data:unknown=[]
-    if(path==='/api/auth/me')data=user
-    else if(path==='/api/orgs/current')data={id:1,name:'党建办公室',themeJson:null,enabledPacks:null,terminologyJson:null}
+    if(path==='/api/auth/me')data=account
+    else if(path==='/api/orgs/current')data={id:1,name:'党建办公室',themeJson:null,enabledPacks:JSON.stringify(options.packs ?? []),terminologyJson:null}
     else if(path==='/api/notifications/unread-count')data=0
     else if(path==='/api/agent/conversations')data={records:[
       {id:1,title:'准备培训班策划初稿',status,pendingTaskCount:status==='PENDING_CONFIRM'?1:0,createdAt:'2026-10-14T09:30:00',updatedAt:'2026-10-14T09:31:00'},
@@ -288,7 +289,7 @@ for (const dark of [false, true]) test(`输入区交互配色跟随系统主题�
     probe.remove()
     return values
   })
-  const contrast = async (selector:string) => page.locator(selector).evaluate(el => {
+  const contrast = (locator: Locator) => locator.evaluate(el => {
     const luminance = (color:string) => {
       const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(value => {
         const channel = value / 255
@@ -302,10 +303,11 @@ for (const dark of [false, true]) test(`输入区交互配色跟随系统主题�
   })
   const context = page.getByRole('button', {name:'附加上下文', exact:true})
   await context.hover()
-  await expect(page.getByRole('tooltip')).toBeVisible()
-  expect(await contrast('.ant-tooltip-inner:visible')).toBeGreaterThanOrEqual(4.5)
-  await expect(page.getByRole('tooltip')).toHaveCSS('background-color', palette['canvas-elevated'])
-  await expect(page.getByRole('tooltip')).toHaveCSS('color', palette['text-primary'])
+  const tooltip = page.getByRole('tooltip', {name:'附加活动作为上下文', exact:true})
+  await expect(tooltip).toBeVisible()
+  expect(await contrast(tooltip)).toBeGreaterThanOrEqual(4.5)
+  await expect(tooltip).toHaveCSS('background-color', palette['canvas-elevated'])
+  await expect(tooltip).toHaveCSS('color', palette['text-primary'])
   await expect(context).toHaveCSS('background-color', palette['soft-strong'])
   await capture('tooltip')
   const mode = page.getByRole('combobox', {name:'运行模式'})
@@ -341,7 +343,7 @@ for (const dark of [false, true]) test(`输入区交互配色跟随系统主题�
   }, agentModule())
   const stop = page.getByRole('button', {name:'停止任务', exact:true})
   await stop.hover()
-  expect(await contrast('.lingsi-send-stop')).toBeGreaterThanOrEqual(4.5)
+  expect(await contrast(stop)).toBeGreaterThanOrEqual(4.5)
   await expect(stop).toHaveCSS('background-color', palette['soft-strong'])
   await expect(stop).toHaveCSS('color', palette['text-primary'])
   await capture('stop')
@@ -760,15 +762,23 @@ test('公共精修样式与复制反馈在明暗主题生效', async ({ page }) 
   await setup(page)
   await task(page, '准备培训班策划初稿').click()
   const composer = page.locator('.lingsi-composer-box')
-  await page.locator('.lingsi-composer-ta').focus()
-  const light = await composer.evaluate(el => ({ shadow: getComputedStyle(el).boxShadow, border: getComputedStyle(el).borderTopColor }))
-  expect(light.shadow).toContain('inset')
-  expect(light.shadow.split(/,(?![^()]*\))/)).toHaveLength(2)
-  expect(light.border).toBe('rgba(0, 0, 0, 0)')
+  const editor = page.locator('.lingsi-composer-ta')
+  const glow = () => composer.evaluate(el => getComputedStyle(el, '::after').animationName)
+  await editor.focus()
+  await expect(composer).toHaveCSS('border-top-width', '1px')
+  await expect(composer).toHaveCSS('border-top-color', 'rgb(22, 104, 220)')
+  expect(await glow()).toBe('none')
   expect(await page.locator('.lingsi-main-title h1').evaluate(el => getComputedStyle(el).fontWeight)).toBe('600')
   await page.getByRole('button', { name: '切换深色' }).click()
   expect(await page.locator('.lingsi-main-title h1').evaluate(el => getComputedStyle(el).fontWeight)).toBe('560')
   expect(await page.locator('body').evaluate(el => getComputedStyle(el).fontVariantNumeric)).toBe('tabular-nums')
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await editor.focus()
+  await expect(composer).toHaveCSS('border-top-color', 'rgb(134, 185, 255)')
+  expect(await glow()).toBe('lingsi-composer-glow')
+  await editor.blur()
+  expect(await glow()).toBe('none')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.resolve() } }))
   const copy = page.locator('.lingsi-msg-actions .pams-copy')
   await copy.click()
@@ -785,10 +795,13 @@ test('公共精修样式与复制反馈在明暗主题生效', async ({ page }) 
 
 test('业务入口填入草稿、真实任务筛选、预览与确认门禁',async({page})=>{
   const {requests,errors}=await setup(page)
-  await expect(page.locator('.lingsi-starter')).toHaveCount(6)
+  await expect(page.getByRole('button', {name: /^查看我的待办/})).toBeVisible()
   await page.screenshot({path:resolve(output,'welcome-light.png'),animations:'disabled'})
-  await page.locator('.lingsi-starter').filter({hasText:'活动筹备'}).click()
-  await expect(page.locator('.lingsi-composer-ta')).toHaveValue(/策划初稿/)
+  await page.getByRole('button', {name: '草稿与预览', exact: true}).click()
+  await page.getByRole('button', {name: /^起草活动策划书/}).click()
+  const input = page.getByRole('textbox', {name: '任务内容'})
+  await expect(input).toHaveValue(/策划初稿/)
+  await expect(input).toBeFocused()
   expect(requests.filter(r=>r.path==='/api/agent/chat')).toHaveLength(0)
   await page.locator('.lingsi-task-filters').getByRole('button',{name:'已完成'}).click()
   await expect(page.locator('.lingsi-conv-select')).toHaveCount(1)
@@ -823,6 +836,37 @@ test('业务入口填入草稿、真实任务筛选、预览与确认门禁',asy
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark')
   await page.screenshot({path:resolve(output,'completed-dark.png'),animations:'disabled'})
   expect(errors).toEqual([])
+})
+
+test('模板按运行模式、操作权限和工作包展示，切换资料问答只填入草稿', async ({ page }) => {
+  const { requests } = await setup(page, {
+    permissions: ['activity:view', 'plan:view', 'plan:edit', 'kb:read', 'youth:view', 'party:view'],
+    packs: ['youth', 'volunteer'],
+  })
+  const input = page.getByRole('textbox', { name: '任务内容' })
+  const draftCategory = page.getByRole('button', { name: '草稿与预览', exact: true })
+
+  await draftCategory.click()
+  await expect(page.getByRole('button', { name: /^修订 Word 策划书/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^预排活动值班/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^起草活动报道/ })).toHaveCount(0)
+
+  await pickMode(page, '只读模式')
+  await expect(draftCategory).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^查看近期活动/ })).toBeVisible()
+  await page.getByRole('button', { name: '组织工作包', exact: true }).click()
+  await expect(page.getByRole('button', { name: /^查看团务待办/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^汇总志愿服务/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^查询党员发展进度/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: '资料与文档', exact: true }).click()
+  await page.getByRole('button', { name: /^查活动归档要求/ }).click()
+  await expect(page.getByRole('combobox', { name: '运行模式' })).toHaveText('资料问答')
+  await expect(input).toHaveValue(/逐项注明出处/)
+  await expect(input).toBeFocused()
+  await expect(page.getByRole('button', { name: /^查活动审批流程/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^查看近期活动/ })).toHaveCount(0)
+  expect(requests.filter(request => request.path.startsWith('/api/agent/chat'))).toHaveLength(0)
 })
 
 test('取消保留跳过事项，资料来源在同一成果面板回看',async({page})=>{

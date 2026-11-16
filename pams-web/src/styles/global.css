@@ -177,23 +177,12 @@ body {
   color: inherit !important;
 }
 
-/* 选中：选中底色（浅色=浅主色 / 深色=半透白）+ 左侧 3px 主色竖条 + 加粗 */
+/* 主导航选中态使用与表单控件相同的描边。 */
 .app-sider .ant-menu-item-selected {
-  background: var(--sider-selected) !important;
+  background: transparent !important;
   color: var(--sider-text) !important;
   font-weight: calc(600 - var(--font-weight-compensation));
-}
-/* 蓝色只出现在这一处 3px 竖条。
-   不把选中底做成主色实填：深色下低透蓝会把整行染蓝，正是「不要蓝色遮罩」要避免的观感。 */
-.app-sider .ant-menu-item-selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  background: var(--brand);
+  box-shadow: var(--focus-ring);
 }
 /* 展开的父级：与选中项同样权重 */
 .app-sider .ant-menu-submenu-selected > .ant-menu-submenu-title {

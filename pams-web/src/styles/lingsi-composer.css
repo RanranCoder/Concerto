@@ -4,12 +4,38 @@
   container-name: composer;
 }
 .lingsi-v6 .lingsi-composer-box {
+  position: relative;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--text-secondary) 16%, transparent);
   border-radius: var(--r-2xl);
   background: var(--canvas-elevated);
   box-shadow: 0 3px 14px color-mix(in srgb, var(--text-primary) 4%, transparent);
   transition: box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+.lingsi-v6 .lingsi-composer-box:has(.lingsi-composer-ta:focus) {
+  border-color: var(--focus);
+  box-shadow: var(--focus-shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Sweep only the glow layer; the blue edge stays steady and the editor stays clickable. */
+  .lingsi-v6 .lingsi-composer-box:has(.lingsi-composer-ta:focus)::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: var(--r-2xl);
+    pointer-events: none;
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--focus) 48%, transparent);
+    mask-image: linear-gradient(105deg, transparent 33%, #000 50%, transparent 67%);
+    mask-size: 190% calc(100% + 24px);
+    mask-repeat: no-repeat;
+    mask-clip: no-clip;
+    animation: lingsi-composer-glow 6s ease-in-out infinite;
+  }
+}
+@keyframes lingsi-composer-glow {
+  from { mask-position: 100% center; opacity: 0; }
+  48% { opacity: .95; }
+  to { mask-position: 0% center; opacity: 0; }
 }
 .lingsi-v6 .lingsi-composer-ta.ant-input {
   display: block;
@@ -62,11 +88,6 @@
   color: var(--text-primary);
 }
 .lingsi-composer-tool:disabled { opacity: .45; cursor: not-allowed; }
-.lingsi-composer-tool:focus-visible,
-.lingsi-v6 .lingsi-send:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
-}
 .lingsi-composer-settings {
   display: inline-flex;
   align-items: center;
@@ -147,7 +168,7 @@
 .lingsi-v6-collab input:checked ~ .lingsi-collab-switch::after { transform: translateX(10px); }
 .lingsi-v6-collab:hover input:checked:not(:disabled) ~ .lingsi-collab-switch { background: var(--brand-hover); }
 .lingsi-v6-collab:hover input:not(:checked):not(:disabled) ~ .lingsi-collab-switch { background: var(--text-tertiary); }
-.lingsi-v6-collab:has(input:focus-visible) { border-radius: var(--r-lg); outline: 2px solid var(--focus); outline-offset: 1px; }
+.lingsi-v6-collab:has(input:focus-visible) { outline: 1px solid transparent; outline-offset: -1px; box-shadow: var(--focus-ring); }
 .lingsi-v6-collab:has(input:disabled) { opacity: .45; cursor: not-allowed; }
 .lingsi-v6 .lingsi-composer-bar .lingsi-send {
   width: 40px;

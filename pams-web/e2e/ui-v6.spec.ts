@@ -51,7 +51,7 @@ async function setup(page: Page, viewer = user) {
 }
 
 test('真实工作台按日期聚合，并完整显示第二页的周末活动', async ({ page }) => {
-  await setup(page)
+  await setup(page, { ...user, permissions: [...user.permissions, 'schedule:self:view'] })
   await page.goto('/')
   await expect(page.locator('.workbench-week')).toBeVisible()
   const sidebar = page.locator('.app-sider')
@@ -60,7 +60,7 @@ test('真实工作台按日期聚合，并完整显示第二页的周末活动',
   await expect(sidebar.locator('.ant-menu-item-group-title')).toHaveText(['日常工作', '组织与资料', '智能协作', '系统管理'])
   await expect(sidebar.locator('.sidebar-account')).toContainText('林老师')
   await expect(sidebar.getByRole('menuitem', { name: /工作台$/ })).toHaveCSS('height', '40px')
-  await expect(sidebar.getByRole('menuitem', { name: /工作台$/ })).toHaveCSS('border-inline-start-color', 'rgb(22, 104, 220)')
+  await expect(sidebar.getByRole('menuitem', { name: /工作台$/ })).toHaveCSS('box-shadow', /rgb\(22, 104, 220\) 0px 0px 0px 1px inset/)
   await expect(page.locator('.workbench-day.today')).toContainText('核对培训班名单')
   await page.getByText('全周', { exact: true }).click()
   await expect(page.locator('.workbench-day')).toHaveCount(7)

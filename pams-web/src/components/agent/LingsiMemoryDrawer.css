@@ -157,7 +157,8 @@
 }
 .memory-status-filters button:hover { color: var(--text-primary); background: var(--soft); }
 .memory-status-filters button[aria-pressed='true'] {
-  border-bottom-color: var(--brand-text);
+  border-radius: var(--r-sm);
+  box-shadow: var(--focus-ring);
   color: var(--brand-text);
   font-weight: calc(600 - var(--font-weight-compensation));
 }

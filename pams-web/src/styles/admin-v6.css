@@ -129,7 +129,7 @@
   font-variant-numeric:tabular-nums
 }
 .admin-rail>button[aria-pressed=true]:not(.ant-btn) {
-  background:var(--brand-soft);
+  box-shadow:var(--focus-ring);
   color:var(--brand-text);
   font-weight: calc(600 - var(--font-weight-compensation))
 }
