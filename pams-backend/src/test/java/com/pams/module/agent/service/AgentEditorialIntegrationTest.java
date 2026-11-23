@@ -97,7 +97,20 @@ class AgentEditorialIntegrationTest {
         assertThatThrownBy(()->extensions.read("queryActivityAgenda",ctx,Map.of("activityId",activity.getId()+999999))).hasMessageContaining("不可见");
         assertThatThrownBy(()->extensions.read("queryActivityAgenda",ctx,Map.of("activityId",activity.getId(),"page",1.5))).hasMessageContaining("整数");
     }
-    com.pams.module.routine.entity.Schedule schedule(){var s=new com.pams.module.routine.entity.Schedule();s.setActivityId(activity.getId());s.setScheduleType("ACTIVITY");s.setStatus("DRAFT");s.setScheduleDate(java.time.LocalDate.of(2026,12,1));s.setStartTime(java.time.LocalTime.of(8,0));s.setEndTime(java.time.LocalTime.of(9,0));s.setSource("MANUAL");return schedules.saveAndFlush(s);}
+    com.pams.module.routine.entity.Schedule schedule() {
+        var schedule = new com.pams.module.routine.entity.Schedule();
+        schedule.setActivityId(activity.getId());
+        schedule.setScheduleType("ACTIVITY");
+        schedule.setStatus("DRAFT");
+        schedule.setScheduleDate(java.time.LocalDate.of(2026, 12, 1));
+        schedule.setStartTime(java.time.LocalTime.of(8, 0));
+        schedule.setEndTime(java.time.LocalTime.of(9, 0));
+        schedule.setSource("MANUAL");
+        var saved = schedules.saveAndFlush(schedule);
+        db.update("INSERT INTO schedule_person(schedule_id,user_id,person_name,is_primary,org_id) VALUES(?,?,?,1,1)",
+                saved.getId(), ctx.getUserId(), "测试");
+        return saved;
+    }
     ToolContext publishing(){return new ToolContext(ctx.getLoginUser(),List.of("activity:view","schedule:view","schedule:publish").stream().map(SimpleGrantedAuthority::new).toList(),null,null);}
     AgentActionPlan publicationPlan(ToolContext who,Long id){var meta=publications.metadata(who,id);var result=publication.execute(who,Map.of("scheduleIds",List.of(id),"baselines",Map.of(id.toString(),meta.get("baseline"))));assertThat(result.plan()).as(result.summary()).isNotNull();var p=result.plan();return gate.createPlan(who,publication,p.summary(),p.total(),p.items(),p.skipped(),p.detailLines(),false,p.preview());}
     @Test void publishesOnlyExplicitScheduleAndReconcilesWithoutRepublishing()throws Exception{

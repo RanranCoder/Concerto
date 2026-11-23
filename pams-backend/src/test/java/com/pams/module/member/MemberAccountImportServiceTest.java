@@ -121,7 +121,8 @@ class MemberAccountImportServiceTest {
         var credentials = json.readTree(response.getContentAsString()).path("data");
         String a = credentials.get(0).path("token").asText(), b = credentials.get(1).path("token").asText();
         assertThat(a).hasSize(43).isNotEqualTo(b);
-        assertThat(db.queryForList("SELECT token_hash FROM member_account_credential", String.class))
+        assertThat(db.queryForList("SELECT token_hash FROM member_account_credential WHERE batch_id=?", String.class, id))
+            .hasSize(2)
             .allSatisfy(h -> assertThat(h).hasSize(64).isNotEqualTo(a).isNotEqualTo(b));
         assertThat(db.queryForObject("SELECT preview_json FROM member_account_batch WHERE id=?", String.class, id)).doesNotContain(a, b);
         assertThat(db.queryForList("SELECT detail_json FROM org_audit_log", String.class)).allSatisfy(d -> assertThat(d).doesNotContain(a, b));
@@ -146,7 +147,8 @@ class MemberAccountImportServiceTest {
         String fresh = preview();
         db.update("UPDATE organization SET authz_version=authz_version+1 WHERE id=1");
         call("POST", "/api/members/account-batches/" + fresh + "/apply", Map.of(), 409);
-        assertThat(db.queryForObject("SELECT COUNT(*) FROM member_account_credential", Integer.class)).isZero();
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM member_account_credential WHERE batch_id IN (?,?)",
+                Integer.class, id, fresh)).isZero();
     }
 
     @Test
@@ -254,7 +256,11 @@ class MemberAccountImportServiceTest {
         call("POST", "/api/members/account-batches/not-a-preview/apply", request(List.of(member)), 404);
         var tooMany = java.util.stream.LongStream.rangeClosed(1, 201).boxed().toList();
         call("POST", "/api/members/account-batches/previews", request(tooMany), 400);
-        assertThat(db.queryForObject("SELECT COUNT(*) FROM member_account_credential", Integer.class)).isZero();
+        assertThat(db.queryForObject("""
+                SELECT COUNT(*) FROM member_account_credential c
+                JOIN sys_user u ON u.id=c.user_id
+                WHERE u.org_id=1 AND u.username IN ('batch_student_1','batch_student_2')
+                """, Integer.class)).isZero();
     }
 
     @Test

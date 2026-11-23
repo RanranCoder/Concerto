@@ -120,16 +120,21 @@ class NotificationReminderTest {
     }
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification WHERE entity_type='TASK' AND entity_id=? AND type='TASK_DUE_REMINDER'",Long.class,id)).isEqualTo(1);
   }
-  @Test void regularSchedulePublicationNotifiesWithoutInventingAStartTime(){
+  @Test void regularSchedulePublicationRequiresExplicitTimeAndCreatesNoStartReminder(){
     var request=new com.pams.module.routine.dto.ScheduleRequest();request.setScheduleType("CLASS_DUTY");
     request.setScheduleDate(now.toLocalDate());request.setSessionName("上午");
     var person=new com.pams.module.routine.dto.ScheduleRequest.SchedulePersonItem();person.setUserId(user);person.setPersonName("测试负责人");person.setIsPrimary(1);request.setPersons(List.of(person));
     long id=routine.createSchedule(request);schedules.add(id);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification WHERE entity_type='SCHEDULE' AND entity_id=?",Long.class,id)).isZero();
-    publication.publish(id);
+    assertThatThrownBy(() -> publication.publish(id,false)).hasMessageContaining("日期和起止时间");
+    assertThat(db.queryForObject("SELECT status FROM schedule WHERE id=?",String.class,id)).isEqualTo("DRAFT");
+    request.setStartTime(LocalTime.of(8,0));
+    request.setEndTime(LocalTime.of(10,0));
+    routine.updateSchedule(id,request);
+    publication.publish(id,false);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification WHERE entity_type='SCHEDULE' AND entity_id=? AND type='SCHEDULE_PUBLISHED'",Long.class,id)).isEqualTo(1);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification_reminder WHERE resource_type='SCHEDULE' AND resource_id=?",Long.class,id)).isZero();
-    publication.cancel(id);
+    publication.cancel(id,false);
     assertThat(db.queryForObject("SELECT COUNT(*) FROM notification WHERE entity_type='SCHEDULE' AND entity_id=? AND type='SCHEDULE_CANCELLED'",Long.class,id)).isEqualTo(1);
   }
 }
