@@ -1,7 +1,9 @@
 import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
+  Grid,
   Button,
   DatePicker,
   Empty,
@@ -50,7 +52,7 @@ function matchFilters(r: AttendanceVO, f: AttendanceFilter) {
     (!f.dateTo || (!!r.activityDate && r.activityDate <= f.dateTo)) &&
     (!f.type || r.activityType === f.type) &&
     (!f.status || r.status === f.status) &&
-    (!f.keyword || `${r.personName} ${r.studentNo ?? ''}`.includes(f.keyword))
+    (!f.keyword || [r.personName, r.studentNo].some((v) => v?.toLowerCase().includes(f.keyword!.toLowerCase())))
   )
 }
 export default function AttendanceList() {
@@ -66,8 +68,10 @@ export default function AttendanceList() {
     canAudit = permissions.some((p) =>
       ['attendance:view'].includes(p),
     )
+  const canViewMine = permissions.includes('attendance:self:view')
+  const compact = !Grid.useBreakpoint().md
   const [params, setParams] = useSearchParams()
-  const scope = !canViewAll || params.get('scope') === 'mine' ? 'mine' : 'all'
+  const scope = !canViewAll || (canViewMine && params.get('scope') === 'mine') ? 'mine' : 'all'
   const initialActivity = Number(params.get('activityId')) || undefined
   const [filters, setFilters] = useState<AttendanceFilter>({
       activityId: initialActivity,
@@ -76,6 +80,8 @@ export default function AttendanceList() {
   const [rows, setRows] = useState<AttendanceVO[]>([]),
     [loading, setLoading] = useState(false),
     [revision, setRevision] = useState(0),
+    [loadFailed, setLoadFailed] = useState(false),
+    [auditFailed, setAuditFailed] = useState(false),
     [activities, setActivities] = useState<ActivityVO[]>([])
   const [detail, setDetail] = useState<AttendanceVO | null>(null),
     [mode, setMode] = useState<'detail' | 'edit' | 'makeup'>('detail'),
@@ -93,33 +99,46 @@ export default function AttendanceList() {
   }, [initialActivity])
   useEffect(() => {
     let current = true
-    setLoading(true)
-    const request =
-      scope === 'mine' ? listMyAttendances() : listAttendances(filters)
-    request
-      .then((r) => {
-        if (current) setRows(r ?? [])
+    let requestVersion = 0
+    const load = (showLoading: boolean) => {
+      const version = ++requestVersion
+      if (showLoading) {
+        setLoading(true)
+        setLoadFailed(false)
+        setRows([])
+      }
+      const request = scope === 'mine' ? listMyAttendances({ silentError: true }) : listAttendances(filters, { silentError: true })
+      void request.then((result) => {
+        if (current && version === requestVersion) {
+          setRows(result ?? [])
+          setLoadFailed(false)
+        }
+      }).catch(() => {
+        if (current && version === requestVersion) setLoadFailed(true)
+      }).finally(() => {
+        if (current && version === requestVersion) setLoading(false)
       })
-      .catch(() => {
-        if (current) setRows([])
-      })
-      .finally(() => {
-        if (current) setLoading(false)
-      })
+    }
+    load(true)
+    const timer = window.setInterval(() => {
+      if (!document.hidden) load(false)
+    }, 30_000)
     return () => {
       current = false
+      window.clearInterval(timer)
     }
   }, [filters, scope, revision])
   useEffect(() => {
     let current = true
     setAudits([])
+    setAuditFailed(false)
     if (!detail || !canAudit) return
     setAuditLoading(true)
     listAttendanceAudits(detail.id)
       .then((r) => {
         if (current) setAudits(r ?? [])
       })
-      .catch(() => {})
+      .catch(() => { if (current) setAuditFailed(true) })
       .finally(() => {
         if (current) setAuditLoading(false)
       })
@@ -133,7 +152,7 @@ export default function AttendanceList() {
   )
   const count = (s: string) => visible.filter((r) => r.status === s).length
   const signed = visible.filter((r) =>
-    ['NORMAL', 'LATE', 'MAKEUP'].includes(r.status),
+    ['NORMAL', 'LATE', 'MAKEUP', 'EARLY_LEAVE'].includes(r.status),
   ).length
   const change = (patch: Partial<AttendanceFilter>) =>
     setFilters((f) => ({ ...f, ...patch }))
@@ -177,17 +196,22 @@ export default function AttendanceList() {
     {
       title: '成员 / 学号',
       key: 'person',
-      width: 150,
+      width: compact ? undefined : 150,
       render: (_, r) => (
         <>
           <strong>{r.personName}</strong>
           <small>{r.studentNo || '未登记学号'}</small>
+          {compact && <>
+            <small>{r.activityName || r.sessionName || '例行事务'} · {r.activityDate || '未设置日期'}</small>
+            <RoutineStatus status={r.status} />
+          </>}
         </>
       ),
     },
     {
       title: '活动 / 班次',
       key: 'activity',
+      responsive: ['md'],
       render: (_, r) => (
         <>
           <strong>{r.activityName || '例行事务'}</strong>
@@ -203,12 +227,14 @@ export default function AttendanceList() {
     {
       title: '考勤结果',
       dataIndex: 'status',
+      responsive: ['md'],
       width: 100,
       render: (s) => <RoutineStatus status={s} />,
     },
     {
       title: '签到时间',
       key: 'time',
+      responsive: ['md'],
       width: 130,
       render: (_, r) => (
         <>
@@ -220,13 +246,14 @@ export default function AttendanceList() {
     {
       title: '来源',
       dataIndex: 'statusSource',
+      responsive: ['lg'],
       width: 100,
       render: (s) => <small>{s === 'MANUAL' ? '人工修正' : '自动判定'}</small>,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 130,
+      width: compact ? 100 : 130,
       render: (_, r) => (
         <Space>
           <Button type="link" onClick={() => open(r, 'detail')}>
@@ -363,16 +390,20 @@ export default function AttendanceList() {
         </span>
         <span>摘要随筛选更新</span>
       </div>
+      {loadFailed && (
+        <Alert type="error" showIcon message="考勤加载失败"
+          action={<Button size="small" onClick={() => setRevision((n) => n + 1)}>重新加载</Button>} />
+      )}
       <Table
         className="routine-data-table"
         rowKey="id"
         columns={columns}
         dataSource={visible}
         loading={loading}
-        scroll={{ x: 950 }}
+        scroll={compact ? undefined : { x: 800 }}
         pagination={{ pageSize: 15, showTotal: (n) => `共 ${n} 条考勤记录` }}
         locale={{
-          emptyText: <Empty description="没有匹配的考勤记录，请调整筛选" />,
+          emptyText: loading || loadFailed ? null : <Empty description="没有匹配的考勤记录，请调整筛选" />,
         }}
       />
     </GlassCard>
@@ -385,7 +416,7 @@ export default function AttendanceList() {
         extra={
           <Button
             icon={<DownloadOutlined />}
-            disabled={!visible.length}
+            disabled={loading || loadFailed || !visible.length}
             onClick={() =>
               downloadCsv('考勤明细', [
                 [
@@ -393,6 +424,9 @@ export default function AttendanceList() {
                   '学号',
                   '活动',
                   '日期',
+                  '班次',
+                  '开始时间',
+                  '结束时间',
                   '状态',
                   '签到时间',
                   '来源',
@@ -403,6 +437,9 @@ export default function AttendanceList() {
                   r.studentNo,
                   r.activityName,
                   r.activityDate,
+                  r.sessionName,
+                  r.activityStart,
+                  r.activityEnd,
                   ATTENDANCE_STATUS_MAP[r.status] || r.status,
                   r.checkedInAt,
                   r.statusSource,
@@ -418,8 +455,8 @@ export default function AttendanceList() {
       <RoutineSummary
         items={[
           { label: '当前记录', value: visible.length, note: '筛选范围' },
-          { label: '已签到', value: signed, note: '正常 / 迟到 / 补签' },
-          { label: '待签到', value: count('PENDING'), note: '活动结束前' },
+          { label: '已签到', value: signed, note: '含迟到、早退和补签' },
+          { label: '待签到', value: count('PENDING'), note: '班次结算前' },
           {
             label: '缺勤 / 迟到',
             value: count('ABSENT') + count('LATE'),
@@ -441,11 +478,11 @@ export default function AttendanceList() {
           ...(canViewAll
             ? [{ key: 'all', label: '考勤管理', children: table }]
             : []),
-          { key: 'mine', label: '我的考勤', children: table },
+          ...(canViewMine ? [{ key: 'mine', label: '我的考勤', children: table }] : []),
         ]}
       />
       <RoutineNote>
-        活动排班发布后进入待签到；活动结束后，未签到自动判为缺勤。人工修正的记录不会被自动任务覆盖。
+        班次发布后进入待签到，结束后自动结算缺勤。人工修正记录会保留。
       </RoutineNote>
       <FormSurface
         mode="drawer"
@@ -566,6 +603,8 @@ export default function AttendanceList() {
               <section className="routine-audit">
                 <h3>人工修改记录</h3>
                 <Spin spinning={auditLoading}>
+                      {auditFailed && <Alert type="error" message="审计记录加载失败"
+                        action={<Button size="small" onClick={() => setRevision((n) => n + 1)}>重试</Button>} />}
                   {audits.length ? (
                     audits
                       .slice()

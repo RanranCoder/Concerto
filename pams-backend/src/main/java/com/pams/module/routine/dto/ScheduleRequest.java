@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 /** 排班保存请求。persons 为值班人员数组。 */
@@ -18,6 +19,8 @@ public class ScheduleRequest {
     private String sessionName;
     private String location;
     private LocalDate scheduleDate;
+    private LocalTime startTime;
+    private LocalTime endTime;
     private String notes;
     private List<SchedulePersonItem> persons;
 

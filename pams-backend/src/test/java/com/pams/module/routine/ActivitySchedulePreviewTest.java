@@ -35,7 +35,7 @@ class ActivitySchedulePreviewTest {
     void candidates(String... names) {
         when(matcher.matchByPeriod(any(), any(), any(), anyList(), any(), any())).thenReturn(List.of(
                 new FreeSlotMatcher.PeriodSlot(3,"第5–6节",LocalTime.of(14,0),LocalTime.of(15,40),
-                        java.util.Arrays.stream(names).map(n -> new FreeSlotMatcher.Candidate(n,1L)).toList())));
+                        java.util.Arrays.stream(names).map(n -> new FreeSlotMatcher.Candidate(n, (long) n.hashCode())).toList())));
     }
     @Test void previewIsReadOnlyAndBalancesPeopleAcrossDates() {
         candidates("乙同学","甲同学");
@@ -63,6 +63,7 @@ class ActivitySchedulePreviewTest {
     }
     @Test void matchingPreviewWritesDraftsWithTheReviewedPeople() {
         candidates("甲同学");
+        when(activities.lockById(10L)).thenReturn(java.util.Optional.of(new com.pams.module.activity.entity.Activity()));
         when(schedules.save(any())).thenAnswer(i -> {var s=(com.pams.module.routine.entity.Schedule)i.getArgument(0);s.setId(1L);return s;});
         var preview = service.preview(request());
         assertThat(service.generateReviewed(request(),ActivityScheduleService.previewFingerprint(preview))).isEqualTo(preview);
@@ -70,4 +71,37 @@ class ActivitySchedulePreviewTest {
         verify(people,times(2)).save(argThat(p -> "甲同学".equals(p.getPersonName())));
         verifyNoInteractions(attendance);
     }
+    @Test void webPreviewExcludesConflictsAndRejectsAChangedPlanBeforeWrites() {
+        candidates("甲同学");
+        var activity = new com.pams.module.activity.entity.Activity();
+        activity.setId(10L);
+        activity.setOrgId(1L);
+        when(activities.findById(10L)).thenReturn(java.util.Optional.of(activity));
+        when(activities.lockById(10L)).thenReturn(java.util.Optional.of(activity));
+        var request = request();
+        var preview = service.reviewGeneration(request);
+        assertThat(preview.draftCount()).isEqualTo(2);
+        verify(schedules, never()).save(any());
+
+        var busy = new com.pams.module.routine.entity.Schedule();
+        busy.setId(77L);
+        busy.setStatus("PUBLISHED");
+        busy.setScheduleDate(request.getStartDate());
+        busy.setStartTime(request.getStartTime());
+        busy.setEndTime(request.getEndTime());
+        var person = new com.pams.module.routine.entity.SchedulePerson();
+        person.setScheduleId(77L);
+        person.setUserId((long) "甲同学".hashCode());
+        when(schedules.findByScheduleDateBetweenOrderByIdAsc(any(), any())).thenReturn(List.of(busy));
+        when(people.findByScheduleIdIn(List.of(77L))).thenReturn(List.of(person));
+
+        assertThatThrownBy(() -> service.confirmGeneration(request, preview.fingerprint()))
+                .isInstanceOf(BizException.class).hasMessageContaining("预览已变化");
+        var updated = service.reviewGeneration(request);
+        assertThat(updated.draftCount()).isEqualTo(1);
+        assertThat(updated.days().getFirst().get("slots").toString()).contains("conflictingNames=[甲同学]", "missingCount=1");
+        verify(schedules, never()).save(any());
+        verifyNoInteractions(attendance);
+    }
+
 }

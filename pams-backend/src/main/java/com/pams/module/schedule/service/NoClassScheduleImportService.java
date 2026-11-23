@@ -128,7 +128,8 @@ public class NoClassScheduleImportService {
                 throw new BizException(2704, "生成 Excel 失败");
             }
             markdown = NoClassScheduleMarkdownWriter.write(rows, deptName + " 无课表");
-            persistRecord(deptId, deptName, safeSem, rows);
+            if (failed.isEmpty()) persistRecord(deptId, deptName, safeSem, rows);
+            else warnings.add("本次仅生成预览，修正失败文件后请重新提交完整批次。");
             downloadUrl = "无课表/" + xlsxPath.getFileName().toString();
         }
 
@@ -136,7 +137,9 @@ public class NoClassScheduleImportService {
             notices.add(com.pams.module.notification.service.BusinessNoticeService.Domain.SCHEDULE_IMPORT,com.pams.module.notification.service.BusinessNoticeService.Action.IMPORTED,people.size(),null);
             notices.add(com.pams.module.notification.service.BusinessNoticeService.Domain.SCHEDULE_IMPORT,com.pams.module.notification.service.BusinessNoticeService.Action.FAILED,failed.size(),null);
         }
-        return toVO(deptName, semester, rows, markdown, downloadUrl, files.size(), people.size(), failed, warnings);
+        var result = toVO(deptName, semester, rows, markdown, downloadUrl, files.size(), people.size(), failed, warnings);
+        result.setPublished(!people.isEmpty() && failed.isEmpty());
+        return result;
     }
 
     /** 生成后覆盖式持久化：同部门+学期只保留最新一份。 */

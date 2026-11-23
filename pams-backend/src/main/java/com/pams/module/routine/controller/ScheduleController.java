@@ -18,6 +18,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -32,7 +33,8 @@ public class ScheduleController {
                                        @RequestParam(required = false) Integer weekNo,
                                        @RequestParam(required = false) Integer weekday,
                                        @RequestParam(required = false) Long activityId) {
-        return Result.ok(service.listSchedules(type, weekNo, weekday, activityId));
+        return Result.ok(service.listSchedules(type, weekNo, weekday, activityId).stream()
+                .filter(s -> RoutineService.canReviewDrafts() || !Schedule.STATUS_DRAFT.equals(s.getStatus())).toList());
     }
 
     /** 我的排班：当前用户被排到的班次 */
@@ -65,11 +67,11 @@ public class ScheduleController {
 
     @PreAuthorize("hasAuthority('schedule:publish')")
     @PostMapping("/{id}/publish")
-    public Result<Void> publish(@PathVariable Long id) { publication.publish(id); return Result.ok(); }
+    public Result<Void> publish(@PathVariable Long id) { publication.publish(id, false); return Result.ok(); }
 
     @PreAuthorize("hasAuthority('schedule:publish')")
     @PostMapping("/{id}/cancel")
-    public Result<Void> cancel(@PathVariable Long id) { publication.cancel(id); return Result.ok(); }
+    public Result<Void> cancel(@PathVariable Long id) { publication.cancel(id, false); return Result.ok(); }
 
     /** 导出值班表 xlsx（POI 生成，Content-Disposition 下载） */
     @PreAuthorize("hasAuthority('schedule:export')")
@@ -77,8 +79,11 @@ public class ScheduleController {
     public ResponseEntity<byte[]> export(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) Integer weekNo,
                                          @RequestParam(required = false) Integer weekday,
-                                         @RequestParam(required = false) Long activityId) {
-        String path = service.exportExcel(type, weekNo, weekday, activityId);
+                                         @RequestParam(required = false) Long activityId,
+                                         @RequestParam(required = false) LocalDate dateFrom,
+                                         @RequestParam(required = false) LocalDate dateTo,
+                                         @RequestParam(required = false) String keyword) {
+        String path = service.exportExcel(type, weekNo, weekday, activityId, dateFrom, dateTo, keyword);
         Path file = Path.of(path);
         try {
             byte[] bytes = Files.readAllBytes(file);

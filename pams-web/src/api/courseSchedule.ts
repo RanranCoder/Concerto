@@ -24,6 +24,7 @@ export interface NoClassScheduleImportVO {
   rows: NoClassScheduleRowVO[]
   markdown: string
   downloadUrl: string
+  published?: boolean
   totalFiles: number
   successCount: number
   failed: ImportFileFailureVO[]
@@ -68,6 +69,8 @@ export interface FreeTimeAnalysisVO {
   semester: string
   periods: ScheduleConfigVO[]
   users: FreeTimeUserVO[]
+  submittedCount?: number
+  missingUsers?: FreeTimeUserVO[]
   heatmap: Record<string, Record<number, number>>
   optimal: OptimalSlotVO[]
 }

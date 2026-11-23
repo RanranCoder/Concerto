@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +72,12 @@ public class SigninController {
         return Result.ok(resp);
     }
 
+    @PreAuthorize("hasAuthority('checkin:manage')")
+    @GetMapping("/{activityId}/token")
+    public Result<com.pams.module.activity.dto.SigninTokenDTO> currentToken(@PathVariable Long activityId) {
+        return Result.ok(service.currentToken(activityId));
+    }
+
     /** 关闭签到：使该活动当前码作废（停止扫码）；重开即再次生成新码 */
     @PreAuthorize("hasAuthority('checkin:manage')")
     @PostMapping("/{activityId}/close")
@@ -85,7 +90,7 @@ public class SigninController {
      * 扫码签到（公开接口，免登录）。兼容两种 body：
      *   旧格式：{token, name, studentNo}
      *   新格式：{token, fields: {姓名, 学号, 手机号, 班级, 身份}}
-     * 可选 signTime：浏览器当前时间（ISO 字符串），用于自动判时（无则用服务器时间）。
+     * 签到日期和时间由服务端判定。
      */
     @PostMapping("/scan")
     public Result<Signin> scan(@RequestBody Map<String, Object> body) {
@@ -112,19 +117,10 @@ public class SigninController {
         if (trimmed.length() > 50) {
             throw new BizException(400, "姓名长度不能超过50个字符");
         }
-        LocalDateTime browserTime = null;
-        String rawTime = asString(body.get("signTime"));
-        if (rawTime != null && !rawTime.isBlank()) {
-            try {
-                browserTime = LocalDateTime.parse(rawTime);
-            } catch (Exception ignored) {
-                browserTime = null;
-            }
-        }
         Long previous=com.pams.common.OrgContext.get();
         try {
             com.pams.common.OrgContext.set(service.resolveOrgByToken(token));
-            return Result.ok(service.scanSignin(token, trimmed, studentNo, fields, browserTime));
+            return Result.ok(service.scanSignin(token, trimmed, studentNo, fields));
         } finally {
             if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);
         }

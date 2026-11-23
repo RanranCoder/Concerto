@@ -24,7 +24,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,6 +45,10 @@ import java.util.stream.Collectors;
 public class RoutineService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.pams.module.notification.service.NotificationBusinessEvents notifications;
+    @Autowired
+    private ActivityScheduleService publication;
+    @Autowired
+    private com.pams.module.activity.service.SigninService signinService;
     private final ScheduleRepository scheduleRepository;
     private final SchedulePersonRepository schedulePersonRepository;
     private final AttendanceRepository attendanceRepository;
@@ -76,6 +83,7 @@ public class RoutineService {
 
     @Transactional
     public Long createSchedule(ScheduleRequest req) {
+        validateRegularRequest(req);
         Schedule s = new Schedule();
         applySchedule(s, req);
         s.setStatus(Schedule.STATUS_DRAFT);
@@ -89,19 +97,28 @@ public class RoutineService {
     @Transactional
     public void updateSchedule(Long id, ScheduleRequest req) {
         Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        validateRegularRequest(req);
+        requireRegular(s);
         requirePublishedMutation(s);
+        if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) publication.requireUnchangedRecordedTime(s,
+                req.getScheduleDate(), req.getStartTime(), req.getEndTime());
         var notificationBefore=notifications==null?null:notifications.snapshot(s);
         applySchedule(s, req);
         scheduleRepository.save(s);
         schedulePersonRepository.deleteByScheduleId(id);
         savePersons(id, req.getPersons());
+        if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
+            publication.validateForPublication(s);
+            publication.syncAttendanceRows(s);
+        }
         if(notifications!=null)notifications.scheduleChanged(notificationBefore,s);
     }
 
     @Transactional
     public void deleteSchedule(Long id) {
         Schedule s=scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
-        requirePublishedMutation(s);
+        requireRegular(s);
+        if (!Schedule.STATUS_DRAFT.equals(s.getStatus())) throw new BizException(409, "仅草稿可删除，请取消已发布班次");
         var notificationBefore=notifications==null?null:notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
         // attendance.schedule_id 有 FK 约束，先清掉该排班的考勤记录再删排班
@@ -130,6 +147,12 @@ public class RoutineService {
         return filtered;
     }
 
+    public static boolean canReviewDrafts() {
+        var actor = com.pams.module.agent.core.ToolContext.current(null, null);
+        return actor.hasPermission("schedule:manage") || actor.hasPermission("schedule:publish")
+                || actor.hasPermission("schedule:generate");
+    }
+
     /** 我的排班：返回当前用户在排班人员中的排班（含已组装 persons）。 */
     public List<Schedule> listMySchedules(Long userId, String realName) {
         List<Schedule> all = listSchedules(null, null, null, null);
@@ -143,7 +166,23 @@ public class RoutineService {
 
     /** 导出值班表 xlsx，返回文件路径（控制器负责读 bytes 下载） */
     public String exportExcel(String type, Integer weekNo, Integer weekday, Long activityId) {
-        List<Schedule> schedules = listSchedules(type, weekNo, weekday, activityId);
+        return exportExcel(type, weekNo, weekday, activityId, null, null, null);
+    }
+
+    public String exportExcel(String type, Integer weekNo, Integer weekday, Long activityId,
+                              LocalDate dateFrom, LocalDate dateTo, String keyword) {
+        String query = keyword == null ? "" : keyword.trim();
+        boolean hasDateRange = dateFrom != null || dateTo != null;
+        List<Schedule> schedules = listSchedules(type, weekNo, weekday, activityId).stream()
+                .filter(s -> !Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
+                .filter(s -> canReviewDrafts() || !Schedule.STATUS_DRAFT.equals(s.getStatus()))
+                .filter(s -> !hasDateRange || (s.getScheduleDate() == null ? weekNo != null
+                        : (dateFrom == null || !s.getScheduleDate().isBefore(dateFrom))
+                        && (dateTo == null || !s.getScheduleDate().isAfter(dateTo))))
+                .filter(s -> query.isEmpty() || ((s.getLocation() == null ? "" : s.getLocation()) + " " +
+                        s.getPersons().stream().map(SchedulePerson::getPersonName).collect(Collectors.joining(" ")))
+                        .contains(query))
+                .toList();
 
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("值班表");
@@ -153,7 +192,7 @@ public class RoutineService {
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
 
-            String[] headers = {"周次", "星期", "节次(时间段)", "地点", "值班人员"};
+            String[] headers = {"周次", "星期", "节次(时间段)", "地点", "值班人员", "班次日期", "开始时间", "结束时间", "状态"};
             Row header = sheet.createRow(0);
             for (int i = 0; i < headers.length; i++) {
                 Cell c = header.createCell(i);
@@ -173,6 +212,16 @@ public class RoutineService {
                         .filter(n -> n != null && !n.isBlank())
                         .collect(Collectors.joining("、"));
                 row.createCell(4).setCellValue(names);
+                row.createCell(5).setCellValue(s.getScheduleDate() == null ? "" : s.getScheduleDate().toString());
+                row.createCell(6).setCellValue(s.getStartTime() == null ? "" : s.getStartTime().toString());
+                row.createCell(7).setCellValue(s.getEndTime() == null ? "" : s.getEndTime().toString());
+                row.createCell(8).setCellValue(s.getStatus() == null ? "" : switch (s.getStatus()) {
+                    case Schedule.STATUS_DRAFT -> "草稿";
+                    case Schedule.STATUS_PUBLISHED -> "已发布";
+                    case Schedule.STATUS_ENDED -> "已结束";
+                    case Schedule.STATUS_CANCELLED -> "已取消";
+                    default -> s.getStatus();
+                });
             }
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
@@ -180,8 +229,7 @@ public class RoutineService {
 
             Path dir = Path.of(uploadDir == null ? "uploads" : uploadDir);
             Files.createDirectories(dir);
-            String fileName = "export-" + System.currentTimeMillis() + ".xlsx";
-            Path file = dir.resolve(fileName);
+            Path file = Files.createTempFile(dir, "schedule-", ".xlsx");
             try (FileOutputStream out = new FileOutputStream(file.toFile())) {
                 wb.write(out);
             }
@@ -195,10 +243,12 @@ public class RoutineService {
         s.setScheduleType(req.getScheduleType());
         s.setActivityId(req.getActivityId());
         s.setWeekNo(req.getWeekNo());
-        s.setWeekday(req.getWeekday());
+        s.setWeekday(req.getScheduleDate() == null ? req.getWeekday() : req.getScheduleDate().getDayOfWeek().getValue());
         s.setSessionName(req.getSessionName());
         s.setLocation(req.getLocation());
         s.setScheduleDate(req.getScheduleDate());
+        s.setStartTime(req.getStartTime());
+        s.setEndTime(req.getEndTime());
         s.setNotes(req.getNotes());
         s.setUpdatedAt(LocalDateTime.now());
     }
@@ -216,7 +266,35 @@ public class RoutineService {
         }
     }
 
+    private static final Pattern LEGACY_TIME_RANGE = Pattern.compile(
+            "(?:^|/)\\s*(\\d{1,2}):(\\d{2})\\s*[-–—~至]\\s*(\\d{1,2}):(\\d{2})\\s*$");
+
+    private void validateRegularRequest(ScheduleRequest req) {
+        if (Schedule.TYPE_ACTIVITY.equals(req.getScheduleType()))
+            throw new BizException(400, "请在活动排班中维护活动班次");
+        if (req.getStartTime() == null && req.getEndTime() == null && req.getSessionName() != null) {
+            var time = LEGACY_TIME_RANGE.matcher(req.getSessionName());
+            if (time.find()) {
+                try {
+                    req.setStartTime(LocalTime.of(Integer.parseInt(time.group(1)), Integer.parseInt(time.group(2))));
+                    req.setEndTime(LocalTime.of(Integer.parseInt(time.group(3)), Integer.parseInt(time.group(4))));
+                } catch (java.time.DateTimeException e) {
+                    throw new BizException(400, "班次时间格式无效");
+                }
+            }
+        }
+        if ((req.getStartTime() == null) != (req.getEndTime() == null)
+                || req.getStartTime() != null && !req.getEndTime().isAfter(req.getStartTime()))
+            throw new BizException(400, "结束时间必须晚于开始时间");
+    }
+
+    private void requireRegular(Schedule schedule) {
+        if (Schedule.TYPE_ACTIVITY.equals(schedule.getScheduleType())) throw new BizException(404, "例行班次不存在");
+    }
+
     private void requirePublishedMutation(Schedule s) {
+        if (!Set.of(Schedule.STATUS_PUBLISHED, Schedule.STATUS_DRAFT).contains(s.getStatus() == null ? "" : s.getStatus()))
+            throw new BizException(409, "已结束或已取消班次不可编辑");
         if ((s.getStatus() == null || Schedule.STATUS_PUBLISHED.equals(s.getStatus()))
                 && !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("schedule:publish"))
             throw new BizException(403,"修改已生效班次需要排班发布权限");
@@ -242,32 +320,31 @@ public class RoutineService {
         Schedule schedule = scheduleRepository.lockById(req.getScheduleId()).orElseThrow(() -> new BizException(404,"班次不存在或不可见"));
         if (!Schedule.STATUS_PUBLISHED.equals(schedule.getStatus()))
             throw new BizException(409, "仅已发布班次可打卡");
-        var today = java.time.LocalDate.now();
-        if (schedule.getScheduleDate() != null ? !today.equals(schedule.getScheduleDate())
-                : schedule.getWeekday() == null || schedule.getWeekday() != today.getDayOfWeek().getValue())
-            throw new BizException(409, "不在本班次打卡日期内");
-        var now = java.time.LocalTime.now();
-        if (schedule.getStartTime() != null && LocalDateTime.now().isBefore(today.atTime(schedule.getStartTime()).minusMinutes(30))
-                || schedule.getEndTime() != null && now.isAfter(schedule.getEndTime()))
-            throw new BizException(409, "不在本班次打卡时间内");
+        var now = AttendanceWindow.now();
         var person = schedulePersonRepository.findByScheduleId(schedule.getId()).stream()
                 .filter(p -> ctx.getUserId().equals(p.getUserId())).findFirst()
                 .orElseThrow(() -> new BizException(403, "本班次未关联你的账号，请联系排班人员核对"));
         var existing = attendanceRepository.findByScheduleId(schedule.getId()).stream()
                 .filter(a -> ctx.getUserId().equals(a.getPersonId())).findFirst();
         Attendance attendance = existing.orElseGet(Attendance::new);
-        if (existing.isPresent() && !Attendance.STATUS_PENDING.equals(attendance.getStatus()))
-            return attendance;
+        if (existing.isPresent() && Attendance.isSigned(attendance.getStatus())) return attendance;
+        if (existing.isPresent() && (Attendance.SOURCE_MANUAL.equals(attendance.getStatusSource())
+                || !Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(attendance.getStatus()))))
+            throw new BizException(409, "本班次已有考勤结论，请联系管理员核对");
+        if (!AttendanceWindow.isOpen(schedule, now)) throw new BizException(409, "不在本班次打卡时间内");
         attendance.setScheduleId(schedule.getId());
         attendance.setPersonId(ctx.getUserId());
         attendance.setPersonName(person.getPersonName());
-        attendance.setStatus(schedule.getStartTime() != null && now.isAfter(schedule.getStartTime())
-                ? Attendance.STATUS_LATE : Attendance.STATUS_NORMAL);
+        attendance.setStatus(AttendanceWindow.status(schedule, now));
         attendance.setStatusSource(Attendance.SOURCE_AUTO);
-        attendance.setCheckedInAt(LocalDateTime.now());
-        attendance.setRecordTime(LocalDateTime.now());
-        if (attendance.getCreatedAt() == null) attendance.setCreatedAt(LocalDateTime.now());
-        return attendanceRepository.save(attendance);
+        attendance.setCheckedInAt(now);
+        attendance.setRecordTime(now);
+        if (attendance.getCreatedAt() == null) attendance.setCreatedAt(now);
+        Attendance saved = attendanceRepository.save(attendance);
+        if (Schedule.TYPE_ACTIVITY.equals(schedule.getScheduleType()) && schedule.getActivityId() != null) {
+            signinService.recordSelfCheckin(schedule, saved);
+        }
+        return saved;
     }
 
     @Transactional
@@ -310,31 +387,47 @@ public class RoutineService {
         for (Attendance a : all) {
             if (weekNo != null && !matchesWeekNo(a, weekNo, scheduleById)) continue;
             if (type != null && !type.isBlank() && !matchesScheduleType(a, type, scheduleById)) continue;
-            Map<String, Object> row = acc.computeIfAbsent(a.getPersonName(), k -> {
+            String status = Attendance.normalizedStatus(a.getStatus());
+            String personKey = a.getPersonId() != null ? "id:" + a.getPersonId()
+                    : a.getStudentNo() != null && !a.getStudentNo().isBlank() ? "student:" + a.getStudentNo()
+                    : "name:" + a.getPersonName();
+            Map<String, Object> row = acc.computeIfAbsent(personKey, k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
-                m.put("personName", k);
+                m.put("personName", a.getPersonName());
+                m.put("personId", a.getPersonId());
                 m.put("shouldAttend", 0);
                 m.put("present", 0);
                 m.put("leave", 0);
                 m.put("absent", 0);
                 m.put("count", 0);
+                m.put("pending", 0);
+                m.put("canceled", 0);
                 return m;
             });
-            row.put("shouldAttend", (Integer) row.get("shouldAttend") + 1);
             row.put("count", (Integer) row.get("count") + 1);
-            switch (statusOf(a)) {
-                case "PRESENT" -> row.put("present", (Integer) row.get("present") + 1);
-                case "LEAVE" -> row.put("leave", (Integer) row.get("leave") + 1);
-                default -> row.put("absent", (Integer) row.get("absent") + 1);
+            if (!Attendance.STATUS_CANCELED.equals(status)) {
+                row.put("shouldAttend", (Integer) row.get("shouldAttend") + 1);
             }
+            String bucket = Attendance.isSigned(status) ? "present" : switch (status) {
+                case Attendance.STATUS_LEAVE -> "leave";
+                case Attendance.STATUS_ABSENT -> "absent";
+                case Attendance.STATUS_CANCELED -> "canceled";
+                default -> "pending";
+            };
+            row.put(bucket, (Integer) row.get(bucket) + 1);
         }
         return new ArrayList<>(acc.values());
     }
 
     @Transactional
     public void deleteAttendance(Long id) {
-        attendanceRepository.findById(id).orElseThrow(() -> new BizException(2402, "考勤记录不存在"));
-        attendanceRepository.deleteById(id);
+        Attendance row = attendanceRepository.findById(id)
+                .orElseThrow(() -> new BizException(2402, "考勤记录不存在"));
+        if (row.getScheduleId() != null || Attendance.isSigned(row.getStatus())
+                || Attendance.SOURCE_MANUAL.equals(row.getStatusSource())) {
+            throw new BizException(409, "需要保留此考勤记录，请使用人工修正");
+        }
+        attendanceRepository.delete(row);
     }
 
     /** 记录所属排班周次是否匹配。未关联排班（scheduleId 为空或排班不存在）时按 0 处理，不匹配任何 weekNo */
@@ -366,7 +459,4 @@ public class RoutineService {
                 .collect(Collectors.toMap(Schedule::getId, s -> s));
     }
 
-    private static String statusOf(Attendance a) {
-        return a.getStatus() == null ? "ABSENT" : a.getStatus();
-    }
 }

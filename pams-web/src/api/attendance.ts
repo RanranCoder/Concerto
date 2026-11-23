@@ -96,9 +96,11 @@ export interface AttendanceFilter {
   status?: string
 }
 
-export const listAttendances = (params: AttendanceFilter) => get<AttendanceVO[]>('/attendances', params)
+export const listAttendances = (params: AttendanceFilter, options?: { silentError?: boolean }) =>
+  get<AttendanceVO[]>('/attendances', params, options)
 export const getAttendanceStats = (params: AttendanceFilter) => get<AttendanceStats>('/attendances/stats', params)
-export const listMyAttendances = () => get<AttendanceVO[]>('/attendances/my')
+export const listMyAttendances = (options?: { silentError?: boolean }) =>
+  get<AttendanceVO[]>('/attendances/my', undefined, options)
 export const updateAttendanceStatus = (id: number, data: { newStatus: string; remark?: string }) =>
   put<AttendanceVO>(`/attendances/${id}/status`, data)
 export const makeupAttendance = (id: number, remark?: string) =>
@@ -106,6 +108,7 @@ export const makeupAttendance = (id: number, remark?: string) =>
 export const listAttendanceAudits = (id: number) => get<AttendanceAuditVO[]>(`/attendances/${id}/audits`)
 
 export const createAttendance = (data: AttendanceSave) => post<AttendanceVO>('/attendances', data)
+export const checkInForSchedule = (scheduleId: number) => post<AttendanceVO>('/attendances', { scheduleId })
 export const deleteAttendance = (id: number) => del<void>(`/attendances/${id}`)
 /** 按人汇总（兼容保留） */
 export const summaryAttendance = (params: { weekNo?: number; type?: string }) =>

@@ -51,6 +51,5 @@ it.each([
   await waitFor(() => expect(scanSignin).toHaveBeenCalledWith({
     token: 'activity-token',
     fields: extraValue ? { 姓名: '张三', [extraLabel]: extraValue } : { 姓名: '张三' },
-    signTime: expect.any(String),
   }))
 })

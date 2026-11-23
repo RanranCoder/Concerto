@@ -8,7 +8,7 @@ export interface SigninVO {
   studentNo: string | null
   className: string | null
   identityType: string | null
-  signType: 'MANUAL' | 'SCAN' | null
+  signType: 'MANUAL' | 'SCAN' | 'SELF' | null
   signTime: string | null
   location: string | null
   phone: string | null
@@ -153,8 +153,13 @@ export interface ActivitySigninToken {
   token: string
   activityId: number
   expiresAt: string
-  qrContent: string
+  qrContent?: string
 }
+
+export const getActivitySigninToken = (activityId: number) =>
+  get<ActivitySigninToken | null>(`/signins/${activityId}/token`, undefined, { silentError: true })
+
+export const signinTokenExpiresAt = (time: string) => Date.parse(time + '+08:00')
 
 /** 生成/刷新活动唯一签到码 */
 export const generateActivitySigninToken = (activityId: number) =>

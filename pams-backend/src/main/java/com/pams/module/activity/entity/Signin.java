@@ -8,13 +8,14 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "signin")
 public class Signin implements OrgScoped {
-    public enum SignType { MANUAL, SCAN }
+    public enum SignType { MANUAL, SCAN, SELF }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long activityId;
     private Long sessionId;
+    private Long scheduleId;
     private Long personId;
     private String name;
     private String studentNo;

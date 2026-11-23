@@ -5,7 +5,9 @@ import {
   Button,
   DatePicker,
   Empty,
+  Alert,
   Form,
+  Grid,
   Input,
   InputNumber,
   Select,
@@ -40,7 +42,8 @@ import { listUserOptions, type UserOptionVO } from '@/api/user'
 import {
   listActivitySchedules,
   listSemesters,
-  generateActivitySchedules,
+  previewActivitySchedules,
+  confirmActivitySchedules,
   createActivitySchedule,
   updateActivitySchedule,
   publishActivitySchedule,
@@ -48,12 +51,15 @@ import {
   cancelActivitySchedule,
   regenerateActivitySchedule,
   deleteActivitySchedule,
-  type GenerateResult,
+  type GenerateScheduleRequest,
+  type GenerationReview,
   type ActivityScheduleSave,
 } from '@/api/activitySchedule'
 import {
   closeActivitySignin,
   generateActivitySigninToken,
+  getActivitySigninToken,
+  signinTokenExpiresAt,
   getSigninFields,
   listSignins,
   type ActivitySigninToken,
@@ -62,6 +68,7 @@ import {
 } from '@/api/signin'
 import type { ScheduleVO, SchedulePersonItem } from '@/api/schedule'
 import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/api/http'
 import { timeRange } from '@/utils/routine'
 
 interface GenerateValues {
@@ -97,7 +104,10 @@ export default function ActivityScheduleList() {
     canGenerate = permissions.includes('schedule:generate'),
     canPublish = permissions.includes('schedule:publish'),
     canReadSignin = permissions.includes('checkin:view'),
+    canViewAttendance = permissions.includes('attendance:view') || permissions.includes('attendance:self:view'),
     canManageSignin = permissions.includes('checkin:manage')
+  const compact = !Grid.useBreakpoint().md
+  const qrVersion = useRef(0)
   const [activityId, setActivityId] = useState<number | undefined>(
     Number(params.get('activityId')) || undefined,
   )
@@ -117,7 +127,8 @@ export default function ActivityScheduleList() {
     [manualEditing, setManualEditing] = useState<ScheduleVO | null>(null),
     [manualOpen, setManualOpen] = useState(false)
   const [genOpen, setGenOpen] = useState(false),
-    [preview, setPreview] = useState<GenerateResult[] | null>(null),
+    [preview, setPreview] = useState<{ request: GenerateScheduleRequest; review: GenerationReview } | null>(null),
+    [previewStale, setPreviewStale] = useState(false),
     [publishTarget, setPublishTarget] = useState<{
       activityId: number
       rows: ScheduleVO[]
@@ -134,7 +145,8 @@ export default function ActivityScheduleList() {
     [signRows, setSignRows] = useState<SigninVO[]>([]),
     [fields, setFields] = useState<SigninFieldConfigVO[]>([]),
     [signLoading, setSignLoading] = useState(false),
-    [qrBusy, setQrBusy] = useState(false)
+    [qrBusy, setQrBusy] = useState(false),
+    [qrFailed, setQrFailed] = useState(false)
   const selected = activities.find((a) => a.id === activityId),
     drafts = rows.filter((s) => s.status === 'DRAFT'),
     shown = rows.filter((s) => !status || s.status === status)
@@ -178,7 +190,9 @@ export default function ActivityScheduleList() {
     }
   }, [activityId, revision])
   useEffect(() => {
+    ++qrVersion.current
     setQr(null)
+    setQrFailed(false)
     setSignRows([])
     setFields([])
     setStatus(undefined)
@@ -208,6 +222,35 @@ export default function ActivityScheduleList() {
     }, 6000)
     return () => clearInterval(timer)
   }, [tab, activityId, canReadSignin, refreshSigns])
+  useEffect(() => {
+    if (tab !== 'signin' || !activityId || !canManageSignin) return
+    let current = true
+    const refresh = () => {
+      const version = qrVersion.current
+      void getActivitySigninToken(activityId).then((result) => {
+        if (current && version === qrVersion.current) {
+          setQr(result)
+          setQrFailed(false)
+        }
+      }).catch(() => {
+        if (current && version === qrVersion.current) setQrFailed(true)
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 10_000)
+    return () => {
+      current = false
+      window.clearInterval(timer)
+    }
+  }, [activityId, canManageSignin, tab])
+  useEffect(() => {
+    if (!qr) return
+    const delay = Math.max(0, signinTokenExpiresAt(qr.expiresAt) - Date.now())
+    const timer = window.setTimeout(() => {
+      setQr((current) => current?.token === qr.token ? null : current)
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [qr])
   const reload = () => setRevision((n) => n + 1)
   const selectActivity = (id: number) => {
     setActivityId(id)
@@ -231,45 +274,67 @@ export default function ActivityScheduleList() {
       setBusy(false)
     }
   }
-  const generate = async (v: GenerateValues) => {
-    if (!v.timeRange[1].isAfter(v.timeRange[0])) {
+  const previewGeneration = async (v: GenerateValues) => {
+    if (v.timeRange[1].format('HH:mm:ss') <= v.timeRange[0].format('HH:mm:ss')) {
       message.warning('结束时间必须晚于开始时间')
       return
     }
+    const request: GenerateScheduleRequest = {
+      activityId: v.activityMode === 'existing' ? v.activityId : undefined,
+      customActivityName: v.activityMode === 'custom' ? v.customActivityName?.trim() : undefined,
+      startDate: v.dateRange[0].format('YYYY-MM-DD'),
+      endDate: v.dateRange[1].format('YYYY-MM-DD'),
+      startTime: v.timeRange[0].format('HH:mm:ss'),
+      endTime: v.timeRange[1].format('HH:mm:ss'),
+      deptIds: v.deptIds,
+      peoplePerSlot: v.peoplePerSlot,
+      semester: v.semester,
+      semesterStartDate: v.semesterStartDate?.format('YYYY-MM-DD') ?? null,
+    }
     setBusy(true)
     try {
-      const result = await generateActivitySchedules({
-        activityId: v.activityMode === 'existing' ? v.activityId : undefined,
-        customActivityName:
-          v.activityMode === 'custom'
-            ? v.customActivityName?.trim()
-            : undefined,
-        startDate: v.dateRange[0].format('YYYY-MM-DD'),
-        endDate: v.dateRange[1].format('YYYY-MM-DD'),
-        startTime: v.timeRange[0].format('HH:mm:ss'),
-        endTime: v.timeRange[1].format('HH:mm:ss'),
-        deptIds: v.deptIds,
-        peoplePerSlot: v.peoplePerSlot,
-        semester: v.semester,
-        semesterStartDate: v.semesterStartDate?.format('YYYY-MM-DD') ?? null,
-      })
-      setGenOpen(false)
-      setPreview(result ?? [])
-      setStatus('DRAFT')
-      reload()
-      const updated = await listActivities({ page: 1, size: 200 })
-      setActivities(updated.records ?? [])
-      const targetId =
-        v.activityMode === 'existing'
-          ? v.activityId
-          : updated.records.find((a) => a.name === v.customActivityName?.trim())
-              ?.id
-      if (targetId) selectActivity(targetId)
-      reload()
-      if (result.some((r) => r.slots?.length))
-        message.success('已按无课表生成草稿排班')
-      else message.warning('未找到可排时段，请核对无课表与周次')
+      const review = await previewActivitySchedules(request)
+      setPreviewStale(false)
+      setPreview({ request, review })
     } catch {
+    } finally {
+      setBusy(false)
+    }
+  }
+  const refreshGeneration = async () => {
+    if (!preview) return
+    setBusy(true)
+    try {
+      const review = await previewActivitySchedules(preview.request)
+      setPreview({ request: preview.request, review })
+      setPreviewStale(false)
+    } catch {
+    } finally {
+      setBusy(false)
+    }
+  }
+  const confirmGeneration = async () => {
+    if (!preview || previewStale || !preview.review.draftCount) return
+    setBusy(true)
+    const { request, review } = preview
+    try {
+      const result = await confirmActivitySchedules(request, review.fingerprint)
+      setPreview(null)
+      setGenOpen(false)
+      setStatus('DRAFT')
+      message.success('已生成 ' + result.draftCount + ' 个草稿班次')
+      reload()
+      let targetId = request.activityId
+      if (!targetId) {
+        const updated = await listActivities({ page: 1, size: 200 })
+        setActivities(updated.records ?? [])
+        targetId = updated.records.find((a) => a.name === request.customActivityName)?.id
+      }
+      if (targetId) selectActivity(targetId)
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 409) setPreviewStale(true)
+      else if (typeof e === 'object' && e && 'response' in e &&
+        (e.response as { status?: number } | undefined)?.status === 409) setPreviewStale(true)
     } finally {
       setBusy(false)
     }
@@ -313,6 +378,7 @@ export default function ActivityScheduleList() {
   const operateQr = async (close = false) => {
     if (!activityId) return
     const id = activityId
+    ++qrVersion.current
     setQrBusy(true)
     try {
       if (close) {
@@ -326,6 +392,7 @@ export default function ActivityScheduleList() {
       }
     } catch {
     } finally {
+      ++qrVersion.current
       setQrBusy(false)
     }
   }
@@ -339,7 +406,7 @@ export default function ActivityScheduleList() {
     {
       title: '日期 / 节次',
       key: 'time',
-      width: 190,
+      width: compact ? undefined : 190,
       render: (_, s) => (
         <>
           <strong>
@@ -349,12 +416,14 @@ export default function ActivityScheduleList() {
           <small>
             {timeRange(s)} {s.sessionName && `/ ${s.sessionName}`}
           </small>
+          {compact && <RoutineStatus status={s.status} />}
         </>
       ),
     },
     {
       title: '值班人员',
       key: 'people',
+      responsive: ['md'],
       render: (_, s) => (
         <>
           <ShiftPeople shift={s} />
@@ -365,6 +434,7 @@ export default function ActivityScheduleList() {
     {
       title: '来源',
       key: 'source',
+      responsive: ['lg'],
       width: 115,
       render: (_, s) => (
         <small>{s.source === 'AUTO' ? '无课表生成' : '人工排班'}</small>
@@ -373,15 +443,16 @@ export default function ActivityScheduleList() {
     {
       title: '状态',
       key: 'status',
+      responsive: ['md'],
       width: 105,
       render: (_, s) => <RoutineStatus status={s.status} />,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 170,
+      width: compact ? 155 : 170,
       render: (_, s) => (
-        <Space>
+        <Space size={compact ? 2 : 8} wrap>
           <Button type="link" onClick={() => setDetail(s)}>
             查看
           </Button>
@@ -447,7 +518,7 @@ export default function ActivityScheduleList() {
         <div className="routine-toolbar-actions">
           <Button
             type="link"
-            disabled={!activityId}
+            disabled={!activityId || !canViewAttendance}
             onClick={() =>
               navigate(`/routine/attendance?activityId=${activityId}`)
             }
@@ -479,7 +550,7 @@ export default function ActivityScheduleList() {
         loading={loading}
         columns={columns}
         dataSource={shown}
-        scroll={{ x: 900 }}
+        scroll={compact ? undefined : { x: 780 }}
         pagination={{ pageSize: 15, showTotal: (n) => `共 ${n} 个班次` }}
         locale={{
           emptyText: (
@@ -501,6 +572,7 @@ export default function ActivityScheduleList() {
     <div className="routine-signin-workspace">
       <GlassCard className="routine-qr">
         <h3>活动签到码</h3>
+        {qrFailed && <Alert showIcon type="error" message="签到状态暂时无法读取，页面将自动重试" />}
         {qr ? (
           <>
             <span className="tone-tag tone-success">签到已开启</span>
@@ -511,10 +583,10 @@ export default function ActivityScheduleList() {
                 level="M"
               />
             </div>
-            <small>有效期至 {dayjs(qr.expiresAt).format('HH:mm:ss')}</small>
+            <small>有效期至 {dayjs(qr.expiresAt).format('MM-DD HH:mm')}</small>
           </>
         ) : (
-          <Empty description="开启签到后生成活动统一签到码" />
+          !qrFailed && <Empty description="开启签到后生成活动统一签到码" />
         )}
         {canManageSignin && (
           <Space wrap>
@@ -534,7 +606,7 @@ export default function ActivityScheduleList() {
             ) : (
               <Button
                 type="primary"
-                disabled={!activityId}
+                disabled={!activityId || qrFailed}
                 loading={qrBusy}
                 icon={<QrcodeOutlined />}
                 onClick={() => operateQr()}
@@ -734,140 +806,147 @@ export default function ActivityScheduleList() {
           </>
         }
       />
-      <FormSurface
-        mode="drawer"
-        description="设置活动范围与人员来源，先生成草稿再核对发布。"
-        title="从无课表生成活动排班"
-        width={650}
-        open={genOpen}
-        destroyOnHidden
-        onCancel={() => setGenOpen(false)}
-        confirmLoading={busy}
-        okText="生成草稿"
-        onOk={() => genForm.submit()}
-      >
-        <Form
-          form={genForm}
-          preserve={false}
-          layout="vertical"
-          initialValues={{
-            activityMode: 'existing',
-            activityId,
-            semester: params.get('semester') || semesters[0],
-            deptIds: Number(params.get('deptId'))
-              ? [Number(params.get('deptId'))]
-              : undefined,
-          }}
-          onFinish={generate}
+      {genOpen && (
+        <FormSurface
+          mode="drawer"
+          description="设置活动范围与人员来源，先预览人员与时段，确认后才保存草稿。"
+          title="从无课表生成活动排班"
+          width={650}
+          open={!preview}
+          onCancel={() => setGenOpen(false)}
+          confirmLoading={busy}
+          okText="预览排班"
+          onOk={() => genForm.submit()}
         >
-          <FormSection title="活动范围">
-            <Form.Item name="activityMode" label="活动方式">
-              <Select
-                options={[
-                  { value: 'existing', label: '选择现有活动' },
-                  { value: 'custom', label: '自定义活动名称' },
-                ]}
-              />
-            </Form.Item>
-            {genMode !== 'custom' ? (
+          <Form
+            form={genForm}
+            preserve={false}
+            layout="vertical"
+            initialValues={{
+              activityMode: 'existing',
+              activityId,
+              semester: params.get('semester') || semesters[0],
+              deptIds: Number(params.get('deptId'))
+                ? [Number(params.get('deptId'))]
+                : undefined,
+            }}
+            onFinish={previewGeneration}
+          >
+            <FormSection title="活动范围">
+              <Form.Item name="activityMode" label="活动方式">
+                <Select
+                  options={[
+                    { value: 'existing', label: '选择现有活动' },
+                    { value: 'custom', label: '自定义活动名称' },
+                  ]}
+                />
+              </Form.Item>
+              {genMode !== 'custom' ? (
+                <Form.Item
+                  name="activityId"
+                  label="关联活动"
+                  rules={[{ required: true }]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={activities.map((a) => ({
+                      value: a.id,
+                      label: a.name,
+                    }))}
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item
+                  name="customActivityName"
+                  label="自定义活动名称"
+                  rules={[{ required: true, whitespace: true }]}
+                >
+                  <Input maxLength={100} />
+                </Form.Item>
+              )}
               <Form.Item
-                name="activityId"
-                label="关联活动"
+                name="dateRange"
+                label="活动日期范围"
                 rules={[{ required: true }]}
               >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={activities.map((a) => ({
-                    value: a.id,
-                    label: a.name,
-                  }))}
-                />
+                <DatePicker.RangePicker style={{ width: '100%' }} />
               </Form.Item>
-            ) : (
               <Form.Item
-                name="customActivityName"
-                label="自定义活动名称"
-                rules={[{ required: true, whitespace: true }]}
+                name="timeRange"
+                label="每天的活动时段"
+                rules={[{ required: true }]}
               >
-                <Input maxLength={100} />
-              </Form.Item>
-            )}
-            <Form.Item
-              name="dateRange"
-              label="活动日期范围"
-              rules={[{ required: true }]}
-            >
-              <DatePicker.RangePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item
-              name="timeRange"
-              label="每天的活动时段"
-              rules={[{ required: true }]}
-            >
-              <TimePicker.RangePicker
-                format="HH:mm"
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-          </FormSection>
-          <FormSection title="人员与无课表">
-            <Form.Item
-              name="deptIds"
-              label="参与部门"
-              rules={[{ required: true, type: 'array', min: 1 }]}
-            >
-              <Select
-                mode="multiple"
-                options={depts.map((d) => ({ value: d.id, label: d.name }))}
-              />
-            </Form.Item>
-            <div className="routine-form-grid">
-              <Form.Item name="semester" label="无课表学期">
-                <Select
-                  allowClear
-                  options={[
-                    ...new Set(
-                      [params.get('semester'), ...semesters].filter(
-                        (s): s is string => !!s,
-                      ),
-                    ),
-                  ].map((s) => ({ value: s, label: s }))}
+                <TimePicker.RangePicker
+                  format="HH:mm"
+                  style={{ width: '100%' }}
                 />
               </Form.Item>
-              <Form.Item name="semesterStartDate" label="第一教学周的周一">
-                <DatePicker style={{ width: '100%' }} />
+            </FormSection>
+            <FormSection title="人员与无课表">
+              <Form.Item
+                name="deptIds"
+                label="参与部门"
+                rules={[{ required: true, type: 'array', min: 1 }]}
+              >
+                <Select
+                  mode="multiple"
+                  options={depts.map((d) => ({ value: d.id, label: d.name }))}
+                />
               </Form.Item>
-            </div>
-            <Form.Item name="peoplePerSlot" label="每节次人数（留空不限）">
-              <InputNumber min={1} precision={0} />
-            </Form.Item>
-            <RoutineNote>
-              按每个覆盖节次分别匹配无课人员，在本次生成范围内尽量均衡安排。生成后先存为草稿。
-            </RoutineNote>
-            <RoutineNote warning>
-              未填写开学日期时不筛选单双周，请人工核对；周末和无可用人员的时段不自动排班。
-            </RoutineNote>
-          </FormSection>
-        </Form>
-      </FormSurface>
+              <div className="routine-form-grid">
+                <Form.Item name="semester" label="无课表学期">
+                  <Select
+                    allowClear
+                    options={[
+                      ...new Set(
+                        [params.get('semester'), ...semesters].filter(
+                          (s): s is string => !!s,
+                        ),
+                      ),
+                    ].map((s) => ({ value: s, label: s }))}
+                  />
+                </Form.Item>
+                <Form.Item name="semesterStartDate" label="第一教学周的周一">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+              </div>
+              <Form.Item name="peoplePerSlot" label="每节次人数（留空不限）">
+                <InputNumber min={1} precision={0} />
+              </Form.Item>
+              <RoutineNote>
+                按每个覆盖节次分别匹配无课人员，在本次生成范围内尽量均衡安排。生成后先存为草稿。
+              </RoutineNote>
+              <RoutineNote warning>
+                按教学周记录的无课表需要填写第一教学周的周一。周末请手动排班。
+              </RoutineNote>
+            </FormSection>
+          </Form>
+        </FormSurface>
+      )}
       <FormSurface
         mode="dialog"
-        title="排班生成结果"
+        title="复核活动排班"
         width={650}
         open={preview !== null}
-        onCancel={() => setPreview(null)}
+        onCancel={() => { if (!busy) setPreview(null) }}
         footer={
-          <Button type="primary" onClick={() => setPreview(null)}>
-            查看草稿
-          </Button>
+          <Space wrap>
+            <Button disabled={busy} onClick={() => setPreview(null)}>返回调整</Button>
+            {previewStale ? (
+              <Button type="primary" loading={busy} onClick={() => void refreshGeneration()}>重新预览</Button>
+            ) : (
+              <Button type="primary" loading={busy} disabled={!preview?.review.draftCount}
+                onClick={() => void confirmGeneration()}>确认生成草稿</Button>
+            )}
+          </Space>
         }
       >
         <p className="routine-muted">
-          已生成 {preview?.reduce((n, r) => n + (r.slots?.length ?? 0), 0)}{' '}
-          个草稿班次，合计 {preview?.reduce((n, r) => n + r.count, 0)} 人次。
+          预计生成 {preview?.review.draftCount ?? 0} 个草稿班次。清单版本 {preview?.review.fingerprint.slice(0, 8)}
         </p>
-        {preview?.map((r) => (
+        {previewStale && <Alert type="warning" showIcon message="名单或已排班次有变化，请重新预览后确认。" />}
+        {preview?.review.days.map((r) => (
           <div key={r.date}>
             <h4>{r.date}</h4>
             {r.slots?.length ? (
@@ -883,6 +962,10 @@ export default function ActivityScheduleList() {
                     {slot.persons.map((p) => p.name).join('、')}
                     <small>{slot.count} 人</small>
                   </span>
+                  {!!slot.missingCount && <small>缺 {slot.missingCount} 人</small>}
+                  {!!slot.unboundNames?.length && <small>未关联账号：{slot.unboundNames.join('、')}</small>}
+                  {!!slot.conflictingNames?.length && <small>已有值班：{slot.conflictingNames.join('、')}</small>}
+                  {!!slot.existingShiftIds?.length && <small>该活动已有重叠班次，本时段跳过</small>}
                 </div>
               ))
             ) : (
@@ -1041,7 +1124,7 @@ export default function ActivityScheduleList() {
           {cancelTarget?.scheduleDate} {cancelTarget && timeRange(cancelTarget)}
         </p>
         <RoutineNote warning>
-          此班次的自动考勤同步置为取消；人工修正过的考勤保留。
+          仍待签到的自动考勤会取消，已完成和人工修正的记录会保留。
         </RoutineNote>
       </FormSurface>
       <FormSurface
@@ -1110,7 +1193,7 @@ export default function ActivityScheduleList() {
             <DatePicker />
           </Form.Item>
           <RoutineNote warning>
-            重新选人会同步刷新已发布班次的自动考勤，人工修正记录保留。未填写开学日期时不筛选单双周。
+            重新选人会同步刷新已发布班次的自动考勤，人工修正记录保留。按教学周记录的无课表需要填写第一教学周的周一。
           </RoutineNote>
         </Form>
       </FormSurface>

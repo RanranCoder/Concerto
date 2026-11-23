@@ -38,8 +38,17 @@ class ActivityScheduleServiceTest {
     @BeforeEach void setup() {
         var user=new com.pams.security.LoginUser(1L,"scheduler","排班员","CUSTOM",1,null,null,1L);
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user,null,List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("schedule:publish"))));
+        UserRepository users = mock(UserRepository.class);
+        when(users.findAllById(anyList())).thenAnswer(call -> ((List<Long>) call.getArgument(0)).stream()
+                .map(id -> {
+                    var account = new com.pams.entity.User();
+                    account.setId(id);
+                    account.setOrgId(1L);
+                    account.setStatus(1);
+                    return account;
+                }).toList());
         service = new ActivityScheduleService(matcher, schedules, people, attendances,
-                mock(DepartmentRepository.class), mock(UserRepository.class), mock(ActivityRepository.class));
+                mock(DepartmentRepository.class), users, mock(ActivityRepository.class));
         schedule = new Schedule(); schedule.setId(1L); schedule.setScheduleType(Schedule.TYPE_ACTIVITY);
         schedule.setStatus(Schedule.STATUS_PUBLISHED); schedule.setSource(Schedule.SOURCE_AUTO);
         schedule.setScheduleDate(LocalDate.of(2026, 10, 14)); schedule.setStartTime(LocalTime.of(14, 0)); schedule.setEndTime(LocalTime.of(15, 40)); schedule.setDeptId(5L);
@@ -71,15 +80,29 @@ class ActivityScheduleServiceTest {
         Attendance manual = attendance(10, 2, Attendance.SOURCE_MANUAL, Attendance.STATUS_MAKEUP);
         Attendance signed = attendance(11, 3, Attendance.SOURCE_AUTO, Attendance.STATUS_NORMAL);
         attendance(12, 4, Attendance.SOURCE_AUTO, Attendance.STATUS_PENDING);
+        Attendance formerSigned = attendance(13, 6, Attendance.SOURCE_AUTO, Attendance.STATUS_LATE);
         service.updateManual(1L, request(List.of(person(3, 1), person(5, 0))));
         assertTrue(storedAttendance.contains(manual), "Removed member's manual evidence must remain addressable by its audit ID");
         assertSame(signed, storedAttendance.stream().filter(a -> a.getPersonId().equals(3L)).findFirst().orElseThrow());
         assertEquals(Attendance.STATUS_NORMAL, signed.getStatus());
         assertEquals("历史备注", manual.getRemark());
         assertFalse(storedAttendance.stream().anyMatch(a -> a.getPersonId().equals(4L)));
+        assertTrue(storedAttendance.contains(formerSigned));
         assertEquals(Attendance.STATUS_PENDING, storedAttendance.stream().filter(a -> a.getPersonId().equals(5L)).findFirst().orElseThrow().getStatus());
         verify(attendances, never()).deleteByScheduleId(anyLong());
     }
+    @Test void cancelPreservesCompletedAttendanceAndCancelsOnlyOpenRows() {
+        var signed = attendance(10, 2, Attendance.SOURCE_AUTO, Attendance.STATUS_NORMAL);
+        var pending = attendance(11, 3, Attendance.SOURCE_AUTO, Attendance.STATUS_PENDING);
+        var leave = attendance(12, 4, Attendance.SOURCE_MANUAL, Attendance.STATUS_LEAVE);
+        service.cancel(1L);
+        service.cancel(1L);
+        assertEquals(Schedule.STATUS_CANCELLED, schedule.getStatus());
+        assertEquals(Attendance.STATUS_NORMAL, signed.getStatus());
+        assertEquals(Attendance.STATUS_CANCELED, pending.getStatus());
+        assertEquals(Attendance.STATUS_LEAVE, leave.getStatus());
+    }
+
     @Test void regenerationKeepsManualCorrectionsAndAssignsOnePrimary() {
         Attendance manual = attendance(10, 2, Attendance.SOURCE_MANUAL, Attendance.STATUS_LEAVE);
         when(matcher.matchByPeriod(any(), any(), any(), anyList(), any(), any())).thenReturn(List.of(new FreeSlotMatcher.PeriodSlot(3, "第5-6节", schedule.getStartTime(), schedule.getEndTime(), List.of(new FreeSlotMatcher.Candidate("成员2", 2L), new FreeSlotMatcher.Candidate("成员3", 3L)))));

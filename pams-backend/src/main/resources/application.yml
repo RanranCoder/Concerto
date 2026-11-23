@@ -19,7 +19,7 @@ spring:
     # 再回落到这里导入的 pams.agent.api-key 占位值）。
     import: optional:file:../.env[.properties],optional:file:./.env[.properties]
   datasource:
-    url: jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    url: jdbc:mysql://localhost:3306/pams_concerto_demo?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: root
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver

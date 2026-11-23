@@ -4,6 +4,7 @@ import {
   App,
   Button,
   DatePicker,
+  TimePicker,
   Form,
   Input,
   InputNumber,
@@ -58,7 +59,8 @@ import {
   downloadBlob,
 } from '@/utils/routine'
 
-interface FormValues extends Omit<ScheduleSave, 'scheduleDate'> {
+interface FormValues extends Omit<ScheduleSave, 'scheduleDate' | 'startTime' | 'endTime'> {
+  timeRange?: [Dayjs, Dayjs]
   scheduleDate?: Dayjs
 }
 export default function ScheduleList() {
@@ -145,6 +147,9 @@ export default function ScheduleList() {
       weekday: day,
       scheduleDate: day ? start.add(day - 1, 'day') : undefined,
       sessionName: period?.label,
+      timeRange: period?.startTime && period?.endTime
+        ? [dayjs('2000-01-01T' + period.startTime), dayjs('2000-01-01T' + period.endTime)]
+        : undefined,
       persons: [{ personName: '', isPrimary: 1 }],
     })
     setFormOpen(true)
@@ -159,6 +164,9 @@ export default function ScheduleList() {
       weekday: weekday(s),
       scheduleDate: s.scheduleDate ? dayjs(s.scheduleDate) : undefined,
       sessionName: s.sessionName,
+      timeRange: s.startTime && s.endTime
+        ? [dayjs('2000-01-01T' + s.startTime), dayjs('2000-01-01T' + s.endTime)]
+        : undefined,
       location: s.location,
       notes: s.notes,
       persons: s.persons.map((p) => ({
@@ -172,8 +180,15 @@ export default function ScheduleList() {
   const save = async (v: FormValues) => {
     setSaving(true)
     try {
+      const { timeRange: selectedTime, ...values } = v
+      if (selectedTime && selectedTime[1].format('HH:mm') <= selectedTime[0].format('HH:mm')) {
+        form.setFields([{ name: 'timeRange', errors: ['结束时间必须晚于开始时间'] }])
+        return
+      }
       const payload: ScheduleSave = {
-        ...v,
+        ...values,
+        startTime: selectedTime?.[0].format('HH:mm:ss') ?? null,
+        endTime: selectedTime?.[1].format('HH:mm:ss') ?? null,
         activityId: editing?.activityId ?? v.activityId,
         scheduleDate: v.scheduleDate?.format('YYYY-MM-DD') ?? null,
         persons: v.persons?.map((p) => ({
@@ -208,7 +223,13 @@ export default function ScheduleList() {
   }
   const exportRows = async () => {
     try {
-      const res = await exportSchedule({ type, weekNo })
+      const res = await exportSchedule({
+        type,
+        weekNo,
+        keyword: query.trim() || undefined,
+        dateFrom: mode === 'week' ? start.format('YYYY-MM-DD') : undefined,
+        dateTo: mode === 'week' ? start.add(6, 'day').format('YYYY-MM-DD') : undefined,
+      })
       downloadBlob(
         res.data,
         `排班表-${weekNo ? `第${weekNo}周` : '全部教学周'}.xlsx`,
@@ -380,7 +401,8 @@ export default function ScheduleList() {
                 rows={filtered}
                 activities={activities}
                 onOpen={setDetail}
-                onEdit={canManage ? openEdit : undefined}
+                onEdit={canManage && (detail?.status === 'DRAFT' ||
+          (detail?.status === 'PUBLISHED' && canPublish)) ? openEdit : undefined}
               />
             )}
           </Spin>
@@ -450,7 +472,7 @@ export default function ScheduleList() {
               </Button>
             </div>
             <RoutineNote>
-              导出按排班类型和教学周导出，不包含本页人员关键词筛选。
+              导出当前视图和筛选范围内的例行班次。
             </RoutineNote>
           </GlassCard>
         </aside>
@@ -461,7 +483,7 @@ export default function ScheduleList() {
         onClose={() => setDetail(null)}
         onEdit={canManage ? openEdit : undefined}
         onDelete={
-          canManage && (detail?.status !== 'PUBLISHED' || canPublish)
+          canManage && detail?.status === 'DRAFT'
             ? remove
             : undefined
         }
@@ -575,6 +597,9 @@ export default function ScheduleList() {
             rules={[{ required: true }]}
           >
             <Input maxLength={50} placeholder="如 第1-2节 / 09:00-09:10" />
+          </Form.Item>
+          <Form.Item name="timeRange" label="班次起止时间" extra="发布打卡前需要填写日期与起止时间。">
+            <TimePicker.RangePicker format="HH:mm" style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="location" label="值班地点">
             <Input maxLength={100} />

@@ -24,6 +24,7 @@ class BusinessPermissionV2Test {
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate db;
   @Autowired jakarta.persistence.EntityManager entities;
+  @Autowired com.pams.module.routine.service.AttendanceAutoJob attendanceJob;
   final ObjectMapper json = new ObjectMapper();
   String token;
 
@@ -144,6 +145,100 @@ class BusinessPermissionV2Test {
   }
 
   @Test
+  void publishedRosterEditsAndPersistedQrAgreeWithAttendanceAndSummary() throws Exception {
+    long first = db.queryForObject("SELECT id FROM sys_user WHERE username='teacher'", Long.class);
+    long second = db.queryForObject("SELECT id FROM sys_user WHERE username='staff'", Long.class);
+    String name = "签到回归成员";
+    String date = com.pams.module.routine.service.AttendanceWindow.now().toLocalDate().toString();
+    long activity = activity();
+    Map<String, Object> shift = new HashMap<>(Map.of(
+        "activityId", activity, "scheduleDate", date, "startTime", "00:01:00", "endTime", "23:59:59",
+        "persons", List.of(Map.of("userId", first, "personName", "指导老师"))));
+    long id = call("POST", "/api/activity-schedules", shift, 200).asLong();
+    call("POST", "/api/activity-schedules/" + id + "/publish", null, 200);
+    shift.put("persons", List.of(Map.of("userId", second, "personName", name)));
+    call("PUT", "/api/activity-schedules/" + id, shift, 200);
+    var pending = call("GET", "/api/attendances?activityId=" + activity, null, 200);
+    assertThat(pending).hasSize(1);
+    assertThat(pending.get(0).path("personId").asLong()).isEqualTo(second);
+    assertThat(pending.get(0).path("status").asText()).isEqualTo("PENDING");
+
+    long other = call("POST", "/api/activity-schedules", Map.of(
+        "activityId", activity, "scheduleDate", date, "startTime", "00:00:00", "endTime", "23:59:59",
+        "persons", List.of(Map.of("userId", first, "personName", "指导老师"))), 200).asLong();
+    call("POST", "/api/activity-schedules/" + other + "/publish", null, 200);
+
+    String qr = call("POST", "/api/signins/token", Map.of("activityId", activity), 200).path("token").asText();
+    entities.flush();
+    entities.clear();
+    assertThat(call("GET", "/api/signins/" + activity + "/token", null, 200).path("token").asText()).isEqualTo(qr);
+    var scan = call("POST", "/api/signins/scan", Map.of("token", qr, "name", name), 200);
+    assertThat(scan.path("scheduleId").asLong()).isEqualTo(id);
+    var recorded = call("GET", "/api/attendances?activityId=" + activity, null, 200);
+    assertThat(recorded).anyMatch(row -> row.path("scheduleId").asLong() == id
+        && List.of("NORMAL", "LATE").contains(row.path("status").asText())
+        && row.path("signCount").asInt() == 1);
+    assertThat(recorded).anyMatch(row -> row.path("scheduleId").asLong() == other
+        && row.path("status").asText().equals("PENDING"));
+    call("POST", "/api/attendances", Map.of("scheduleId", other), 200);
+    assertThat(call("GET", "/api/signins?activityId=" + activity, null, 200))
+        .anyMatch(row -> row.path("scheduleId").asLong() == other && row.path("signType").asText().equals("SELF"));
+    var summary = call("GET", "/api/attendances/summary?type=ACTIVITY", null, 200);
+    assertThat(summary).anyMatch(person -> person.path("personId").asLong() == second
+        && person.path("present").asInt() == 1 && person.path("absent").asInt() == 0);
+    call("POST", "/api/signins/" + activity + "/close", null, 200);
+    assertThat(call("GET", "/api/signins/" + activity + "/token", null, 200).path("token").isMissingNode()).isTrue();
+  }
+
+  @Test
+  @org.springframework.transaction.annotation.Transactional(
+      propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+  void dueRoutineShiftSettlesInAnotherOrganization() {
+    db.update("INSERT INTO organization(name) VALUES('自动考勤回归组织')");
+    long org = db.queryForObject("SELECT id FROM organization WHERE name='自动考勤回归组织'", Long.class);
+    try {
+      var date = com.pams.module.routine.service.AttendanceWindow.now().toLocalDate().minusDays(1);
+      db.update("""
+          INSERT INTO schedule (schedule_type, status, schedule_date, start_time, end_time, org_id, created_at)
+          VALUES ('CLASS_DUTY', 'PUBLISHED', ?, '09:00:00', '10:00:00', ?, CURRENT_TIMESTAMP)
+          """, date, org);
+      long id = db.queryForObject("SELECT id FROM schedule WHERE org_id=?", Long.class, org);
+      db.update("""
+          INSERT INTO schedule_person (schedule_id, person_name, org_id) VALUES (?, '待签成员', ?)
+          """, id, org);
+      db.update("""
+          INSERT INTO attendance (schedule_id, person_name, status, status_source, org_id)
+          VALUES (?, '待签成员', 'PENDING', 'AUTO', ?)
+          """, id, org);
+      attendanceJob.run();
+      attendanceJob.run();
+      assertThat(db.queryForObject("SELECT status FROM schedule WHERE id=?", String.class, id)).isEqualTo("ENDED");
+      assertThat(db.queryForObject("SELECT status FROM attendance WHERE schedule_id=?", String.class, id)).isEqualTo("ABSENT");
+    } finally {
+      db.update("DELETE FROM attendance WHERE org_id=?", org);
+      db.update("DELETE FROM schedule_person WHERE org_id=?", org);
+      db.update("DELETE FROM schedule WHERE org_id=?", org);
+      db.update("DELETE FROM organization WHERE id=?", org);
+    }
+  }
+
+  @Test
+  void emptySubmittedCourseScheduleIsDistinctFromMissingSchedule() throws Exception {
+    long teacher = db.queryForObject("SELECT id FROM sys_user WHERE username='teacher'", Long.class);
+    long staff = db.queryForObject("SELECT id FROM sys_user WHERE username='staff'", Long.class);
+    String semester = "2099-2100-1";
+    var payload = Map.of("semester", semester, "cells", List.of());
+    call("POST", "/api/course-schedules/mine", payload, 200);
+    call("POST", "/api/course-schedules/mine", payload, 200);
+    var analysis = call("GET", "/api/course-schedules/analyze?semester=" + semester
+        + "&userIds=" + teacher + "," + staff, null, 200);
+    assertThat(analysis.path("submittedCount").asInt()).isEqualTo(1);
+    assertThat(analysis.path("missingUsers")).anyMatch(u -> u.path("id").asLong() == staff);
+    assertThat(analysis.path("optimal").get(0).path("freeCount").asInt()).isEqualTo(1);
+    assertThat(analysis.path("optimal").get(0).path("allFree").asBoolean()).isFalse();
+  }
+
+  @Test
   void ownAttendanceNeverGrantsOrganizationReadOrManualCorrection() throws Exception {
     long uid = user(role("schedule:check", "attendance:self:view"));
     db.update(
@@ -176,7 +271,7 @@ class BusinessPermissionV2Test {
         "INSERT INTO"
             + " schedule(schedule_type,status,schedule_date,start_time,end_time,org_id,created_at)"
             + " VALUES('ACTIVITY','PUBLISHED',?,'00:00:00','23:59:59',1,CURRENT_TIMESTAMP)",
-        java.sql.Date.valueOf(LocalDate.now()));
+        java.sql.Date.valueOf(com.pams.module.routine.service.AttendanceWindow.now().toLocalDate()));
     long shift = db.queryForObject("SELECT MAX(id) FROM schedule", Long.class);
     db.update(
         "INSERT INTO schedule_person(schedule_id,user_id,person_name,is_primary,org_id)"

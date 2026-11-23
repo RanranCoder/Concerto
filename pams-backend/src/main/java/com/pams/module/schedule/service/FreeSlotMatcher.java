@@ -1,5 +1,6 @@
 package com.pams.module.schedule.service;
 
+import com.pams.common.BizException;
 import com.pams.module.schedule.dto.NoClassScheduleCellVO;
 import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleRowVO;
@@ -13,9 +14,11 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 基于无课表匹配“目标日期 + 时间段内全程空闲”的候选人员。
@@ -65,14 +68,21 @@ public class FreeSlotMatcher {
 
         List<ScheduleConfig> configs = configRepo.findAllByOrderByPeriodAsc();
         // 预加载各部门的无课表（一次读取）
-        List<NoClassScheduleGeneratedVO> generatedList = new ArrayList<>();
+        Map<Long, NoClassScheduleGeneratedVO> generatedList = new LinkedHashMap<>();
         for (Long deptId : deptIds) {
             NoClassScheduleGeneratedVO g = importService.getGenerated(deptId, semester);
-            if (g != null && g.getRows() != null && !g.getRows().isEmpty()) generatedList.add(g);
+            if (g != null && g.getRows() != null && !g.getRows().isEmpty()) generatedList.put(deptId, g);
         }
         if (generatedList.isEmpty()) return List.of();
 
+        var accountsByDept = userRepo.findAll().stream()
+                .filter(u -> u.getDept() != null && deptIds.contains(u.getDept().getId())
+                        && Objects.equals(u.getStatus(), 1) && !Objects.equals(u.getDeleted(), 1))
+                .collect(Collectors.groupingBy(u -> u.getDept().getId()));
+        if (semesterStartDate != null && semesterStartDate.getDayOfWeek() != java.time.DayOfWeek.MONDAY)
+            throw new BizException(400, "第一教学周起始日期必须是周一");
         Integer week = semesterStartDate != null ? weekOf(date, semesterStartDate) : null;
+        if (week != null && week < 1) return List.of();
 
         List<PeriodSlot> slots = new ArrayList<>();
         for (ScheduleConfig c : configs) {
@@ -80,21 +90,24 @@ public class FreeSlotMatcher {
             // 只保留与活动时间段相交的节次
             boolean overlaps = c.getEndTime().isAfter(start) && c.getStartTime().isBefore(end);
             if (!overlaps) continue;
-            Set<String> periodFree = new LinkedHashSet<>();
-            for (NoClassScheduleGeneratedVO g : generatedList) {
-                List<NoClassScheduleCellVO> cells = cellsOf(g, c.getPeriod(), weekday);
+            Map<String, Candidate> periodFree = new LinkedHashMap<>();
+            for (var source : generatedList.entrySet()) {
+                List<NoClassScheduleCellVO> cells = cellsOf(source.getValue(), c.getPeriod(), weekday);
                 if (cells == null) continue;
                 for (NoClassScheduleCellVO cell : cells) {
                     if (cell.getName() == null || cell.getName().isBlank()) continue;
+                    if (week == null && cell.getFreeWeeks() != null && !cell.getFreeWeeks().isBlank())
+                        throw new BizException(400, "这份无课表按教学周记录，请填写第一教学周的周一");
                     if (week != null && !isFreeOnWeek(cell.getFreeWeeks(), week)) continue;
-                    periodFree.add(cell.getName());
+                    var matches = accountsByDept.getOrDefault(source.getKey(), List.of()).stream()
+                            .filter(u -> cell.getName().equals(u.getRealName())).limit(2).toList();
+                    Long id = matches.size() == 1 ? matches.getFirst().getId() : null;
+                    periodFree.putIfAbsent(id == null ? source.getKey() + ":" + cell.getName() : "id:" + id,
+                            new Candidate(cell.getName(), id));
                 }
             }
             if (periodFree.isEmpty()) continue;
-            List<Candidate> cands = new ArrayList<>();
-            for (String name : periodFree) {
-                cands.add(new Candidate(name, resolveUniqueUserId(name)));
-            }
+            List<Candidate> cands = new ArrayList<>(periodFree.values());
             cands.sort((a, b) -> a.name().compareTo(b.name()));
             slots.add(new PeriodSlot(c.getPeriod(), c.getLabel(), c.getStartTime(), c.getEndTime(), cands));
         }
@@ -111,14 +124,6 @@ public class FreeSlotMatcher {
             }
         }
         return null;
-    }
-
-    /** 按姓名唯一命中回填 userId；同名多人或无匹配返回 null（宁缺勿错，参照 V20 迁移策略）。 */
-    private Long resolveUniqueUserId(String name) {
-        List<com.pams.entity.User> matched = userRepo.findAll().stream()
-                .filter(u -> name.equals(u.getRealName()) && (u.getDeleted() == null || u.getDeleted() == 0))
-                .toList();
-        return matched.size() == 1 ? matched.get(0).getId() : null;
     }
 
     private boolean isFreeOnWeek(String freeWeeks, int week) {

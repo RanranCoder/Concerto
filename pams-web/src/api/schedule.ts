@@ -93,6 +93,8 @@ export interface ScheduleSave {
   sessionName?: string | null
   location?: string | null
   scheduleDate?: string | null
+  startTime?: string | null
+  endTime?: string | null
   notes?: string | null
   persons?: SchedulePersonItem[]
 }
@@ -112,7 +114,13 @@ export const updateSchedule = (id: number, data: ScheduleSave) =>
 export const deleteSchedule = (id: number) => del<void>(`/schedules/${id}`)
 
 /** 导出值班表 xlsx：responseType blob 下载，走原生 http（跳过 Result 解包） */
-export const exportSchedule = (params: { type?: string; weekNo?: number }) =>
+export const exportSchedule = (params: {
+  type?: string
+  weekNo?: number
+  dateFrom?: string
+  dateTo?: string
+  keyword?: string
+}) =>
   http.get('/schedules/export', { params, responseType: 'blob' })
 
 export const publishRegularSchedule = (id: number) =>

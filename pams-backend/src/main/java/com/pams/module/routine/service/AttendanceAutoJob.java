@@ -2,24 +2,22 @@ package com.pams.module.routine.service;
 
 import com.pams.module.routine.entity.Attendance;
 import com.pams.module.routine.entity.Schedule;
-import com.pams.module.routine.entity.SchedulePerson;
 import com.pams.module.routine.repository.AttendanceRepository;
-import com.pams.module.routine.repository.SchedulePersonRepository;
 import com.pams.module.routine.repository.ScheduleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import com.pams.common.OrgContext;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * 自动考勤引擎（活动级单码）：已发布的活动排班在活动结束时间过后，将仍未签到
+ * 自动考勤引擎：有完整日期与时段的已发布排班在结束时间过后，将仍未签到
  * （status_source=AUTO 且 status=PENDING）的排班人员置为「缺勤」。
  *
  * 硬性约束：绝不覆盖 status_source=MANUAL 的考勤行；排班置 ENDED 后不再重复处理（幂等）。
@@ -29,72 +27,87 @@ public class AttendanceAutoJob {
 
     private static final Logger log = LoggerFactory.getLogger(AttendanceAutoJob.class);
 
-    private final SchedulePersonRepository schedulePersonRepository;
+    private final ActivityScheduleService publication;
     private final AttendanceRepository attendanceRepository;
     private final ScheduleRepository scheduleRepository;
 
-    public AttendanceAutoJob(SchedulePersonRepository schedulePersonRepository,
+    private final JdbcTemplate jdbc;
+    private final TransactionTemplate transactions;
+
+    public AttendanceAutoJob(ActivityScheduleService publication,
                              AttendanceRepository attendanceRepository,
-                             ScheduleRepository scheduleRepository) {
-        this.schedulePersonRepository = schedulePersonRepository;
+                             ScheduleRepository scheduleRepository,
+                             JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
+        this.publication = publication;
         this.attendanceRepository = attendanceRepository;
         this.scheduleRepository = scheduleRepository;
+        this.jdbc = jdbc;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     @Scheduled(fixedDelay = 300_000)
-    @Transactional
     public void run() {
-        LocalDateTime now = LocalDateTime.now();
-        List<Schedule> published = scheduleRepository.findByScheduleTypeAndStatus(Schedule.TYPE_ACTIVITY, Schedule.STATUS_PUBLISHED);
-        for (Schedule sch : published) {
-            if (!isScheduleOver(sch, now)) continue;
-            try {
-                markAbsent(sch.getId());
-            } catch (Exception e) {
-                log.warn("自动考勤失败 schedule={}: {}", sch.getId(), e.getMessage());
+        process(false);
+    }
+
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void reconcileUpcoming() {
+        process(true);
+    }
+
+    private void process(boolean upcoming) {
+        LocalDateTime now = AttendanceWindow.now();
+        Long previous = OrgContext.get();
+        try {
+            for (Long orgId : jdbc.queryForList(
+                    "SELECT id FROM organization WHERE status=1 AND deleted=0 ORDER BY id", Long.class)) {
+                OrgContext.set(orgId);
+                List<Long> eligible = transactions.execute(status -> scheduleRepository.findByStatus(Schedule.STATUS_PUBLISHED)
+                        .stream().filter(s -> eligible(s, now, upcoming)).map(Schedule::getId).toList());
+                if (eligible == null) continue;
+                for (Long id : eligible) {
+                    try {
+                        transactions.executeWithoutResult(status -> apply(id, now, upcoming));
+                    } catch (RuntimeException e) {
+                        log.warn("自动考勤失败 org={} schedule={}", orgId, id, e);
+                    }
+                }
             }
-            sch.setStatus(Schedule.STATUS_ENDED);
-            scheduleRepository.save(sch);
+        } finally {
+            if (previous == null) OrgContext.clear();
+            else OrgContext.set(previous);
         }
     }
 
-    /** 已发布活动排班是否已过活动结束时间（无日期则无法判定，跳过；无结束时间仅当日按天判定）。 */
-    private boolean isScheduleOver(Schedule sch, LocalDateTime now) {
-        if (sch.getScheduleDate() == null) return false;
-        LocalDate today = now.toLocalDate();
-        int cmp = sch.getScheduleDate().compareTo(today);
-        if (cmp < 0) return true;
-        if (cmp > 0) return false;
-        if (sch.getEndTime() == null) return false; // 同日且无结束时间，无法判定
-        return !now.toLocalTime().isBefore(sch.getEndTime());
+    private void apply(Long id, LocalDateTime now, boolean upcoming) {
+        scheduleRepository.lockById(id)
+                .filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus()) && eligible(s, AttendanceWindow.now(), upcoming))
+                .ifPresent(s -> {
+                    if (upcoming) {
+                        publication.ensureUpcomingAttendanceRows(s);
+                        return;
+                    }
+                    markAbsent(id, now);
+                    s.setStatus(Schedule.STATUS_ENDED);
+                    s.setUpdatedAt(now);
+                    scheduleRepository.save(s);
+                });
     }
 
-    private void markAbsent(Long scheduleId) {
-        LocalDateTime now = LocalDateTime.now();
-        List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(scheduleId);
-        for (SchedulePerson p : persons) {
-            Optional<Attendance> existing = p.getUserId() != null
-                    ? attendanceRepository.findByScheduleIdAndPersonId(scheduleId, p.getUserId())
-                    : attendanceRepository.findByScheduleIdAndPersonName(scheduleId, p.getPersonName());
-            if (existing.isPresent()) {
-                Attendance a = existing.get();
-                if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())) continue; // 人工已改不覆盖
-                if (!Attendance.STATUS_PENDING.equals(a.getStatus())) continue; // 已签到/非待签不覆盖
-                a.setStatus(Attendance.STATUS_ABSENT);
-                a.setRecordTime(now);
-                attendanceRepository.save(a);
-            } else {
-                // 防御：有排班人员但缺考勤行时补建
-                Attendance a = new Attendance();
-                a.setScheduleId(scheduleId);
-                a.setPersonId(p.getUserId());
-                a.setPersonName(p.getPersonName());
-                a.setStatus(Attendance.STATUS_ABSENT);
-                a.setStatusSource(Attendance.SOURCE_AUTO);
-                a.setRecordTime(now);
-                a.setCreatedAt(now);
-                attendanceRepository.save(a);
-            }
+    private boolean eligible(Schedule schedule, LocalDateTime now, boolean upcoming) {
+        if (schedule.getScheduleDate() == null || schedule.getStartTime() == null || schedule.getEndTime() == null
+                || !schedule.getEndTime().isAfter(schedule.getStartTime())) return false;
+        return upcoming ? now.isBefore(schedule.getScheduleDate().atTime(schedule.getStartTime()))
+                : !now.isBefore(schedule.getScheduleDate().atTime(schedule.getEndTime()));
+    }
+
+    private void markAbsent(Long scheduleId, LocalDateTime now) {
+        for (Attendance row : attendanceRepository.findByScheduleId(scheduleId)) {
+            if (Attendance.SOURCE_MANUAL.equals(row.getStatusSource())
+                    || !Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(row.getStatus()))) continue;
+            row.setStatus(Attendance.STATUS_ABSENT);
+            row.setRecordTime(now);
+            attendanceRepository.save(row);
         }
     }
 }

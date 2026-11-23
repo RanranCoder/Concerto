@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "activity")
 @SQLRestriction("deleted = 0")
 public class Activity implements OrgScoped {
@@ -34,4 +35,8 @@ public class Activity implements OrgScoped {
     private Integer deleted;
     @org.hibernate.annotations.TenantId
     private Long orgId;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String checkinToken;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private LocalDateTime checkinExpiresAt;
 }

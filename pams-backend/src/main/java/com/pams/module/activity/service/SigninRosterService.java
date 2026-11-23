@@ -301,6 +301,10 @@ public class SigninRosterService {
         rosterRepo.delete(r);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private SigninService signinService;
+
     // ===== 手动补签 =====
     /**
      * 手动补签（幂等）：对每个名单行，先按姓名+学号查该活动是否已有匹配签到记录，
@@ -309,7 +313,7 @@ public class SigninRosterService {
     @Transactional
     public int backfill(Long activityId, List<Long> rosterIds, Long operatorId) {
         int n = 0;
-        List<Signin> existing = signinRepo.findByActivityId(activityId);
+        List<Signin> existing = new java.util.ArrayList<>(signinRepo.findByActivityId(activityId));
         for (Long id : rosterIds) {
             SigninRoster r = rosterRepo.findById(id).orElseThrow(() -> new BizException(2406, "名单行不存在"));
             if (!r.getActivityId().equals(activityId)) throw new BizException(2407, "名单行不属于该活动");
@@ -326,7 +330,8 @@ public class SigninRosterService {
             s.setSignTime(LocalDateTime.now());
             s.setRemark("应签名单补签");
             s.setCreatedAt(LocalDateTime.now());
-            signinRepo.save(s);
+            Signin saved = signinService == null ? signinRepo.save(s) : signinService.saveManualRecord(s);
+            existing.add(saved == null ? s : saved);
             n++;
         }
         return n;

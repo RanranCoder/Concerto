@@ -226,9 +226,8 @@ export default function CourseSchedulePage() {
       const imported = await importNoClassSchedules(data)
       setResult(imported)
       setConfirmImport(false)
-      message.success(
-        `已生成无课表：${imported.successCount}/${imported.totalFiles} 份成功`,
-      )
+      if (imported.published === false) message.warning('导入未生效，修正失败文件后请重新提交完整批次')
+      else message.success('无课表已生效')
     } catch {
     } finally {
       setImporting(false)
@@ -442,9 +441,12 @@ export default function CourseSchedulePage() {
         {analysis ? (
           <>
             <div className="routine-caption">
-              <span>参与 {analysis.users.length} 人 / 点击时段查看人数</span>
+              <span>已提交 {analysis.submittedCount ?? analysis.users.length} / {analysis.users.length} 人</span>
               <span>青绿 = 全员无课</span>
             </div>
+            {!!analysis.missingUsers?.length && <RoutineNote warning>
+              未提交课表：{analysis.missingUsers.map((u) => u.realName).join('、')}
+            </RoutineNote>}
             <div className="routine-table-scroll">
               <table className="routine-week-table routine-course-table">
                 <thead>
@@ -696,7 +698,7 @@ export default function CourseSchedulePage() {
               <small>覆盖最新无课表，请先核对目标部门</small>
             </div>
             <RoutineNote>
-              成功文件会生成最新结果；失败文件需要修正后重新导入。
+              全部文件通过后才替换已生效的无课表。
             </RoutineNote>
           </GlassCard>
         </aside>
@@ -710,6 +712,7 @@ export default function CourseSchedulePage() {
                 {result.successCount} 份成功 / {result.failed.length} 份失败 /{' '}
                 {result.semester}
               </p>
+              {result.published === false && <RoutineNote warning>本批次仅供核对，未替换当前无课表。</RoutineNote>}
             </div>
             <Space wrap>
               <Button
@@ -730,7 +733,7 @@ export default function CourseSchedulePage() {
                   )
                 }
               >
-                查看无课表
+                {result.published === false ? '查看已生效无课表' : '查看无课表'}
               </Button>
             </Space>
           </div>

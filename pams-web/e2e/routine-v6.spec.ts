@@ -64,6 +64,7 @@ async function setup(page: Page, viewer = manager) {
       JSON.stringify({ state: { mode: 'light' }, version: 0 }),
     )
   }, viewer)
+  const qrByActivity = new Map<number, { token: string; activityId: number; expiresAt: string }>()
   const errors: string[] = [],
     writes: Array<{ path: string; body: any; url: URL }> = [],
     reads: string[] = []
@@ -360,40 +361,31 @@ async function setup(page: Page, viewer = manager) {
             s.scheduleType === 'ACTIVITY' &&
             s.activityId === Number(url.searchParams.get('activityId')),
         )
-      else if (path === '/api/activity-schedules/generate') {
-        const s = {
-          id: nextId++,
-          scheduleType: 'ACTIVITY',
-          activityId: body.activityId,
-          scheduleDate: body.startDate,
-          startTime: '14:00:00',
-          endTime: '15:40:00',
-          status: 'DRAFT',
-          source: 'AUTO',
-          persons,
+      else if (path === '/api/activity-schedules/generate/preview' || path === '/api/activity-schedules/generate/confirm') {
+        const confirming = path.endsWith('/confirm')
+        const input = confirming ? body.request : body
+        const fingerprint = '8675309000000000'
+        if (confirming && body.fingerprint === fingerprint) {
+          schedules.push({
+            id: nextId++, scheduleType: 'ACTIVITY', activityId: input.activityId,
+            scheduleDate: input.startDate, startTime: '14:00:00', endTime: '15:40:00',
+            status: 'DRAFT', source: 'AUTO', persons,
+          })
         }
-        schedules.push(s)
-        data = [
-          {
-            date: body.startDate,
+        const picked = people.slice(0, 2).map((p) => ({ name: p.realName, userId: p.id }))
+        data = {
+          fingerprint,
+          draftCount: 1,
+          days: [{
+            date: input.startDate,
             count: 2,
-            persons: people
-              .slice(0, 2)
-              .map((p) => ({ name: p.realName, userId: p.id })),
-            slots: [
-              {
-                period: 3,
-                label: '第5-6节',
-                startTime: '14:00:00',
-                endTime: '15:40:00',
-                count: 2,
-                persons: people
-                  .slice(0, 2)
-                  .map((p) => ({ name: p.realName, userId: p.id })),
-              },
-            ],
-          },
-        ]
+            persons: picked,
+            slots: [{
+              period: 3, label: '第5-6节', startTime: '14:00:00', endTime: '15:40:00',
+              count: 2, persons: picked, conflictingNames: ['已值班成员'],
+            }],
+          }],
+        }
       } else if (path === '/api/activity-schedules' && method === 'POST') {
         schedules.push({
           ...body,
@@ -486,13 +478,15 @@ async function setup(page: Page, viewer = manager) {
             required: 0,
           },
         ]
-      else if (path === '/api/signins/token')
+      else if (path === '/api/signins/token') {
         data = {
           token: 'isolated-qr-token',
           activityId: body.activityId,
           expiresAt: '2026-10-14T10:30:00',
-          qrContent: 'unused',
         }
+        qrByActivity.set(body.activityId, data)
+      } else if (/\/signins\/\d+\/token$/.test(path))
+        data = qrByActivity.get(Number(path.split('/').at(-2))) ?? null
       else if (path === '/api/signins')
         data = [
           {
@@ -698,6 +692,10 @@ test('发布范围限于当前活动，考勤联动与修正审计保留原因',
   ).toHaveLength(0)
   await page.getByRole('button', { name: /开启签到$/ }).click()
   await expect(page.locator('.routine-qr-box svg')).toBeVisible()
+  await page.reload()
+  await page.getByRole('tab', { name: '签到现场' }).click()
+  await expect(page.locator('.routine-qr-box svg')).toBeVisible()
+  expect(state.writes.filter((w) => w.path === '/api/signins/token')).toHaveLength(1)
   await screenshot(page, 'signin-scene')
   expect(
     state.writes.find((w) => w.path === '/api/signins/token')?.body.activityId,
@@ -807,6 +805,21 @@ test('成员从我的接口读取考勤，管理操作按权限码隐藏', async
   expect(state.errors).toEqual([])
 })
 
+test('手机考勤无需横滑即可查看状态并打开详情', async ({ page }) => {
+  await setup(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/routine/attendance')
+  const row = page.locator('.ant-table-row').first()
+  await expect(row.getByText('正常', { exact: true })).toBeVisible()
+  await row.locator('strong').scrollIntoViewIfNeeded()
+  const open = row.getByRole('button', { name: '详情', exact: true })
+  await expect(open).toBeInViewport()
+  await expect(row.getByRole('button', { name: '修正', exact: true })).toBeInViewport()
+  await screenshot(page, 'attendance-mobile')
+  await open.click()
+  await expect(page.locator('.ant-drawer-open')).toContainText('考勤详情')
+})
+
 test('生成草稿及重新生成将部门、学期、开学日期传给后端，取消保留人工考勤', async ({
   page,
 }) => {
@@ -836,10 +849,13 @@ test('生成草稿及重新生成将部门、学期、开学日期传给后端�
   await dept.press('Escape')
   await dialog.locator('#peoplePerSlot').fill('2')
   await screenshot(page, 'activity-generate')
-  await dialog.getByRole('button', { name: '生成草稿', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '排班生成结果' })).toBeVisible()
+  await dialog.getByRole('button', { name: '预览排班', exact: true }).click()
+  const review = page.getByRole('dialog', { name: '复核活动排班' })
+  await expect(review).toBeVisible()
+  await expect(review).toContainText('已有值班：已值班成员')
+  expect(state.schedules.some((s) => s.scheduleDate === '2026-10-19')).toBe(false)
   const generated = state.writes.find(
-    (w) => w.path === '/api/activity-schedules/generate',
+    (w) => w.path === '/api/activity-schedules/generate/preview',
   )!.body
   expect(generated).toMatchObject({
     activityId: 1,
@@ -849,7 +865,12 @@ test('生成草稿及重新生成将部门、学期、开学日期传给后端�
     peoplePerSlot: 2,
     startDate: '2026-10-19',
   })
-  await page.getByRole('button', { name: '查看草稿', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await screenshot(page, 'activity-preview')
+  await review.getByRole('button', { name: '确认生成草稿', exact: true }).click()
+  await expect(review).toHaveCount(0)
+  expect(state.writes.find((w) => w.path.endsWith('/generate/confirm'))?.body)
+    .toEqual({ request: generated, fingerprint: '8675309000000000' })
   await page
     .locator('.ant-table-row')
     .filter({ hasText: '2026-10-19' })

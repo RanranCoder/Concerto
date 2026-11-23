@@ -28,6 +28,18 @@ public class Attendance implements OrgScoped {
     public static final String SOURCE_AUTO = "AUTO";
     public static final String SOURCE_MANUAL = "MANUAL";
 
+    public static String normalizedStatus(String status) {
+        if ("PRESENT".equals(status)) return STATUS_NORMAL;
+        return status == null || status.isBlank() ? STATUS_PENDING : status;
+    }
+
+    public static boolean isSigned(String status) {
+        return switch (normalizedStatus(status)) {
+            case STATUS_NORMAL, STATUS_LATE, STATUS_EARLY_LEAVE, STATUS_MAKEUP -> true;
+            default -> false;
+        };
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

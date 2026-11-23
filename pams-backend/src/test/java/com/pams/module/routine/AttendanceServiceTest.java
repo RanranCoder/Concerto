@@ -57,6 +57,26 @@ class AttendanceServiceTest {
         assertThat(lisi.get("count")).isEqualTo(1);
     }
 
+    @Test
+    void summaryKeepsSignedPendingCanceledAndSameNameAccountsDistinct() {
+        var statuses = List.of("PRESENT", "LATE", "MAKEUP", "EARLY_LEAVE", "PENDING", "CANCELED", "ABSENT");
+        var records = java.util.stream.IntStream.range(0, statuses.size()).mapToObj(i -> {
+            Attendance row = new Attendance();
+            row.setPersonId(i == 6 ? 20L : 10L);
+            row.setPersonName("同名成员");
+            row.setStatus(statuses.get(i));
+            return row;
+        }).toList();
+        when(repo.findAll()).thenReturn(records);
+
+        var totals = service.summary(null, null);
+        assertThat(totals).hasSize(2);
+        assertThat(totals.getFirst()).containsEntry("shouldAttend", 5)
+                .containsEntry("present", 4).containsEntry("pending", 1).containsEntry("canceled", 1)
+                .containsEntry("absent", 0);
+        assertThat(totals.getLast()).containsEntry("personId", 20L).containsEntry("absent", 1);
+    }
+
     /** type 语义：按考勤所属排班的 scheduleType 过滤（如"本周禁烟值班考勤汇总"），而非考勤状态 */
     @Test
     void summary_typeFiltersByScheduleType() {

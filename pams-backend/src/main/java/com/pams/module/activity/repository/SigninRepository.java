@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface SigninRepository extends JpaRepository<Signin, Long> {
     List<Signin> findByActivityId(Long activityId);
+    List<Signin> findByActivityIdIn(java.util.Collection<Long> activityIds);
+    List<Signin> findByScheduleId(Long scheduleId);
     long countByActivityId(Long activityId);
     List<Signin> findByActivityIdAndNameContaining(Long activityId, String name);
     List<Signin> findBySessionId(Long sessionId);

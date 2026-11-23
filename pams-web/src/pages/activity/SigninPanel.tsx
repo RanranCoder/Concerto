@@ -38,7 +38,7 @@ import {
   type SigninVO,
 } from '@/api/signin'
 
-const SIGN_TYPE_TEXT: Record<string, string> = { MANUAL: '手动', SCAN: '扫码' }
+const SIGN_TYPE_TEXT: Record<string, string> = { MANUAL: '手动', SCAN: '扫码', SELF: '本人打卡' }
 const IDENTITY_OPTIONS = ['党建干事', '发展对象', '预备党员', '入党积极分子']
 
 /** CSV 字段转义：含逗号/引号/换行的字段加引号包裹并转义内部引号 */

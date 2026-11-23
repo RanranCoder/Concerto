@@ -13,20 +13,19 @@ import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.repository.AttendanceAuditRepository;
 import com.pams.module.routine.repository.AttendanceRepository;
 import com.pams.module.routine.repository.ScheduleRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /** 考勤中心：列表/统计/人工改状态(含审计)/补签/我的考勤。 */
 @Service
@@ -37,6 +36,8 @@ public class AttendanceManageService {
     private final ScheduleRepository scheduleRepository;
     private final SigninRepository signinRepository;
     private final ActivityRepository activityRepository;
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     public AttendanceManageService(AttendanceRepository attendanceRepository,
                                    AttendanceAuditRepository auditRepository,
@@ -52,6 +53,10 @@ public class AttendanceManageService {
 
     /** 考勤中心列表。filters: activityId/date/type/name(studentNo)/status */
     public List<AttendanceVO> list(Map<String, Object> filters) {
+        return list(filters, attendanceRepository.findAll());
+    }
+
+    private List<AttendanceVO> list(Map<String, Object> filters, List<Attendance> all) {
         Long activityId = asLong(filters.get("activityId"));
         LocalDate date = asDate(filters.get("date"));
         LocalDate dateFrom = asDate(filters.get("dateFrom"));
@@ -60,7 +65,6 @@ public class AttendanceManageService {
         String keyword = asStr(filters.get("keyword"));
         String status = asStr(filters.get("status"));
 
-        List<Attendance> all = attendanceRepository.findAll();
         Map<Long, Schedule> scheduleById = new HashMap<>();
         Set<Long> scheduleIds = new java.util.LinkedHashSet<>();
         for (Attendance a : all) if (a.getScheduleId() != null) scheduleIds.add(a.getScheduleId());
@@ -74,42 +78,39 @@ public class AttendanceManageService {
             for (Activity a : activityRepository.findAllById(activityIds)) activityById.put(a.getId(), a);
         }
 
+        Map<Long, List<Signin>> signsByActivity = activityIds.isEmpty() ? Map.of()
+                : signinRepository.findByActivityIdIn(activityIds).stream()
+                    .collect(Collectors.groupingBy(Signin::getActivityId));
         List<AttendanceVO> out = new ArrayList<>();
         for (Attendance a : all) {
             Schedule sch = a.getScheduleId() == null ? null : scheduleById.get(a.getScheduleId());
             Activity act = sch == null || sch.getActivityId() == null ? null : activityById.get(sch.getActivityId());
-            if (activityId != null && act != null && !activityId.equals(act.getId())) continue;
-            if (date != null && sch != null && !date.equals(sch.getScheduleDate())) continue;
-            if (dateFrom != null && sch != null && sch.getScheduleDate() != null && sch.getScheduleDate().isBefore(dateFrom)) continue;
-            if (dateTo != null && sch != null && sch.getScheduleDate() != null && sch.getScheduleDate().isAfter(dateTo)) continue;
+            LocalDate scheduleDate = sch == null ? null : sch.getScheduleDate();
+            if (activityId != null && (act == null || !activityId.equals(act.getId()))) continue;
+            if (date != null && !date.equals(scheduleDate)) continue;
+            if (dateFrom != null && (scheduleDate == null || scheduleDate.isBefore(dateFrom))) continue;
+            if (dateTo != null && (scheduleDate == null || scheduleDate.isAfter(dateTo))) continue;
             if (type != null && !type.isBlank() && (act == null || !type.equals(act.getType()))) continue;
-            if (status != null && !status.isBlank() && !status.equals(a.getStatus())) continue;
+            if (status != null && !status.isBlank() && !Attendance.normalizedStatus(status).equals(Attendance.normalizedStatus(a.getStatus()))) continue;
             if (keyword != null && !keyword.isBlank()
                     && !contains(a.getPersonName(), keyword)
                     && !contains(a.getStudentNo(), keyword)) continue;
-            out.add(toVO(a, sch, act));
+            List<Signin> signs = act == null ? List.of() : signsByActivity.getOrDefault(act.getId(), List.of());
+            out.add(toVO(a, sch, act, signs));
         }
-        out.sort((x, y) -> {
-            LocalDate dx = x.getActivityDate(); LocalDate dy = y.getActivityDate();
-            if (dx != null && dy != null) return dy.compareTo(dx);
-            return Long.compare(y.getId(), x.getId());
-        });
+        out.sort(Comparator.comparing(AttendanceVO::getActivityDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(AttendanceVO::getId, Comparator.reverseOrder()));
         return out;
     }
 
     /** 统计卡：{totalActivities, shouldAttend, signed, normal, late, absent, leave, makeup, pending} */
     public Map<String, Object> stats(Map<String, Object> filters) {
         Map<String, Object> result = new LinkedHashMap<>();
-        long todayActivities = scheduleRepository.findAll().stream()
-                .filter(s -> Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
-                .filter(s -> LocalDate.now().equals(s.getScheduleDate()))
-                .filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus()))
-                .count();
-        result.put("totalActivities", todayActivities);
-
         List<AttendanceVO> rows = list(filters);
-        long should = rows.size();
-        long signed = rows.stream().filter(a -> isSigned(a.getStatus())).count();
+        long activities = rows.stream().map(AttendanceVO::getActivityId).filter(Objects::nonNull).distinct().count();
+        result.put("totalActivities", activities);
+        long should = rows.stream().filter(a -> !Attendance.STATUS_CANCELED.equals(a.getStatus())).count();
+        long signed = rows.stream().filter(a -> Attendance.isSigned(a.getStatus())).count();
         long normal = rows.stream().filter(a -> Attendance.STATUS_NORMAL.equals(a.getStatus())).count();
         long late = rows.stream().filter(a -> Attendance.STATUS_LATE.equals(a.getStatus())).count();
         long absent = rows.stream().filter(a -> Attendance.STATUS_ABSENT.equals(a.getStatus())).count();
@@ -124,68 +125,98 @@ public class AttendanceManageService {
         result.put("leave", leave);
         result.put("makeup", makeup);
         result.put("pending", pending);
+        result.put("earlyLeave", rows.stream().filter(a -> Attendance.STATUS_EARLY_LEAVE.equals(a.getStatus())).count());
+        result.put("canceled", rows.stream().filter(a -> Attendance.STATUS_CANCELED.equals(a.getStatus())).count());
         return result;
     }
 
-    /** 我的考勤：按当前用户 id 或姓名匹配。 */
     public List<AttendanceVO> my(Long userId, String realName) {
-        return list(new HashMap<>()).stream()
-                .filter(vo -> (vo.getPersonId() != null && vo.getPersonId().equals(userId))
-                        )
-                .toList();
+        return list(Map.of(), attendanceRepository.findByPersonId(userId));
     }
 
     /** 人工修改考勤状态：写 audit，置 MANUAL（自动任务不覆盖）。 */
     @Transactional
     public Attendance updateStatus(Long id, AttendanceStatusRequest req, Long operatorId, String operatorName) {
-        Attendance a = getAttendance(id);
-        if (req.getNewStatus() == null || req.getNewStatus().isBlank()) throw new BizException(400, "新状态不能为空");
-        String old = a.getStatus();
+        requireReason(req.getRemark());
+        if (Attendance.STATUS_MAKEUP.equals(req.getNewStatus())) return makeup(id, operatorId, operatorName, req.getRemark(), null, null);
+        if (req.getNewStatus() == null || !Set.of(Attendance.STATUS_NORMAL, Attendance.STATUS_LATE,
+                Attendance.STATUS_ABSENT, Attendance.STATUS_LEAVE, Attendance.STATUS_EARLY_LEAVE).contains(req.getNewStatus()))
+            throw new BizException(400, "请选择有效的修正状态");
+        Attendance a = lockAttendance(id);
+        String old = Attendance.normalizedStatus(a.getStatus());
+        if (Objects.equals(old, req.getNewStatus())) return a;
         a.setStatus(req.getNewStatus());
         a.setStatusSource(Attendance.SOURCE_MANUAL);
-        a.setRemark(req.getRemark());
-        a.setRecordTime(LocalDateTime.now());
+        a.setRemark(req.getRemark().trim());
+        a.setRecordTime(AttendanceWindow.now());
         Attendance saved = attendanceRepository.save(a);
-        if (!Objects.equals(old, req.getNewStatus())) {
-            writeAudit(saved.getId(), old, req.getNewStatus(), operatorId, operatorName, req.getRemark());
-        }
+        writeAudit(saved.getId(), old, req.getNewStatus(), operatorId, operatorName, a.getRemark());
         return saved;
     }
 
     /** 人工补签：建手动签到 + 置 MAKEUP + 审计。 */
     @Transactional
     public Attendance makeup(Long id, Long operatorId, String operatorName, String remark, String studentNo, String personName) {
-        Attendance a = getAttendance(id);
+        requireReason(remark);
+        Attendance a = lockAttendance(id);
+        if (Attendance.STATUS_MAKEUP.equals(a.getStatus())) return a;
         // 建手动签到记录（若有场次则绑定；无活动上下文时跳过落签，仅改考勤）
         Long activityId = a.getScheduleId() == null ? null
                 : scheduleRepository.findById(a.getScheduleId()).map(Schedule::getActivityId).orElse(null);
-        if (activityId != null) {
+        if (activityId != null && a.getCheckedInAt() == null && signinRepository.findByScheduleId(a.getScheduleId())
+                .stream().noneMatch(sign -> matchesPerson(sign, a))) {
             Signin s = new Signin();
             s.setActivityId(activityId);
+            s.setScheduleId(a.getScheduleId());
             s.setSessionId(a.getSessionId());
             s.setPersonId(a.getPersonId());
             s.setName(personName == null ? a.getPersonName() : personName);
             s.setStudentNo(studentNo == null ? a.getStudentNo() : studentNo);
             s.setSignType(Signin.SignType.MANUAL);
-            s.setSignTime(LocalDateTime.now());
-            s.setCreatedAt(LocalDateTime.now());
+            s.setSignTime(AttendanceWindow.now());
+            s.setCreatedAt(AttendanceWindow.now());
             signinRepository.save(s);
         }
 
         String old = a.getStatus();
         a.setStatus(Attendance.STATUS_MAKEUP);
         a.setStatusSource(Attendance.SOURCE_MANUAL);
-        a.setCheckedInAt(LocalDateTime.now());
-        a.setRemark(remark);
-        a.setRecordTime(LocalDateTime.now());
+        if (a.getCheckedInAt() == null) a.setCheckedInAt(AttendanceWindow.now());
+        a.setRemark(remark.trim());
+        a.setRecordTime(AttendanceWindow.now());
         Attendance saved = attendanceRepository.save(a);
-        writeAudit(saved.getId(), old, Attendance.STATUS_MAKEUP, operatorId, operatorName, remark);
+        writeAudit(saved.getId(), Attendance.normalizedStatus(old), Attendance.STATUS_MAKEUP, operatorId, operatorName, a.getRemark());
         return saved;
     }
 
     public List<AttendanceAudit> audits(Long id) {
         getAttendance(id);
         return auditRepository.findByAttendanceIdOrderByOperateTimeDesc(id);
+    }
+
+    @Transactional
+    public void recordManualSignin(Attendance row, String oldStatus, com.pams.security.LoginUser actor, String remark) {
+        String reason = remark == null || remark.isBlank() ? "活动签到补录" : remark.trim();
+        requireReason(reason);
+        row.setRemark(reason);
+        Attendance saved = attendanceRepository.save(row);
+        writeAudit(saved.getId(), oldStatus, Attendance.STATUS_MAKEUP,
+                actor == null ? null : actor.getId(), actor == null ? "系统" : actor.getRealName(), reason);
+    }
+
+    private Attendance lockAttendance(Long id) {
+        Attendance row = getAttendance(id);
+        if (row.getScheduleId() != null) scheduleRepository.lockById(row.getScheduleId())
+                .orElseThrow(() -> new BizException(409, "关联班次已变更，请刷新"));
+        if (entityManager != null) entityManager.refresh(row, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if (Attendance.STATUS_CANCELED.equals(row.getStatus()))
+            throw new BizException(409, "已取消的考勤不能修正");
+        return row;
+    }
+
+    private void requireReason(String reason) {
+        if (reason == null || reason.isBlank() || reason.trim().length() > 255)
+            throw new BizException(400, "请填写 1 到 255 个字符的修正原因");
     }
 
     private void writeAudit(Long attendanceId, String oldStatus, String newStatus,
@@ -196,13 +227,13 @@ public class AttendanceManageService {
         audit.setNewStatus(newStatus);
         audit.setOperatorId(operatorId);
         audit.setOperatorName(operatorName);
-        audit.setOperateTime(LocalDateTime.now());
+        audit.setOperateTime(AttendanceWindow.now());
         audit.setRemark(remark);
-        audit.setCreatedAt(LocalDateTime.now());
+        audit.setCreatedAt(AttendanceWindow.now());
         auditRepository.save(audit);
     }
 
-    private AttendanceVO toVO(Attendance a, Schedule sch, Activity act) {
+    private AttendanceVO toVO(Attendance a, Schedule sch, Activity act, List<Signin> signs) {
         AttendanceVO vo = new AttendanceVO();
         vo.setId(a.getId());
         vo.setScheduleId(a.getScheduleId());
@@ -210,7 +241,7 @@ public class AttendanceManageService {
         vo.setPersonId(a.getPersonId());
         vo.setPersonName(a.getPersonName());
         vo.setStudentNo(a.getStudentNo());
-        vo.setStatus(a.getStatus() == null || a.getStatus().isBlank() ? Attendance.STATUS_PENDING : a.getStatus());
+        vo.setStatus(Attendance.normalizedStatus(a.getStatus()));
         vo.setStatusSource(a.getStatusSource() == null ? Attendance.SOURCE_AUTO : a.getStatusSource());
         vo.setRemark(a.getRemark());
         vo.setCheckedInAt(a.getCheckedInAt());
@@ -219,36 +250,32 @@ public class AttendanceManageService {
             vo.setActivityDate(sch.getScheduleDate());
             vo.setActivityStart(sch.getStartTime());
             vo.setActivityEnd(sch.getEndTime());
+            vo.setSessionName(sch.getSessionName());
             if (sch.getActivityId() != null && act != null) {
                 vo.setActivityId(act.getId());
                 vo.setActivityName(act.getName());
                 vo.setActivityType(act.getType());
             }
         }
-        vo.setSignCount(calcSignCount(a));
+        long signCount = sch == null ? 0 : signs.stream().filter(sign -> matchesPerson(sign, a))
+                .filter(sign -> sch.getId().equals(sign.getScheduleId()) ||
+                        sign.getScheduleId() == null && sign.getSignTime() != null
+                                && Objects.equals(a.getCheckedInAt(), sign.getSignTime()))
+                .count();
+        vo.setSignCount(signCount == 0 && a.getCheckedInAt() != null ? 1 : signCount);
         return vo;
     }
 
-    private long calcSignCount(Attendance a) {
-        if (a.getScheduleId() != null) {
-            return signinRepository.findAll().stream()
-                    .filter(s -> matchesPerson(s, a)).count();
-        }
-        return 0;
-    }
-
-    private boolean matchesPerson(Signin s, Attendance a) {
-        if (a.getPersonId() != null && s.getPersonId() != null) return a.getPersonId().equals(s.getPersonId());
-        return a.getPersonName() != null && a.getPersonName().equalsIgnoreCase(s.getName());
+    private boolean matchesPerson(Signin sign, Attendance row) {
+        if (row.getPersonId() != null && sign.getPersonId() != null) return row.getPersonId().equals(sign.getPersonId());
+        if (row.getStudentNo() != null && !row.getStudentNo().isBlank()
+                && sign.getStudentNo() != null && !sign.getStudentNo().isBlank())
+            return row.getStudentNo().equals(sign.getStudentNo());
+        return false;
     }
 
     private Attendance getAttendance(Long id) {
         return attendanceRepository.findById(id).orElseThrow(() -> new BizException(2402, "考勤记录不存在"));
-    }
-
-    private boolean isSigned(String status) {
-        return Attendance.STATUS_NORMAL.equals(status) || Attendance.STATUS_LATE.equals(status)
-                || Attendance.STATUS_MAKEUP.equals(status);
     }
 
     private static boolean contains(String v, String kw) {

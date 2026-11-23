@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -73,6 +74,100 @@ public class ActivityScheduleService {
         return generateReviewed(req, null);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.jdbc.core.JdbcTemplate generationJdbc;
+
+    public record GenerationReview(String fingerprint, List<Map<String, Object>> days, int draftCount) {}
+
+    @Transactional(readOnly = true)
+    public GenerationReview reviewGeneration(ActivityScheduleGenerateRequest request) {
+        Long target = existingTarget(request);
+        var calculation = calculate(request, true, generationConflicts(request, target));
+        return review(request, target, calculation);
+    }
+
+    @Transactional
+    public GenerationReview confirmGeneration(ActivityScheduleGenerateRequest request, String fingerprint) {
+        validate(fingerprint != null && !fingerprint.isBlank(), "请先预览并核对排班");
+        if (generationJdbc != null) {
+            generationJdbc.queryForObject("SELECT id FROM organization WHERE id = ? FOR UPDATE",
+                    Long.class, com.pams.common.OrgContext.getOrDefault());
+        }
+        Long target = existingTarget(request);
+        if (target != null) {
+            activityRepository.lockById(target).filter(a -> a.getStatus() != ActivityStatus.ARCHIVED)
+                    .orElseThrow(() -> new BizException(2408, "关联活动不可用"));
+        }
+        var calculation = calculate(request, true, generationConflicts(request, target));
+        var current = review(request, target, calculation);
+        if (!fingerprint.equals(current.fingerprint())) {
+            throw new BizException(409, "排班预览已变化，请重新预览并核对");
+        }
+        validate(current.draftCount() > 0, "暂无可生成的班次，请调整排班条件");
+        Long activityId = target == null ? resolveActivityId(request) : target;
+        saveDrafts(request, activityId, calculation);
+        return current;
+    }
+
+    private Long existingTarget(ActivityScheduleGenerateRequest request) {
+        if (request.getActivityId() != null) {
+            return activityRepository.findById(request.getActivityId())
+                    .filter(a -> com.pams.common.OrgContext.getOrDefault().equals(a.getOrgId())
+                            && a.getStatus() != ActivityStatus.ARCHIVED)
+                    .map(Activity::getId)
+                    .orElseThrow(() -> new BizException(2408, "关联活动不可用"));
+        }
+        validate(request.getCustomActivityName() != null && !request.getCustomActivityName().isBlank(),
+                "请选择活动或填写自定义活动名称");
+        var matches = activityRepository.findByName(request.getCustomActivityName().trim());
+        if (matches.isEmpty()) return null;
+        return matches.stream().filter(a -> a.getStatus() != ActivityStatus.ARCHIVED)
+                .map(Activity::getId).min(Long::compareTo)
+                .orElseThrow(() -> new BizException(2408, "同名活动已归档，请使用其他名称"));
+    }
+
+    private GenerationReview review(ActivityScheduleGenerateRequest request, Long target, Calculation calculation) {
+        Map<String, Object> scope = new LinkedHashMap<>();
+        scope.put("org", com.pams.common.OrgContext.getOrDefault());
+        scope.put("activity", target);
+        scope.put("custom", request.getCustomActivityName());
+        scope.put("start", request.getStartDate());
+        scope.put("end", request.getEndDate());
+        scope.put("startTime", request.getStartTime());
+        scope.put("endTime", request.getEndTime());
+        scope.put("departments", request.getDeptIds());
+        scope.put("semester", request.getSemester());
+        scope.put("semesterStart", request.getSemesterStartDate());
+        scope.put("people", request.getPeoplePerSlot());
+        scope.put("days", calculation.details());
+        return new GenerationReview(previewFingerprint(List.of(scope)), calculation.details(), calculation.assignments().size());
+    }
+
+    private record Conflicts(Long activityId, List<Schedule> schedules, Map<Long, List<SchedulePerson>> rosters) {
+        private static final Conflicts NONE = new Conflicts(null, List.of(), Map.of());
+
+        List<Schedule> overlapping(LocalDate date, FreeSlotMatcher.PeriodSlot slot) {
+            return schedules.stream().filter(s -> date.equals(s.getScheduleDate()))
+                    .filter(s -> s.getStartTime() == null || s.getEndTime() == null
+                            || s.getStartTime().isBefore(slot.endTime()) && s.getEndTime().isAfter(slot.startTime()))
+                    .toList();
+        }
+    }
+
+    private Conflicts generationConflicts(ActivityScheduleGenerateRequest request, Long target) {
+        if (request.getStartDate() == null || request.getEndDate() == null) return Conflicts.NONE;
+        List<Schedule> schedules = scheduleRepository
+                .findByScheduleDateBetweenOrderByIdAsc(request.getStartDate(), request.getEndDate()).stream()
+                .filter(s -> !Schedule.STATUS_CANCELLED.equals(s.getStatus()))
+                .filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus())
+                        || target != null && target.equals(s.getActivityId()) && Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
+                .toList();
+        Map<Long, List<SchedulePerson>> rosters = schedules.isEmpty() ? Map.of()
+                : schedulePersonRepository.findByScheduleIdIn(schedules.stream().map(Schedule::getId).toList())
+                        .stream().collect(Collectors.groupingBy(SchedulePerson::getScheduleId));
+        return new Conflicts(target, schedules, rosters);
+    }
+
     /** 同一计算器用于只读预览及写入；预览不创建活动、排班、人员或考勤。 */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> preview(ActivityScheduleGenerateRequest req) {
@@ -82,11 +177,24 @@ public class ActivityScheduleService {
     /** 确认时若无课表改变，拒绝写入，让用户重新核对清单。 */
     @Transactional
     public List<Map<String, Object>> generateReviewed(ActivityScheduleGenerateRequest req, String expected) {
-        Calculation calculation = calculate(req);
+        Calculation calculation = calculate(req, expected == null);
         if (expected != null && !expected.equals(previewFingerprint(calculation.details()))) {
             throw new BizException(2408, "排班候选人员已变化，请重新生成清单并核对后确认。");
         }
+        if (calculation.assignments().isEmpty()) return calculation.details();
         Long activityId = resolveActivityId(req);
+        activityRepository.lockById(activityId)
+                .filter(a -> a.getStatus() != ActivityStatus.ARCHIVED)
+                .orElseThrow(() -> new BizException(2408, "关联活动不可用"));
+        var existing = scheduleRepository.findByScheduleTypeAndActivityIdAndScheduleDateBetween(
+                Schedule.TYPE_ACTIVITY, activityId, req.getStartDate(), req.getEndDate());
+        for (Assignment assignment : calculation.assignments()) {
+            validate(existing.stream().noneMatch(s -> !Schedule.STATUS_CANCELLED.equals(s.getStatus())
+                    && assignment.date().equals(s.getScheduleDate())
+                    && (s.getStartTime() == null || s.getEndTime() == null
+                    || s.getStartTime().isBefore(assignment.slot().endTime())
+                    && s.getEndTime().isAfter(assignment.slot().startTime()))), "活动已有重叠班次，请先核对已有排班");
+        }
         return saveDrafts(req, activityId, calculation);
     }
 
@@ -146,8 +254,7 @@ public class ActivityScheduleService {
         }
         String deptName = deptNames.isEmpty() ? null : String.join("/", deptNames);
         for (Assignment a : calculation.assignments()) {
-            createSchedule(activityId, a.date(), a.slot().startTime(), a.slot().endTime(),
-                    deptName, req.getDeptIds().getFirst(), req.getSemester(), a.people(), a.slot().label());
+            createSchedule(activityId, req, a, deptName);
         }
         return calculation.details();
     }
@@ -167,6 +274,14 @@ public class ActivityScheduleService {
     private record Calculation(List<Map<String, Object>> details, List<Assignment> assignments) {}
 
     private Calculation calculate(ActivityScheduleGenerateRequest req) {
+        return calculate(req, false);
+    }
+
+    private Calculation calculate(ActivityScheduleGenerateRequest req, boolean clipPeriods) {
+        return calculate(req, clipPeriods, Conflicts.NONE);
+    }
+
+    private Calculation calculate(ActivityScheduleGenerateRequest req, boolean clipPeriods, Conflicts conflicts) {
         validate(req.getStartDate() != null && req.getEndDate() != null, "请选择日期范围");
         validate(req.getStartTime() != null && req.getEndTime() != null, "请设置开始/结束时间");
         validate(req.getEndTime().isAfter(req.getStartTime()), "结束时间必须晚于开始时间");
@@ -186,16 +301,37 @@ public class ActivityScheduleService {
             List<Map<String, Object>> slotDetails = new ArrayList<>();
             int dayTotal = 0;
             List<Map<String, Object>> dayPersons = new ArrayList<>();
-            for (FreeSlotMatcher.PeriodSlot slot : slots) {
-                // 本时段候选去重 + 按已排次数最少优先 + 限制人数
-                List<FreeSlotMatcher.Candidate> picked = pickBalanced(slot.candidates(), limit, usage);
+            for (FreeSlotMatcher.PeriodSlot matched : slots) {
+                var slot = clipPeriods ? new FreeSlotMatcher.PeriodSlot(matched.period(), matched.label(),
+                        matched.startTime().isBefore(req.getStartTime()) ? req.getStartTime() : matched.startTime(),
+                        matched.endTime().isAfter(req.getEndTime()) ? req.getEndTime() : matched.endTime(),
+                        matched.candidates()) : matched;
+                List<String> unbound = slot.candidates().stream().filter(c -> c.userId() == null)
+                        .map(FreeSlotMatcher.Candidate::name).distinct().toList();
+                List<Schedule> overlaps = conflicts.overlapping(d, slot);
+                List<Long> existingShifts = overlaps.stream()
+                        .filter(s -> conflicts.activityId() != null && conflicts.activityId().equals(s.getActivityId())
+                                && Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
+                        .map(Schedule::getId).toList();
+                Set<Long> busy = overlaps.stream().filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus()))
+                        .flatMap(s -> conflicts.rosters().getOrDefault(s.getId(), List.of()).stream())
+                        .map(SchedulePerson::getUserId).filter(Objects::nonNull).collect(Collectors.toSet());
+                List<String> busyNames = slot.candidates().stream().filter(c -> c.userId() != null && busy.contains(c.userId()))
+                        .map(FreeSlotMatcher.Candidate::name).distinct().toList();
+                List<FreeSlotMatcher.Candidate> picked = existingShifts.isEmpty()
+                        ? pickBalanced(slot.candidates().stream()
+                                .filter(c -> c.userId() != null && !busy.contains(c.userId())).toList(), limit, usage)
+                        : List.of();
                 if (!picked.isEmpty()) assignments.add(new Assignment(d, slot, picked));
                 for (FreeSlotMatcher.Candidate c : picked) {
-                    usage.merge(c.name(), 1, Integer::sum);
+                    usage.merge(c.userId().toString(), 1, Integer::sum);
                     dayPersons.add(personMap(c));
                 }
                 dayTotal += picked.size();
                 Map<String, Object> slotDetail = slotMap(slot, picked);
+                slotDetail.put("unboundNames", unbound);
+                slotDetail.put("conflictingNames", busyNames);
+                slotDetail.put("existingShiftIds", existingShifts);
                 slotDetail.put("missingCount", limit == Integer.MAX_VALUE ? 0 : Math.max(0, limit - picked.size()));
                 slotDetails.add(slotDetail);
             }
@@ -218,8 +354,8 @@ public class ActivityScheduleService {
         if (cands == null || cands.isEmpty()) return List.of();
         List<FreeSlotMatcher.Candidate> sorted = new ArrayList<>(cands);
         sorted.sort((a, b) -> {
-            int ua = usage.getOrDefault(a.name(), 0);
-            int ub = usage.getOrDefault(b.name(), 0);
+            int ua = usage.getOrDefault(a.userId().toString(), 0);
+            int ub = usage.getOrDefault(b.userId().toString(), 0);
             if (ua != ub) return ua - ub;
             return a.name().compareTo(b.name());
         });
@@ -268,24 +404,25 @@ public class ActivityScheduleService {
         return activityRepository.save(a).getId();
     }
 
-    private long createSchedule(Long activityId, LocalDate date, java.time.LocalTime start, java.time.LocalTime end,
-                                String deptName, Long deptId, String semester,
-                                List<FreeSlotMatcher.Candidate> cands, String sessionName) {
-        if (cands == null || cands.isEmpty()) {
-            return -1; // 无候选则不建排班（避免空排班）
-        }
+    private void createSchedule(Long activityId, ActivityScheduleGenerateRequest request, Assignment assignment,
+                                String deptName) {
+        var cands = assignment.people();
+        var slot = assignment.slot();
         Schedule s = new Schedule();
         s.setScheduleType(Schedule.TYPE_ACTIVITY);
         s.setActivityId(activityId);
-        s.setSessionName(sessionName);
-        s.setScheduleDate(date);
-        s.setStartTime(start);
-        s.setEndTime(end);
+        s.setSessionName(slot.label());
+        s.setScheduleDate(assignment.date());
+        s.setStartTime(slot.startTime());
+        s.setEndTime(slot.endTime());
         s.setStatus(Schedule.STATUS_DRAFT);
         s.setSource(Schedule.SOURCE_AUTO);
-        s.setDeptId(deptId);
+        s.setDeptId(request.getDeptIds().getFirst());
         s.setDeptName(deptName);
-        s.setSemester(semester);
+        s.setSemester(request.getSemester());
+        s.setGenerationDeptIds(request.getDeptIds().stream().distinct().map(String::valueOf).collect(Collectors.joining(",")));
+        s.setGenerationPeopleLimit(request.getPeoplePerSlot());
+        s.setGenerationSemesterStart(request.getSemesterStartDate());
         s.setCreatedAt(LocalDateTime.now());
         s.setUpdatedAt(LocalDateTime.now());
         Schedule saved = scheduleRepository.save(s);
@@ -293,7 +430,6 @@ public class ActivityScheduleService {
             FreeSlotMatcher.Candidate c = cands.get(i);
             savePerson(saved.getId(), c.userId(), c.name(), i == 0 ? 1 : 0);
         }
-        return saved.getId();
     }
 
     public List<Schedule> list(Long activityId, String status, LocalDate date) {
@@ -319,9 +455,18 @@ public class ActivityScheduleService {
 
     @Transactional
     public void publish(Long id) {
-        Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        publish(id, true);
+    }
+
+    @Transactional
+    public void publish(Long id, boolean activity) {
+        publishLocked(lockSchedule(id, activity));
+    }
+
+    private void publishLocked(Schedule s) {
         validate(Schedule.STATUS_DRAFT.equals(s.getStatus()) || Schedule.STATUS_PUBLISHED.equals(s.getStatus()),
                 "当前状态不可发布");
+        if (Schedule.STATUS_DRAFT.equals(s.getStatus())) validateForPublication(s);
         var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setStatus(Schedule.STATUS_PUBLISHED);
         s.setUpdatedAt(LocalDateTime.now());
@@ -332,15 +477,23 @@ public class ActivityScheduleService {
 
     @Transactional
     public void cancel(Long id) {
-        Schedule s = scheduleRepository.lockById(id).orElseThrow(() -> new BizException(404,"排班不存在"));
+        cancel(id, true);
+    }
+
+    @Transactional
+    public void cancel(Long id, boolean activity) {
+        Schedule s = lockSchedule(id, activity);
+        if (Schedule.STATUS_CANCELLED.equals(s.getStatus())) return;
+        validate(Schedule.STATUS_PUBLISHED.equals(s.getStatus()), "仅已发布班次可取消");
         var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setStatus(Schedule.STATUS_CANCELLED);
         s.setUpdatedAt(LocalDateTime.now());
         scheduleRepository.save(s);
         if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
-        // 联动：该排班人员考勤置「取消」（不覆盖人工改过的行）
+        // Preserve completed and manually reviewed outcomes. Only open expectations are canceled.
         for (Attendance a : attendanceRepository.findByScheduleId(id)) {
-            if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())) continue;
+            if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())
+                    || !Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(a.getStatus()))) continue;
             a.setStatus(Attendance.STATUS_CANCELED);
             a.setRecordTime(LocalDateTime.now());
             attendanceRepository.save(a);
@@ -350,19 +503,11 @@ public class ActivityScheduleService {
     /** 一键发布：把当前范围内（可按活动过滤）全部草稿排班发布并预建考勤行，返回发布条数。 */
     @Transactional
     public int publishAll(Long activityId) {
-        List<Schedule> drafts = scheduleRepository.findAll().stream()
-                .filter(s -> Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
-                .filter(s -> Schedule.STATUS_DRAFT.equals(s.getStatus()))
-                .filter(s -> activityId == null || activityId.equals(s.getActivityId()))
-                .toList();
         int n = 0;
-        for (Schedule s : drafts) {
-            var notificationBefore = notifications == null ? null : notifications.snapshot(s);
-        s.setStatus(Schedule.STATUS_PUBLISHED);
-            s.setUpdatedAt(LocalDateTime.now());
-            scheduleRepository.save(s);
-            ensureAttendanceRows(s);
-        if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
+        for (Long id : scheduleRepository.findDraftActivityIds(activityId)) {
+            Schedule draft = lockSchedule(id, true);
+            if (!Schedule.STATUS_DRAFT.equals(draft.getStatus())) continue;
+            publishLocked(draft);
             n++;
         }
         return n;
@@ -371,23 +516,31 @@ public class ActivityScheduleService {
     /** 重新生成：仅 AUTO 来源可重新按无课表替换人员；已发布则同步刷新考勤行。 */
     @Transactional
     public int regenerate(Long id, Long deptId, String semester, LocalDate semesterStartDate) {
-        Schedule s = getSchedule(id);
+        Schedule s = lockSchedule(id, true);
         requirePublishedMutation(s);
         validate(Schedule.SOURCE_AUTO.equals(s.getSource()), "仅无课表自动生成的排班可重新生成");
         if (s.getScheduleDate() == null || s.getStartTime() == null || s.getEndTime() == null) {
             throw new BizException(2406, "该排班缺少日期或时间，无法重新生成");
         }
-        Long dpt = deptId != null ? deptId : s.getDeptId();
+        List<Long> departments = deptId != null ? List.of(deptId)
+                : s.getGenerationDeptIds() != null ? java.util.Arrays.stream(s.getGenerationDeptIds().split(",")).map(Long::valueOf).toList()
+                : s.getDeptId() == null ? List.of() : List.of(s.getDeptId());
         String sem = semester != null && !semester.isBlank() ? semester : s.getSemester();
+        LocalDate semesterStart = semesterStartDate == null ? s.getGenerationSemesterStart() : semesterStartDate;
         List<FreeSlotMatcher.PeriodSlot> slots = matcher.matchByPeriod(s.getScheduleDate(), s.getStartTime(), s.getEndTime(),
-                dpt == null ? List.of() : List.of(dpt), sem, semesterStartDate);
+                departments, sem, semesterStart);
         // 命中与该排班时段一致的节次；否则取第一个可排节次
         FreeSlotMatcher.PeriodSlot target = null;
         for (FreeSlotMatcher.PeriodSlot slot : slots) {
             if (slot.startTime().equals(s.getStartTime()) && slot.endTime().equals(s.getEndTime())) { target = slot; break; }
         }
         if (target == null && !slots.isEmpty()) target = slots.get(0);
-        List<FreeSlotMatcher.Candidate> cands = target == null ? List.of() : target.candidates();
+        int previousCount = schedulePersonRepository.findByScheduleId(id).size();
+        int peopleLimit = s.getGenerationPeopleLimit() == null
+                ? (previousCount == 0 ? Integer.MAX_VALUE : previousCount)
+                : (s.getGenerationPeopleLimit() <= 0 ? Integer.MAX_VALUE : s.getGenerationPeopleLimit());
+        List<FreeSlotMatcher.Candidate> cands = target == null ? List.of() : target.candidates().stream()
+                .filter(c -> c.userId() != null).limit(peopleLimit).toList();
         if (cands.isEmpty()) throw new BizException(2407, "该日期时段无符合无课表的候选人员");
         var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
@@ -395,9 +548,17 @@ public class ActivityScheduleService {
             FreeSlotMatcher.Candidate c = cands.get(i);
             savePerson(id, c.userId(), c.name(), i == 0 ? 1 : 0);
         }
+        s.setSemester(sem);
+        s.setGenerationSemesterStart(semesterStart);
+        if (deptId != null) {
+            s.setDeptId(deptId);
+            s.setDeptName(departmentRepository.findById(deptId).map(d -> d.getName()).orElse(null));
+            s.setGenerationDeptIds(deptId.toString());
+        }
         s.setUpdatedAt(LocalDateTime.now());
         scheduleRepository.save(s);
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
+            validateForPublication(s);
             syncAttendanceRows(s);
         }
         if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
@@ -408,7 +569,8 @@ public class ActivityScheduleService {
     public Long createManual(ActivityScheduleSaveRequest req) {
         validate(req.getActivityId() != null, "活动ID不能为空");
         validate(req.getScheduleDate() != null, "请选择日期");
-        validate(req.getStartTime() != null && req.getEndTime() != null, "请设置开始/结束时间");
+        validate(req.getStartTime() != null && req.getEndTime() != null && req.getEndTime().isAfter(req.getStartTime()),
+                "请选择有效的班次起止时间");
         Schedule s = new Schedule();
         s.setScheduleType(Schedule.TYPE_ACTIVITY);
         s.setActivityId(req.getActivityId());
@@ -428,8 +590,13 @@ public class ActivityScheduleService {
 
     @Transactional
     public void updateManual(Long id, ActivityScheduleSaveRequest req) {
-        Schedule s = getSchedule(id);
+        Schedule s = lockSchedule(id, true);
         requirePublishedMutation(s);
+        validate(req.getScheduleDate() != null && req.getStartTime() != null && req.getEndTime() != null
+                && req.getEndTime().isAfter(req.getStartTime()), "请选择有效的班次日期和时间");
+        if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
+            requireUnchangedRecordedTime(s, req.getScheduleDate(), req.getStartTime(), req.getEndTime());
+        }
         var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         s.setScheduleDate(req.getScheduleDate());
         s.setStartTime(req.getStartTime());
@@ -441,6 +608,7 @@ public class ActivityScheduleService {
         schedulePersonRepository.deleteByScheduleId(id);
         savePersons(id, req.getPersons());
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())) {
+            validateForPublication(s);
             syncAttendanceRows(s);
         }
         if (notifications != null) notifications.scheduleChanged(notificationBefore, s);
@@ -448,8 +616,8 @@ public class ActivityScheduleService {
 
     @Transactional
     public void delete(Long id) {
-        Schedule s = getSchedule(id);
-        requirePublishedMutation(s);
+        Schedule s = lockSchedule(id, true);
+        validate(Schedule.STATUS_DRAFT.equals(s.getStatus()), "仅草稿可删除，请取消已发布班次");
         var notificationBefore = notifications == null ? null : notifications.snapshot(s);
         schedulePersonRepository.deleteByScheduleId(id);
         attendanceRepository.deleteByScheduleId(id);
@@ -459,12 +627,56 @@ public class ActivityScheduleService {
 
     /** 发布后为每位排班人员预建 PENDING 考勤行（自动判断引擎将据此落考勤）。 */
     private void requirePublishedMutation(Schedule s) {
+        validate(Schedule.STATUS_DRAFT.equals(s.getStatus()) || Schedule.STATUS_PUBLISHED.equals(s.getStatus()),
+                "已结束或已取消班次不可修改");
         if (Schedule.STATUS_PUBLISHED.equals(s.getStatus())
                 && !com.pams.module.agent.core.ToolContext.current(null,null).hasPermission("schedule:publish"))
             throw new BizException(403,"修改已发布班次需要排班发布权限");
     }
-    private void ensureAttendanceRows(Schedule s) {
+    void validateForPublication(Schedule s) {
+        validate(s.getScheduleDate() != null && s.getStartTime() != null && s.getEndTime() != null
+                && s.getEndTime().isAfter(s.getStartTime()), "发布前请设置有效的班次日期和起止时间");
         List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(s.getId());
+        validate(!persons.isEmpty() && persons.stream().allMatch(p -> p.getUserId() != null),
+                "发布前请为每位排班人员关联账号");
+        List<Long> ids = persons.stream().map(SchedulePerson::getUserId).distinct().toList();
+        validate(ids.size() == persons.size(), "同一成员不能重复安排在一个班次");
+        Long orgId = com.pams.common.OrgContext.getOrDefault();
+        var accounts = userRepository.findAllById(ids);
+        validate(accounts.size() == ids.size() && accounts.stream().allMatch(u ->
+                orgId.equals(u.getOrgId()) && Integer.valueOf(1).equals(u.getStatus())
+                        && !Integer.valueOf(1).equals(u.getDeleted())),
+                "请核对班次人员，名单含停用或不属于本组织的账号");
+        validate(scheduleRepository.countRosterConflicts(s.getId(), s.getScheduleDate(), s.getStartTime(),
+                s.getEndTime(), ids) == 0, "有成员已在此时段排班，请更换人员或调整时间");
+    }
+
+    void requireUnchangedRecordedTime(Schedule schedule, LocalDate date, java.time.LocalTime start, java.time.LocalTime end) {
+        if (Objects.equals(date, schedule.getScheduleDate()) && Objects.equals(start, schedule.getStartTime())
+                && Objects.equals(end, schedule.getEndTime())) return;
+        validate(attendanceRepository.findByScheduleId(schedule.getId()).stream()
+                .allMatch(a -> Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(a.getStatus()))
+                        && !Attendance.SOURCE_MANUAL.equals(a.getStatusSource())),
+                "班次已有考勤结论，不能修改日期或时间");
+    }
+
+    void ensureUpcomingAttendanceRows(Schedule schedule) {
+        List<SchedulePerson> roster = schedulePersonRepository.findByScheduleId(schedule.getId());
+        List<Long> userIds = roster.stream().map(SchedulePerson::getUserId).filter(Objects::nonNull).distinct().toList();
+        if (userIds.isEmpty()) return;
+        Long orgId = com.pams.common.OrgContext.getOrDefault();
+        Set<Long> active = userRepository.findAllById(userIds).stream()
+                .filter(u -> orgId.equals(u.getOrgId()) && Integer.valueOf(1).equals(u.getStatus())
+                        && !Integer.valueOf(1).equals(u.getDeleted()))
+                .map(com.pams.entity.User::getId).collect(Collectors.toSet());
+        ensureAttendanceRows(schedule, roster.stream().filter(person -> active.contains(person.getUserId())).toList());
+    }
+
+    private void ensureAttendanceRows(Schedule s) {
+        ensureAttendanceRows(s, schedulePersonRepository.findByScheduleId(s.getId()));
+    }
+
+    private void ensureAttendanceRows(Schedule s, List<SchedulePerson> persons) {
         List<Attendance> existing = new ArrayList<>(attendanceRepository.findByScheduleId(s.getId()));
         for (SchedulePerson p : persons) {
             if (existing.stream().anyMatch(a -> samePerson(a, p))) continue;
@@ -485,10 +697,11 @@ public class ActivityScheduleService {
     }
 
     /** 人员调整只移除不再排班的自动记录；人工修正及其审计保持原 ID。 */
-    private void syncAttendanceRows(Schedule s) {
+    void syncAttendanceRows(Schedule s) {
         List<SchedulePerson> persons = schedulePersonRepository.findByScheduleId(s.getId());
         for (Attendance a : attendanceRepository.findByScheduleId(s.getId())) {
-            if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())) continue;
+            if (Attendance.SOURCE_MANUAL.equals(a.getStatusSource())
+                    || !Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(a.getStatus()))) continue;
             if (persons.stream().noneMatch(p -> samePerson(a, p))) attendanceRepository.deleteById(a.getId());
         }
         ensureAttendanceRows(s);
@@ -520,10 +733,10 @@ public class ActivityScheduleService {
         schedulePersonRepository.save(sp);
     }
 
-    private Schedule getSchedule(Long id) {
-        return scheduleRepository.findById(id)
-                .filter(s -> Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
-                .orElseThrow(() -> new BizException(2401, "活动排班不存在"));
+    private Schedule lockSchedule(Long id, boolean activity) {
+        return scheduleRepository.lockById(id)
+                .filter(s -> activity == Schedule.TYPE_ACTIVITY.equals(s.getScheduleType()))
+                .orElseThrow(() -> new BizException(2401, "排班不存在"));
     }
 
     private void validate(boolean cond, String msg) {

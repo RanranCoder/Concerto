@@ -50,6 +50,10 @@ public class Schedule implements OrgScoped {
     private String source;
     private String semester;
     private Long deptId;
+    @Column(columnDefinition = "TEXT")
+    private String generationDeptIds;
+    private Integer generationPeopleLimit;
+    private LocalDate generationSemesterStart;
     private String deptName;
     private String location;
     private LocalDate scheduleDate;

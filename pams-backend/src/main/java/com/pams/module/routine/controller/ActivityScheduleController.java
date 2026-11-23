@@ -32,7 +32,9 @@ public class ActivityScheduleController {
     public Result<List<Schedule>> list(@RequestParam(required = false) Long activityId,
                                        @RequestParam(required = false) String status,
                                        @RequestParam(required = false) LocalDate date) {
-        return Result.ok(service.list(activityId, status, date));
+        return Result.ok(service.list(activityId, status, date).stream()
+                .filter(s -> com.pams.module.routine.service.RoutineService.canReviewDrafts()
+                        || !Schedule.STATUS_DRAFT.equals(s.getStatus())).toList());
     }
 
     /** 已上传无课表的学期列表（供生成弹窗下拉选择） */
@@ -46,6 +48,21 @@ public class ActivityScheduleController {
     @PostMapping("/generate")
     public Result<List<Map<String, Object>>> generate(@Valid @RequestBody ActivityScheduleGenerateRequest req) {
         return Result.ok(service.generate(req));
+    }
+
+    @PreAuthorize("hasAuthority('schedule:generate')")
+    @PostMapping("/generate/preview")
+    public Result<ActivityScheduleService.GenerationReview> preview(@Valid @RequestBody ActivityScheduleGenerateRequest req) {
+        return Result.ok(service.reviewGeneration(req));
+    }
+
+    public record GenerationConfirmation(@jakarta.validation.constraints.NotNull @Valid ActivityScheduleGenerateRequest request,
+                                         @jakarta.validation.constraints.NotBlank String fingerprint) {}
+
+    @PreAuthorize("hasAuthority('schedule:generate')")
+    @PostMapping("/generate/confirm")
+    public Result<ActivityScheduleService.GenerationReview> confirm(@Valid @RequestBody GenerationConfirmation confirmation) {
+        return Result.ok(service.confirmGeneration(confirmation.request(), confirmation.fingerprint()));
     }
 
     @PreAuthorize("hasAuthority('schedule:manage')")

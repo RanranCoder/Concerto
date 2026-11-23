@@ -13,6 +13,7 @@ import com.pams.module.routine.entity.Attendance;
 import com.pams.module.routine.entity.Schedule;
 import com.pams.module.routine.entity.SchedulePerson;
 import com.pams.module.routine.repository.AttendanceRepository;
+import com.pams.module.routine.service.AttendanceWindow;
 import com.pams.module.routine.repository.SchedulePersonRepository;
 import com.pams.module.routine.repository.ScheduleRepository;
 import com.pams.repository.UserRepository;
@@ -21,24 +22,15 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * 活动级单码签到：一个活动一个签到码（token 只绑定 activityId，刷新即作废旧码）。
- *
- * 扫码自动判时：以「浏览器当前时间」为签到时间，匹配该活动当天已发布活动排班，
- * 归属到包含/最近的时段；时段内（<= 结束时间）= 正常，超过结束时间 = 迟到；
- * 无该天活动排班则保持宽松记录（不判考勤）。重复签到拒绝，非排班人员默认拒绝。
- */
+/** Activity QR tokens and sign-in records. A scheduled sign-in belongs to one roster and time window. */
 @Service
 public class SigninService {
     private final SigninRepository repository;
@@ -54,8 +46,12 @@ public class SigninService {
     private SchedulePersonRepository schedulePersonRepository;
     private AttendanceRepository attendanceRepository;
     private UserRepository userRepository;
+    @Autowired(required = false)
+    private com.pams.module.routine.service.AttendanceManageService attendanceManagement;
     @Autowired(required=false)
     private org.springframework.jdbc.core.JdbcTemplate tenantJdbc;
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     public SigninService(SigninRepository repository, ActivityRepository activityRepository,
                          SigninRosterService rosterService) {
@@ -100,11 +96,20 @@ public class SigninService {
     }
 
     /** 生成活动唯一签到令牌（24h 有效）；刷新即作废该活动旧令牌（新码生效、旧码作废） */
+    @Transactional
     public SigninTokenDTO generateToken(Long activityId) {
         String token = UUID.randomUUID().toString().replace("-", "");
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(24);
-        tokenStore.entrySet().removeIf(e -> e.getValue().getActivityId().equals(activityId));
-        tokenStore.put(token, new TokenEntry(activityId, expiresAt));
+        LocalDateTime expiresAt = AttendanceWindow.now().plusHours(24).withNano(0);
+        if (tenantJdbc == null) {
+            tokenStore.entrySet().removeIf(e -> e.getValue().getActivityId().equals(activityId));
+            tokenStore.put(token, new TokenEntry(activityId, expiresAt));
+        } else {
+            var activity = activityRepository.lockById(activityId)
+                    .orElseThrow(() -> new BizException(2001, "活动不存在"));
+            activity.setCheckinToken(token);
+            activity.setCheckinExpiresAt(expiresAt);
+            activityRepository.save(activity);
+        }
         SigninTokenDTO dto = new SigninTokenDTO();
         dto.setToken(token);
         dto.setActivityId(activityId);
@@ -113,10 +118,30 @@ public class SigninService {
     }
 
     /** 关闭签到：使该活动当前码立即失效（后续自动考勤照常判缺席），重开即重新生成新码 */
+    @Transactional
     public void revokeToken(Long activityId) {
-        tokenStore.entrySet().removeIf(e -> e.getValue().getActivityId().equals(activityId));
-        tokenStore.put(UUID.randomUUID().toString().replace("-", ""),
-                new TokenEntry(activityId, LocalDateTime.now().minusSeconds(1)));
+        if (tenantJdbc == null) {
+            tokenStore.entrySet().removeIf(e -> e.getValue().getActivityId().equals(activityId));
+            return;
+        }
+        var activity = activityRepository.lockById(activityId)
+                .orElseThrow(() -> new BizException(2001, "活动不存在"));
+        activity.setCheckinToken(null);
+        activity.setCheckinExpiresAt(null);
+        activityRepository.save(activity);
+    }
+
+    public SigninTokenDTO currentToken(Long activityId) {
+        var activity = activityRepository.findById(activityId)
+                .filter(a -> com.pams.common.OrgContext.getOrDefault().equals(a.getOrgId()))
+                .orElseThrow(() -> new BizException(2001, "活动不存在"));
+        if (activity.getCheckinToken() == null || activity.getCheckinExpiresAt() == null
+                || !AttendanceWindow.now().isBefore(activity.getCheckinExpiresAt())) return null;
+        var dto = new SigninTokenDTO();
+        dto.setActivityId(activityId);
+        dto.setToken(activity.getCheckinToken());
+        dto.setExpiresAt(activity.getCheckinExpiresAt());
+        return dto;
     }
 
     /** 测试辅助：将 token 置为已过期 */
@@ -129,23 +154,13 @@ public class SigninService {
 
     @Transactional
     public Signin scanSignin(String token, String name, String studentNo) {
-        return scanSignin(token, name, studentNo, null, null);
+        return scanSignin(token, name, studentNo, null);
     }
 
     @Transactional
     public Signin scanSignin(String token, String name, String studentNo, Map<String, String> fields) {
-        return scanSignin(token, name, studentNo, fields, null);
-    }
-
-    /**
-     * 扫码签到（免登录，浏览器时间判时）：
-     * 校验 token/活动 → 取签到时间（默认服务器当前时间）→ 若活动当天有已发布活动排班则
-     * 判时归属（正常/迟到）并落考勤，否则宽松记录。重复签到与缺排班人员分别拦截。
-     */
-    @Transactional
-    public Signin scanSignin(String token, String name, String studentNo, Map<String, String> fields, LocalDateTime browserTime) {
         Long activityId = validateAndResolveActivity(token);
-        LocalDateTime st = browserTime == null ? LocalDateTime.now() : browserTime;
+        LocalDateTime st = AttendanceWindow.now();
         Signin s = new Signin();
         s.setActivityId(activityId);
         s.setName(name);
@@ -170,146 +185,132 @@ public class SigninService {
             s.setRemark("（应签名单）");
         }
 
-        // 活动当天已发布活动排班的人员；无则宽松记录（不判考勤，兼容纯签到活动）
-        List<Schedule> daySchedules = daySchedules(activityId, st.toLocalDate());
-        List<SchedulePerson> persons = personsOf(daySchedules);
-        if (!persons.isEmpty()) {
-            // 重复签到
-            if (hasSigned(activityId, name, studentNo)) {
-                throw new BizException(2305, "你已完成签到");
-            }
-            // 匹配排班人员（学号优先，姓名兜底）
-            SchedulePerson person = matchPerson(persons, name, studentNo);
-            if (person == null) {
-                throw new BizException(2306, "当前活动暂无你的排班记录");
-            }
-            s.setPersonId(person.getUserId());
-            // 判定并落考勤
-            judgeAndUpdateAttendance(daySchedules, person, s, st);
-        }
+        bindScan(s, st);
 
         Signin saved = repository.save(s);
         maybeNotifyCompleted(activityId);
         return saved;
     }
 
-    /** 活动某天的已发布活动排班（按开始时间排序） */
-    private List<Schedule> daySchedules(Long activityId, LocalDate date) {
+    private record Assignment(Schedule schedule, SchedulePerson person) {}
+
+    private void bindScan(Signin signin, LocalDateTime now) {
+        List<Schedule> schedules = activitySchedules(signin.getActivityId());
+        if (schedules.isEmpty()) return; // Activities without a published roster still accept general sign-ins.
+        List<Assignment> matches = assignments(schedules.stream().filter(s -> AttendanceWindow.isOpen(s, now)).toList(), signin);
+        List<Assignment> started = matches.stream().filter(a ->
+                !now.isBefore(a.schedule().getScheduleDate().atTime(a.schedule().getStartTime()))).toList();
+        if (!started.isEmpty()) matches = started;
+        if (matches.isEmpty()) throw new BizException(2306, "当前没有属于你的可签到班次，请核对排班时间");
+        if (matches.size() > 1) throw new BizException(409, "同一时间有多个匹配班次，请联系排班负责人核对");
+        Assignment assignment = matches.getFirst();
+        Schedule slot = lockAssignment(assignment);
+        if (!AttendanceWindow.isOpen(slot, now)) throw new BizException(409, "班次已变更，请重新签到");
+        Attendance existing = personOfAttendance(slot.getId(), assignment.person());
+        if (existing != null && Attendance.isSigned(existing.getStatus()))
+            throw new BizException(2305, "你已完成本班次签到");
+        if (existing != null && (Attendance.SOURCE_MANUAL.equals(existing.getStatusSource())
+                || !Attendance.STATUS_PENDING.equals(Attendance.normalizedStatus(existing.getStatus()))))
+            throw new BizException(409, "本班次已有考勤结论，请联系管理员核对");
+        applyAssignment(signin, slot, assignment.person(), existing, AttendanceWindow.status(slot, now), false);
+    }
+
+    private List<Schedule> activitySchedules(Long activityId) {
         if (scheduleRepository == null) return List.of();
-        List<Schedule> all = scheduleRepository.findByScheduleTypeAndActivityIdAndStatus(
-                Schedule.TYPE_ACTIVITY, activityId, Schedule.STATUS_PUBLISHED);
-        List<Schedule> result = new ArrayList<>();
-        for (Schedule sch : all) {
-            if (sch.getScheduleDate() != null && sch.getScheduleDate().equals(date)) result.add(sch);
-        }
-        result.sort(Comparator.comparing(sch -> sch.getStartTime() == null ? LocalTime.MIN : sch.getStartTime()));
-        return result;
+        return scheduleRepository.findByScheduleTypeAndActivityId(Schedule.TYPE_ACTIVITY, activityId).stream()
+                .filter(s -> !Schedule.STATUS_DRAFT.equals(s.getStatus())).toList();
     }
 
-    private List<SchedulePerson> personsOf(List<Schedule> schedules) {
-        if (schedulePersonRepository == null) return List.of();
-        List<SchedulePerson> result = new ArrayList<>();
-        for (Schedule sch : schedules) {
-            result.addAll(schedulePersonRepository.findByScheduleId(sch.getId()));
+    private List<Assignment> assignments(List<Schedule> schedules, Signin signin) {
+        if (schedules.isEmpty()) return List.of();
+        var people = schedulePersonRepository.findByScheduleIdIn(schedules.stream().map(Schedule::getId).toList());
+        Long id = signin.getPersonId();
+        if (id == null && signin.getStudentNo() != null && !signin.getStudentNo().isBlank() && userRepository != null) {
+            Long orgId = com.pams.common.OrgContext.getOrDefault();
+            var ids = userRepository.findByStudentNo(signin.getStudentNo()).stream()
+                    .filter(u -> orgId.equals(u.getOrgId()) && Integer.valueOf(1).equals(u.getStatus())
+                            && !Integer.valueOf(1).equals(u.getDeleted()))
+                    .map(com.pams.entity.User::getId).distinct().toList();
+            if (ids.size() != 1) return List.of();
+            id = ids.getFirst();
         }
-        return result;
+        if (id == null) {
+            var ids = people.stream().filter(p -> signin.getName() != null && signin.getName().equalsIgnoreCase(p.getPersonName()))
+                    .map(SchedulePerson::getUserId).filter(java.util.Objects::nonNull).distinct().toList();
+            if (ids.size() != 1) return List.of();
+            id = ids.getFirst();
+        }
+        Long userId = id;
+        Map<Long, Schedule> byId = new HashMap<>();
+        schedules.forEach(s -> byId.put(s.getId(), s));
+        Map<Long, SchedulePerson> bySchedule = new java.util.LinkedHashMap<>();
+        people.stream().filter(p -> userId.equals(p.getUserId())).forEach(p -> bySchedule.putIfAbsent(p.getScheduleId(), p));
+        return bySchedule.values().stream().map(p -> new Assignment(byId.get(p.getScheduleId()), p)).toList();
     }
 
-    private boolean hasSigned(Long activityId, String name, String studentNo) {
-        List<Signin> existing = repository.findByActivityId(activityId);
-        for (Signin e : existing) {
-            if (studentNo != null && !studentNo.isBlank() && studentNo.equals(e.getStudentNo())) return true;
-            if (name != null && name.equalsIgnoreCase(e.getName())) return true;
-        }
-        return false;
+    private Schedule lockAssignment(Assignment assignment) {
+        Schedule candidate = assignment.schedule();
+        Schedule current = scheduleRepository.lockById(candidate.getId())
+                .orElseThrow(() -> new BizException(409, "班次已变更，请刷新"));
+        if (entityManager != null) entityManager.refresh(current, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        boolean stillAssigned = schedulePersonRepository.findCurrentRoster(current.getId()).stream()
+                .anyMatch(p -> assignment.person().getUserId().equals(p.getUserId()));
+        if (!stillAssigned) throw new BizException(409, "排班人员已变更，请刷新");
+        return current;
     }
 
-    private SchedulePerson matchPerson(List<SchedulePerson> persons, String name, String studentNo) {
-        Long userId = null;
-        if (studentNo != null && !studentNo.isBlank() && userRepository != null) {
-            userId = userRepository.findByStudentNo(studentNo).stream()
-                    .filter(u -> u.getDeleted() == null || u.getDeleted() == 0)
-                    .findFirst().map(u -> u.getId()).orElse(null);
-        }
-        if (userId != null) {
-            for (SchedulePerson p : persons) {
-                if (userId.equals(p.getUserId())) return p;
-            }
-        }
-        if (name != null) {
-            for (SchedulePerson p : persons) {
-                if (name.equalsIgnoreCase(p.getPersonName())) return p;
-            }
-        }
-        return null;
+    /** Binds manual entries only when there is an unambiguous scheduled assignment. */
+    private void bindManual(Signin signin) {
+        List<Assignment> matches = assignments(activitySchedules(signin.getActivityId()).stream()
+                .filter(s -> Schedule.STATUS_PUBLISHED.equals(s.getStatus()) || Schedule.STATUS_ENDED.equals(s.getStatus()))
+                .toList(), signin);
+        var time = signin.getSignTime();
+        List<Assignment> timed = matches.stream().filter(a -> {
+            Schedule s = a.schedule();
+            return s.getScheduleDate() != null && s.getStartTime() != null && s.getEndTime() != null
+                    && !time.isBefore(s.getScheduleDate().atTime(s.getStartTime()).minusMinutes(30))
+                    && time.isBefore(s.getScheduleDate().atTime(s.getEndTime()));
+        }).toList();
+        if (!timed.isEmpty()) matches = timed;
+        if (matches.isEmpty()) return;
+        if (matches.size() != 1) throw new BizException(409, "该成员有多个班次，请指定实际签到时间或从考勤明细补签");
+        Assignment assignment = matches.getFirst();
+        Schedule slot = lockAssignment(assignment);
+        if (!Schedule.STATUS_PUBLISHED.equals(slot.getStatus()) && !Schedule.STATUS_ENDED.equals(slot.getStatus()))
+            throw new BizException(409, "班次已变更，请刷新");
+        Attendance existing = personOfAttendance(slot.getId(), assignment.person());
+        if (existing != null && (Attendance.isSigned(existing.getStatus())
+                || Attendance.SOURCE_MANUAL.equals(existing.getStatusSource())))
+            throw new BizException(409, "本班次已有考勤结论，请在考勤中心核对");
+        applyAssignment(signin, slot, assignment.person(), existing, Attendance.STATUS_MAKEUP, true);
     }
 
-    /**
-     * 时段归属：优先返回“包含签到时刻”的时段；否则返回“结束时间 >= 签到时刻”中结束最早的时段；
-     * 全部已结束则返回结束最晚的时段（据此记迟到）。
-     */
-    private Schedule judgeSlot(List<Schedule> daySchedules, LocalDateTime st) {
-        if (daySchedules == null || daySchedules.isEmpty()) return null;
-        LocalTime t = st.toLocalTime();
-        // 1) 命中包含此刻的时段
-        for (Schedule sch : daySchedules) {
-            if (sch.getStartTime() != null && sch.getEndTime() != null
-                    && !t.isBefore(sch.getStartTime()) && !t.isAfter(sch.getEndTime())) {
-                return sch;
-            }
+    private void applyAssignment(Signin signin, Schedule slot, SchedulePerson person, Attendance existing,
+                                 String status, boolean manual) {
+        signin.setScheduleId(slot.getId());
+        signin.setPersonId(person.getUserId());
+        Attendance row = existing == null ? new Attendance() : existing;
+        if (existing == null) {
+            row.setScheduleId(slot.getId());
+            row.setPersonId(person.getUserId());
+            row.setPersonName(person.getPersonName());
+            row.setCreatedAt(LocalDateTime.now());
         }
-        // 2) 未结束中结束最早的时段
-        Schedule upcoming = null;
-        Schedule last = null;
-        for (Schedule sch : daySchedules) {
-            if (sch.getEndTime() == null) continue;
-            if (last == null || sch.getEndTime().isAfter(last.getEndTime())) last = sch;
-            if (!t.isAfter(sch.getEndTime())) {
-                if (upcoming == null || sch.getEndTime().isBefore(upcoming.getEndTime())) upcoming = sch;
-            }
-        }
-        return upcoming != null ? upcoming : last; // 全部已结束 → 最晚时段记迟到
-    }
-
-    private void judgeAndUpdateAttendance(List<Schedule> daySchedules, SchedulePerson person, Signin s, LocalDateTime st) {
-        if (attendanceRepository == null || daySchedules.isEmpty()) return;
-        Schedule slot = judgeSlot(daySchedules, st);
-        if (slot == null) return;
-        boolean late = slot.getEndTime() != null && st.toLocalTime().isAfter(slot.getEndTime());
-        String status = late ? Attendance.STATUS_LATE : Attendance.STATUS_NORMAL;
-
-        SchedulePerson slotPerson = null;
-        for (SchedulePerson p : schedulePersonRepository.findByScheduleId(slot.getId())) {
-            if (person.getUserId() != null && person.getUserId().equals(p.getUserId())) { slotPerson = p; break; }
-            if (person.getUserId() == null && person.getPersonName().equalsIgnoreCase(p.getPersonName())) { slotPerson = p; break; }
-        }
-        if (slotPerson == null) return;
-
-        Attendance existing = personOfAttendance(slot.getId(), slotPerson);
-        Attendance a;
-        if (existing != null) {
-            if (Attendance.SOURCE_MANUAL.equals(existing.getStatusSource())) return; // 人工改过不自动覆盖
-            a = existing;
-        } else {
-            a = new Attendance();
-            a.setScheduleId(slot.getId());
-            a.setPersonId(slotPerson.getUserId());
-            a.setPersonName(slotPerson.getPersonName());
-            a.setCreatedAt(LocalDateTime.now());
-        }
-        a.setStatus(status);
-        a.setStatusSource(Attendance.SOURCE_AUTO);
-        a.setStudentNo(s.getStudentNo());
-        a.setCheckedInAt(st);
-        a.setRecordTime(LocalDateTime.now());
-        attendanceRepository.save(a);
+        String previousStatus = Attendance.normalizedStatus(row.getStatus());
+        row.setStatus(status);
+        row.setStatusSource(manual ? Attendance.SOURCE_MANUAL : Attendance.SOURCE_AUTO);
+        if (signin.getStudentNo() != null && !signin.getStudentNo().isBlank()) row.setStudentNo(signin.getStudentNo());
+        row.setCheckedInAt(signin.getSignTime());
+        row.setRecordTime(LocalDateTime.now());
+        if (manual && attendanceManagement != null) {
+            var actor = com.pams.module.agent.core.ToolContext.current(null, null).getLoginUser();
+            attendanceManagement.recordManualSignin(row, existing == null ? Attendance.STATUS_PENDING : previousStatus,
+                    actor, signin.getRemark());
+        } else attendanceRepository.save(row);
     }
 
     private Attendance personOfAttendance(Long scheduleId, SchedulePerson p) {
-        if (p.getUserId() != null) {
-            return attendanceRepository.findByScheduleIdAndPersonId(scheduleId, p.getUserId()).orElse(null);
-        }
-        return attendanceRepository.findByScheduleIdAndPersonName(scheduleId, p.getPersonName()).orElse(null);
+        return attendanceRepository.findByScheduleIdAndPersonId(scheduleId, p.getUserId()).orElse(null);
     }
 
     /**
@@ -339,23 +340,25 @@ public class SigninService {
 
     /** 校验 token 有效并解析活动 id（供公开接口读取核验字段配置，不校验活动存在，返回原始值） */
     public Long resolveActivityByToken(String token) {
-        TokenEntry e = tokenStore.get(token);
-        if (e == null) throw new BizException(2302, "签到码无效或已失效");
-        if (e.getExpiresAt().isBefore(LocalDateTime.now())) {
-            tokenStore.remove(token);
-            throw new BizException(2303, "签到码已过期，请刷新");
-        }
-        return e.getActivityId();
+        return resolveTokenEntry(token).getActivityId();
     }
 
     /** Must run before the public controller invokes a transactional tenant service. */
     public Long resolveOrgByToken(String token) {
-        resolveActivityByToken(token);
-        TokenEntry entry = tokenStore.get(token);
-        if (entry == null) throw new BizException(2302,"签到码无效或已失效");
-        Long org = entry.getOrgId();
-        if (tenantJdbc != null && tenantJdbc.queryForObject("SELECT COUNT(*) FROM organization WHERE id=? AND status=1 AND deleted=0",Integer.class,org) != 1) throw new BizException(403,"组织不可用");
-        return org;
+        return resolveTokenEntry(token).getOrgId();
+    }
+
+    private TokenEntry resolveTokenEntry(String token) {
+        TokenEntry entry = tenantJdbc == null ? tokenStore.get(token) : tenantJdbc.query("""
+                SELECT a.id, a.org_id, a.checkin_expires_at FROM activity a
+                JOIN organization o ON o.id = a.org_id
+                WHERE a.checkin_token = ? AND a.deleted = 0 AND o.status = 1 AND o.deleted = 0
+                """, (rs, n) -> new TokenEntry(rs.getLong(1), rs.getObject(3, LocalDateTime.class),
+                        rs.getLong(2)), token).stream().findFirst().orElse(null);
+        if (entry == null) throw new BizException(2302, "签到码无效或已失效");
+        if (entry.getExpiresAt() == null || !AttendanceWindow.now().isBefore(entry.getExpiresAt()))
+            throw new BizException(2303, "签到码已过期，请刷新");
+        return entry;
     }
 
     public List<Signin> listByActivity(Long activityId, String keyword) {
@@ -378,19 +381,51 @@ public class SigninService {
         s.setStudentNo(req.getStudentNo());
         s.setClassName(req.getClassName());
         s.setIdentityType(req.getIdentityType());
-        s.setSignType(req.getSignType() == null ? Signin.SignType.MANUAL : req.getSignType());
-        s.setSignTime(req.getSignTime());
+        s.setSignType(req.getSignType() == Signin.SignType.SCAN ? Signin.SignType.SCAN : Signin.SignType.MANUAL);
+        s.setSignTime(req.getSignTime() == null ? LocalDateTime.now() : req.getSignTime());
         s.setLocation(req.getLocation());
         s.setPhone(req.getPhone());
         s.setRemark(req.getRemark());
         s.setCreatedAt(LocalDateTime.now());
-        return repository.save(s);
+        return saveManualRecord(s);
+    }
+
+    @Transactional
+    public void recordSelfCheckin(Schedule schedule, Attendance attendance) {
+        Signin signin = new Signin();
+        signin.setScheduleId(schedule.getId());
+        signin.setActivityId(schedule.getActivityId());
+        signin.setPersonId(attendance.getPersonId());
+        signin.setName(attendance.getPersonName());
+        signin.setStudentNo(attendance.getStudentNo());
+        signin.setSignType(Signin.SignType.SELF);
+        signin.setSignTime(attendance.getCheckedInAt());
+        signin.setCreatedAt(AttendanceWindow.now());
+        repository.save(signin);
+        maybeNotifyCompleted(schedule.getActivityId());
+    }
+
+    @Transactional
+    public Signin saveManualRecord(Signin signin) {
+        bindManual(signin);
+        return repository.save(signin);
     }
 
     @Transactional
     public void delete(Long id) {
-        getEntity(id);
-        repository.deleteById(id);
+        Signin signin = getEntity(id);
+        if (signin.getScheduleId() != null || isLegacyAttendanceEvidence(signin)) {
+            throw new BizException(409, "此记录已关联班次，请在考勤中心修正并保留原始签到记录");
+        }
+        repository.delete(signin);
+    }
+
+    private boolean isLegacyAttendanceEvidence(Signin signin) {
+        if (signin.getSignTime() == null || signin.getPersonId() == null) return false;
+        return activitySchedules(signin.getActivityId()).stream()
+                .filter(s -> signin.getSignTime().toLocalDate().equals(s.getScheduleDate()))
+                .anyMatch(s -> attendanceRepository.findByScheduleIdAndPersonId(s.getId(), signin.getPersonId())
+                        .filter(a -> signin.getSignTime().equals(a.getCheckedInAt())).isPresent());
     }
 
     public Signin getEntity(Long id) {

@@ -22,6 +22,8 @@ public class CourseScheduleService {
     private final CourseScheduleRepository scheduleRepo;
     private final ScheduleConfigRepository configRepo;
     private final UserRepository userRepo;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public CourseScheduleService(CourseScheduleRepository scheduleRepo,
                                  ScheduleConfigRepository configRepo,
@@ -76,6 +78,13 @@ public class CourseScheduleService {
     public void saveMySchedule(Long userId, String semester, List<Map<String, Object>> cells) {
         if (semester == null || semester.isBlank()) throw new BizException(2701, "请选择学期");
         scheduleRepo.deleteByUserIdAndSemester(userId, semester);
+        if (jdbc != null) {
+            jdbc.update("""
+                    INSERT INTO course_schedule_submission (org_id, user_id, semester, submitted_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                    ON DUPLICATE KEY UPDATE submitted_at = CURRENT_TIMESTAMP
+                    """, com.pams.common.OrgContext.getOrDefault(), userId, semester);
+        }
         if (cells == null) return;
         for (Map<String, Object> cell : cells) {
             CourseSchedule cs = new CourseSchedule();
@@ -111,20 +120,19 @@ public class CourseScheduleService {
                     cfg(4, "第7-8节"), cfg(5, "第9-10节"));
         }
         List<Map<String, Object>> users = new ArrayList<>();
+        Long org = com.pams.common.OrgContext.get();
+        if (org == null) throw new BizException(403, "当前组织不可用");
         List<Long> ids = (userIds == null || userIds.isEmpty())
-                ? userRepo.findAll().stream().map(u -> u.getId()).distinct().toList()
+                ? userRepo.findByOrgIdOrderByIdAsc(org).stream().map(u -> u.getId()).distinct().toList()
                 : userIds.stream().distinct().toList();
-        Long org=com.pams.common.OrgContext.get();
         for (Long uid : ids) {
-            if(uid==null || org==null)throw new BizException(403,"人员不属于当前可见组织");
+            if (uid == null)throw new BizException(403,"人员不属于当前可见组织");
             var u=userRepo.findById(uid).filter(candidate->Objects.equals(candidate.getOrgId(),org))
                 .orElseThrow(()->new BizException(403,"人员不属于当前可见组织"));
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", u.getId());m.put("realName", u.getRealName());
             m.put("deptName", u.getDept() == null ? "" : u.getDept().getName());users.add(m);
         }
-        int total = Math.max(users.size(), 1);
-
         // 循环外一次性载入所有人员课表，构建 Map<userId, List<CourseSchedule>>，避免三重循环内逐人查库（N+1）
         List<CourseSchedule> allSchedules = ids.isEmpty()
                 ? List.of()
@@ -136,6 +144,19 @@ public class CourseScheduleService {
             scheduleByUser.computeIfAbsent(cs.getUserId(), k -> new ArrayList<>()).add(cs);
         }
 
+        Set<Long> submitted = new HashSet<>(scheduleByUser.keySet());
+        if (jdbc != null) {
+            if (semester == null || semester.isBlank()) {
+                submitted.addAll(jdbc.queryForList("SELECT user_id FROM course_schedule_submission WHERE org_id = ?",
+                        Long.class, org));
+            } else {
+                submitted.addAll(jdbc.queryForList(
+                        "SELECT user_id FROM course_schedule_submission WHERE org_id = ? AND semester = ?",
+                        Long.class, org, semester));
+            }
+        }
+        List<Long> participants = ids.stream().filter(submitted::contains).toList();
+        List<Map<String, Object>> missing = users.stream().filter(u -> !submitted.contains(u.get("id"))).toList();
         Map<String, Object> heatmap = new LinkedHashMap<>();
         for (int day = 1; day <= 7; day++) {
             int curDay = day; // 显式赋值，保证 lambda 可捕获
@@ -144,7 +165,7 @@ public class CourseScheduleService {
                 int curPeriod = c.getPeriod(); // 同理，enhanced for 变量在 lambda 中需显式捕获
                 // 空闲人数 = 总人数 - 该天该节有课人数（纯内存计算）
                 int free = 0;
-                for (Long uid : ids) {
+                for (Long uid : participants) {
                     List<CourseSchedule> list = scheduleByUser.getOrDefault(uid, Collections.emptyList());
                     boolean isBusy = list.stream().anyMatch(cs ->
                             cs.getDayOfWeek() == curDay && cs.getPeriod().equals(curPeriod));
@@ -165,7 +186,7 @@ public class CourseScheduleService {
                 o.put("period", c.getPeriod());
                 o.put("label", c.getLabel());
                 o.put("freeCount", free);
-                o.put("allFree", free == total);
+                o.put("allFree", !users.isEmpty() && missing.isEmpty() && free == users.size());
                 optimal.add(o);
             }
         }
@@ -178,6 +199,8 @@ public class CourseScheduleService {
         result.put("semester", semester);
         result.put("periods", configs);
         result.put("users", users);
+        result.put("submittedCount", participants.size());
+        result.put("missingUsers", missing);
         result.put("heatmap", heatmap);
         result.put("optimal", optimal);
         return result;

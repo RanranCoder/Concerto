@@ -14,7 +14,7 @@ import {
   shiftTitle,
   WeekControls,
 } from '@/components/routine/ScheduleViews'
-import { post } from '@/api/http'
+import { ATTENDANCE_STATUS_MAP, checkInForSchedule, listMyAttendances, type AttendanceVO } from '@/api/attendance'
 import { listMySchedules, type ScheduleVO } from '@/api/schedule'
 import { listActivities, type ActivityVO } from '@/api/activity'
 import { getScheduleConfigs, type ScheduleConfigVO } from '@/api/courseSchedule'
@@ -31,9 +31,19 @@ import {
 export default function MyScheduleList() {
   const { message } = App.useApp()
   const [checking, setChecking] = useState(false)
+  const [attendance, setAttendance] = useState<AttendanceVO[]>([])
+  const [now, setNow] = useState(() => dayjs())
   const checkIn = async (shift: ScheduleVO) => {
     setChecking(true)
-    try { await post('/attendances', {scheduleId:shift.id,personName:user?.realName || user?.username,status:'NORMAL'}); message.success('本人打卡已记录') } catch {} finally { setChecking(false) }
+    try {
+      const result = await checkInForSchedule(shift.id)
+      setAttendance((rows) => [...rows.filter((row) => row.scheduleId !== shift.id), result])
+      message.success('打卡结果：' + (ATTENDANCE_STATUS_MAP[result.status] || result.status))
+    } catch {
+      // The HTTP interceptor shows the server's reason.
+    } finally {
+      setChecking(false)
+    }
   }
   const navigate = useNavigate(),
     user = useAuthStore((s) => s.user)
@@ -60,6 +70,41 @@ export default function MyScheduleList() {
       })
       .catch(() => {})
   }, [])
+  const canViewAttendance = user?.permissions.includes('attendance:self:view')
+  const canCheck = user?.permissions.includes('schedule:check')
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(dayjs()), 15_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  useEffect(() => {
+    if (!canViewAttendance) return
+    let current = true
+    listMyAttendances().then((result) => {
+      if (current) setAttendance(result ?? [])
+    }).catch(() => {})
+    return () => { current = false }
+  }, [canViewAttendance])
+  const shiftEnd = (shift: ScheduleVO) =>
+    dayjs(shift.scheduleDate + 'T' + (shift.endTime || '23:59:59') + '+08:00')
+  const checkInControl = (shift: ScheduleVO) => {
+    const result = attendance.find((row) => row.scheduleId === shift.id)
+    if (result && result.status !== 'PENDING') {
+      const time = result.checkedInAt?.slice(11, 16)
+      const status = ATTENDANCE_STATUS_MAP[result.status] || result.status
+      return <small className="routine-muted">{time ? time + ' · ' : ''}{status}</small>
+    }
+    if (!canCheck || shift.status !== 'PUBLISHED') return null
+    if (!shift.scheduleDate || !shift.startTime || !shift.endTime) {
+      return <small className="routine-muted">班次时间待核实</small>
+    }
+    const opensAt = dayjs(shift.scheduleDate + 'T' + shift.startTime + '+08:00').subtract(30, 'minute')
+    if (now.isBefore(opensAt)) {
+      const opensLabel = dayjs(shift.scheduleDate + 'T' + shift.startTime).subtract(30, 'minute')
+      return <small className="routine-muted">{opensLabel.format('MM-DD HH:mm')} 开始打卡</small>
+    }
+    if (!now.isBefore(shiftEnd(shift))) return <small className="routine-muted">打卡已截止</small>
+    return <Button type="primary" loading={checking} onClick={() => void checkIn(shift)}>本人打卡</Button>
+  }
   const filtered = rows.filter(
     (s) => !activityId || s.activityId === activityId,
   )
@@ -76,9 +121,7 @@ export default function MyScheduleList() {
         s.status !== 'CANCELLED' &&
         s.status !== 'ENDED' &&
         s.scheduleDate &&
-        dayjs(
-          `${s.scheduleDate}T${s.endTime || periods[periodFor(s, periods)]?.endTime || '23:59:59'}`,
-        ).isAfter(dayjs()),
+        shiftEnd(s).isAfter(now),
     )
     .sort((a, b) =>
       `${a.scheduleDate} ${a.startTime ?? periods[periodFor(a, periods)]?.startTime ?? ''}`.localeCompare(
@@ -126,7 +169,10 @@ export default function MyScheduleList() {
               </span>
             </div>
           </div>
-          <div><Button onClick={() => setDetail(next)}>查看安排</Button>{user?.permissions.includes('schedule:check') && next.status === 'PUBLISHED' && <Button type="primary" loading={checking} onClick={() => void checkIn(next)}>本人打卡</Button>}</div>
+          <div className="routine-toolbar-actions">
+            <Button onClick={() => setDetail(next)}>查看安排</Button>
+            {checkInControl(next)}
+          </div>
         </section>
       )}
       <RoutineSummary
@@ -227,6 +273,7 @@ export default function MyScheduleList() {
         shift={detail}
         activities={activities}
         onClose={() => setDetail(null)}
+        extra={detail ? checkInControl(detail) : undefined}
       />
     </RoutineLayout>
   )

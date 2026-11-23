@@ -23,6 +23,10 @@ export interface GenerateSlot {
   startTime: string | null
   endTime: string | null
   count: number
+  missingCount?: number
+  unboundNames?: string[]
+  conflictingNames?: string[]
+  existingShiftIds?: number[]
   persons: Array<{ name: string; userId: number }>
 }
 
@@ -39,7 +43,7 @@ export const listActivitySchedules = (params: { activityId?: number; status?: st
 /** 已上传无课表的学期列表 */
 export const listSemesters = () => get<string[]>('/activity-schedules/semesters')
 
-export const generateActivitySchedules = (data: {
+export interface GenerateScheduleRequest {
   activityId?: number
   customActivityName?: string
   startDate: string
@@ -50,7 +54,19 @@ export const generateActivitySchedules = (data: {
   peoplePerSlot?: number
   semester?: string
   semesterStartDate?: string | null
-}) => post<GenerateResult[]>('/activity-schedules/generate', data)
+}
+
+export interface GenerationReview {
+  fingerprint: string
+  days: GenerateResult[]
+  draftCount: number
+}
+
+export const previewActivitySchedules = (request: GenerateScheduleRequest) =>
+  post<GenerationReview>('/activity-schedules/generate/preview', request)
+
+export const confirmActivitySchedules = (request: GenerateScheduleRequest, fingerprint: string) =>
+  post<GenerationReview>('/activity-schedules/generate/confirm', { request, fingerprint })
 
 export const createActivitySchedule = (data: ActivityScheduleSave) => post<number>('/activity-schedules', data)
 export const updateActivitySchedule = (id: number, data: ActivityScheduleSave) => put<void>(`/activity-schedules/${id}`, data)

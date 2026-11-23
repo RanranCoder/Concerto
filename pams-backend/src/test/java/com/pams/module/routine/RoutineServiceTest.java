@@ -60,14 +60,24 @@ class RoutineServiceTest {
         Schedule s = new Schedule();
         s.setId(1L); s.setScheduleType("SMOKING_CURB"); s.setWeekNo(1); s.setWeekday(1);
         s.setSessionName("上午第1-2节"); s.setLocation("一楼大厅");
-        when(schedRepo.findAll()).thenReturn(List.of(s));
+        s.setScheduleDate(java.time.LocalDate.of(2026, 11, 16));
+        var activity = new Schedule();
+        activity.setId(2L);
+        activity.setScheduleType(Schedule.TYPE_ACTIVITY);
+        activity.setLocation("一楼大厅");
+        activity.setScheduleDate(s.getScheduleDate());
+        when(schedRepo.findAll()).thenReturn(List.of(s, activity));
         SchedulePerson p = new SchedulePerson(); p.setScheduleId(1L); p.setPersonName("张三");
         when(spRepo.findByScheduleIdIn(any())).thenReturn(List.of(p));
 
         ScheduleController controller = new ScheduleController(service, mock(com.pams.module.routine.service.ActivityScheduleService.class));
-        ResponseEntity<byte[]> resp = controller.export(null, null, null, null);
+        ResponseEntity<byte[]> resp = controller.export(null, null, null, null, s.getScheduleDate(), s.getScheduleDate(), "一楼");
 
         assertThat(resp.getBody()).isNotEmpty();
+        try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(resp.getBody()))) {
+            assertThat(workbook.getSheetAt(0).getLastRowNum()).isEqualTo(1);
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(5).getStringCellValue()).isEqualTo("2026-11-16");
+        }
         // 响应字节返回后临时文件应已删除
         try (var files = Files.list(uploadDir)) {
             assertThat(files.count()).isZero();

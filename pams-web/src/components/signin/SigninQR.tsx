@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Tag } from 'antd'
+import { Alert, Button, Space } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { QRCodeSVG } from 'qrcode.react'
-import { countSignins, generateSigninToken } from '@/api/signin'
+import {
+  closeActivitySignin,
+  countSignins,
+  generateActivitySigninToken,
+  getActivitySigninToken,
+  signinTokenExpiresAt,
+  type ActivitySigninToken,
+} from '@/api/signin'
 
 interface SigninQRProps {
   activityId: number
@@ -11,40 +18,65 @@ interface SigninQRProps {
   active?: boolean
 }
 
-/**
- * 扫码签到二维码卡片。
- *
- * - qrContent 由后端按请求 origin 拼好（部署在反向代理后时取 X-Forwarded-Host），
- *   但 dev 下 vite proxy changeOrigin 会把 Host 重写为 localhost:8080，后端拼出的
- *   qrContent 指向后端端口（不托管 SPA）会 404。因此这里统一用前端自身的
- *   window.location.origin 覆盖，保证扫码链接落到本机前端路由 /signin/{token}。
- * - “未刷新长期有效”：后端刷新即作废旧令牌（新码生效、旧码作废），未刷新则 24h 内
- *   一直有效。扫码在他人设备上发生，本组件轮询签到人数，人数增长时回调 onSigned
- *   触发列表自动刷新，出现 SCAN 记录。
- */
 export default function SigninQR({ activityId, onSigned, active = true }: SigninQRProps) {
-  const [qrContent, setQrContent] = useState('')
-  const [expiresAt, setExpiresAt] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [qr, setQr] = useState<ActivitySigninToken | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
   const lastCountRef = useRef(0)
+  const requestVersion = useRef(0)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
+    const version = ++requestVersion.current
     try {
-      const t = await generateSigninToken(activityId)
-      setQrContent(`${window.location.origin}/signin/${t.token}`)
-      setExpiresAt(t.expiresAt)
-      lastCountRef.current = (await countSignins(activityId)) ?? 0
+      const current = await getActivitySigninToken(activityId)
+      if (version === requestVersion.current) {
+        setQr(current)
+        setFailed(false)
+      }
     } catch {
-      /* http 拦截已提示 */
+      if (version === requestVersion.current) setFailed(true)
     } finally {
-      setLoading(false)
+      if (version === requestVersion.current) setLoading(false)
     }
   }, [activityId])
 
   useEffect(() => {
-    refresh()
-  }, [refresh])
+    if (!active) return
+    setLoading(true)
+    setQr(null)
+    void refresh()
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 12_000)
+    return () => {
+      ++requestVersion.current
+      window.clearInterval(timer)
+    }
+  }, [active, refresh])
+
+  useEffect(() => {
+    if (!qr) return
+    const timer = window.setTimeout(() => void refresh(),
+      Math.max(0, signinTokenExpiresAt(qr.expiresAt) - Date.now()))
+    return () => window.clearTimeout(timer)
+  }, [qr, refresh])
+
+  const changeToken = async (close = false) => {
+    ++requestVersion.current
+    setLoading(true)
+    try {
+      if (close) {
+        await closeActivitySignin(activityId)
+        setQr(null)
+      } else {
+        setQr(await generateActivitySigninToken(activityId))
+      }
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      ++requestVersion.current
+      setLoading(false)
+    }
+  }
 
   // 轮询签到人数：数量增长说明有新的扫码签到，触发列表自动刷新。
   // 仅当「签到」Tab 处于激活状态时轮询（active=false 清除定时器，切走即停）。
@@ -66,20 +98,23 @@ export default function SigninQR({ activityId, onSigned, active = true }: Signin
 
   return (
     <div style={{ textAlign: 'center', padding: 16 }}>
-      {qrContent ? (
-        <QRCodeSVG value={qrContent} size={180} level="M" bgColor="#ffffff" fgColor="#000000" />
+      {failed && <Alert type="error" message="签到状态读取或更新失败"
+        action={<Button size="small" onClick={() => void refresh()}>重试</Button>} />}
+      {qr ? (
+        <>
+          <QRCodeSVG value={window.location.origin + '/signin/' + qr.token}
+            size={180} level="M" bgColor="#ffffff" fgColor="#000000" />
+          <p>有效期至 {qr.expiresAt.replace('T', ' ').slice(0, 16)}</p>
+        </>
       ) : (
-        <div style={{ height: 180 }} />
+        !loading && <p>签到尚未开启</p>
       )}
-      <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-        扫码签到 · 有效期至 {expiresAt ? new Date(expiresAt).toLocaleTimeString() : '-'}
-        <Tag style={{ marginLeft: 8 }} color="green">
-          未刷新长期有效
-        </Tag>
-      </div>
-      <Button icon={<ReloadOutlined />} loading={loading} onClick={refresh} style={{ marginTop: 8 }}>
-        刷新二维码
-      </Button>
+      <Space wrap style={{ marginTop: 8 }}>
+        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void changeToken()}>
+          {qr ? '刷新二维码' : '开启签到'}
+        </Button>
+        {qr && <Button danger disabled={loading} onClick={() => void changeToken(true)}>关闭签到</Button>}
+      </Space>
     </div>
   )
 }

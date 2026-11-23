@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface SchedulePersonRepository extends JpaRepository<SchedulePerson, Long> {
     List<SchedulePerson> findByScheduleId(Long scheduleId);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
+    @org.springframework.data.jpa.repository.Query("select p from SchedulePerson p where p.scheduleId = :scheduleId")
+    List<SchedulePerson> findCurrentRoster(@org.springframework.data.repository.query.Param("scheduleId") Long scheduleId);
     /** C3: 批量按排班 id 集合加载人员，替代逐条 findByScheduleId，避免 N+1 */
     List<SchedulePerson> findByScheduleIdIn(List<Long> scheduleIds);
     long countByPersonName(String personName);

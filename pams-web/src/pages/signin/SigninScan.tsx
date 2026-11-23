@@ -19,11 +19,7 @@ function hasNameField(configs: Array<{ fieldName: string }>): boolean {
 }
 
 /** 构造浏览器本地时间 ISO（LocalDateTime 可解析，无时区偏置），用于自动判时 */
-function localIso(): string {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
+
 
 /**
  * 免登录扫码签到落地页（/signin/:token）。
@@ -84,7 +80,7 @@ export default function SigninScan() {
           fields[fieldName] = value
         }
       }
-      await scanSignin({ token, fields, signTime: localIso() })
+      await scanSignin({ token, fields })
       setDone(true)
       message.success('签到成功')
     } catch {

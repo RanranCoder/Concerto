@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     List<Attendance> findByScheduleId(Long scheduleId);
+    List<Attendance> findByPersonId(Long personId);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<Attendance> findByScheduleIdAndPersonId(Long scheduleId, Long personId);
     Optional<Attendance> findByScheduleIdAndPersonName(Long scheduleId, String personName);
     List<Attendance> findBySessionId(Long sessionId);
