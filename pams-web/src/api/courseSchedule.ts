@@ -15,16 +15,18 @@ export interface NoClassScheduleRowVO {
   days: Record<string, NoClassScheduleCellVO[]>
 }
 export interface ImportFileFailureVO {
+  fileIndex: number
   fileName: string
   reason: string
 }
 export interface NoClassScheduleImportVO {
+  deptId: number
   deptName: string
   semester: string
   rows: NoClassScheduleRowVO[]
   markdown: string
-  downloadUrl: string
-  published?: boolean
+  downloadUrl: string | null
+  published: boolean
   totalFiles: number
   successCount: number
   failed: ImportFileFailureVO[]
@@ -91,7 +93,7 @@ export const analyzeFreeTime = (semester?: string, userIds?: number[]) =>
 
 /** 批量上传课表生成无课表（FormData: files[] + deptId + semester + maxWeek） */
 export const importNoClassSchedules = (formData: FormData) =>
-  post<NoClassScheduleImportVO>('/course-schedules/import', formData)
+  post<NoClassScheduleImportVO>('/course-schedules/import', formData, { silentError: true })
 
 /** 下载生成的 xlsx（responseType blob，拦截器对 blob 原样返回） */
 export const downloadNoClassScheduleXlsx = (downloadUrl: string) =>
@@ -109,8 +111,13 @@ export interface NoClassScheduleGeneratedVO {
 
 /** 读取某部门+学期最新生成的无课表（无记录返回 null） */
 export const getGeneratedNoClassSchedule = (deptId?: number, semester?: string) =>
-  get<NoClassScheduleGeneratedVO | null>('/course-schedules/generated', { deptId, semester })
+  get<NoClassScheduleGeneratedVO | null>('/course-schedules/generated', { deptId, semester }, { silentError: true })
 
 /** 最近一次导入无课表的部门+学期（供无课表页默认选中；无则 null） */
-export const getLatestNoClassSchedule = () =>
-  get<{ deptId: number; deptName: string; semester: string } | null>('/course-schedules/generated/latest')
+export const getLatestNoClassSchedule = (deptId?: number) =>
+  get<{ deptId: number; deptName: string; semester: string } | null>(
+    '/course-schedules/generated/latest', { deptId }, { silentError: true },
+  )
+
+export const listGeneratedSemesters = () =>
+  get<string[]>('/course-schedules/generated/semesters', undefined, { silentError: true })

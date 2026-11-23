@@ -8,6 +8,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,9 +23,12 @@ import java.util.regex.Pattern;
 public final class ClassTimetableParser {
 
     /** 取紧跟 "[数字,数字]" 的括号内容作为周次，防课程名内括号干扰。 */
-    private static final Pattern COURSE = Pattern.compile("\\(([^()]*)\\)\\s*\\[[\\d,\\s]+\\]");
-    private static final Pattern SEMESTER = Pattern.compile("\\b(\\d{4}-\\d{4}-\\d)\\b");
+    private static final Pattern COURSE = Pattern.compile("\\(([^()]*)\\)\\s*\\[[\\d,、\\s-]+节?\\]");
+    private static final Pattern SEMESTER =
+            Pattern.compile("(?<!\\d)(\\d{4}-\\d{4})\\s*(?:-(\\d)|学年\\s*第\\s*(\\d)\\s*学期)(?!\\d)");
     private static final String[] DAY_NAMES = {"星期一","星期二","星期三","星期四","星期五","星期六","星期日"};
+
+    public record ParsedTimetable(String semester, Map<SlotKey, List<Course>> courses) {}
 
     private ClassTimetableParser() {}
 
@@ -34,16 +38,41 @@ public final class ClassTimetableParser {
 
     /** 按学期总周数 maxWeek 截断解析，与无课表生成的 maxWeek 口径一致，避免周数不一致。 */
     public static Map<SlotKey, List<Course>> parse(InputStream in, int maxWeek) throws IOException {
+        return parseTimetable(in, maxWeek).courses();
+    }
+
+    public static ParsedTimetable parseTimetable(InputStream in, int maxWeek) throws IOException {
         try (Workbook wb = ExcelGuard.open(in)) {
-            return parseSheet(wb.getSheetAt(0), maxWeek);
+            Sheet sheet = wb.getSheetAt(0);
+            return new ParsedTimetable(detectSemester(sheet), parseSheet(sheet, maxWeek));
         }
     }
 
     public static String detectSemester(InputStream in) throws IOException {
         try (Workbook wb = ExcelGuard.open(in)) {
-            Matcher m = SEMESTER.matcher(wb.getSheetAt(0).getSheetName());
-            return m.find() ? m.group(1) : null;
+            return detectSemester(wb.getSheetAt(0));
         }
+    }
+
+    private static String detectSemester(Sheet sheet) {
+        String semester = semesterIn(sheet.getSheetName());
+        if (semester != null) return semester;
+        DataFormatter formatter = new DataFormatter();
+        for (int r = 0; r <= Math.min(5, sheet.getLastRowNum()); r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            for (var cell : row) {
+                semester = semesterIn(formatter.formatCellValue(cell));
+                if (semester != null) return semester;
+            }
+        }
+        return null;
+    }
+
+    private static String semesterIn(String text) {
+        Matcher match = SEMESTER.matcher(Normalizer.normalize(text, Normalizer.Form.NFKC));
+        if (!match.find()) return null;
+        return match.group(1) + "-" + (match.group(2) == null ? match.group(3) : match.group(2));
     }
 
     private static Map<SlotKey, List<Course>> parseSheet(Sheet sheet, int maxWeek) {
@@ -64,8 +93,14 @@ public final class ClassTimetableParser {
         for (int c = 0; c < hdr.getLastCellNum(); c++) {
             String v = fmt.formatCellValue(hdr.getCell(c)).trim();
             for (int d = 1; d <= 7; d++) {
-                if (DAY_NAMES[d - 1].equals(v)) dayCol.put(d, c);
+                if ((DAY_NAMES[d - 1].equals(v) || ("周" + DAY_NAMES[d - 1].substring(2)).equals(v))
+                        && dayCol.putIfAbsent(d, c) != null) {
+                    throw new IllegalArgumentException("发现重复列：" + DAY_NAMES[d - 1]);
+                }
             }
+        }
+        for (int d = 1; d <= 5; d++) {
+            if (!dayCol.containsKey(d)) throw new IllegalArgumentException("缺少课表列：" + DAY_NAMES[d - 1]);
         }
 
         Map<SlotKey, List<Course>> result = new HashMap<>();
@@ -75,8 +110,13 @@ public final class ClassTimetableParser {
             for (int d = 1; d <= 7; d++) {
                 Integer col = dayCol.get(d);
                 if (col == null) continue;
-                List<Course> courses = parseCell(fmt.formatCellValue(row.getCell(col)), maxWeek);
-                if (!courses.isEmpty()) result.put(new SlotKey(d, period), courses);
+                try {
+                    List<Course> courses = parseCell(fmt.formatCellValue(row.getCell(col)), maxWeek);
+                    if (!courses.isEmpty()) result.put(new SlotKey(d, period), courses);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException(DAY_NAMES[d - 1] + NoClassScheduleGenerator.PERIOD_LABELS[period - 1]
+                            + "：" + e.getMessage(), e);
+                }
             }
         }
         return result;
@@ -85,14 +125,14 @@ public final class ClassTimetableParser {
     private static List<Course> parseCell(String text, int maxWeek) {
         List<Course> out = new ArrayList<>();
         if (text == null || text.isBlank()) return out;
-        for (String line : text.split("\\r?\\n")) {
-            String trimmed = line.trim();
+        for (String line : text.split("\\R")) {
+            String trimmed = Normalizer.normalize(line, Normalizer.Form.NFKC).trim();
             if (trimmed.isEmpty()) continue;
             Matcher m = COURSE.matcher(trimmed);
-            if (!m.find()) continue;
+            if (!m.find()) throw new IllegalArgumentException("无法识别课程格式，应为“课程名(周次)[节次]”");
             String name = trimmed.substring(0, m.start()).trim();
             if (name.isEmpty()) name = "未知课程";
-            out.add(new Course(name, WeekRangeParser.parse(m.group(1).trim(), maxWeek)));
+            out.add(new Course(name, WeekRangeParser.parseCourseWeeks(m.group(1), maxWeek)));
         }
         return out;
     }

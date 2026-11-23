@@ -5,6 +5,7 @@ import java.util.List;
 
 @Data
 public class NoClassScheduleImportVO {
+    private Long deptId;
     private String deptName;
     private String semester;
     private List<NoClassScheduleRowVO> rows;

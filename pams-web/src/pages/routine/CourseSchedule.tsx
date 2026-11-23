@@ -1,6 +1,7 @@
 import FormSurface from '@/components/form/FormSurface'
 import { useEffect, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Empty,
@@ -20,6 +21,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import GlassCard from '@/components/glass/GlassCard'
 import PageHeader from '@/components/glass/PageHeader'
@@ -32,11 +34,11 @@ import {
   getScheduleConfigs,
   importNoClassSchedules,
   downloadNoClassScheduleXlsx,
+  listGeneratedSemesters,
   type NoClassScheduleImportVO,
   type FreeTimeAnalysisVO,
   type ScheduleConfigVO,
 } from '@/api/courseSchedule'
-import { listSemesters } from '@/api/activitySchedule'
 import { listDepts, type DeptVO } from '@/api/dept'
 import { listUserOptions, type UserOptionVO } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
@@ -62,7 +64,8 @@ export default function CourseSchedulePage() {
     [params, setParams] = useSearchParams(),
     user = useAuthStore((s) => s.user)
   const canManage = user?.permissions.includes('course:manage'),
-    canEditCourse = user?.permissions.includes('course:self:manage')
+    canEditCourse = user?.permissions.includes('course:self:manage'),
+    canViewFreeSchedule = user?.permissions.includes('schedule:free_table')
   const [tab, setTab] = useState(
       params.get('tab') || (canManage ? 'import' : 'edit'),
     ),
@@ -104,7 +107,11 @@ export default function CourseSchedulePage() {
   const [files, setFiles] = useState<UploadFile[]>([]),
     [result, setResult] = useState<NoClassScheduleImportVO | null>(null),
     [importing, setImporting] = useState(false),
-    [confirmImport, setConfirmImport] = useState(false)
+    [importError, setImportError] = useState(''),
+    [confirmImport, setConfirmImport] = useState<'all' | 'parsed' | null>(null)
+  const failures = new Map(result?.failed.map((f) => [f.fileIndex, f]))
+  const parsedFiles = files.filter((_, i) => !failures.has(i))
+  const filesToImport = confirmImport === 'parsed' ? parsedFiles : files
   const periods = configs.length ? configs : FALLBACK_PERIODS,
     allSemesters = [...new Set([semester, impSemester, ...semesterOptions])]
   useEffect(() => {
@@ -119,12 +126,15 @@ export default function CourseSchedulePage() {
     listDepts()
       .then(setDepts)
       .catch(() => {})
-    listSemesters()
+  }, [])
+  useEffect(() => {
+    if (!canManage && !canViewFreeSchedule) return
+    listGeneratedSemesters()
       .then((r) =>
         setSemesterOptions((s) => [...new Set([...(r ?? []), ...s])]),
       )
       .catch(() => {})
-  }, [])
+  }, [canManage, canViewFreeSchedule])
   useEffect(() => {
     let current = true
     setLoading(true)
@@ -213,22 +223,26 @@ export default function CourseSchedulePage() {
     }
   }
   const runImport = async () => {
-    if (!impDeptId || !files.length) return
+    if (!impDeptId || !impSemester || !filesToImport.length || importing) return
     setImporting(true)
+    setImportError('')
     try {
       const data = new FormData()
-      files.forEach((f) => {
+      filesToImport.forEach((f) => {
         const raw = f.originFileObj ?? (f as unknown as File)
         data.append('files', raw, f.name)
       })
       data.append('deptId', String(impDeptId))
       data.append('semester', impSemester)
       const imported = await importNoClassSchedules(data)
+      setFiles(filesToImport)
       setResult(imported)
-      setConfirmImport(false)
-      if (imported.published === false) message.warning('导入未生效，修正失败文件后请重新提交完整批次')
-      else message.success('无课表已生效')
-    } catch {
+      setConfirmImport(null)
+    } catch (error) {
+      const detail = isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : error instanceof Error ? error.message : undefined
+      setImportError(detail || '无课表导入失败，请重试。')
     } finally {
       setImporting(false)
     }
@@ -606,7 +620,7 @@ export default function CourseSchedulePage() {
                 options={allSemesters.map((s) => ({ value: s, label: s }))}
               />
             </label>
-            <span className="routine-muted">按文件名或表内姓名识别成员</span>
+            <span className="routine-muted">按文件名识别成员，例如“张三-课表.xlsx”</span>
           </div>
           <div className="routine-import-dropzone">
             <Upload.Dragger
@@ -636,24 +650,20 @@ export default function CourseSchedulePage() {
             </Upload.Dragger>
           </div>
           <div className="routine-import-files">
-            {files.map((f) => (
+            {files.map((f, index) => (
               <div className="routine-import-file" key={f.uid}>
                 <div>
                   {f.name}
                   <small>
                     {Math.max(1, Math.round((f.size ?? 0) / 1024))} KB
-                    {result?.failed.find((x) => x.fileName === f.name)
-                      ?.reason &&
-                      ` / ${result.failed.find((x) => x.fileName === f.name)!.reason}`}
+                    {failures.has(index) && ` / ${failures.get(index)?.reason}`}
                   </small>
                 </div>
                 {result && (
                   <span
-                    className={`tone-tag ${result.failed.some((x) => x.fileName === f.name) ? 'tone-danger' : 'tone-success'}`}
+                    className={`tone-tag ${failures.has(index) ? 'tone-danger' : 'tone-success'}`}
                   >
-                    {result.failed.some((x) => x.fileName === f.name)
-                      ? '导入失败'
-                      : '已解析'}
+                    {failures.has(index) ? '导入失败' : '已解析'}
                   </span>
                 )}
                 <Button
@@ -674,9 +684,12 @@ export default function CourseSchedulePage() {
             <span>已选择 {files.length} 份课表</span>
             <Button
               type="primary"
-              disabled={!files.length || !impDeptId}
+              disabled={!files.length || !impDeptId || !impSemester}
               loading={importing}
-              onClick={() => setConfirmImport(true)}
+              onClick={() => {
+                setImportError('')
+                setConfirmImport('all')
+              }}
             >
               生成无课表
             </Button>
@@ -686,7 +699,7 @@ export default function CourseSchedulePage() {
           <GlassCard className="routine-pad">
             <h3>导入前检查</h3>
             <div className="routine-side-link">
-              <strong>文件包含姓名与课程信息</strong>
+              <strong>文件名包含姓名</strong>
               <small>无法识别姓名时，修改文件名后重传</small>
             </div>
             <div className="routine-side-link">
@@ -698,21 +711,24 @@ export default function CourseSchedulePage() {
               <small>覆盖最新无课表，请先核对目标部门</small>
             </div>
             <RoutineNote>
-              全部文件通过后才替换已生效的无课表。
+              有文件失败时可核对预览，修正后重试或确认发布已解析文件。
             </RoutineNote>
           </GlassCard>
         </aside>
+      </div>
+      <div role="status">
+        {result && (
+          <p className="routine-muted">
+            {result.published ? '无课表已发布' : result.successCount > 0 ? '预览待发布' : '没有文件通过解析'}
+            {' / '}{result.successCount} 份已解析 / {result.failed.length} 份失败 / {result.semester}
+          </p>
+        )}
       </div>
       {result && (
         <GlassCard className="routine-import-results">
           <div className="business-section-head">
             <div>
               <h3>生成结果 · {result.deptName}</h3>
-              <p className="routine-muted">
-                {result.successCount} 份成功 / {result.failed.length} 份失败 /{' '}
-                {result.semester}
-              </p>
-              {result.published === false && <RoutineNote warning>本批次仅供核对，未替换当前无课表。</RoutineNote>}
             </div>
             <Space wrap>
               <Button
@@ -722,19 +738,33 @@ export default function CourseSchedulePage() {
               >
                 下载 Excel
               </Button>
-              <Button icon={<CopyOutlined />} onClick={copyMarkdown}>
+              <Button icon={<CopyOutlined />} onClick={copyMarkdown} disabled={!result.markdown}>
                 复制 Markdown
               </Button>
-              <Button
-                type="primary"
-                onClick={() =>
-                  navigate(
-                    `/routine/free-schedules?deptId=${impDeptId}&semester=${encodeURIComponent(result.semester)}`,
-                  )
-                }
-              >
-                {result.published === false ? '查看已生效无课表' : '查看无课表'}
-              </Button>
+              {!result.published && result.successCount > 0 && (
+                <Button
+                  type="primary"
+                  disabled={importing}
+                  onClick={() => {
+                    setImportError('')
+                    setConfirmImport('parsed')
+                  }}
+                >
+                  仅发布已解析文件
+                </Button>
+              )}
+              {canViewFreeSchedule && (
+                <Button
+                  type={result.published ? 'primary' : 'default'}
+                  onClick={() =>
+                    navigate(
+                      `/routine/free-schedules?deptId=${result.deptId}&semester=${encodeURIComponent(result.semester)}`,
+                    )
+                  }
+                >
+                  {result.published ? '查看无课表' : '查看已生效无课表'}
+                </Button>
+              )}
             </Space>
           </div>
           {(result.failed.length > 0 || result.warnings.length > 0) && (
@@ -753,7 +783,7 @@ export default function CourseSchedulePage() {
               ))}
             </div>
           )}
-          <FreeScheduleGrid rows={result.rows} />
+          {result.rows.length > 0 && <FreeScheduleGrid rows={result.rows} />}
         </GlassCard>
       )}
     </>
@@ -833,20 +863,23 @@ export default function CourseSchedulePage() {
       </FormSurface>
       <FormSurface
         mode="dialog"
-        title="确认生成部门无课表"
-        open={confirmImport}
-        onCancel={() => !importing && setConfirmImport(false)}
+        title={confirmImport === 'parsed' ? '确认仅发布已解析文件' : '确认生成部门无课表'}
+        open={confirmImport !== null}
+        onCancel={() => !importing && setConfirmImport(null)}
         confirmLoading={importing}
-        okText="确认生成"
+        okText={confirmImport === 'parsed' ? '确认发布' : '确认生成'}
         onOk={runImport}
       >
         <h3>
           {depts.find((d) => d.id === impDeptId)?.name} / {impSemester}
         </h3>
-        <p>本次导入 {files.length} 份课表文件。</p>
+        <p>本次提交 {filesToImport.length} 份课表文件。</p>
         <RoutineNote warning>
-          同部门、同学期的最新无课结果会被替换，请核对目标部门与文件。
+          {confirmImport === 'parsed'
+            ? `确认后，仅用已解析文件替换该部门本学期的无课表，另有 ${failures.size} 份课表不会纳入排班。`
+            : '全部文件通过后会替换该部门本学期的无课表，请核对目标部门与文件。'}
         </RoutineNote>
+        {importError && <Alert type="error" showIcon message={importError} />}
       </FormSurface>
     </RoutineLayout>
   )

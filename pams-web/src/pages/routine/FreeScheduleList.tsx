@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Empty, Select, Spin } from "antd";
+import { Alert, Button, Empty, Select, Spin } from "antd";
 import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
@@ -10,70 +10,81 @@ import FreeScheduleGrid from "@/components/routine/FreeScheduleGrid";
 import {
   getGeneratedNoClassSchedule,
   getLatestNoClassSchedule,
+  listGeneratedSemesters,
   type NoClassScheduleGeneratedVO,
 } from "@/api/courseSchedule";
-import { listSemesters } from "@/api/activitySchedule";
 import { listDepts, type DeptVO } from "@/api/dept";
 import { useAuthStore } from "@/stores/auth";
 import { downloadCsv, freeInWeek, WEEK_DAYS } from "@/utils/routine";
 
+type LoadResult<T> = { key: string; data: T | null; failed?: boolean };
+
 export default function FreeScheduleList() {
   const navigate = useNavigate(),
-    [params] = useSearchParams(),
+    [params, setParams] = useSearchParams(),
     user = useAuthStore((s) => s.user);
   const canManage = user?.permissions.includes("course:manage");
-  const [depts, setDepts] = useState<DeptVO[]>([]),
-    [deptId, setDeptId] = useState<number | undefined>(
-      Number(params.get("deptId")) || user?.deptId || undefined,
-    );
-  const [semester, setSemester] = useState(params.get("semester") || ""),
-    [semesterOptions, setSemesterOptions] = useState<string[]>([]),
-    [week, setWeek] = useState<number>(),
-    [ready, setReady] = useState(false);
-  const [data, setData] = useState<NoClassScheduleGeneratedVO | null>(null),
-    [loading, setLoading] = useState(false),
-    [revision, setRevision] = useState(0);
+  const canGenerate = user?.permissions.includes("schedule:view") && user.permissions.includes("schedule:generate");
+  const requestedDeptId = Number(params.get("deptId")) || undefined;
+  const requestedSemester = params.get("semester") || "";
+  const [depts, setDepts] = useState<DeptVO[]>([]);
+  const [semesterOptions, setSemesterOptions] = useState<string[]>([]);
+  const [week, setWeek] = useState<number>();
+  const [revision, setRevision] = useState(0);
+  const [latest, setLatest] = useState<LoadResult<{ deptId: number; semester: string }>>();
+  const [loaded, setLoaded] = useState<LoadResult<NoClassScheduleGeneratedVO>>();
+  const defaultKey = `${requestedDeptId ?? ""}:${revision}`;
+  const selection = !requestedSemester && latest?.key === defaultKey ? latest : undefined;
+  const deptId = requestedDeptId ?? selection?.data?.deptId ?? user?.deptId ?? undefined;
+  const semester = requestedSemester || selection?.data?.semester || "";
+  const queryKey = deptId && semester ? `${deptId}:${semester}:${revision}` : "";
+  const response = loaded?.key === queryKey ? loaded : undefined;
+  const data = response?.data;
+  const loading = (!requestedSemester && !selection) || (!!queryKey && !response);
+  const loadFailed = selection?.failed || response?.failed;
   useEffect(() => {
     listDepts()
       .then((r) => setDepts(r ?? []))
       .catch(() => {});
-    listSemesters()
-      .then((r) => setSemesterOptions(r ?? []))
-      .catch(() => {});
-    getLatestNoClassSchedule()
-      .then((latest) => {
-        if (latest && !params.get("deptId") && !params.get("semester")) {
-          setDeptId(latest.deptId);
-          setSemester(latest.semester);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setReady(true));
     const onFocus = () => setRevision((n) => n + 1);
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
   useEffect(() => {
     let current = true;
-    if (!ready) return;
-    if (!deptId || !semester) {
-      setData(null);
-      return;
-    }
-    setLoading(true);
-    setData(null);
+    listGeneratedSemesters()
+      .then((r) => { if (current) setSemesterOptions(r ?? []); })
+      .catch(() => {});
+    return () => { current = false; };
+  }, [revision]);
+  useEffect(() => {
+    if (requestedSemester) return;
+    let current = true;
+    getLatestNoClassSchedule(requestedDeptId)
+      .then((r) => { if (current) setLatest({ key: defaultKey, data: r ?? null }); })
+      .catch(() => { if (current) setLatest({ key: defaultKey, data: null, failed: true }); });
+    return () => { current = false; };
+  }, [defaultKey, requestedDeptId, requestedSemester]);
+  useEffect(() => {
+    if (!queryKey) return;
+    let current = true;
     getGeneratedNoClassSchedule(deptId, semester)
       .then((r) => {
-        if (current) setData(r ?? null);
+        if (current) setLoaded({ key: queryKey, data: r ?? null });
       })
-      .catch(() => {})
-      .finally(() => {
-        if (current) setLoading(false);
+      .catch(() => {
+        if (current) setLoaded({ key: queryKey, data: null, failed: true });
       });
     return () => {
       current = false;
     };
-  }, [ready, deptId, semester, revision]);
+  }, [deptId, semester, queryKey]);
+  const selectScope = (selectedDeptId: number | undefined, selectedSemester: string) => {
+    const next = new URLSearchParams(params);
+    if (selectedDeptId) next.set("deptId", String(selectedDeptId));
+    if (selectedSemester) next.set("semester", selectedSemester);
+    setParams(next, { replace: true });
+  };
   const courseUrl = `/routine/course-schedule?tab=import${deptId ? `&deptId=${deptId}` : ""}${semester ? `&semester=${encodeURIComponent(semester)}` : ""}`;
   const exportResult = () => {
     if (!data) return;
@@ -108,7 +119,7 @@ export default function FreeScheduleList() {
               aria-label="无课表部门"
               placeholder="请选择部门"
               value={deptId}
-              onChange={setDeptId}
+              onChange={(id) => selectScope(id, semester)}
               options={depts.map((d) => ({ value: d.id, label: d.name }))}
             />
           </label>
@@ -118,7 +129,7 @@ export default function FreeScheduleList() {
               aria-label="无课表学期"
               placeholder="请选择学期"
               value={semester || undefined}
-              onChange={setSemester}
+              onChange={(term) => selectScope(deptId, term)}
               options={[
                 ...new Set([semester, ...semesterOptions].filter(Boolean)),
               ].map((s) => ({ value: s, label: s }))}
@@ -140,6 +151,7 @@ export default function FreeScheduleList() {
           </label>
           <div className="routine-toolbar-actions">
             <Button
+              aria-label="刷新无课表"
               icon={<ReloadOutlined />}
               onClick={() => setRevision((n) => n + 1)}
             >
@@ -150,7 +162,7 @@ export default function FreeScheduleList() {
                 导出当前结果
               </Button>
             )}
-            {data && canManage && (
+            {data && canGenerate && (
               <Button
                 type="primary"
                 onClick={() =>
@@ -164,8 +176,12 @@ export default function FreeScheduleList() {
             )}
           </div>
         </div>
-        <Spin spinning={loading || !ready}>
-          {data ? (
+        <Spin spinning={loading}>
+          {loading ? (
+            <div className="routine-empty" aria-busy="true" />
+          ) : loadFailed ? (
+            <Alert type="error" showIcon message="无课表加载失败" description="请点击刷新重试。" />
+          ) : data ? (
             <>
               <div className="business-section-head">
                 <div>

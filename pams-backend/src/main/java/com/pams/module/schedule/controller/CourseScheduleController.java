@@ -1,7 +1,6 @@
 package com.pams.module.schedule.controller;
 
 import com.pams.common.BizException;
-import com.pams.common.ExcelGuard;
 import com.pams.common.Result;
 import com.pams.module.schedule.dto.NoClassScheduleGeneratedVO;
 import com.pams.module.schedule.dto.NoClassScheduleImportVO;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.net.URLEncoder;
 import java.util.List;
@@ -99,20 +97,14 @@ public class CourseScheduleController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String semester,
             @RequestParam(required = false) Integer maxWeek) {
-        if (files != null) {
-            for (MultipartFile f : files) {
-                ExcelGuard.checkSize(f.getSize());
-            }
-        }
-        return Result.ok(importService.importTimetables(files == null ? List.of() : List.of(files), deptId, semester, maxWeek));
+        return Result.ok(importService.importTimetables(List.of(files), deptId, semester, maxWeek));
     }
 
     /** 下载生成的 xlsx 无课表。path 为上传目录下的相对路径。 */
-    @PreAuthorize("hasAuthority('schedule:free_table')")
+    @PreAuthorize("hasAnyAuthority('schedule:free_table', 'course:manage')")
     @GetMapping("/import/download")
     public ResponseEntity<Resource> download(@RequestParam String path) {
         Path target = importService.resolveDownload(path);
-        if (!Files.exists(target)) throw new BizException(2705, "文件不存在");
         try {
             Resource resource = new UrlResource(target.toUri());
             String encoded = URLEncoder.encode(target.getFileName().toString(), StandardCharsets.UTF_8).replace("+", "%20");
@@ -136,7 +128,13 @@ public class CourseScheduleController {
     /** 最近一次导入无课表的部门+学期（供前端默认选中；无导入则 null）。 */
     @PreAuthorize("hasAuthority('schedule:free_table')")
     @GetMapping("/generated/latest")
-    public Result<Map<String, Object>> generatedLatest() {
-        return Result.ok(importService.latestImport());
+    public Result<Map<String, Object>> generatedLatest(@RequestParam(required = false) Long deptId) {
+        return Result.ok(importService.latestImport(deptId));
+    }
+
+    @PreAuthorize("hasAnyAuthority('schedule:free_table', 'course:manage')")
+    @GetMapping("/generated/semesters")
+    public Result<List<String>> generatedSemesters() {
+        return Result.ok(importService.generatedSemesters());
     }
 }

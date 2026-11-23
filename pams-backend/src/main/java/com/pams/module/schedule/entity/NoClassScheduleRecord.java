@@ -17,7 +17,7 @@ public class NoClassScheduleRecord implements OrgScoped {
     private String deptName;
     @Column(nullable = false, length = 20)
     private String semester;
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
     private String gridJson;
     private LocalDateTime createdAt;
     @org.hibernate.annotations.TenantId

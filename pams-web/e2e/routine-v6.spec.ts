@@ -7,7 +7,7 @@ test.use({
   viewport: { width: 1600, height: 1100 },
   timezoneId: 'Asia/Shanghai',
 })
-const output = resolve('..', 'docs', 'ui-v6-routine-implementation')
+const output = process.env.PAMS_ROUTINE_E2E_ARTIFACT_DIR ?? resolve('..', 'docs', 'ui-v6-routine-implementation')
 const manager = {
   id: 1,
   username: 'director',
@@ -219,6 +219,7 @@ async function setup(page: Page, viewer = manager) {
       ]),
     ),
   }))
+  let publishedGrid: typeof grid | undefined
   const filters = (r: any, url: URL) => {
     const q = url.searchParams
     return (
@@ -292,39 +293,48 @@ async function setup(page: Page, viewer = manager) {
             },
           ],
         }
-      else if (path === '/api/activity-schedules/semesters')
+      else if (path === '/api/activity-schedules/semesters' || path === '/api/course-schedules/generated/semesters')
         data = ['2026-2027-1']
       else if (path === '/api/course-schedules/generated/latest')
         data = { deptId: 2, deptName: '组织部', semester: '2026-2027-1' }
-      else if (path === '/api/course-schedules/generated')
-        data =
-          url.searchParams.get('deptId') === '3'
-            ? null
-            : {
-                deptName:
-                  url.searchParams.get('deptId') === '1' ? '文秘部' : '组织部',
-                semester: '2026-2027-1',
-                rows: grid,
-                createdAt: '2026-10-12T18:30:00',
-              }
-      else if (path === '/api/course-schedules/import')
+      else if (path === '/api/course-schedules/generated') {
+        const dept = url.searchParams.get('deptId')
+        const rows = dept === '1' ? publishedGrid : dept === '2' ? grid : undefined
+        data = rows ? {
+          deptName: dept === '1' ? '文秘部' : '组织部',
+          semester: '2026-2027-1',
+          rows,
+          createdAt: '2026-10-12T18:30:00',
+        } : null
+      } else if (path === '/api/course-schedules/import') {
+        const hasFailedFile = req.postDataBuffer()?.includes(Buffer.from('routine-invalid-timetable'))
+        const rows = grid.map((row) => ({
+          ...row,
+          days: Object.fromEntries(Object.entries(row.days).map(([day, cells]) => [
+            day, cells.filter((cell) => cell.name !== '林同学'),
+          ])),
+        }))
+        if (!hasFailedFile) publishedGrid = rows
         data = {
+          deptId: 1,
           deptName: '文秘部',
           semester: '2026-2027-1',
-          rows: grid,
-          totalFiles: 2,
-          successCount: 1,
-          failed: [
+          rows,
+          published: !hasFailedFile,
+          totalFiles: hasFailedFile ? 3 : 2,
+          successCount: 2,
+          failed: hasFailedFile ? [
             {
-              fileName: '未命名课表.xlsx',
+              fileIndex: 2,
+              fileName: '2026物联网3班.xlsx',
               reason: '姓名未识别，请修改文件名后重新导入',
             },
-          ],
+          ] : [],
           warnings: ['周次已按原课表计算'],
           markdown: '# 无课表',
           downloadUrl: '无课表/文秘部/result.xlsx',
         }
-      else if (
+      } else if (
         path === '/api/course-schedules/import/download' ||
         path === '/api/schedules/export'
       ) {
@@ -739,10 +749,16 @@ test('课程编辑、共同空闲分析、导入失败反馈与无课周次筛�
       buffer: Buffer.from('isolated-test-file'),
     },
     {
-      name: '未命名课表.xlsx',
+      name: '周同学_课表.xlsx',
       mimeType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       buffer: Buffer.from('isolated-test-file'),
+    },
+    {
+      name: '2026物联网3班.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from('routine-invalid-timetable'),
     },
   ])
   await page.getByRole('button', { name: '生成无课表', exact: true }).click()
@@ -754,9 +770,15 @@ test('课程编辑、共同空闲分析、导入失败反馈与无课周次筛�
     page.getByText('生成结果 · 文秘部', { exact: true }),
   ).toBeVisible()
   await expect(
-    page.locator('.routine-import-file').filter({ hasText: '未命名' }),
+    page.locator('.routine-import-file').filter({ hasText: '2026物联网3班' }),
   ).toContainText('导入失败')
+  await expect(page.getByText(/预览待发布/)).toBeVisible()
   await screenshot(page, 'course-import-result')
+  await page.getByRole('button', { name: '仅发布已解析文件', exact: true }).click()
+  const publishDialog = page.getByRole('dialog', { name: '确认仅发布已解析文件' })
+  await expect(publishDialog).toContainText('本次提交 2 份课表文件')
+  await publishDialog.getByRole('button', { name: '确认发布', exact: true }).click()
+  await expect(page.getByText(/无课表已发布/)).toBeVisible()
   await page.getByRole('button', { name: '查看无课表', exact: true }).click()
   await expect(page).toHaveURL(/free-schedules\?deptId=1&semester=2026-2027-1/)
   await selectOption(page, '无课表周次', '第 8 周')
@@ -771,6 +793,23 @@ test('课程编辑、共同空闲分析、导入失败反馈与无课周次筛�
     page.getByText('这个部门尚未生成本学期无课表', { exact: true }),
   ).toBeVisible()
   expect(state.errors).toEqual([])
+})
+
+test('无课表区分读取失败与未生成，刷新后显示正式结果', async ({ page }) => {
+  const state = await setup(page, { ...member, permissions: ['schedule:free_table'] })
+  let available = false
+  await page.route('**/api/course-schedules/generated?*', async (route) => {
+    if (available) await route.fallback()
+    else await route.fulfill({ status: 500, json: { code: 500, message: 'server error' } })
+  })
+  await page.goto('/routine/free-schedules?deptId=2&semester=2026-2027-1')
+  await expect(page.getByText('无课表加载失败', { exact: true })).toBeVisible()
+  await expect(page.getByText('这个部门尚未生成本学期无课表', { exact: true })).toHaveCount(0)
+  available = true
+  await page.getByRole('button', { name: '刷新无课表', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '组织部无课表' })).toBeVisible()
+  expect(state.reads).toContain('/api/course-schedules/generated/semesters')
+  expect(state.reads).not.toContain('/api/activity-schedules/semesters')
 })
 
 test('成员从我的接口读取考勤，管理操作按权限码隐藏', async ({ page }) => {

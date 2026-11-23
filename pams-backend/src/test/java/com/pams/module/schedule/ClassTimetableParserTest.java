@@ -100,6 +100,35 @@ class ClassTimetableParserTest {
     }
 
     @Test
+    void parsesFullWidthCourseSyntax() throws Exception {
+        var file = buildTimetableWithCourse("课程A（１～７周 单周）［１－２节］◇1101");
+        var parsed = ClassTimetableParser.parseTimetable(new ByteArrayInputStream(file), 18);
+        assertThat(parsed.semester()).isEqualTo("2025-2026-2");
+        assertThat(parsed.courses().get(new SlotKey(1, 1)).getFirst().weeks()).isEqualTo(w(1, 3, 5, 7));
+    }
+
+    @Test
+    void rejectsUnknownCourseWeekInsteadOfReportingTheSlotFree() throws Exception {
+        var file = buildTimetableWithCourse("课程A(1-4;待定)[1,2]◇1101");
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> ClassTimetableParser.parse(new ByteArrayInputStream(file)));
+        assertThat(error.getMessage()).contains("星期一", "无法识别课程周次");
+    }
+
+    @Test
+    void rejectsUnrecognizedWeekdayColumns() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Row header = wb.createSheet().createRow(0);
+            header.createCell(0).setCellValue("节次");
+            header.createCell(1).setCellValue("星期一");
+            wb.write(out);
+            var error = assertThrows(IllegalArgumentException.class,
+                    () -> ClassTimetableParser.parse(new ByteArrayInputStream(out.toByteArray())));
+            assertThat(error.getMessage()).contains("缺少课表列", "星期二");
+        }
+    }
+
+    @Test
     void throwsOnNonTimetable() throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             wb.createSheet("x").createRow(0).createCell(0).setCellValue("随便");
