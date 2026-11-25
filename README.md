@@ -6,7 +6,7 @@
 
 GitHub 仓库 `RanranCoder/Concerto` 的默认分支为 `main`。后端工程沿用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。生产部署状态以相应发布记录为准。
 
-[快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
+[快速启动](#快速启动) · [Docker Compose](#docker-compose) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
 ![协奏工作台：周历、活动概况与待办](docs/design/ui-v6-implementation/dashboard-light.png)
 
@@ -18,7 +18,7 @@ GitHub 仓库 `RanranCoder/Concerto` 的默认分支为 `main`。后端工程沿
 | --- | --- |
 | 工作台 | 本周活动、排班和任务截止聚合，待办入口，工作日 / 全周切换 |
 | 活动管理 | 活动阶段推进、原生 DOCX 策划书编辑与版本审核、议程、座位表、评分、签到、任务甘特图与活动排班 |
-| 排班考勤 | 常规排班、我的排班、活动排班预览与发布、考勤核对与修正、课表导入、无课时间查询 |
+| 排班考勤 | 常规排班、我的排班、活动排班预览与发布、签到考勤、按部门和学期导入并发布无课表 |
 | 成员与党务 | 成员名册、届别、发展阶段、考察记录、转入转出和党务名册 |
 | 宣传与档案 | 推文、新闻稿、材料、模板、素拓加分、公告和群聊资料 |
 | 智能协作 | 灵思对话、资料问答、多 Agent 协作、持久任务与成果版本、变更确认、历史摘要与个人长期记忆 |
@@ -26,6 +26,11 @@ GitHub 仓库 `RanranCoder/Concerto` 的默认分支为 `main`。后端工程沿
 | 通知中心 | 业务消息、未读与截止提醒、公告确认、通知偏好、SSE 实时更新及投递运维 |
 
 UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航。活动、排班、档案与灵思采用各自的业务工作面，创建和编辑表单复用公共组件。菜单与操作入口会根据当前账号权限及组织领域包调整。
+
+### 排班与考勤
+
+- 活动排班可手动安排，也可按节次预览选人。保存为草稿后可单独或批量发布，发布时建立待签到考勤记录。活动使用统一签到码，刷新后旧码失效。
+- 在「课表导入」选择部门和学期，上传文件名以姓名开头的 Excel 课表。解析全部成功时自动发布无课表。有文件失败时，可以修正后重试，或核对预览并确认「仅发布已解析文件」。同部门、同学期重新发布会更新当前无课表。
 
 ## 技术栈
 
@@ -42,9 +47,11 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 
 ## 快速启动
 
+[Docker Compose](#docker-compose) 可直接在容器中构建并启动整套应用。需要在宿主机运行后端和前端时，按下方步骤操作。
+
 ### 1. 准备环境与依赖
 
-本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.20+（22.x）和 MySQL 8**，并确保相关命令已加入 PATH。
+本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.20+（22.x）和 MySQL 8**。将 `java`、`mvn`、`node`、`npm` 和 `mysql` 加入 PATH，Windows 一键启动还会使用 `mysqladmin`。
 
 ```bash
 git clone https://github.com/RanranCoder/Concerto.git
@@ -57,34 +64,30 @@ cd ..
 
 ### 2. 配置本地环境
 
-Windows 上的 Bash 命令使用 Git Bash（`C:\dev\Git\bin\bash.exe`），PowerShell 代码块在 PowerShell 中执行。复制配置示例后编辑 `.env`。
+Windows 上的 Bash 命令在 Git Bash 中执行。复制配置示例后编辑仓库根目录的 `.env`。
 
 ```bash
 cp .env.example .env
 ```
 
-`.env.example` 中的 `MYSQL_*` 供 Docker Compose 使用；**本地直连 MySQL 的密码使用 `DB_PASSWORD`**。可在 `.env` 中追加：
+在 `.env` 中填写本机 MySQL 的 root 密码。两种启动方式都创建 `pams_db`。下方命令通过环境变量指定该数据库，覆盖后端基础配置中的 `pams_concerto_demo`。
 
 ```dotenv
-# 本地开发：连接 localhost:3306，默认用户 root
 DB_PASSWORD=your_local_mysql_password
-
-# 可选：部署默认真实模型，同时填写模型 ID 与密钥
-PAMS_AGENT_MODEL=
-PAMS_AGENT_API_KEY=
 ```
 
-同时替换示例中的 `PAMS_JWT_SECRET`。本地未设置该项时，后端每次启动生成随机密钥，重启后需要重新登录。`.env` 已被 Git 忽略；系统环境变量优先于文件配置。后端会尝试从启动目录及其上级目录读取 `.env`，从仓库根目录或后端模块目录启动均可。
+将示例中的 `PAMS_JWT_SECRET` 替换为自己的随机密钥。本地缺少该项时会使用临时密钥，重启后需重新登录。如需接入真实模型，同时填写 `PAMS_AGENT_MODEL` 和 `PAMS_AGENT_API_KEY`。后端从启动目录及其上一级读取 `.env`，系统环境变量优先。
 
 ### 3. 启动应用
 
 **Windows 一键启动**：先启动 MySQL，再在仓库根目录的 PowerShell 中运行：
 
 ```powershell
+$env:SPRING_DATASOURCE_URL = 'jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false'
 .\start.bat
 ```
 
-脚本会读取 `.env`、检查 MySQL、创建 `pams_db`，并在独立窗口中启动后端和前端，随后打开浏览器。它使用 MySQL `root` 用户和 `DB_PASSWORD`，后端启用 `dev` profile；前端依赖需提前安装。
+脚本使用 MySQL `root` 用户和 `DB_PASSWORD` 创建 `pams_db`，在独立窗口中以 `dev` profile 启动后端、启动前端，再打开浏览器。
 
 **手动启动**：在仓库根目录执行以下命令。建库命令中的密码应与后端配置一致。
 
@@ -93,6 +96,7 @@ PAMS_AGENT_API_KEY=
 mysql -u root -p < database/init_db.sql
 
 # 终端一：后端（dev profile 用于首次初始化演示账号）
+export SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false'
 mvn -f pams-backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
@@ -110,7 +114,7 @@ npm run dev
 
 Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等待 Maven 下载依赖、Flyway 迁移和种子初始化完成。
 
-**使用 IntelliJ IDEA**：打开仓库根目录，导入根 `pom.xml` 聚合工程，运行 `com.pams.PartyAffairsManagementSystemApplication`。需要演示账号时设置 Active profiles 为 `dev`；前端仍单独运行 `npm run dev`。
+**使用 IntelliJ IDEA**：打开仓库根目录，导入根 `pom.xml` 聚合工程，运行 `com.pams.PartyAffairsManagementSystemApplication`。在运行配置的 Environment variables 中填写上面的 `SPRING_DATASOURCE_URL`。需要初始化开发演示账号时，将 Active profiles 设为 `dev`。前端单独运行 `npm run dev`。
 
 ### 演示账号与新组织
 
@@ -211,8 +215,8 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 | 配置项 | 用途与默认行为 |
 | --- | --- |
-| `DB_PASSWORD` | 本地 MySQL 密码，默认 `root`；本地默认地址 `localhost:3306/pams_db`、用户 `root` |
-| `SPRING_DATASOURCE_URL` | 通过系统环境变量覆盖数据库连接地址 |
+| `DB_PASSWORD` | 后端本地 MySQL 密码，默认 `root` |
+| `SPRING_DATASOURCE_URL` | 覆盖数据库连接地址。后端基础配置使用 `localhost:3306/pams_concerto_demo`，本地开发按快速启动连接 `pams_db`，Compose 使用 `mysql:3306/pams_db` |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | 通过系统环境变量覆盖数据库账号与密码 |
 | `PAMS_JWT_SECRET` | JWT 签名密钥；本地未设置时随机生成，生产需显式配置 |
 | `PAMS_AGENT_PROTOCOL` / `PAMS_AGENT_BASE_URL` | 部署默认协议与 API 根地址，默认 `openai_responses` 和 `https://api.openai.com/v1`。旧服务可显式配置 `openai_chat_completions` |
@@ -228,7 +232,7 @@ Vite 已将 `/api`、`/uploads` 和 `/ws` 代理到后端。首次启动需等�
 
 ### Docker Compose
 
-编辑根目录 `.env`，替换 `.env.example` 中的数据库凭据和 JWT 密钥。需要部署默认真实模型时配置协议、API 根地址、模型 ID 与密钥。启动命令如下。
+需要 Docker 和 Compose 插件。若还没有根目录 `.env`，先从 `.env.example` 复制，再填写 `MYSQL_ROOT_PASSWORD`、`MYSQL_USER`、`MYSQL_PASSWORD` 和 `PAMS_JWT_SECRET`。如需接入部署默认模型，填写模型 ID 与密钥，并按服务选择协议与 API 根地址。
 
 ```bash
 docker compose up -d --build
@@ -237,9 +241,11 @@ docker compose ps
 
 编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据、上传文件和自动生成的 AI 服务加密密钥分别保存到 `pams-mysql-data`、`pams-uploads` 和 `pams-ai-secrets` 命名卷。备份组织 AI 配置时同时保留加密主密钥。
 
-当前 Flyway 迁移最高为 **V74**。V59、V60 加入 AI 服务配置和密钥状态，后续迁移扩展了业务回执、受控规划、提示词快照和请求级写入状态。V71 增加 Agent 实例租约，V72 加入团务与志愿服务的数据表和权限，V73 更新排班与考勤一致性约束，V74 支持导入后发布无课表。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
+当前 Flyway 迁移最高为 [**V74**](pams-backend/src/main/resources/db/migration/V74__no_class_schedule_publication.sql)。V59、V60 加入 AI 服务配置和密钥状态，后续迁移扩展了业务回执、受控规划、提示词快照和请求级写入状态。V71 增加 Agent 实例租约，V72 加入团务与志愿服务的数据表和权限，V73 更新排班与考勤一致性约束，V74 支持导入后发布无课表。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
 
-仓库的镜像构建工作流在推送 `main` 或手动触发时运行；Maven 后端测试和前端 `npm test` 通过后才构建并推送镜像。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
+### 使用已构建的镜像
+
+推送到 `main` 或手动触发后，GitHub Actions 先运行后端和前端测试，通过后发布后端与前端的 `latest` 镜像。若部署使用 GHCR，在服务器的 `.env` 中设置 `PAMS_IMAGE_PREFIX=ghcr.io/ranrancoder/pams`。运行 `./deploy.sh` 时，脚本会快进更新代码、拉取镜像并启动服务。有了可访问的镜像后，也可直接使用 `docker compose pull` 和 `docker compose up -d --no-build`。 [部署脚本](deploy.sh) · [Compose 配置](docker-compose.yml) · [镜像构建工作流](.github/workflows/build-push-images.yml)
 
 ## 开发与验证
 
@@ -269,7 +275,7 @@ npm run test:e2e
 
 配置会启动或复用 5173 上的 Vite 服务，不负责启动后端。部分 UI 用例在 Windows 上指定 Microsoft Edge，需本机已安装；其他用例可通过 `PAMS_E2E_CHROME_CHANNEL` 选择本机浏览器。浏览器样本测试用于验证页面行为，不能代替真实接口与数据库联调。
 
-长期记忆管理可定向运行 `npx playwright test e2e/agent-memory.spec.ts`。S5 真实模型、进程恢复和浏览器验收使用独立 MySQL 测试库及显式开关，不属于默认离线测试；执行命令与前置条件见 [S5 工具说明](scripts/agent-s5/README.md)。通知系统的隔离验收另见[通知工具说明](scripts/notification-acceptance/README.md)。历史验收数量与结果记录在各自文档中，不代表每次拉取代码后的测试结果。
+排班考勤和长期记忆可分别用 `npx playwright test e2e/routine-v6.spec.ts` 和 `npx playwright test e2e/agent-memory.spec.ts` 定向验证。S5 真实模型、进程恢复和浏览器验收使用独立 MySQL 测试库及显式开关，不属于默认离线测试；执行命令与前置条件见 [S5 工具说明](scripts/agent-s5/README.md)。通知系统的隔离验收另见[通知工具说明](scripts/notification-acceptance/README.md)。历史验收数量与结果记录在各自文档中，不代表每次拉取代码后的测试结果。
 
 ## 项目结构
 
