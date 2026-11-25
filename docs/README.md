@@ -14,7 +14,6 @@
 | 通知与 MySQL、Nginx 和 SSE 联调 | [通知验收](../scripts/notification-acceptance/README.md) |
 | 独立演示库与本地演示种子 | [协奏演示库](../scripts/concerto-demo/README.md)、[本地演示数据](../scripts/demo-data/README.md) |
 | 设计规范和模块实现背景 | [设计与原型索引](design/README.md) |
-| 产品演示视频与素材 | [演示视频目录](../video/pams-cat-yarn-30s/README.md) |
 
 ## 设计和历史记录
 

@@ -299,7 +299,6 @@ Concerto/
 ├── database/                                # 建库与存量材料处理脚本
 ├── docs/                                    # 使用指南、设计档案与验收证据
 ├── scripts/                                 # 演示数据、灵思与通知验收工具
-├── video/                                   # 产品演示视频素材
 ├── pom.xml                                  # Maven 聚合入口
 ├── .env.example                             # 容器环境配置示例
 ├── docker-compose.yml
