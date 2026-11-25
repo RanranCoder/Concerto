@@ -4,7 +4,7 @@
 
 协奏源于信息与智能工程学院党建办公室的党务管理需求。每个组织可以在自己的工作区管理活动、排班、成员和档案，用内置 AI 助手 Concerto Agent 查找资料、准备业务操作和跟进任务。工作台汇总一周的活动、排班与任务截止时间。
 
-[快速开始](#快速开始) · [主要功能](#主要功能) · [Concerto Agent 与知识库](#concerto-agent-与知识库) · [本地开发](#本地开发) · [部署](#部署) · [文档](#文档)
+[快速开始](#快速开始) · [主要功能](#主要功能) · [Concerto Agent 与知识库](#concerto-agent-与知识库) · [本地开发](#本地开发) · [部署](#部署) · [文档](#文档) · [许可证](#许可证)
 
 ![协奏工作台的周历、活动概况和待办](docs/design/ui-v6-implementation/dashboard-light.png)
 
@@ -159,4 +159,12 @@ Compose 默认将前端发布到 `127.0.0.1:8081`。对外提供服务时，可�
 
 ## 许可证
 
-项目代码使用 MIT License。SuperDoc 等第三方组件遵循各自的许可证。 [许可证全文](LICENSE)
+Copyright (c) 2026 RanranCoder
+
+协奏（Concerto / PAMS）的自有代码采用 PolyForm Strict License 1.0.0。源码公开，符合许可条款的个人和非商业用途可以免费使用。按许可部署原版时，可以使用系统内置的品牌、组织和流程设置。 [许可证全文](LICENSE)
+
+商业使用、修改源码进行二次开发、制作衍生版本或再分发，超出许可证和适用法律允许的范围时，需要单独授权。二次开发和商业使用可向项目维护者申请付费授权。 [联系 RanranCoder](https://github.com/RanranCoder)
+
+已按 MIT License 发布的历史版本继续适用当时的许可证。 [历史 MIT 许可证](https://github.com/RanranCoder/Concerto/blob/ab4382970c2c5241ca41bd38b0588d143d74c873/LICENSE)
+
+第三方组件适用各自的许可证。SuperDoc 提供 AGPLv3 和商业授权，分发或部署包含 SuperDoc 的前端时应遵守适用条款。 [SuperDoc 许可说明](https://docs.superdoc.dev/resources/license/)
