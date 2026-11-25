@@ -4,7 +4,7 @@
 
 协奏把活动筹备、排班考勤、成员资料、内容宣传和档案归集放进同一个工作台，并通过「灵思」AI 助手连接资料检索与业务操作。项目起源于信息与智能工程学院党建办公室的党务管理场景，现已支持多组织注册、数据隔离、组织主题和领域包配置。
 
-本文以 `Concerto` 分支为准。仓库与后端工程继续使用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。源码能力与生产部署可能不同步，部署状态以相应发布记录为准。
+GitHub 仓库 `RanranCoder/Concerto` 的默认分支为 `main`。后端工程沿用 PAMS 名称，界面产品名为「协奏」，智能助手名为「灵思」。生产部署状态以相应发布记录为准。
 
 [快速启动](#快速启动) · [功能概览](#功能概览) · [灵思与知识库](#灵思与知识库) · [组织与权限](#组织与权限) · [开发与验证](#开发与验证) · [文档导航](#文档导航)
 
@@ -47,8 +47,8 @@ UI v6 提供明暗主题、组织品牌色、桌面侧栏和手机抽屉导航�
 本地开发需要 **JDK 21、Maven 3.9+、Node.js 22.20+（22.x）和 MySQL 8**，并确保相关命令已加入 PATH。
 
 ```bash
-git clone --branch Concerto git@github.com:RanranCoder/PAMS.git
-cd PAMS
+git clone https://github.com/RanranCoder/Concerto.git
+cd Concerto
 
 cd pams-web
 npm ci
@@ -237,9 +237,9 @@ docker compose ps
 
 编排包含 MySQL、后端和 Nginx 前端三个服务，访问 <http://127.0.0.1:8081>。前端端口默认仅绑定宿主机回环地址；对外访问需另外配置反向代理或端口映射。MySQL 数据、上传文件和自动生成的 AI 服务加密密钥分别保存到 `pams-mysql-data`、`pams-uploads` 和 `pams-ai-secrets` 命名卷。备份组织 AI 配置时同时保留加密主密钥。
 
-当前 Flyway 迁移最高为 **V72**。V59、V60 加入 AI 服务配置和密钥状态，后续迁移扩展了业务回执、受控规划、提示词快照和请求级写入状态。V71 增加 Agent 实例租约，V72 加入团务与志愿服务的数据表和权限。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
+当前 Flyway 迁移最高为 **V74**。V59、V60 加入 AI 服务配置和密钥状态，后续迁移扩展了业务回执、受控规划、提示词快照和请求级写入状态。V71 增加 Agent 实例租约，V72 加入团务与志愿服务的数据表和权限，V73 更新排班与考勤一致性约束，V74 支持导入后发布无课表。升级存量数据库前应备份，并在目标 MySQL 环境验证迁移、所有者归属和授权结果；H2 回归不能替代生产迁移验收。部分历史部署采用单独应用字段或表的发布方式，不能仅凭源码版本认定线上 Flyway 历史已经同步，也不能为启用记忆直接执行所有待处理迁移。
 
-仓库的镜像构建工作流在推送 `main` 或手动触发时运行；当前工作流定义要求 Maven 后端测试和前端 `npm test` 通过后才构建并推送镜像。推送 `Concerto` 不会自动触发该工作流。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
+仓库的镜像构建工作流在推送 `main` 或手动触发时运行；Maven 后端测试和前端 `npm test` 通过后才构建并推送镜像。部署脚本与配置见 [docker-compose.yml](docker-compose.yml)、[deploy.sh](deploy.sh) 和 [镜像构建工作流](.github/workflows/build-push-images.yml)。
 
 ## 开发与验证
 
@@ -274,32 +274,37 @@ npm run test:e2e
 ## 项目结构
 
 ```text
-PAMS/
+Concerto/
+├── .github/workflows/                       # 镜像构建与专项验收
 ├── pams-backend/
 │   └── src/
 │       ├── main/java/com/pams/
-│       │   ├── common/、config/、security/     # 公共设施、租户上下文与认证
-│       │   └── module/                        # 活动、排班、党务、档案、Agent、知识库、组织与权限
-│       ├── main/java/db/migration/            # Java Flyway 迁移（含 V37）
+│       │   ├── common/、config/、security/   # 公共设施、租户上下文与认证
+│       │   └── module/                      # 活动、排班、党务、档案、Agent、知识库、组织与权限
+│       ├── main/java/db/migration/           # Java Flyway 迁移
 │       ├── main/resources/
 │       │   ├── application.yml
-│       │   └── db/                           # 通用 / MySQL / H2 迁移
-│       └── test/                             # 单元与集成测试
+│       │   └── db/                          # 通用 / MySQL / H2 迁移
+│       └── test/                            # 单元与集成测试
 ├── pams-web/
 │   ├── src/
 │   │   ├── api/、stores/                     # 接口与应用状态
 │   │   ├── components/                       # 品牌、表单、灵思及业务共享组件
 │   │   ├── layouts/、pages/、router/          # 页面、导航与权限守卫
 │   │   └── styles/、utils/                   # v6 主题、样式与工具函数
-│   ├── dev/                                  # 开发代理辅助逻辑
-│   └── e2e/                                  # Playwright 用例
-├── database/                                 # 建库与存量材料处理脚本
-├── docs/                                     # 设计、实现记录、原型与验收截图
-├── pom.xml                                   # Maven 聚合入口
-├── .env.example                              # 容器环境配置示例
+│   ├── dev/                                 # 开发代理辅助逻辑
+│   ├── e2e/                                 # Playwright 用例
+│   ├── public/                              # 静态资源
+│   └── scripts/                             # 前端辅助脚本
+├── database/                                # 建库与存量材料处理脚本
+├── docs/                                    # 使用指南、设计档案与验收证据
+├── scripts/                                 # 演示数据、灵思与通知验收工具
+├── video/                                   # 产品演示视频素材
+├── pom.xml                                  # Maven 聚合入口
+├── .env.example                             # 容器环境配置示例
 ├── docker-compose.yml
 ├── deploy.sh
-└── start.bat                                 # Windows 本地开发启动入口
+└── start.bat                                # Windows 本地开发启动入口
 ```
 
 ## 文档导航

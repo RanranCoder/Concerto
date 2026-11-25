@@ -12,6 +12,7 @@ pams-web/test-results-s5/
 pams-web/playwright-report/
 # IDE / OS
 .idea/
+.obsidian/
 .vscode/
 *.iml
 .DS_Store
@@ -45,8 +46,24 @@ target/test-data/
 .acl-repair/
 
 # 数据抽取临时产物
+/extract_fields.py
 extract_stdout.txt
 field_extract_result.txt
 *_extract_result.txt
+
+# 本地报告、答辩材料与辅助脚本
+/docs/毕业设计综合设计文档/
+/report_work/
+/emphasize_agent.py
+/emphasize_step7.py
+
+# 本地验收生成物（已归档的证据继续受 Git 跟踪）
+/docs/audits/agent-acceptance-20261102/batch6-mysql-*/
+/docs/audits/agent-closure-20261103/document-visual/*.docx
+/docs/audits/agent-closure-20261103/document-visual/*.pdf
+/docs/audits/agent-closure-20261103/document-visual/pdf-renderer-metadata.json
+/docs/audits/agent-closure-20261103/quality-*/
+/docs/audits/agent-closure-20261103/resume-probe/
+
 # 本地工具探针
 pams-backend/.dsh-write-probe.txt

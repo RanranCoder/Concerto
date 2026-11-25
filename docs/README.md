@@ -1,6 +1,6 @@
 # 协奏文档索引
 
-当前使用说明按 2026-11-12 的 `Concerto` 工作区核对，基准提交为 `2bec9ee`，含工作区已有的 V71 和镜像发布测试门禁。线上版本及数据库迁移状态以对应发布记录为准。
+当前项目结构和运行入口见 [项目 README](../README.md)。下方保留 2026-11-12 的文档审计记录，基准提交为 `2bec9ee`。线上版本及数据库迁移状态以对应发布记录为准。
 
 ## 使用、开发与验收
 
@@ -12,7 +12,9 @@
 | 组织模型服务、协议和密钥保存 | [AI 服务设置](design/ai-services/README.md) |
 | 灵思隔离环境和专项命令 | [S5 验收](../scripts/agent-s5/README.md) |
 | 通知与 MySQL、Nginx 和 SSE 联调 | [通知验收](../scripts/notification-acceptance/README.md) |
+| 独立演示库与本地演示种子 | [协奏演示库](../scripts/concerto-demo/README.md)、[本地演示数据](../scripts/demo-data/README.md) |
 | 设计规范和模块实现背景 | [设计与原型索引](design/README.md) |
+| 产品演示视频与素材 | [演示视频目录](../video/pams-cat-yarn-30s/README.md) |
 
 ## 设计和历史记录
 
