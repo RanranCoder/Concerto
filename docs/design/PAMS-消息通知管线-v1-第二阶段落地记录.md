@@ -9,7 +9,7 @@
 按用户“分批次全部提交”的要求，进入本阶段前已提交并清空既有工作区：
 
 - `4c9235b`：通知可靠收件箱与 SSE，包含任务计划、权限治理的必要依赖。
-- `08c8f88`：灵思输入界面调整及请求 ID 兼容。
+- `08c8f88`：Concerto Agent 输入界面调整及请求 ID 兼容。
 - `8e7b66d`：设计原型、落地文档与验收材料。
 
 本阶段延续站内消息与 SSE 技术路线，没有引入外部消息队列或发送渠道。生产数据库与部署配置尚未执行上线操作。
@@ -61,7 +61,7 @@
 
 ## 4. 统一“待我处理”
 
-新增 `PendingWorkService` 与 `GET /api/notifications/pending`。该查询直接读取业务状态，工作台、通知中心和灵思 `queryMyPendingWork` 共用。
+新增 `PendingWorkService` 与 `GET /api/notifications/pending`。该查询直接读取业务状态，工作台、通知中心和 Concerto Agent `queryMyPendingWork` 共用。
 
 | 待办来源 | 当前资格 |
 | --- | --- |

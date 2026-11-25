@@ -1,6 +1,6 @@
 # 协奏 Concerto 工程实践
 
-> 协奏 Concerto（工程代号 PAMS）是一个面向学生组织的协同管理平台，覆盖活动、排班考勤、成员、党务、宣传、档案、通知、权限与 AI 助手「灵思」等业务。本文沉淀项目的工程约定、架构分层、构建测试体系与踩坑经验，供后续开发与维护参考。
+> 协奏 Concerto（工程代号 PAMS）是一个面向学生组织的协同管理平台，覆盖活动、排班考勤、成员、党务、宣传、档案、通知、权限与 AI 助手「Concerto Agent」等业务。本文沉淀项目的工程约定、架构分层、构建测试体系与踩坑经验，供后续开发与维护参考。
 
 ---
 
@@ -86,7 +86,7 @@ com.pams
 | 模块 | Controller（数量） |
 |---|---|
 | activity 活动管理 | Activity、ActivityDetail、Agenda、Plan、Score、Seat、Signin、SigninRoster、Task（9） |
-| agent 灵思 | Agent、AgentArtifact、AgentBench、AgentDiagnostics、AgentMemory、AgentRuntime、AgentTeam + provider 下 AgentProvider、AgentModelStatus（9） |
+| `agent`（Concerto Agent） | Agent、AgentArtifact、AgentBench、AgentDiagnostics、AgentMemory、AgentRuntime、AgentTeam + provider 下 AgentProvider、AgentModelStatus（9） |
 | archive 档案 | Announcement、Credit、File、LegacyFileAccess、Material、Template（6） |
 | party 党务 | PartyInvestigation、PartyMember、PartyRegister、PartyRoster、PartyTransfer（5） |
 | member 成员 | AccountBatch、AccountSetup、Member、MemberSession（4） |

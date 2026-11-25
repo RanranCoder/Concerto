@@ -48,7 +48,7 @@ POST 示例：
 
 新记录省略 revision；修改或确认已有记录必须携带最新 revision。consent 缺省为 false，只创建 PENDING 候选，不进入模型上下文；候选不能覆盖有效记忆。确认使用相同 scope、key、content，携带 revision 和 consent=true。状态为 ACTIVE、PENDING、INVALID 或 EXPIRED。
 
-没有启用自动抽取。第三批通过聊天指令与接口管理；第四批在灵思顶部增加“长期记忆”管理抽屉。避免在用户没有明确请求时自动保存聊天中的临时参数或业务资料。
+没有启用自动抽取。第三批通过聊天指令与接口管理；第四批在 Concerto Agent 顶部增加“长期记忆”管理抽屉。避免在用户没有明确请求时自动保存聊天中的临时参数或业务资料。
 
 ## 留存、失效与并发
 

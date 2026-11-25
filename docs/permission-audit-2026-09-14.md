@@ -9,7 +9,7 @@
 
 ## 0. 结论摘要
 
-**一句话**：系统采用 **单角色 RBAC + Controller 方法级注解**，权限码体系本身是健全的；但 **39.1% 的端点没有任何注解**，且**不存在行级数据域隔离**；智能体问答（灵思）会**复用同一批 Service**，因此它既继承了这些缺口，又额外引入了两条独有路径。
+**一句话**：系统采用 **单角色 RBAC + Controller 方法级注解**，权限码体系本身是健全的；但 **39.1% 的端点没有任何注解**，且**不存在行级数据域隔离**；智能体问答（Concerto Agent）会**复用同一批 Service**，因此它既继承了这些缺口，又额外引入了两条独有路径。
 
 | # | 问题 | 等级 | 当前可利用 |
 |---|---|---|---|
@@ -21,7 +21,7 @@
 | **A6** | `PolicyGuard.mask()` 不遮姓名；`maskName()` 定义后**从未被调用** | 🟠 中 | ✅ 是 |
 | **A7** | `POST /api/signins/scan` permitAll 匿名写考勤，仅靠签到码 | 🟠 中 | ✅ 是 |
 | **A8** | `CourseScheduleController./analyze` 无权限且接受任意 `userIds` → 任一人可查任意人空闲时段 | 🟠 **中高** | ✅ 是 |
-| **A9** | **`party:view` 口径与前端路由守卫冲突**：干事（STAFF）持有 `party:view`，但 `/party/*` 路由用 `RequireRole(LEADER_ROLES)` 守卫 → **干事看不到党务台账页面，却可通过灵思问出党员姓名与所处阶段** | 🔴 **高** | ✅ **是（本审计最确凿的"越权获取受保护内容"实例）** |
+| **A9** | **`party:view` 口径与前端路由守卫冲突**：干事（STAFF）持有 `party:view`，但 `/party/*` 路由用 `RequireRole(LEADER_ROLES)` 守卫 → **干事看不到党务台账页面，却可通过 Concerto Agent 问出党员姓名与所处阶段** | 🔴 **高** | ✅ **是（本审计最确凿的"越权获取受保护内容"实例）** |
 
 ### ⚠️ 定级更正说明（2026-09-14 当日二次核查）
 
@@ -190,7 +190,7 @@
 ```
 浏览器 ──▶ Controller ──@PreAuthorize──▶ Service ──▶ Repository
                                               ▲
-灵思   ──▶ ToolRegistry ──visibleTo/dispatch──┘   ← 平行的第二道，不共享代码
+Concerto Agent   ──▶ ToolRegistry ──visibleTo/dispatch──┘   ← 平行的第二道，不共享代码
 ```
 
 因此智能体的越权风险 = **页面自身缺口** ∪ **智能体独有路径**。前者不需要智能体就存在，但**智能体会把它变成"一句话就能拿到"**，降低了利用门槛（不需要理解参数结构、不需要翻接口文档）。
@@ -348,7 +348,7 @@ String id = prefix + "_" + Long.toHexString(System.nanoTime());
 
 #### P8 —— 知识库索引层（设计阶段，见 §3）
 
-### 2.3.A9 —— 【🔴 高】真正的越权实例：干事可以通过灵思问出党务台账内容
+### 2.3.A9 —— 【🔴 高】真正的越权实例：干事可以通过 Concerto Agent 问出党务台账内容
 
 **这是本审计中唯一确凿的"没有页面权限的用户获取到该页面受保护内容"实例。**
 
@@ -378,7 +378,7 @@ String id = prefix + "_" + Long.toHexString(System.nanoTime());
 ② 后端：PartyMemberController 的 GET /  (page)、GET /{id}、GET /stages 三个端点
         —— 无 @PreAuthorize（实测 3/7 未注解）
         → 干事直连 API 即可拿到党务名册
-③ 灵思：QueryPartyMemberProgressTool.requiredPermissions() = ["party:view"]
+③ Concerto Agent：QueryPartyMemberProgressTool.requiredPermissions() = ["party:view"]
         —— 而 STAFF 的权限种子里**就有** "party:view"（PermissionService.restoreDefault L124）
         → 工具对干事可见
         → 干事问一句"有哪些预备党员"，得到 姓名 + 阶段 + 所属部门 + 申请时间
@@ -389,7 +389,7 @@ String id = prefix + "_" + Long.toHexString(System.nanoTime());
 #### 为什么 `party:view` 是错误的口径（而不是"权限配错了"）
 
 即便把 `party:view` 从 STAFF 摘掉，也仍是错的口径 —— 因为它表达的是"能看党务"，而产品要表达的是"**部长及以上**能看党务"。
-用权限码表达角色谓词，会在权限管理页上产生一个新的失败模式：**管理员为了让某干事用上某个功能，勾选了 `party:view`，于是顺带把他放进了党务台账** —— 而前端路由是角色守卫，不受权限码影响，所以**页面依然打不开**，他只会通过 API 和灵思看到数据。
+用权限码表达角色谓词，会在权限管理页上产生一个新的失败模式：**管理员为了让某干事用上某个功能，勾选了 `party:view`，于是顺带把他放进了党务台账** —— 而前端路由是角色守卫，不受权限码影响，所以**页面依然打不开**，他只会通过 API 和 Concerto Agent 看到数据。
 
 > 正确修法：**把口径收成一处**。要么让前端 `/party/*` 也改用 `RequirePerm('party:view')`（则权限码成为唯一口径），要么把工具的 `requiredPermissions` 改成 `requiresLeader()`（则角色成为唯一口径）。**不能一边角色、一边权限码。**
 

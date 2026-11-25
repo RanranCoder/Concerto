@@ -4,7 +4,7 @@
 
 消息通知的业务事件、接收人规则、个人收件箱、MySQL Outbox 与 SSE 技术路线及分期迁移见[消息通知管线重设计 v1](PAMS-消息通知管线重设计-v1.md)（历史设计基线）。可靠收件箱与 SSE 的实现范围、验证证据和后续边界见[第一阶段落地记录](PAMS-消息通知管线-v1-第一阶段落地记录.md)。
 
-通用提醒调度、任务临期逾期、班前提醒及工作台/通知中心/灵思统一待办见[第二阶段落地记录](PAMS-消息通知管线-v1-第二阶段落地记录.md)。
+通用提醒调度、任务临期逾期、班前提醒及工作台/通知中心/Concerto Agent 统一待办见[第二阶段落地记录](PAMS-消息通知管线-v1-第二阶段落地记录.md)。
 
 治理个人告知、公告通知受众与独立确认、管线运维查询及失败恢复见[第三阶段首批落地记录](PAMS-消息通知管线-v1-第三阶段落地记录.md)。
 
@@ -22,7 +22,7 @@
 - [V6 原始入口](PAMS-UI-bright-v6.html)：支持全站模块切换。
 - [V5 原型](PAMS-UI-bright-v5.html)。
 - [登录设计](PAMS-login-redesign-v1.html)。
-- [灵思 V2 原型](lingsi-ui-v2-prototype.html)。
+- [Concerto Agent V2 原型](lingsi-ui-v2-prototype.html)。
 - [设计语言预览](design-preview.html)。
 - [Agent 团队原型](agent-team-prototype.html)。
 
@@ -39,7 +39,7 @@ node docs/design/ui-v6-activity/serve.cjs
 - `PAMS-UI-v6-*.css/js`：V6 各模块原型代码。
 - `PAMS-UI-*.md`：界面规范、模块设计与落地记录。
 - `ui-*`：原型及界面验收截图、验证脚本和样例文件。
-- `assets/`：原型使用的品牌图标和灵思头像。
+- `assets/`：原型使用的品牌图标和 Concerto Agent 头像。
 - `vendor/word-preview/`：Word 预览依赖及许可证。
 - `品牌设计/`：品牌方案与使用规范文档。
 
@@ -51,9 +51,9 @@ node docs/design/ui-v6-activity/serve.cjs
 
 正式项目的接口、权限规则、验证与预览见 [策划书工作台落地记录](PAMS-UI-v6-策划书工作台落地记录.md)。
 
-灵思能力闭环、智能编排与任务成果工作台的统一升级计划见 [灵思 Agent 升级优化方案](PAMS-灵思Agent升级优化方案.md)，包含审计问题映射、实施批次与验收矩阵。
+Concerto Agent 能力闭环、智能编排与任务成果工作台的统一升级计划见 [Concerto Agent 升级优化方案](PAMS-灵思Agent升级优化方案.md)，包含审计问题映射、实施批次与验收矩阵。
 
-各批次已实现的能力、验证证据与尚未完成的后续阶段见 [灵思 Agent 升级落地记录](PAMS-灵思Agent升级落地记录.md)。
+各批次已实现的能力、验证证据与尚未完成的后续阶段见 [Concerto Agent 升级落地记录](PAMS-灵思Agent升级落地记录.md)。
 
 内嵌文档编辑器的方案、授权与接入设计见 [策划书内嵌 Word 编辑器选型调研](PAMS-策划书内嵌Word编辑器选型调研.md)。
 

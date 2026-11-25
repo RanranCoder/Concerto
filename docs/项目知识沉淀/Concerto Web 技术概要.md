@@ -1,6 +1,6 @@
 # Concerto Web 技术概要
 
-> Concerto Web 是协奏的前端工程（`pams-web/`），React 18 单页应用，承载活动、排班考勤、党务、成员、宣传、档案、知识库、权限治理与灵思（Agent）工作台等全部界面。本文概要其技术选型、工程结构、权限体系、实时流式与状态管理设计。
+> Concerto Web 是协奏的前端工程（`pams-web/`），React 18 单页应用，承载活动、排班考勤、党务、成员、宣传、档案、知识库、权限治理与 Concerto Agent 工作台等全部界面。本文概要其技术选型、工程结构、权限体系、实时流式与状态管理设计。
 
 ---
 
@@ -67,7 +67,7 @@ src/
 
 前端在用的权限码（节选）：`activity:view/edit`、`task:view`、`schedule:view/self:view/manage/free_table`、`attendance:view/self:view`、`member:view`、`party:view`、`youth/view`、`volunteer:view`、`content:view`、`material:view`、`notice:view`、`kb:read`、`org:manage`、`user:view`、`role:view`、`checkin:manage`、`plan:edit` 等。
 
-**设计要点：`/agent` 路由与菜单对所有登录用户开放，前端没有 `agent:run` 权限码**——灵思的权限控制在工具层：每个工具声明 `requiredPermissions`，`GET /api/agent/tools` 只返回当前用户可见工具。这是"权限即上下文"在 UI 上的体现。
+**设计要点：`/agent` 路由与菜单对所有登录用户开放，前端没有 `agent:run` 权限码**——Concerto Agent 的权限控制在工具层：每个工具声明 `requiredPermissions`，`GET /api/agent/tools` 只返回当前用户可见工具。这是"权限即上下文"在 UI 上的体现。
 
 > 治理口径：产品可见性要同时核验前端守卫（RequirePerm/RequireRole）、菜单过滤、后端 `@PreAuthorize` 三处一致，不能只凭其中一处判断。
 
@@ -79,8 +79,8 @@ src/
 |---|---|
 | `auth.ts` | token + user，persist 到 localStorage（key `pams_token`），带 migrate 补 permissions |
 | `org.ts` | 当前组织：orgName、primaryColor（theme_json）、enabledPacks、terminology |
-| `agent.ts` | 灵思核心（约 1440 行）：会话 / outcomes / timeline / 流事件 / 确认卡 / 表单 / 断线对账 |
-| `agentPanel.ts` | 灵思右侧实体面板（分屏 tabs：artifact/text/version） |
+| `agent.ts` | Concerto Agent 核心（约 1440 行）：会话 / outcomes / timeline / 流事件 / 确认卡 / 表单 / 断线对账 |
+| `agentPanel.ts` | Concerto Agent 右侧实体面板（分屏 tabs：artifact/text/version） |
 | `notification.ts` | 通知列表与未读数，订阅 authStore 变化自动 reset |
 | `theme.ts` | 明暗主题，persist（key `pams_theme`），写 `document.documentElement.dataset.theme` |
 | `preferences.ts` | 列表密度偏好（key `concerto_preferences`） |
@@ -100,7 +100,7 @@ src/
 
 ---
 
-## 7. 灵思前端（Agent 工作台）
+## 7. Concerto Agent 前端（Agent 工作台）
 
 ### 7.1 通道架构：REST 下单 + WS 过程事件 + REST 补拉对账
 
@@ -154,7 +154,7 @@ src/
 
 ## 9. 主题与样式
 
-- CSS 设计令牌：`styles/tokens.css`（色板/间距/圆角变量）+ `tokens.ts` 常量对齐；`global.css` 基础样式；灵思界面独立 `lingsi*.css`；功能模块样式带版本后缀（`*-v6.css`）防遗留冲突。
+- CSS 设计令牌：`styles/tokens.css`（色板/间距/圆角变量）+ `tokens.ts` 常量对齐；`global.css` 基础样式；Concerto Agent 界面独立 `lingsi*.css`；功能模块样式带版本后缀（`*-v6.css`）防遗留冲突。
 - 明暗双主题：`theme.ts` 切换并写 `data-theme`；`App.tsx` 用 `ConfigProvider(zh_CN)` + **组织主色动态注入**（`org.ts` 的 primaryColor 来自组织 theme_json，多租户在 UI 上的体现）。
 
 ---
@@ -164,14 +164,14 @@ src/
 - **类型检查**：`tsc -b`（solution-style 必须走构建模式）。
 - **Vite**：dev 5173；代理 `/api`、`/uploads`（changeOrigin + 同源 Origin 重写，目标默认 `http://localhost:8080`，可被 `PAMS_E2E_API_TARGET` 覆盖且强制 localhost）、`/ws`（ws:true）；别名 `@ → ./src`。
 - **单测**：`scripts/test.mjs` 驱动 vitest（node 环境，exclude `e2e/**`）；utils 下工具函数普遍配 `.test.ts`。
-- **E2E**：Playwright 25 个 spec（`e2e/`），覆盖登录、权限、活动、签到、灵思对话等主链路。
+- **E2E**：Playwright 25 个 spec（`e2e/`），覆盖登录、权限、活动、签到、Concerto Agent 对话等主链路。
 - 容器化：`Dockerfile` + `nginx.conf` 静态托管。
 
 ---
 
 ## 11. 设计要点小结
 
-1. **权限三处一致**：路由守卫、菜单过滤、后端校验同一权限码口径；灵思例外地把权限下沉到工具层。
+1. **权限三处一致**：路由守卫、菜单过滤、后端校验同一权限码口径；Concerto Agent 例外地把权限下沉到工具层。
 2. **流式三件套**：REST 下单、STOMP 实时、REST 补拉对账；round 重组 + rAF 帧合并 + seq 去重是渲染稳定性的关键。
 3. **服务端权威**：`[n]` 引用回填、citations 复核、权限刷新（/user/queue/authorization）都在服务端完成后才到前端——前端只做展示不做判定。
 4. **契约化错误处理**：Result 解包 + ApiError + silentError + FeedbackBridge，全站错误体验一致。

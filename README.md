@@ -2,9 +2,9 @@
 
 **面向学生组织的活动与协作工作台**
 
-协奏源于信息与智能工程学院党建办公室的党务管理需求。每个组织可以在自己的工作区管理活动、排班、成员和档案，用内置 AI 助手「灵思」查找资料、准备业务操作和跟进任务。工作台汇总一周的活动、排班与任务截止时间。
+协奏源于信息与智能工程学院党建办公室的党务管理需求。每个组织可以在自己的工作区管理活动、排班、成员和档案，用内置 AI 助手 Concerto Agent 查找资料、准备业务操作和跟进任务。工作台汇总一周的活动、排班与任务截止时间。
 
-[快速开始](#快速开始) · [主要功能](#主要功能) · [灵思与知识库](#灵思与知识库) · [本地开发](#本地开发) · [部署](#部署) · [文档](#文档)
+[快速开始](#快速开始) · [主要功能](#主要功能) · [Concerto Agent 与知识库](#concerto-agent-与知识库) · [本地开发](#本地开发) · [部署](#部署) · [文档](#文档)
 
 ![协奏工作台的周历、活动概况和待办](docs/design/ui-v6-implementation/dashboard-light.png)
 
@@ -20,7 +20,7 @@ cd Concerto
 test -f .env || cp .env.example .env
 ```
 
-在根目录的 `.env` 中配置 `MYSQL_ROOT_PASSWORD`、`MYSQL_USER`、`MYSQL_PASSWORD` 和 `PAMS_JWT_SECRET`。MySQL 应用账号可沿用 `pams`，请将示例密码和签名密钥换成自己的值。灵思可以用内置规则模式启动，接入真实模型的配置见下文。
+在根目录的 `.env` 中配置 `MYSQL_ROOT_PASSWORD`、`MYSQL_USER`、`MYSQL_PASSWORD` 和 `PAMS_JWT_SECRET`。MySQL 应用账号可沿用 `pams`，请将示例密码和签名密钥换成自己的值。Concerto Agent 可以用内置规则模式启动，接入真实模型的配置见下文。
 
 ```bash
 docker compose up -d --build
@@ -47,9 +47,9 @@ docker compose logs -f backend
 
 各组织独立管理数据、品牌主题、功能开关和角色。业务主角色决定日常可操作的权限，所有者与受委派的组织管理员负责相应治理操作。权限配置经预览和发布后生效，当前可配置范围为 `ORG`（本组织）。 [角色权限与租户管理](docs/PAMS-角色权限与租户管理-首版落地记录.md) · [花名册批量开户](docs/PAMS-花名册批量开户流程.md)
 
-## 灵思与知识库
+## Concerto Agent 与知识库
 
-从侧栏进入「灵思」（`/agent`），在同一工作区查看对话、任务进度和成果版本。
+打开 `/agent` 进入 Concerto Agent，在同一工作区查看对话、任务进度和成果版本。
 
 | 模式 | 用途 |
 | --- | --- |
@@ -57,7 +57,7 @@ docker compose logs -f backend
 | 只读模式 | 查询权限内的业务信息 |
 | 资料问答 | 检索制度、公告、策划书等组织资料，并给出可回查的引用来源 |
 
-标准模式可按任务需要调度多 Agent 协作。缺少信息时在对话中补齐，确认前可查看内容差异和参考资料，执行结果通过回执记录。确认后生成排班草稿，可在「活动排班」核对并发布。任务和成果可从历史会话继续查看，个人长期记忆可在灵思中管理。 [灵思工作区](docs/design/PAMS-UI-v6-灵思Agent落地记录.md) · [长期记忆](docs/design/PAMS-Agent长期记忆落地说明.md)
+标准模式可按任务需要调度多 Agent 协作。缺少信息时在对话中补齐，确认前可查看内容差异和参考资料，执行结果通过回执记录。确认后生成排班草稿，可在「活动排班」核对并发布。任务和成果可从历史会话继续查看，个人长期记忆可在 Concerto Agent 中管理。 [Concerto Agent 操作手册](docs/协奏PAMS-当前业务功能与使用流程说明.md#16-concerto-agent-与自动协作) · [长期记忆](docs/design/PAMS-Agent长期记忆落地说明.md)
 
 有 `org:manage` 权限的账号可在「系统设置 → AI 服务」测试连接并启用组织默认服务。未设置组织默认服务时，部署侧可以通过 `PAMS_AGENT_MODEL` 和 `PAMS_AGENT_API_KEY` 提供模型，并用 `PAMS_AGENT_PROTOCOL` 和 `PAMS_AGENT_BASE_URL` 选择协议及 API 根地址。默认协议是 `openai_responses`，兼容的 Chat Completions 服务可配置 `openai_chat_completions`。模型 ID 或密钥缺失时，部署默认服务使用内置规则模式（stub）。 [AI 服务设置](docs/design/ai-services/README.md)
 
@@ -146,15 +146,15 @@ Compose 默认将前端发布到 `127.0.0.1:8081`。对外提供服务时，可�
 | `pams-web/` | React 18、TypeScript 5.7、Vite 7、Ant Design 5、Zustand。使用 Vitest 和 Playwright 验证页面与交互 |
 | `pams-backend/` | Java 21、Spring Boot 4.0.2、Spring Data JPA 和 Spring Security。通过 MySQL 8 持久化业务数据，Flyway 管理迁移 |
 | `database/` | 本地建库和数据导入工具 |
-| `scripts/` | 演示数据、灵思和通知专项验收 |
+| `scripts/` | 演示数据、Concerto Agent 和通知专项验收 |
 | `docs/` | 业务操作、接口清单、设计和验收记录 |
 
-通知中心使用 SSE，灵思事件与权限刷新使用 WebSocket（STOMP / SockJS）。生产 Web 镜像由 Nginx 提供前端并转发后端请求。 [API 接口清单](docs/API-inventory.md)
+通知中心使用 SSE，Concerto Agent 事件与权限刷新使用 WebSocket（STOMP / SockJS）。生产 Web 镜像由 Nginx 提供前端并转发后端请求。 [API 接口清单](docs/API-inventory.md)
 
 ## 文档
 
 - [业务操作手册](docs/协奏PAMS-当前业务功能与使用流程说明.md) · [文档索引](docs/README.md)
-- [AI 服务设置](docs/design/ai-services/README.md) · [灵思 S5 验收](scripts/agent-s5/README.md)
+- [AI 服务设置](docs/design/ai-services/README.md) · [Concerto Agent S5 验收](scripts/agent-s5/README.md)
 - [演示库初始化](scripts/concerto-demo/README.md) · [通知管线验收](scripts/notification-acceptance/README.md)
 
 ## 许可证

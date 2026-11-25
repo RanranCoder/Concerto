@@ -1,6 +1,6 @@
 # PAMS（协奏）代码审计报告
 
-审计日期为 2026-11-11，基线为 `Concerto` 分支的 `2bec9ee51730c4da0be9d04866291223e87b6ff7`。本轮按业务影响抽查了活动子资源与租户隔离、JWT 与实时连接、文件访问、灵思持久任务恢复、前端测试与镜像发布流程。源码发现均为静态审查结论。验证环境及测试结果见文末。
+审计日期为 2026-11-11，基线为 `Concerto` 分支的 `2bec9ee51730c4da0be9d04866291223e87b6ff7`。本轮按业务影响抽查了活动子资源与租户隔离、JWT 与实时连接、文件访问、Concerto Agent 持久任务恢复、前端测试与镜像发布流程。源码发现均为静态审查结论。验证环境及测试结果见文末。
 
 ## 审计发现
 
@@ -9,15 +9,15 @@
 | PAMS-01 | P1 | WebSocket 未检查令牌吊销水位 | 登出或改密后，已吊销的 JWT 仍可在有效期内建立实时连接 |
 | PAMS-02 | P1 | 活动子资源创建缺少父活动归属校验 | 有相应管理权限的用户可写入租户归属与父活动不一致的行 |
 | PAMS-03 | P2 | 评分服务缺少服务端分值校验 | 错误维度或越界分值可进入总分，畸形输入可被记录为零分 |
-| PAMS-04 | P2 | 灵思恢复逻辑将进程身份用于判断存活 | 共享数据库的多后端实例可能误判仍在执行的任务 |
+| PAMS-04 | P2 | Concerto Agent 恢复逻辑将进程身份用于判断存活 | 共享数据库的多后端实例可能误判仍在执行的任务 |
 | PAMS-05 | P2 | 镜像发布流程缺少测试门禁 | 当前测试失败仍可通过相应构建步骤 |
-| PAMS-06 | P3 | 灵思样式违反现有字号刻度约束 | 前端测试稳定出现一项失败 |
+| PAMS-06 | P3 | Concerto Agent 样式违反现有字号刻度约束 | 前端测试稳定出现一项失败 |
 
 P1 优先处理认证与租户边界。P2 涉及数据正确性、条件性运行风险或发布保障。P3 为影响局部的工程回归。
 
 ### PAMS-01 · WebSocket 未检查令牌吊销水位
 
-HTTP 认证会比较 JWT 的签发时间和用户的 `tokenInvalidBefore`，登出会推进该水位。通知 SSE 也会在发送前检查有效期、账号和组织状态以及吊销水位。STOMP 拦截器只在 `CONNECT` 解析 JWT 和检查用户状态，后续帧直接放行。此前已签发且未过期的 JWT 因此仍可通过 WebSocket 认证，既有连接也缺少同等的重新验证。灵思通过该通道向用户推送会话和任务事件。 [HTTP 吊销检查](../../pams-backend/src/main/java/com/pams/security/JwtAuthenticationFilter.java#L45) · [登出](../../pams-backend/src/main/java/com/pams/controller/AuthController.java#L157) · [SSE 校验](../../pams-backend/src/main/java/com/pams/module/notification/service/NotificationStreamRegistry.java#L41) · [STOMP 拦截器](../../pams-backend/src/main/java/com/pams/security/WebSocketAuthInterceptor.java#L33) · [灵思事件发布](../../pams-backend/src/main/java/com/pams/module/agent/stream/AgentEventPublisher.java#L157)
+HTTP 认证会比较 JWT 的签发时间和用户的 `tokenInvalidBefore`，登出会推进该水位。通知 SSE 也会在发送前检查有效期、账号和组织状态以及吊销水位。STOMP 拦截器只在 `CONNECT` 解析 JWT 和检查用户状态，后续帧直接放行。此前已签发且未过期的 JWT 因此仍可通过 WebSocket 认证，既有连接也缺少同等的重新验证。Concerto Agent 通过该通道向用户推送会话和任务事件。 [HTTP 吊销检查](../../pams-backend/src/main/java/com/pams/security/JwtAuthenticationFilter.java#L45) · [登出](../../pams-backend/src/main/java/com/pams/controller/AuthController.java#L157) · [SSE 校验](../../pams-backend/src/main/java/com/pams/module/notification/service/NotificationStreamRegistry.java#L41) · [STOMP 拦截器](../../pams-backend/src/main/java/com/pams/security/WebSocketAuthInterceptor.java#L33) · [Concerto Agent 事件发布](../../pams-backend/src/main/java/com/pams/module/agent/stream/AgentEventPublisher.java#L157)
 
 **修复与验收。** 复用 HTTP 的账号、组织和 JWT 吊销校验，并明确连接过期和吊销后的失效机制。验收应覆盖登出或改密后的重连、已打开连接停止接收后续消息、组织停用，以及重新登录后可建立连接。
 
@@ -33,7 +33,7 @@ HTTP 认证会比较 JWT 的签发时间和用户的 `tokenInvalidBefore`，登�
 
 **修复与验收。** 按记录所属活动加载评分规则，逐项验证维度、数值类型和允许范围，校验通过后计算总分。验收覆盖合法边界值、畸形 JSON、未知维度、负分和超过满分，并确认失败更新保留原记录。
 
-### PAMS-04 · 灵思多实例恢复存在存活误判
+### PAMS-04 · Concerto Agent 多实例恢复存在存活误判
 
 恢复扫描将执行所有者与本进程 ID 不同的 `RUNNING` 动作识别为未知结果。工作项状态代码也采用相同判断。另一个仍健康的实例可以持有该动作，因此同库运行时，滚动替换或横向扩容都可能导致待核对状态提前出现。仓库的 Compose 默认配置仅定义一个后端服务实例，本项影响取决于实际部署拓扑。 [恢复扫描](../../pams-backend/src/main/java/com/pams/module/agent/stream/AgentRunOutbox.java#L46) · [工作项状态判断](../../pams-backend/src/main/java/com/pams/module/agent/orchestration/WorkItemState.java#L449) · [Compose 配置](../../docker-compose.yml#L26)
 
@@ -45,7 +45,7 @@ HTTP 认证会比较 JWT 的签发时间和用户的 `tokenInvalidBefore`，登�
 
 **修复与验收。** 把前后端常规测试设为镜像推送的依赖。用一个预期失败的测试验证推送任务被阻止，再确认测试通过时发布可继续。
 
-### PAMS-06 · 灵思样式违反字号刻度约束
+### PAMS-06 · Concerto Agent 样式违反字号刻度约束
 
 协作运行卡片及相关样式使用了五处硬编码字号，其中四处为 `12px`，一处为 `14px`。现有 `tokens.test.ts` 的 CSS 字号断言报告了这五处。 [样式位置](../../pams-web/src/styles/lingsi-v6.css#L199) · [字号断言](../../pams-web/src/styles/tokens.test.ts#L243)
 

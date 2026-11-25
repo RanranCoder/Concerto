@@ -1,7 +1,7 @@
 # PAMS 通用化与「多 Agent 协作」改造策划
 
 > **命题**：基于多 Agent 协作的高校学生组织智能工作台系统设计与实现
-> **现状**：PAMS —— 面向高校党建办公室的党务管理系统（单 Agent「灵思」）
+> **现状**：PAMS —— 面向高校党建办公室的党务管理系统（单 Agent「Concerto Agent」）
 > **文档性质**：毕业设计改造策划（设计稿，待评审）
 > **前置事实**：本文所有「现状」结论均来自对 `pams-backend` / `pams-web` 源码与 Flyway 迁移链（V1–V29）的直接核对。
 
@@ -28,7 +28,7 @@
 
 ### 1.1 已具备的能力（论文中可作为「工程基础」，改造中直接复用）
 
-**后端 `com.pams.module.agent`（灵思）**
+**后端 `com.pams.module.agent`（Concerto Agent）**
 
 | 资产 | 位置 | 复用价值 |
 |---|---|---|
@@ -51,7 +51,7 @@
 
 **前端 `pams-web`**
 
-- 灵思页面全套：`pages/agent/AgentHome` + `components/agent/*`（19 个 `Lingsi*` 组件）+ `stores/agent.ts`（含过程时间轴 `mergeTimeline`）+ `api/agent.ts`。
+- Concerto Agent 页面全套：`pages/agent/AgentHome` + `components/agent/*`（19 个 `Lingsi*` 组件）+ `stores/agent.ts`（含过程时间轴 `mergeTimeline`）+ `api/agent.ts`。
 - 知识库页面：`pages/knowledge/KnowledgeBase`（台账 / 检索记录 / 快照三 Tab）。
 - 设计语言：`styles/lingsi.css`（灰阶极简 + 文档流 + 产物分屏 + 单侧控制点）。
 
@@ -79,7 +79,7 @@
 | 服务对象 | 学院党建办公室 | 高校各类学生组织（党建办 / 学生会 / 社团 / 青协 / 科协…） |
 | 核心域 | 党务台账 + 活动管理 | **组织 / 成员 / 活动 / 任务 / 知识 / Agent** 通用域 |
 | 领域实现 | 硬编码在核心 | **可插拔领域包（Domain Pack）**，党建是其中之一 |
-| 智能形态 | 单个助手（灵思） | **多 Agent 协作团队**（规划 / 检索 / 策划 / 文书 / 排班 / 审查） |
+| 智能形态 | 单个助手（Concerto Agent） | **多 Agent 协作团队**（规划 / 检索 / 策划 / 文书 / 排班 / 审查） |
 | 品牌 | 党建红 `#DE2910` 固化 | 组织档案驱动的**主题令牌** |
 
 ### 2.2 领域抽象模型（通用化的地基）
@@ -316,7 +316,7 @@ Flyway 新迁移（沿用 `V30+`，`CREATE TABLE IF NOT EXISTS` + utf8mb4 约定
 | `AGENT_DELEGATE` | `{from, to, reason}` | 画委派边 |
 | `REVIEW_RESULT` | `{verdict, reason, round}` | 审查卡（PASS/REVISE） |
 
-### 3.8 前端改造（复用灵思全套，新增「协作视图」）
+### 3.8 前端改造（复用 Concerto Agent 全套，新增「协作视图」）
 
 - **复用**：`AgentHome` 三栏骨架、`LingsiConversationList`、`LingsiMessageBody`、`LingsiProcessZone`（时间轴）、`LingsiActionCard`（确认卡）、`LingsiFormCard`、`LingsiArtifactCard`。
 - **新增**：`LingsiAgentTeam`（协作拓扑/团队面板，展示各专家状态与委派关系）、`LingsiReviewCard`（审查结论卡）。

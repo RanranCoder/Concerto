@@ -1,6 +1,6 @@
-# 协奏Concerto Agent 设计原理
+# Concerto Agent 设计原理
 
-> 「灵思」是协奏 Concerto 内置的 AI 助手 Agent，产品名灵思，代码仍为 `com.pams.module.agent`（接口前缀 `/api/agent/**`）。它不是外挂聊天框，而是**长在权限体系里的业务协作者**：复用业务 Service、受 RBAC 与多租户约束、写操作强制人机协同确认。本文沉淀其设计原理与关键不变量。
+> Concerto Agent 是协奏内置的 AI 助手，代码位于 `com.pams.module.agent`（接口前缀 `/api/agent/**`）。它不是外挂聊天框，而是**长在权限体系里的业务协作者**：复用业务 Service、受 RBAC 与多租户约束、写操作强制人机协同确认。本文沉淀其设计原理与关键不变量。
 
 ---
 

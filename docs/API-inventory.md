@@ -45,7 +45,7 @@
 | `dashboard` | 首页仪表盘 | 1 | **1** | 1 | 0 | 0 | 0 | 0 | 1 |
 | `system` | 系统配置 | 1 | **1** | 1 | 0 | 0 | 0 | 0 | 1 |
 | `knowledge` | 知识库问答 | 1 | **16** | 11 | 3 | 1 | 1 | 16 | 0 |
-| `agent` | 灵思（Agent） | 9 | **49** | 18 | 25 | 2 | 4 | 29 | 20 |
+| `agent` | Concerto Agent | 9 | **49** | 18 | 25 | 2 | 4 | 29 | 20 |
 
 > 注解列统计 Controller 层的 `@PreAuthorize`。实际访问还取决于全局认证、组织归属和业务授权。
 
@@ -160,8 +160,8 @@ JWT Bearer：`Authorization: Bearer <token>`；有效期 24h（`pams.jwt.expire-
 
 | 客户端订阅目的地 | 推送方 | 载荷 / 用途 |
 | --- | --- | --- |
-| `/user/queue/agent/stream` | `AgentEventPublisher.DEST_STREAM` | `AgentStreamEvent`：灵思流式过程事件（MESSAGE_DELTA / TOOL_* / RUN_DONE 等） |
-| `/user/queue/agent` | `AgentEventPublisher.DEST_TASK` | 灵思持久化任务 / 工作项状态变更 |
+| `/user/queue/agent/stream` | `AgentEventPublisher.DEST_STREAM` | `AgentStreamEvent`：Concerto Agent 流式过程事件（MESSAGE_DELTA / TOOL_* / RUN_DONE 等） |
+| `/user/queue/agent` | `AgentEventPublisher.DEST_TASK` | Concerto Agent 持久化任务 / 工作项状态变更 |
 | `/user/queue/authorization` | `AuthorizationChangeListener` | 角色权限变更后强制刷新客户端权限缓存 |
 
 
@@ -592,7 +592,7 @@ Controller：`KnowledgeController`
 | GET | `/api/kb/sources` | 源清单：每个源收了什么、什么分级、权重、当前覆盖 | — | `Result<List<Map<String, Object>>>` | `kb:read` |
 | GET | `/api/kb/stats` | 覆盖统计 + 检索健康度（含"知识库更新于…"，取最近一次**成功**索引时间） | — | `Result<Map<String, Object>>` | `kb:read` |
 
-### 4.18 灵思（Agent） · `agent`（49 个）
+### 4.18 Concerto Agent · `agent`（49 个）
 
 Controller：`AgentArtifactController`、`AgentBenchController`、`AgentController`、`AgentDiagnosticsController`、`AgentMemoryController`、`AgentModelStatusController`、`AgentProviderController`、`AgentRuntimeController`、`AgentTeamController`
 
@@ -833,14 +833,14 @@ Controller：`AgentArtifactController`、`AgentBenchController`、`AgentControll
 | `agent` | POST | `/api/agent/team/runs/{id}/nodes/{nodeId}/revise` |
 | `agent` | POST | `/api/agent/team/runs/{id}/resume` |
 
-例如，通知运维入口在方法体内检查授权。灵思接口同时使用 Controller 注解、任务归属校验与工具层策略。服务端校验决定实际授权。
+例如，通知运维入口在方法体内检查授权。Concerto Agent 接口同时使用 Controller 注解、任务归属校验与工具层策略。服务端校验决定实际授权。
 
 ## 附录 C · 与旧版 `docs/API.md`（2026-08-26）的差异
 
 | 项 | 旧文档 | 当前源码 |
 | --- | --- | --- |
 | Controller / 接口数 | 39 / 约 191 | 56 / 351 |
-| 模块 | 14 | 18（新增 `knowledge`、`org`、`permission` 拆分细化、灵思系列 Controller 扩充等） |
+| 模块 | 14 | 18（新增 `knowledge`、`org`、`permission` 拆分细化、Concerto Agent 系列 Controller 扩充等） |
 | `GET /uploads/**` | 列为免登录公开 | `authenticated()`，需登录（Cookie 兜底） |
 | 认证 | 仅列 login / ping / scan 等 | 增加 `logout`、`orgs/register`、`orgs/public`、`account-setup`；WS 独立过滤链 |
 | 长连接 | 简述 `/ws` | 列出 STOMP 用户队列和通知 SSE 入口 |

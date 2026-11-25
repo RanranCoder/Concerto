@@ -1,15 +1,15 @@
-# 协作能力内聚进灵思 —— 修改计划
+# 协作能力内聚进 Concerto Agent —— 修改计划
 
 > 日期：2026-09-22
 > 状态：**待拍板**（关键决策点见 §7，确认后再动代码）
-> 触发需求：协作不应作为独立功能页面，应把业务集成进灵思 Agent，在标准模式下自动判断启用
+> 触发需求：协作不应作为独立功能页面，应把业务集成进 Concerto Agent，在标准模式下自动判断启用
 > 关联文档：`PAMS-通用化与多Agent协作改造策划.md`（本文**修订**其 §3.8 与批次 D 的前端交付形态）
 
 ---
 
 ## 0. 一句话结论
 
-把多 Agent 协作从「一个需要用户主动进入并手选 P1–P4 的独立页面」，改为**灵思标准模式内部的一个执行策略**：由服务端按任务特征**自动判定**单 Agent 还是协作组，协作过程**就近呈现**在对话流里（复用现有过程区/时间轴），而不是另开一屏。前端删除 `/agent/team` 页面与「协作」菜单项，后端新增一个**轻量路由器**决定是否升级为协作 Run。
+把多 Agent 协作从「一个需要用户主动进入并手选 P1–P4 的独立页面」，改为**Concerto Agent 标准模式内部的一个执行策略**：由服务端按任务特征**自动判定**单 Agent 还是协作组，协作过程**就近呈现**在对话流里（复用现有过程区/时间轴），而不是另开一屏。前端删除 `/agent/team` 页面与「协作」菜单项，后端新增一个**轻量路由器**决定是否升级为协作 Run。
 
 ---
 
@@ -17,9 +17,9 @@
 
 ### 1.1 现在存在两条并行链路
 
-| | 单 Agent 链路（灵思） | 多 Agent 链路（协作） |
+| | 单 Agent 链路（Concerto Agent） | 多 Agent 链路（协作） |
 |---|---|---|
-| 入口 | `/agent` 灵思对话页 | `/agent/team` 独立页面 + 侧边栏「协作」菜单 |
+| 入口 | `/agent` Concerto Agent 对话页 | `/agent/team` 独立页面 + 侧边栏「协作」菜单 |
 | 后端 | `AgentOrchestrator.run()`：LLM ↔ 工具循环 | `CoordinatorAgent` + `SpecialistExecutor` + `Blackboard` |
 | 模式 | `standard` / `readonly` / `kb` 三档（输入框分段控件切换） | **用户手选 P1/P2/P3/P4** |
 | 事件 | `AgentStreamEvent`（同一套 WebSocket） | 同一套 WebSocket，但事件类型是 `AGENT_*`/`REVIEW_RESULT` |
@@ -28,7 +28,7 @@
 ### 1.2 问题
 
 1. **能力被藏起来了**：用户必须先知道「协作」这个功能存在、再手选一个协作模式（P1 串行 / P2 并行 / P3 反思 / P4 委派），而多数用户并不知道自己的任务该用哪种模式 —— 模式选择本该是系统的判断，不该是用户的负担。
-2. **与灵思割裂**：协作结果（策划书、推文、排班）产出后，用户在协作页看到的是拓扑与黑板，而不是他要的东西；真正能接着干活的地方在灵思。
+2. **与 Concerto Agent 割裂**：协作结果（策划书、推文、排班）产出后，用户在协作页看到的是拓扑与黑板，而不是他要的东西；真正能接着干活的地方在 Concerto Agent。
 3. **同一套事件、两套壳**：两边已经共用 WebSocket 与 `agent_run/step` 表，独立页面属于额外的呈现成本。
 4. **与论文叙事不符**：论文的创新点是「多 Agent 协作编排」，而不是「多了一个页面」。自动编排（何时该协作）比手动选模式更有论证价值。
 
@@ -43,7 +43,7 @@
 ## 2. 目标形态
 
 ```
-用户在灵思输入一句话（标准模式）
+用户在 Concerto Agent 输入一句话（标准模式）
         │
         ▼
 ┌─────────────────────────────────────────────┐
@@ -57,14 +57,14 @@
 └─────────────────────────────────────────────┘
         │  同一 WebSocket 推同一套事件
         ▼
-   灵思对话流内联呈现：
+   Concerto Agent 对话流内联呈现：
    · 过程区逐行显示「检索专家 正在查活动」「写作专家 生成草稿」
    · 审查结论以卡片内联出现（PASS / REVISE + 理由）
    · 需要人工确认时照旧出确认卡（TaskGate 不变）
    · 产物照旧进右侧产物面板
 ```
 
-**关键点：用户视角只有「灵思」一个入口**，协作是它在背后换了一种执行策略。
+**关键点：用户视角只有「Concerto Agent」一个入口**，协作是它在背后换了一种执行策略。
 
 ---
 
@@ -76,13 +76,13 @@
 |---|---|---|
 | `router/index.tsx` | **删除** `/agent/team` 路由 | 保留 `/agent` |
 | `layouts/MainLayout.tsx` | **删除**「协作」菜单项；`selectedKey` 去掉 `/agent/team` 分支 | — |
-| `pages/agent/AgentTeam.tsx` | **删除**（301 行） | 其能力下沉为灵思内联组件 |
+| `pages/agent/AgentTeam.tsx` | **删除**（301 行） | 其能力下沉为 Concerto Agent 内联组件 |
 | `components/agent/LingsiTeamPanel.tsx` | **新增** | 由 `AgentTeam` 的拓扑/团队面板抽取，作为**可折叠**的内联块（默认折叠，点开看协作细节） |
 | `components/agent/LingsiReviewCard.tsx` | **新增** | 审查结论卡（PASS / REVISE + 理由 + 轮次） |
 | `components/agent/LingsiTimelineRow.tsx` | 扩展 | 支持「专家进度」行：`检索专家 · 查活动概览 · 1.2s` |
 | `components/agent/LingsiMessageBody.tsx` | 扩展 | AI 回复带 `agent_name` 时显示协作者身份标识 |
 | `stores/agent.ts` | 扩展 `mergeTimeline` | 增加 `AGENT_*` / `REVIEW_RESULT` 分支（`stores/agentTeam.ts` 已有等价逻辑，抽取共用） |
-| `stores/agentTeam.ts` | 改造 | 由「页面驱动」改为「随灵思对话流消费事件」，去掉 `start()` 的用户手选模式入参 |
+| `stores/agentTeam.ts` | 改造 | 由「页面驱动」改为「随 Concerto Agent 对话流消费事件」，去掉 `start()` 的用户手选模式入参 |
 | `components/agent/LingsiComposer.tsx` | 微调 | 模式标识区显示「自动协作」状态（见 §7 D3） |
 | `components/agent/LingsiEmptyState.tsx` | 微调 | 示例任务里体现「它会自己组队」 |
 
@@ -263,7 +263,7 @@
 | `service/AgentOrchestrator.java` | 新增协作分流：`run()` 在工具循环**之前**调路由器，命中则委托协调者并把黑板组织成回复。与 `kbMode` 同样是前置分流，单 Agent 那 500 行循环**零改动** |
 | `stream/AgentStreamEvent.java` | 新增 `COLLAB_DECISION` 事件与 `collabDecision(...)`；`agentStart/End/Delegate` 补 `displayName` + `conversationId` |
 | `registry/AgentCatalog.java` | 新增 `displayName(name)`：英文 id → 中文展示名 |
-| `orchestration/CoordinatorAgent.java` | 新增 `RunOutcome`（同时返回 Run 与黑板，避免黑板 JSON 往返）；`runWithBlackboard(...)` 供灵思用，旧的 `run(...)` 签名保留不动既有调用点 |
+| `orchestration/CoordinatorAgent.java` | 新增 `RunOutcome`（同时返回 Run 与黑板，避免黑板 JSON 往返）；`runWithBlackboard(...)` 供 Concerto Agent 用，旧的 `run(...)` 签名保留不动既有调用点 |
 | `controller/AgentController.java` | `/chat` 读取 `collab` 开关（缺省 true，老客户端不受影响） |
 
 ### 10.2 前端：开关与归属校验

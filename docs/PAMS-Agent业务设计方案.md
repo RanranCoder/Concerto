@@ -12,7 +12,7 @@
 > **文档定位**：在《[PAMS-Agent 集成调研文档](PAMS-Agent集成调研文档.md)》（v1.0，2026-08-08，机会点调研）的基础上，把 40+ 个机会点**收敛为可施工的业务设计**，并**给出技术方案与落地可行性判断**。
 > **基线核对**：本稿所有"现状"结论均来自 2026-09-13 对 `pams-backend` / `pams-web` 源码与 Flyway 迁移链的直接核对，与调研文档的差异集中在第 0 节；**v1.8 已补充核对至 2026-10-05（Flyway V1–V34），与 v1.7 的差异集中在 §0.5**。
 > **前置文档**：[PAMS-Agent集成调研文档.md](PAMS-Agent集成调研文档.md) ｜ [PRD-v5-开发规划.md](PRD-v5-开发规划.md) ｜ [API.md](API.md) ｜ [PAMS设计方案.md](PAMS设计方案.md)
-> **后续文档（v1.8 补登，见 §0.5.3 优先级）**：[PAMS-灵思页面设计方案.md](design/PAMS-灵思页面设计方案.md) ｜ [PAMS-灵思知识库问答方案-v1.md](PAMS-灵思知识库问答方案-v1.md) ｜ [PAMS-通用化与多Agent协作改造策划.md](PAMS-通用化与多Agent协作改造策划.md) ｜ [PAMS-协作内聚进灵思-修改计划.md](PAMS-协作内聚进灵思-修改计划.md)
+> **后续文档（v1.8 补登，见 §0.5.3 优先级）**：[Concerto Agent 页面设计方案](design/PAMS-灵思页面设计方案.md) ｜ [Concerto Agent 知识库问答方案 v1](PAMS-灵思知识库问答方案-v1.md) ｜ [PAMS-通用化与多Agent协作改造策划.md](PAMS-通用化与多Agent协作改造策划.md) ｜ [Concerto Agent 协作集成修改计划](PAMS-协作内聚进灵思-修改计划.md)
 
 ---
 
@@ -53,7 +53,7 @@
 
 ### 0.5.1 一句话状态
 
-本文的 D1–D11 设计**已进入实施并大面积落地**：基座（B0 / B0.5）与一期能力（B1–B3）已上线运行；检索增强（B4）由《[PAMS-灵思知识库问答方案-v1](PAMS-灵思知识库问答方案-v1.md)》接管并已落地；多 Agent 协作与通用化由《[PAMS-通用化与多Agent协作改造策划](PAMS-通用化与多Agent协作改造策划.md)》接管，批次 B/C 及协作内聚 C1–C3 已落地。**本文继续作为「基座契约」的唯一事实来源**：工具派发与权限（D3）、确认门禁（D2）、出网与脱敏（D4）、审计（D9）、解耦契约（D11）以本文为准；能力扩展以各自文档为准（见 0.5.3）。
+本文的 D1–D11 设计**已进入实施并大面积落地**：基座（B0 / B0.5）与一期能力（B1–B3）已上线运行；检索增强（B4）由《[Concerto Agent 知识库问答方案 v1](PAMS-灵思知识库问答方案-v1.md)》接管并已落地；多 Agent 协作与通用化由《[PAMS-通用化与多Agent协作改造策划](PAMS-通用化与多Agent协作改造策划.md)》接管，批次 B/C 及协作内聚 C1–C3 已落地。**本文继续作为「基座契约」的唯一事实来源**：工具派发与权限（D3）、确认门禁（D2）、出网与脱敏（D4）、审计（D9）、解耦契约（D11）以本文为准；能力扩展以各自文档为准（见 0.5.3）。
 
 ### 0.5.2 当前实现一览（逐项核对至 2026-10-05 源码）
 
@@ -65,7 +65,7 @@
 | LLM 网关 | DeepSeek + Stub 已落地（无 Key / 失败自动降级）；**Ollama 未接入**；`providerFor(Sensitivity)` 分级路由**未实现**（`LlmConfig` 仅以注释保留设计意图） | 见 D5「v1.8 现状核对」 |
 | 流式 | **事件级 + 字符级 + 推理流均已落地**：`MESSAGE_DELTA` 由 `AgentLlmCaller.DeltaBatch`（24 字符 / 60ms 双阈值）合并推送、`THINKING_DELTA`（模型推理增量）由 `ReasoningBatch`（48 字符 / 80ms）合并推送；`round` 语义覆盖重试（+1000）/ 降级（+2000） | 见 D7「v1.9 现状核对」 |
 | 内容净化 | 已落地（jsoup `HtmlSanitizer`），接入 4 个生成类写工具（`draftPlanSections` / `draftArticleFromActivity` / `publishAnnouncement` / `sendNotification`）；**⚠️ 未收口到 Service 公共入口——人工编辑器保存路径仍只有前端 DOMPurify，D10「顺带覆盖人工写路径」未完成** | 建议见 D10：若要闭合，收口进 `PlanSectionService` / `ArticleService` / `AnnouncementService` 的保存入口 |
-| 多 Agent | 已落地（V32/V33，`orchestration/`：Coordinator + Blackboard + P1–P4 专家执行）；协作内聚 C1–C3 已落地——协作成为灵思内联执行策略，原 `/agent/team` 页面与路由已删除（`LingsiTeamPanel` 内联呈现） | 见《协作内聚进灵思-修改计划》 |
+| 多 Agent | 已落地（V32/V33，`orchestration/`：Coordinator + Blackboard + P1–P4 专家执行）；协作内聚 C1–C3 已落地——协作成为 Concerto Agent 内联执行策略，原 `/agent/team` 页面与路由已删除（`LingsiTeamPanel` 内联呈现） | 见《协作内聚进 Concerto Agent-修改计划》 |
 | 通用化 / 多租户 | 阶段 1（先建列，V30/V31）+ A3 隔离收尾（V34）已落地；领域包 / 组织注册 / 主题令牌见《通用化与多Agent协作改造策划》 | 迁移链 |
 | 前端 | `AgentHome` + **20 个 `Lingsi*` 组件**（含 `LingsiTeamPanel`；`LingsiFormCard.test.tsx` 为单测）+ 知识库页 + 评估页 | `pams-web/src/components/agent/` |
 | Agent API | **18 个端点**：AgentController 11（`/api/agent/**`）+ AgentTeamController 4（`/api/agent/team/**`，协作 Run 接口）+ AgentBenchController 3（`/api/agent/bench/**`） | controller 包实测 |
@@ -75,7 +75,7 @@
 
 1. **区分「规划」与「现状」**：§3.5 是原始**规划基线**；开工前以本节与 §4.3.1 现状表为准——**已落地能力不要重复实现**（清单见 0.5.2），**规划未实现项也不要当作遗漏**（多数在后续文档有明确安排，如 `checkPlanCompleteness` 在《通用化与多Agent协作改造策划》中仍标注「待实现」）。
 2. **契约类改动必读**：动权限（D3）、出网（D4）、门禁（D2）、Service 复用方式（D1）之前，先读 §3.2 与 §4.3.1——那里是**已经踩过的坑**（六条真实缺陷 + v1.8 补记两条），不是理论风险。
-3. **文档优先级（冲突裁决）**：① 基座契约（D1–D4、D11、§4.3.1）→ 本文；② 知识库 / RAG → 《知识库问答方案》（本文 D6 的检索议题已由其实际接管）；③ 多 Agent 协作 / 通用化 / 多租户 → 《通用化与多Agent协作改造策划》+《协作内聚修改计划》；④ 页面与组件形态 → 《灵思页面设计方案》及 UI v2 / v3 / v4。**较新文档优先；冲突消除后回填本文。**
+3. **文档优先级（冲突裁决）**：① 基座契约（D1–D4、D11、§4.3.1）→ 本文；② 知识库 / RAG → 《知识库问答方案》（本文 D6 的检索议题已由其实际接管）；③ 多 Agent 协作 / 通用化 / 多租户 → 《通用化与多Agent协作改造策划》+《协作内聚修改计划》；④ 页面与组件形态 → 《Concerto Agent 页面设计方案》及 UI v2 / v3 / v4。**较新文档优先；冲突消除后回填本文。**
 4. **维护义务**：任何改变「工具数 / 表结构 / 门禁状态机 / 出网口径」的变更，合入时同步更新 §0.5 与 §4.3.1。
 
 ---
@@ -117,7 +117,7 @@
 | **B. 流程内 Copilot** | copilot | 具体表单/编辑器内的就地按钮（不做全局入口） | "这一步帮我填/帮我查" | 策划书章节起草、审核意见辅助、完整性检查、状态推进建议、材料类型建议、签到名单预检 |
 | **C. 批量自动化** | automation | 列表页/详情页的动作按钮，或从 A 触发后落成"任务卡" | "帮我批量做，我确认" | 素拓批量加分、名单导入、材料归档补全、议程生成、排班生成、批量状态推进、催办 |
 
-> **v1.8 命名现状**：入口 A 最终以「**灵思**」为产品名落地（页面 `/agent`、侧栏菜单、前端组件前缀 `Lingsi*`）；本节的"党建小助"为历史命名，其余入口名称与形态不变。
+> **v1.8 命名说明**：本文以 **Concerto Agent** 指代入口 A 对应的助手。页面路径为 `/agent`，前端组件前缀为 `Lingsi*`。本节的「党建小助」是早期方案的名称。
 
 ### 2.1 入口 A：党建小助（对话问答）
 
@@ -458,7 +458,7 @@ Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + 
 | `agent_conversation` | `id, user_id, title, created_at, updated_at, deleted` | 会话；按 `user_id` 强隔离 |
 | `agent_message` | `id, conversation_id, role(SYSTEM/USER/ASSISTANT/TOOL), content, tool_calls(JSON), created_at`，**v1.9：`thinking_json`(JSON) / `thinking_notes_json`(JSON)** | 消息；敏感结果仅存摘要。**思维链两列仅在 `sensitivity = normal` 时写入**（推理原文与编排旁白都可能含业务数据，与正文同级脱敏，见 D4 / 决策 6） |
 | `agent_task` | `id, user_id, conversation_id, tool_name, task_type(SYNC/ASYNC), status(PENDING_CONFIRM/RUNNING/SUCCESS/FAILED/PARTIAL/CANCELLED), plan_json, result_json, confirm_token, confirmed_at, created_at, finished_at` | 确认门禁 + 异步任务状态机（**核心表**） |
-| `agent_tool_call` | `id, conversation_id, message_id, tool_name, args_json(脱敏), sensitivity, side_effect, duration_ms, result_status, created_at` | 调用流水，便于排障与统计。**同时是前端过程区（P5）历史回看的数据源**——刷新页面后 `✓ 查询我的待办 184ms` 这些行从本表读回，不是前端临时状态（灵思 §7.1）。**v1.9：`args_json` 经读侧闸门 `PolicyGuard.egressArgs` 下发给前端供「工具行下钻」——`normal` 给遮罩明文、`sensitive`/`restricted` 给 `null`；写入侧不变（那是审计口径，展示层收紧不该改它）。另：随消息下发的工具条目新增 `ts`（= 调用开始时刻 epoch ms，由 `now - durationMs` 推出，不新增列），前端据此把工具行与推理段/旁白行按真实时间交错** |
+| `agent_tool_call` | `id, conversation_id, message_id, tool_name, args_json(脱敏), sensitivity, side_effect, duration_ms, result_status, created_at` | 调用流水，便于排障与统计。**同时是前端过程区（P5）历史回看的数据源**——刷新页面后 `✓ 查询我的待办 184ms` 这些行从本表读回，不是前端临时状态（Concerto Agent §7.1）。**v1.9：`args_json` 经读侧闸门 `PolicyGuard.egressArgs` 下发给前端供「工具行下钻」——`normal` 给遮罩明文、`sensitive`/`restricted` 给 `null`；写入侧不变（那是审计口径，展示层收紧不该改它）。另：随消息下发的工具条目新增 `ts`（= 调用开始时刻 epoch ms，由 `now - durationMs` 推出，不新增列），前端据此把工具行与推理段/旁白行按真实时间交错** |
 | `agent_audit_log` | `id, user_id, conversation_id, task_id, tool_name, args_digest, side_effect, confirmed_by, result_status, created_at` | 审计（写操作 100% 覆盖） |
 
 > 约束：`agent_task(id, status)` 建索引（乐观锁更新需要）；`agent_conversation(user_id, updated_at)` 建索引（列表查询）。
@@ -579,21 +579,21 @@ Flyway 新迁移（**`V24__agent.sql`**，沿用 `CREATE TABLE IF NOT EXISTS` + 
 
 ### 3.6 前端集成方案
 
-> **2026-09-13 更新**：本节已由 `PAMS-灵思页面设计方案.md`（v1.1）展开与部分修正。页面形态从"仅抽屉"扩展为**六面**（P1 主页 / P2 悬浮球+抽屉 / P3 就地 Copilot / P4 确认卡 / P5 过程区 / P6 受限块），组件名有调整。**以灵思页面设计方案为准**，本表保留用于追溯。
+> **2026-09-13 更新**：本节已由 `PAMS-灵思页面设计方案.md`（v1.1）展开与部分修正。页面形态从"仅抽屉"扩展为**六面**（P1 主页 / P2 悬浮球+抽屉 / P3 就地 Copilot / P4 确认卡 / P5 过程区 / P6 受限块），组件名有调整。**以 Concerto Agent 页面设计方案为准**，本表保留用于追溯。
 
-> **v1.8 现状**：组件已按灵思方案 + UI v3/v4 落地为 `pams-web/src/components/agent/` 下 **20 个 `Lingsi*` 组件**（含多 Agent 内联面板 `LingsiTeamPanel`；`LingsiFormCard.test.tsx` 为单测）。**新建组件与命名以代码现状为准**，本表旧名（AgentDrawer / AgentMessageBubble / AgentProcessZone / AgentResultCard / AgentActionCard 等）仅作追溯。
+> **v1.8 现状**：组件已按 Concerto Agent 方案 + UI v3/v4 落地为 `pams-web/src/components/agent/` 下 **20 个 `Lingsi*` 组件**（含多 Agent 内联面板 `LingsiTeamPanel`；`LingsiFormCard.test.tsx` 为单测）。**新建组件与命名以代码现状为准**，本表旧名（AgentDrawer / AgentMessageBubble / AgentProcessZone / AgentResultCard / AgentActionCard 等）仅作追溯。
 
 | 组件 | 位置 | 说明 |
 |---|---|---|
 | `AgentDrawer` | `src/components/agent/` | 全局抽屉（P2），接 `MainLayout`；会话列表 + 消息流 + 结果卡渲染 |
-| `AgentMessageBubble` | 同上 | 单条消息，**过程区 / 结论区两段式**（灵思 §3.5.1） |
-| `AgentProcessZone` | 同上 | **P5 过程区**：流式时间轴 ↔ 折叠条双形态（灵思 §7.1；原设计中的 `AgentToolTrace` 已升级为此） |
+| `AgentMessageBubble` | 同上 | 单条消息，**过程区 / 结论区两段式**（Concerto Agent §3.5.1） |
+| `AgentProcessZone` | 同上 | **P5 过程区**：流式时间轴 ↔ 折叠条双形态（Concerto Agent §7.1；原设计中的 `AgentToolTrace` 已升级为此） |
 | `AgentResultCard` | 同上 | 结构化结果卡（表格/统计/引用列表），**不是纯文本** |
 | `AgentActionCard` | 同上 | 拟执行清单（P4）：总量 + 明细（可展开）+ skipped 原因 + 确认/取消（原名 `AgentConfirmCard`，为强调"动作"语义改名） |
 | `AgentCopilotButton` | 复用组件 | 就地按钮（P3），`onResult` 回调把生成结果回填父表单字段 |
 | `stores/agent.ts` | `src/stores/` | Zustand store：会话、消息、**过程事件流状态**、任务订阅（原名 `useAgent`，统一为 `stores/` 目录下的 store 命名） |
 | `agent.ts` | `src/api/` | 类型与接口（内聚，遵循现有 `src/api/*` 约定）；含 `AgentStreamEvent` 类型 |
-| 菜单/路由 | — | 有独立页面 `/agent`（P1 主页），侧栏菜单项「灵思」；另在 `MainLayout` 挂悬浮球 |
+| 菜单/路由 | — | 有独立页面 `/agent`（P1 主页），侧栏提供入口；另在 `MainLayout` 挂悬浮球 |
 
 **复用点**：`useWebSocket`（长任务完成推送 + 过程事件流）、`httpBlob`（下载类结果）、`useHasPerm`（按权限隐藏 Copilot 按钮）、现有 `Result`/`PageResult` 类型。
 
@@ -718,7 +718,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 **回归实测（2026-09-14）**：
 
 - **确定性（JUnit）**：`ActivityResolverTest` 11 项（ID 直取 / 尾缀 / 精确唯一 / 同名重复 / 模糊多命中 / 零命中 / 参数缺失 / null 实体加固）+ `AgentToolActivityNameSchemaTest` 1 项（**锁死 6 工具 schema 含 `activityName` 且 `required` 不含 `activityId`，防契约回退**）→ `Tests run: 12, Failures: 0, Errors: 0`。
-- **端到端（`.workbuddy/reg/f3-resolve.mjs`，14 项全绿）**：① 只给名称查签到统计 → `queryRosterSigninStats:OK`，引用 link = `/activity/35/signin`（**反证名称被解析到正确 id**）；② 只给名称生成筹备任务 → 产出确认清单（`planId=22`，摘要「灵思名称解析回归活动 · 筹备任务清单（10 项）」）并取消；③ 名称不存在 → 给可读提示、不泄漏异常。全程**未出现**"需要指定活动 ID"。测试活动（id 35）与两轮任务（21/22）已清理。
+- **端到端（`.workbuddy/reg/f3-resolve.mjs`，14 项全绿）**：① 只给名称查签到统计 → `queryRosterSigninStats:OK`，引用 link = `/activity/35/signin`（**反证名称被解析到正确 id**）；② 只给名称生成筹备任务 → 产出确认清单（`planId=22`，摘要「Concerto Agent 名称解析回归活动 · 筹备任务清单（10 项）」）并取消；③ 名称不存在 → 给可读提示、不泄漏异常。全程**未出现**"需要指定活动 ID"。测试活动（id 35）与两轮任务（21/22）已清理。
 
 **边界**：同名活动 ≥2 个时不自动选择（用「名称（ID n）」消歧）；名称匹配依赖 `page` 的 LIKE 模糊命中，零命中时按可读提示兜底（不抛异常）。
 
@@ -728,7 +728,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 
 | # | 反馈 | 根因 | 处置 |
 |---|---|---|---|
-| 0 | **现在没有办法生成策划书** | 工具清单 #15 `draftPlanSections` 一直未实现——灵思没有这个能力 | 新增 `draftPlanSections` 工具（§3.10.1），工具数 20 → **21**（读 11 / 写 10） |
+| 0 | **现在没有办法生成策划书** | 工具清单 #15 `draftPlanSections` 一直未实现——Concerto Agent 没有这个能力 | 新增 `draftPlanSections` 工具（§3.10.1），工具数 20 → **21**（读 11 / 写 10） |
 | 1 | 发出的消息在对话框不显示，重载后正常 | 用户文案存在页面本地 state（`askedTexts`）、占位消息存在 store，两处更新互相竞态 | 用户文案下沉 store 的 `userTexts`，与占位消息在**同一次 `set`** 写入（单一数据源、下标恒等） |
 | 2 | 策划书/推文这类内容应在对话框先给预览 | 清单卡原设计只显示"标题 + 正文前 60 字"，无法通读 | `AgentActionPlan.preview`（长文正文）+ 确认卡「查看全文」抽屉；`draftPlanSections` 与 `draftArticleFromActivity` 均已接入 |
 | 3 | 多轮纠正后首轮确认按钮"无法执行" | **后端实测纠正后仍可确认**（探针：confirm 200 + 任务 SUCCESS），问题在交互预期——旧卡与已经走远的上下文并置，用户以为它失效了 | **多轮「接续」**（§3.10.2）：出新清单时自动作废本会话旧清单 + 前端旧卡原地转「已被新清单取代」+ 把当前待确认清单注入 LLM 上下文 |
@@ -1005,7 +1005,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 | 4 | 流式输出是否本期做（G3） | 事件级一期+字符级二期 / 全二期 / 全一期 | **事件级一期做、字符级二期**（2026-09-13 修订，原建议"全二期"）。事件级流式成本 0.5–1 人日、收益是"等待可感知 + 事后可追溯"，不做会让一期在等待期只有一个静止动画 |
 | 5 | 检索是否上 ngram FULLTEXT（G5） | 一期 / 二期 | **二期，且按触发条件启动**（出现真实"搜不到"反馈时）。**DDL 与 `BOOLEAN MODE` 细节已写入 D6**，含 `ngram_token_size` 限制 |
 | 6 | `agent_message` 敏感内容的留存策略 | 只存摘要 / 加密存储 / 定期清理 | **只存摘要 + 分角色差异化留存**（见下方详述） |
-| 7 | 过程事件的传输通道（原灵思 §11 第 8 项） | STOMP 用户定向队列 / 轮询 | **✅ 已确认可行，无需拍板**（2026-09-13 源码核实）：`NotificationEventListener` 以普通 `@Component` 注入 `SimpMessagingTemplate` 并调 `convertAndSendToUser(username, dest, payload)`，**无任何线程特判**，证明 `AgentOrchestrator` 在自己的线程池里推事件完全可行。**采用 STOMP `/user/queue/agent/stream` 为主通道，轮询仅作断连补拉兜底** |
+| 7 | 过程事件的传输通道（原 Concerto Agent §11 第 8 项） | STOMP 用户定向队列 / 轮询 | **✅ 已确认可行，无需拍板**（2026-09-13 源码核实）：`NotificationEventListener` 以普通 `@Component` 注入 `SimpMessagingTemplate` 并调 `convertAndSendToUser(username, dest, payload)`，**无任何线程特判**，证明 `AgentOrchestrator` 在自己的线程池里推事件完全可行。**采用 STOMP `/user/queue/agent/stream` 为主通道，轮询仅作断连补拉兜底** |
 | 8 | 首事件延迟（TTFE）阈值 | 800ms / 1.5s / 不设指标 | **P95 < 800ms**。理由见验收标准 9 的说明：TTFE 是"流式是否真的生效"的判定标准，不设指标等于放任"做了流式但体感没变" |
 
 > **v1.8 现状核对（2026-10-05，逐项闭环）**：#1 已执行——DeepSeek + Stub 落地，Ollama 未接、分级路由未实现（见 D5）；#2 ✅ 已落地（`HtmlSanitizer` + jsoup；人工路径收口仍缺，见 §0.5.2）；#3 按原建议执行——content 仍维持 `LEADER` 等价口径，未收敛（现势复核）；#4 事件级 ✅ 且**字符级也已落地**（见 D7）；#5 ✅ 已落地并被《知识库问答方案》扩展（V27/V28）；#6 已落地（写时脱敏），原表"90 天"勘误见决策 6 详述；#7 ✅ 已落地；#8 维持阈值不变。**8 项决策全部闭环，无未决项；后续变更走 §0.5.3 第 4 条维护义务。**
@@ -1025,7 +1025,7 @@ ConversationStore.save(+references)    ← assistant 消息落 refs_json；messa
 
 > **v1.8 勘误与现状**：原表 sensitive / restricted 两行写"90 天"留存，与"写时脱敏、不引入清理任务"自相矛盾——明细既从未落库，"90 天清理"无对象可清；已按实现修正为"随会话保留"。现状核对：`PolicyGuard.forStorage` 已按写时脱敏落地（normal 全文 / sensitive 摘要 / restricted 占位），**代码中不存在任何会话清理任务**；若未来要求摘要行也不长期保留，再单独设计（当前非需求）。
 
-> **⚠️ 一个必须说清的取舍**：如果 `sensitive` 消息只存摘要，那么**用户回看历史会话时会发现"当时的细节不见了"**。这不是 bug，是设计——需要在 UI 上说明（灵思 §7.2 的受限数据块已承担此职责）。**如果不说明，用户会以为系统丢了数据。**
+> **⚠️ 一个必须说清的取舍**：如果 `sensitive` 消息只存摘要，那么**用户回看历史会话时会发现"当时的细节不见了"**。这不是 bug，是设计——需要在 UI 上说明（Concerto Agent §7.2 的受限数据块已承担此职责）。**如果不说明，用户会以为系统丢了数据。**
 
 ---
 

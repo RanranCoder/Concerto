@@ -1,6 +1,6 @@
 # V6 排班考勤原型
 
-日期：2026-10-14。入口：`PAMS-UI-bright-v6.html?module=routine&page=schedules`。沿用原 V6 文件，工作台、活动管理、灵思与设计依据仍可切换。
+日期：2026-10-14。入口：`PAMS-UI-bright-v6.html?module=routine&page=schedules`。沿用原 V6 文件，工作台、活动管理、Concerto Agent 与设计依据仍可切换。
 
 ## 设计方向
 

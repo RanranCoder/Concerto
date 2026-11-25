@@ -1,7 +1,7 @@
-# 灵思思维链展示 · 剩余缺口交接单
+# Concerto Agent 思维链展示 · 剩余缺口交接单
 
 > 日期：2026-10-12
-> 背景：对「灵思过程区/时间轴的思维链展示」做过一轮只读审计（A 内容完整性 / B 视觉排版 / C 交互折叠 / D 性能与无障碍），
+> 背景：对「Concerto Agent 过程区/时间轴的思维链展示」做过一轮只读审计（A 内容完整性 / B 视觉排版 / C 交互折叠 / D 性能与无障碍），
 > 其中**后端导出链路 + 前端过程区/时间轴/store/api 契约**已由另一条并行会话在 21:35–21:41 落地并自测通过。
 > 本文只记录**尚未完成的三件事**，供接手方直接执行；不含已落地部分的重复描述。
 > 范围：`pams-backend/**`、`pams-web/src/{api/agent.ts,stores/agent.ts,components/agent/**,styles/lingsi.css}`。
@@ -124,7 +124,7 @@
 
 ## 5. 附：本轮已改的共享层（别回退）
 
-同一次会话里另做过一轮「界面 UI 视觉排版对齐」，落点与灵思无关或只在共享层，改动已验证健在：
+同一次会话里另做过一轮「界面 UI 视觉排版对齐」，落点与 Concerto Agent 无关或只在共享层，改动已验证健在：
 
 - `styles/theme.ts`：antd `Table` 补 `cellPaddingBlockMD: 10 / cellPaddingInlineMD: 12`（middle 档原本实际取 `paddingSM/paddingXS` = 12/8，导致**每个表格首列文字比同页卡片左移 4px**）。
 - `styles/glass.css`：表格分页器补 12px 水平外边距；登录页标题/副标题改左对齐（原本右对齐，与左对齐的标签、输入框参差）。
