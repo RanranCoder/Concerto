@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 } })
 test.setTimeout(30_000)
 const output = resolve('..', 'docs', 'ui-v6-records-implementation')
-const permissions = ['member:view', 'member:manage', 'member:export', 'member:import_account', 'material:view', 'material:upload', 'material:delete', 'template:view', 'template:manage', 'quality:view', 'quality:add', 'notice:view', 'notice:publish', 'notice:manage', 'chat:manage', 'chat:category', 'activity:view', 'user:view', 'content:view', 'content:manage', 'party:view', 'party:manage']
+const permissions = ['member:view', 'member:manage', 'member:export', 'member:import_account', 'material:view', 'material:upload', 'material:delete', 'template:view', 'template:manage', 'quality:view', 'quality:add', 'notice:view', 'notice:publish', 'notice:manage', 'chat:view', 'chat:manage', 'chat:category', 'activity:view', 'user:view', 'content:view', 'content:manage', 'article:review', 'article:publish', 'news:manage', 'party:view', 'party:manage']
 const teacher = { id: 1, username: 'teacher', realName: '林老师', roleCode: 'TEACHER', roleLevel: 5, deptName: '党建办公室', permissions, managementCapabilities: ['user:manage'] }
 async function setup(page: Page, viewer = teacher) {
   await page.addInitScript(user => {
@@ -65,6 +65,41 @@ async function setup(page: Page, viewer = teacher) {
   return { writeRequests }
 }
 async function shot(page: Page, name: string) { await page.screenshot({ path: resolve(output, name + '.png'), fullPage: true, animations: 'disabled' }) }
+
+function twoPagePdf() {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>',
+  ]
+  let pdf = '%PDF-1.4\n'
+  const offsets = objects.map((object, index) => {
+    const offset = pdf.length
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`
+    return offset
+  })
+  const xref = pdf.length
+  const entries = offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')
+  return Buffer.from(`${pdf}xref\n0 5\n0000000000 65535 f \n${entries}trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`)
+}
+
+test('PDF 附件可以在画布上预览和翻页', async ({ page }) => {
+  await setup(page)
+  await page.route(url => url.pathname === '/api/materials', route => route.fulfill({
+    json: { code: 200, data: { total: 1, records: [{ id: 1, name: '双页附件', bizType: 'OTHER', fileId: 9, originFilename: '双页附件.pdf' }] } },
+  }))
+  await page.route('**/api/files/9/download', route => route.fulfill({
+    contentType: 'application/pdf',
+    body: twoPagePdf(),
+  }))
+  await page.goto('/archive/materials')
+  await page.getByRole('button', { name: /预览$/ }).click()
+  const preview = page.getByRole('dialog', { name: /双页附件\.pdf/ })
+  await expect(preview.getByLabel('PDF 第 1 页')).toBeVisible()
+  await preview.getByRole('button', { name: '下一页' }).click()
+  await expect(preview.getByLabel('PDF 第 2 页')).toBeVisible()
+})
 
 test('成员目录、详情编辑与账号管理入口', async ({ page }) => {
   const { writeRequests } = await setup(page)

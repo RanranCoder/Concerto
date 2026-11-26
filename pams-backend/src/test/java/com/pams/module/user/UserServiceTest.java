@@ -36,7 +36,7 @@ class UserServiceTest {
         u.setId(1L);
         u.setOrgId(1L);
 
-        when(userRepository.findById(1L)).thenReturn(Optional.of(u));
+        when(userRepository.lockById(1L)).thenReturn(Optional.of(u));
         userService.resetPassword(1L, 3); // 部长重置下级（角色为 null → level 视作 0）的密码
         assertThat(u.getPassword()).isNotEqualTo("123456");
         assertThat(encoder.matches("123456", u.getPassword())).isTrue();
@@ -45,7 +45,7 @@ class UserServiceTest {
 
     @Test
     void delete_missingUser_throws() {
-        when(userRepository.findById(9L)).thenReturn(Optional.empty());
+        when(userRepository.lockById(9L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> userService.deleteUser(9L))
                 .isInstanceOf(BizException.class);
     }
@@ -65,7 +65,7 @@ class UserServiceTest {
         existing.setOrgId(1L);
 
             existing.setRole(targetRole);
-            when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
+            when(userRepo.lockById(1L)).thenReturn(Optional.of(existing));
 
             assertThatThrownBy(() -> svc.deleteUser(1L, 3))
                     .isInstanceOf(BizException.class)
@@ -87,10 +87,11 @@ class UserServiceTest {
         existing.setOrgId(1L);
 
         existing.setRole(staff);
-        when(userRepo.findById(1L)).thenReturn(Optional.of(existing));
+        when(userRepo.lockById(1L)).thenReturn(Optional.of(existing));
 
         svc.deleteUser(1L, 3);
         assertThat(existing.getDeleted()).isEqualTo(1L);
+        assertThat(existing.getTokenInvalidBefore()).isNotNull();
         verify(userRepo).save(existing);
     }
 
@@ -102,7 +103,7 @@ class UserServiceTest {
         existing.setOrgId(1L);
 
         existing.setRole(null);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(userRepository.lockById(1L)).thenReturn(Optional.of(existing));
         userService.deleteUser(1L);
         assertThat(existing.getDeleted()).isEqualTo(1L);
     }

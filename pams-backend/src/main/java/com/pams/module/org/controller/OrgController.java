@@ -11,6 +11,7 @@ import com.pams.module.org.entity.OrgPosition;
 import com.pams.module.org.service.OrgRegisterRateLimiter;
 import com.pams.module.org.service.OrgService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +31,8 @@ public class OrgController {
 
     private final OrgService orgService;
     private final OrgRegisterRateLimiter rateLimiter;
+    @Value("${PAMS_TRUST_PROXY_HEADERS:false}")
+    private boolean trustProxyHeaders;
 
     public OrgController(OrgService orgService, OrgRegisterRateLimiter rateLimiter) {
         this.orgService = orgService;
@@ -43,11 +46,12 @@ public class OrgController {
         return Result.ok(rateLimiter.register(clientKey(request), () -> orgService.register(req)));
     }
 
-    /** 取来源标识：优先 X-Forwarded-For 首段，其次 remoteAddr。 */
+    /** 只有部署方确认入口会重写转发链时才使用客户端来源头。 */
     private String clientKey(HttpServletRequest request) {
         String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
+        if (trustProxyHeaders && xff != null) {
+            String first = xff.split(",", 2)[0].strip();
+            if (first.matches("[0-9a-fA-F:.]{1,45}")) return first;
         }
         return request.getRemoteAddr();
     }

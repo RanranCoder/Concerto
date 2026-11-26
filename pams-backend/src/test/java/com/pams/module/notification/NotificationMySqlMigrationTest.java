@@ -26,7 +26,9 @@ class NotificationMySqlMigrationTest {
       s.executeUpdate("INSERT INTO notification(id,org_id,type,title,content,recipient_id,is_read,read_at,created_at,deleted) SELECT 900001,1,'SYSTEM','个人历史样本','migration',id,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0 FROM sys_user WHERE username='notification_upgrade_one'");
       s.executeUpdate("INSERT INTO notification(id,org_id,type,title,content,recipient_role,is_read,created_at,deleted) VALUES(900002,1,'SYSTEM','共享历史样本','migration','ACCEPTANCE_STAFF',0,CURRENT_TIMESTAMP,0)");
     }
-    var migrated=Flyway.configure().dataSource(url,"root",password).locations("classpath:db/migration","classpath:db/migration-mysql").load();migrated.migrate();migrated.validate();
+    var migrated=Flyway.configure().dataSource(url,"root",password)
+        .locations("classpath:db/migration","classpath:db/migration-mysql").target("56").load();
+    migrated.migrate();migrated.validate();
     assertThat(migrated.info().current().getVersion().getVersion()).isEqualTo("56");
     try(var connection=DriverManager.getConnection(url,"root",password);var s=connection.createStatement()) {
       try(var rows=s.executeQuery("SELECT COUNT(*) FROM notification WHERE id IN (900001,900002)")){rows.next();assertThat(rows.getInt(1)).isEqualTo(2);}

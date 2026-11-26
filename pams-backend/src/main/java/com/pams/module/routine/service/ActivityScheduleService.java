@@ -18,6 +18,7 @@ import com.pams.module.schedule.service.FreeSlotMatcher;
 import com.pams.repository.DepartmentRepository;
 import com.pams.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -48,6 +49,7 @@ public class ActivityScheduleService {
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final ActivityRepository activityRepository;
+    private final com.pams.module.org.repository.OrganizationRepository organizations;
 
     public ActivityScheduleService(FreeSlotMatcher matcher,
                                    ScheduleRepository scheduleRepository,
@@ -55,7 +57,8 @@ public class ActivityScheduleService {
                                    AttendanceRepository attendanceRepository,
                                    DepartmentRepository departmentRepository,
                                    UserRepository userRepository,
-                                   ActivityRepository activityRepository) {
+                                   ActivityRepository activityRepository,
+                                   com.pams.module.org.repository.OrganizationRepository organizations) {
         this.matcher = matcher;
         this.scheduleRepository = scheduleRepository;
         this.schedulePersonRepository = schedulePersonRepository;
@@ -63,6 +66,7 @@ public class ActivityScheduleService {
         this.departmentRepository = departmentRepository;
         this.userRepository = userRepository;
         this.activityRepository = activityRepository;
+        this.organizations = organizations;
     }
 
     /**
@@ -453,14 +457,21 @@ public class ActivityScheduleService {
         return all;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void publish(Long id) {
         publish(id, true);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void publish(Long id, boolean activity) {
+        lockPublicationOrg();
         publishLocked(lockSchedule(id, activity));
+    }
+
+    /** Take the shared lock before any schedule lock or conflict read. */
+    void lockPublicationOrg() {
+        organizations.findForUpdate(com.pams.common.OrgContext.getOrDefault())
+                .orElseThrow(() -> new BizException(404, "组织不存在"));
     }
 
     private void publishLocked(Schedule s) {
@@ -501,8 +512,9 @@ public class ActivityScheduleService {
     }
 
     /** 一键发布：把当前范围内（可按活动过滤）全部草稿排班发布并预建考勤行，返回发布条数。 */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public int publishAll(Long activityId) {
+        lockPublicationOrg();
         int n = 0;
         for (Long id : scheduleRepository.findDraftActivityIds(activityId)) {
             Schedule draft = lockSchedule(id, true);
@@ -514,8 +526,9 @@ public class ActivityScheduleService {
     }
 
     /** 重新生成：仅 AUTO 来源可重新按无课表替换人员；已发布则同步刷新考勤行。 */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public int regenerate(Long id, Long deptId, String semester, LocalDate semesterStartDate) {
+        lockPublicationOrg();
         Schedule s = lockSchedule(id, true);
         requirePublishedMutation(s);
         validate(Schedule.SOURCE_AUTO.equals(s.getSource()), "仅无课表自动生成的排班可重新生成");
@@ -588,8 +601,9 @@ public class ActivityScheduleService {
         return saved.getId();
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void updateManual(Long id, ActivityScheduleSaveRequest req) {
+        lockPublicationOrg();
         Schedule s = lockSchedule(id, true);
         requirePublishedMutation(s);
         validate(req.getScheduleDate() != null && req.getStartTime() != null && req.getEndTime() != null

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "sys_user")
+@org.hibernate.annotations.DynamicUpdate
 @SQLRestriction("deleted = 0")
 public class User implements OrgScoped {
     @Id

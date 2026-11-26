@@ -12,7 +12,6 @@ import com.pams.security.LoginUser;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -63,8 +62,8 @@ public class FileController {
             String encoded = java.net.URLEncoder.encode(rec.getFilename(), java.nio.charset.StandardCharsets.UTF_8)
                     .replace("+", "%20");
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(
-                            rec.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : rec.getContentType()))
+                    .contentType(storageService.downloadMediaType(rec.getFilename(), target))
+                    .header("X-Content-Type-Options", "nosniff")
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=\"" + encoded + "\"; filename*=UTF-8''" + encoded)
                     .body(resource);

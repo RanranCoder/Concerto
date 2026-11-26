@@ -3,12 +3,11 @@ const path = require('node:path');
 const directory = path.resolve(process.argv[2] || '');
 const log = path.join(directory, 'batch6-mysql.log');
 if (!fs.existsSync(log)) throw new Error('Pass the evidence directory returned by BatchSixAcceptance.');
-const start = fs.statSync(log).birthtimeMs - 2000;
 const reports = [];
-const reportRoot = path.resolve('pams-backend/target/surefire-reports');
-for (const file of fs.readdirSync(reportRoot)) {
+const reportRoot = path.join(directory, 'surefire-reports');
+for (const file of fs.readdirSync(reportRoot).sort()) {
   const filename = path.join(reportRoot, file);
-  if (!/^TEST-.*\.xml$/.test(file) || fs.statSync(filename).mtimeMs < start) continue;
+  if (!/^TEST-.*\.xml$/.test(file)) continue;
   const header = fs.readFileSync(filename, 'utf8').match(/<testsuite\b[^>]*>/)?.[0];
   if (!header) continue;
   const read = key => header.match(new RegExp(`\\b${key}="([^"]*)"`))?.[1];

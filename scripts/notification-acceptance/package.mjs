@@ -1,6 +1,6 @@
 import fs from 'node:fs';import path from 'node:path';import { fileURLToPath } from 'node:url';import { createHash } from 'node:crypto';import { spawnSync } from 'node:child_process';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const target = new URL(process.env.PAMS_NOTIFICATION_ACCEPTANCE_TARGET?.trim() || 'http://concerto.yuanlab.work');
+const target = new URL(process.env.PAMS_NOTIFICATION_ACCEPTANCE_TARGET?.trim() || 'https://concerto.yuanlab.work');
 if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password ||
     target.pathname !== '/' || target.search || target.hash) {
   throw new Error('PAMS_NOTIFICATION_ACCEPTANCE_TARGET must be an HTTP(S) origin without credentials');

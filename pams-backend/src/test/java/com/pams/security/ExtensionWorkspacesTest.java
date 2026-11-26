@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ExtensionWorkspacesTest {
+    private static final java.util.concurrent.atomic.AtomicInteger registrationSources = new java.util.concurrent.atomic.AtomicInteger();
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate db;
     private final ObjectMapper json = new ObjectMapper();
@@ -144,7 +145,10 @@ class ExtensionWorkspacesTest {
         var request = switch (method) { case "PUT" -> put(path); case "POST" -> post(path); default -> get(path); };
         if (org != null) request.header("Authorization", "Bearer " + org.token);
         if (body != null) request.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
-        if (path.equals("/api/orgs/register")) request.header("X-Forwarded-For", UUID.randomUUID().toString());
+        if (path.equals("/api/orgs/register")) request.with(mock -> {
+            mock.setRemoteAddr("192.0.2." + registrationSources.incrementAndGet());
+            return mock;
+        });
         return json.readTree(mvc.perform(request).andExpect(status().is(expected)).andReturn()
                 .getResponse().getContentAsString()).path("data");
     }

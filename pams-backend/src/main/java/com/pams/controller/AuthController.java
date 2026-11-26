@@ -73,15 +73,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest req, HttpServletResponse response) {
-        // 失败次数限流：同一用户名连续失败 5 次锁 5 分钟
-        loginRateLimiter.checkLocked(req.getUsername());
-        User u = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> { loginRateLimiter.recordFailure(req.getUsername()); return new BizException(1001, "用户名或密码错误"); });
-        if (!passwordEncoder.matches(req.getPassword(), u.getPassword())) {
-            loginRateLimiter.recordFailure(req.getUsername());
-            throw new BizException(1001, "用户名或密码错误");
-        }
-        loginRateLimiter.clear(req.getUsername());
+        User u = loginRateLimiter.authenticate(req.getUsername(), () -> userRepository.findByUsername(req.getUsername())
+                .filter(user -> passwordEncoder.matches(req.getPassword(), user.getPassword())));
         if (!authorization.valid(u.getId())) throw new BizException(403,"账号或组织已停用");
         if (u.getStatus() == null || u.getStatus() == 0) {
             throw new BizException(1002, "账号已禁用");
@@ -120,6 +113,7 @@ public class AuthController {
 
     /** 登出：服务端吊销当前 token（审计 #3：推进用户级失效水位）+ 清理文件直链兜底 Cookie。 */
     @PostMapping("/logout")
+    @org.springframework.transaction.annotation.Transactional
     public Result<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         revokeIfPresent(request);
         ResponseCookie cookie = ResponseCookie.from("pams_token", "")
@@ -145,17 +139,12 @@ public class AuthController {
         }
         try {
             Claims claims = jwtUtil.parse(token);
-            User u = null;
             Long uid = claims.get("uid", Long.class);
-            if (uid != null) {
-                u = userRepository.findById(uid).orElse(null);
-            }
-            if (u == null && claims.getSubject() != null) {
-                u = userRepository.findByUsername(claims.getSubject()).orElse(null);
-            }
-            if (u != null) {
+            if (uid == null) return;
+            User u = userRepository.lockById(uid).orElse(null);
+            if (u != null && u.getUsername().equals(claims.getSubject())
+                    && !JwtUtil.isRevoked(claims.getIssuedAt(), u.getTokenInvalidBefore())) {
                 u.setTokenInvalidBefore(JwtUtil.revocationWatermark(LocalDateTime.now(), u.getTokenInvalidBefore()));
-                userRepository.save(u);
             }
         } catch (JwtException | IllegalArgumentException ignored) {
             // token 无效/已过期：无须服务端吊销

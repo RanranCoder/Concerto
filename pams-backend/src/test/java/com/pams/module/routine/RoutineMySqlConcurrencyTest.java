@@ -4,6 +4,7 @@ import com.pams.common.BizException;
 import com.pams.common.OrgContext;
 import com.pams.module.activity.service.SigninService;
 import com.pams.module.routine.dto.AttendanceStatusRequest;
+import com.pams.module.routine.service.ActivityScheduleService;
 import com.pams.module.routine.service.AttendanceAutoJob;
 import com.pams.module.routine.service.AttendanceManageService;
 import com.pams.module.routine.service.AttendanceWindow;
@@ -40,6 +41,7 @@ class RoutineMySqlConcurrencyTest {
     @Autowired SigninService signins;
     @Autowired AttendanceAutoJob settlement;
     @Autowired AttendanceManageService attendance;
+    @Autowired ActivityScheduleService publication;
 
     @DynamicPropertySource
     static void isolatedMysql(DynamicPropertyRegistry registry) {
@@ -91,6 +93,49 @@ class RoutineMySqlConcurrencyTest {
         }
         assertThat(signCount(shift)).isEqualTo(1);
         assertThat(status(shift)).isEqualTo("LATE");
+    }
+
+    @Test
+    void overlappingDraftsForTheSameMemberCannotBothPublish() throws Exception {
+        long member = db.queryForObject("SELECT MIN(id) FROM sys_user WHERE org_id=1 AND status=1 AND deleted=0", Long.class);
+        var date = AttendanceWindow.now().toLocalDate().plusDays(5);
+        long first = draftFor(member, date);
+        long second = draftFor(member, date);
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> { start.await(); return publishDraft(first); });
+            var b = pool.submit(() -> { start.await(); return publishDraft(second); });
+            start.countDown();
+            assertThat(java.util.List.of(a.get(12, TimeUnit.SECONDS), b.get(12, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        }
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM schedule WHERE id IN (?,?) AND status='PUBLISHED'",
+                Integer.class, first, second)).isEqualTo(1);
+    }
+
+    private long draftFor(long member, java.time.LocalDate date) {
+        String name = "发布并发-" + UUID.randomUUID();
+        db.update("INSERT INTO activity(name, org_id, status, deleted) VALUES (?,1,'EXECUTING',0)", name);
+        long activity = db.queryForObject("SELECT id FROM activity WHERE name=?", Long.class, name);
+        db.update("""
+                INSERT INTO schedule(schedule_type,activity_id,schedule_date,start_time,end_time,status,org_id)
+                VALUES ('ACTIVITY',?,?,'09:00:00','10:00:00','DRAFT',1)
+                """, activity, date);
+        long schedule = db.queryForObject("SELECT id FROM schedule WHERE activity_id=?", Long.class, activity);
+        db.update("INSERT INTO schedule_person(schedule_id,user_id,person_name,org_id) VALUES (?,?,'回归成员',1)", schedule, member);
+        return schedule;
+    }
+
+    private boolean publishDraft(long id) throws Exception {
+        return inOrg(() -> {
+            try {
+                publication.publish(id);
+                return true;
+            } catch (BizException error) {
+                assertThat(error).hasMessageContaining("此时段排班");
+                return false;
+            }
+        });
     }
 
     @Test

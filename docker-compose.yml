@@ -28,7 +28,7 @@ services:
       context: ./pams-backend
     # PAMS_IMAGE_PREFIX 指向镜像仓库时，本地 build 出带仓库前缀的镜像，
     # 服务器则用 --no-build 直接从仓库拉取（见 deploy.sh）
-    image: ${PAMS_IMAGE_PREFIX:-pams}-backend:${PAMS_IMAGE_TAG:-latest}
+    image: ${PAMS_IMAGE_PREFIX:-pams}-backend:${PAMS_IMAGE_TAG:-${PAMS_DEPLOY_COMMIT:-local}}
     container_name: pams-backend
     restart: unless-stopped
     depends_on:
@@ -38,7 +38,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
-      PAMS_JWT_SECRET: ${PAMS_JWT_SECRET}
+      PAMS_JWT_SECRET: ${PAMS_JWT_SECRET:?Generate a unique PAMS_JWT_SECRET before starting Compose}
+      PAMS_COOKIE_SECURE: ${PAMS_COOKIE_SECURE:-false}
+      PAMS_TRUST_PROXY_HEADERS: ${PAMS_TRUST_PROXY_HEADERS:-false}
       # 灵思（Agent）DeepSeek 密钥：可选，经 .env/环境变量注入，仓库内不存任何真实密钥。
       # 不设置（默认空）时后端自动降级为 stub 规则模式，应用照常启动（见 LlmConfig）。
       PAMS_AGENT_API_KEY: ${PAMS_AGENT_API_KEY:-}
@@ -63,13 +65,13 @@ services:
       context: ./pams-web
       args:
         VITE_SUPERDOC_LICENSE_KEY: ${VITE_SUPERDOC_LICENSE_KEY:-}
-    image: ${PAMS_IMAGE_PREFIX:-pams}-web:${PAMS_IMAGE_TAG:-latest}
+    image: ${PAMS_IMAGE_PREFIX:-pams}-web:${PAMS_IMAGE_TAG:-${PAMS_DEPLOY_COMMIT:-local}}
     container_name: pams-web
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${PAMS_WEB_PORT:-3000}:80"
+      - "127.0.0.1:${PAMS_WEB_PORT:-${PAMS_DEFAULT_WEB_PORT:-3000}}:80"
     networks:
       - pams-net
 

@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -174,7 +175,7 @@ public class UserService {
         return vo;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Long createUser(UserSaveRequest req, Integer currentLevel) {
         if (req.getPassword() == null || req.getPassword().length() < 8) throw new BizException(400,"初始密码至少需要 8 位");
         if (userRepository.existsByUsername(req.getUsername())) {
@@ -182,13 +183,15 @@ public class UserService {
         }
         // C3：若同名账号已被软删，复活该行（setDeleted(0) + 更新字段）而非插入新行，
         //     规避 sys_user.username 硬唯一键与软删冲突（删除账号后无法重建同名）。
-        User deleted = userRepository.findDeletedByUsername(req.getUsername()).orElse(null);
+        Role role = assignableRole(req.getRoleId(), currentLevel);
+        User deleted = userRepository.lockDeletedByUsername(req.getUsername()).orElse(null);
         if (deleted != null) {
             if (!OrgContext.getOrDefault().equals(deleted.getOrgId())) throw new BizException(409,"用户名已被占用");
             deleted.setPassword(passwordEncoder.encode(
                     req.getPassword()));
-            apply(deleted, req, currentLevel);
+            apply(deleted, req, role);
             deleted.setDeleted(0L);
+            deleted.setTokenInvalidBefore(com.pams.security.JwtUtil.revocationWatermark(LocalDateTime.now(), deleted.getTokenInvalidBefore()));
             deleted.setUpdatedAt(LocalDateTime.now());
             userRepository.save(deleted);
             return deleted.getId();
@@ -197,7 +200,7 @@ public class UserService {
         u.setUsername(req.getUsername());
         u.setPassword(passwordEncoder.encode(
                 req.getPassword()));
-        apply(u, req, currentLevel);
+        apply(u, req, role);
         u.setDeleted(0L);
         return userRepository.save(u).getId();
     }
@@ -207,18 +210,18 @@ public class UserService {
      * 生产代码必须走 {@link #createUser(UserSaveRequest, Integer)} 传真实操作者级别。
      */
     @Deprecated
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Long createUser(UserSaveRequest req) {
         return createUser(req, null);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void updateUser(Long id, UserSaveRequest req, Integer currentLevel) {
         if (authorization != null) authorization.verifyUserMutation(id);
         User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         if (!OrgContext.getOrDefault().equals(u.getOrgId())) throw new BizException(404,"用户不存在");
         if (authorization != null && !java.util.Objects.equals(u.getRole().getId(),req.getRoleId())) throw new BizException(409,"更换角色请使用角色变更预览");
-        apply(u, req, currentLevel);
+        apply(u, req, assignableRole(req.getRoleId(), currentLevel));
         userRepository.save(u);
         if (authorization != null) authorization.invalidatePendingAccountCredentials(id);
     }
@@ -228,12 +231,20 @@ public class UserService {
      * 生产代码必须走 {@link #updateUser(Long, UserSaveRequest, Integer)} 传真实操作者级别。
      */
     @Deprecated
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void updateUser(Long id, UserSaveRequest req) {
         updateUser(id, req, null);
     }
 
-    private void apply(User u, UserSaveRequest req, Integer currentLevel) {
+    private Role assignableRole(Long roleId, Integer currentLevel) {
+        Role role = roleRepository.findById(roleId).orElseThrow(() -> new BizException(1006, "角色不存在"));
+        if (!OrgContext.getOrDefault().equals(role.getOrgId())) throw new BizException(404,"角色不存在");
+        if (authorization != null) authorization.verifyAssignableRole(role.getId());
+        else checkAssignableLevel(role, currentLevel);
+        return role;
+    }
+
+    private void apply(User u, UserSaveRequest req, Role role) {
         u.setRealName(req.getRealName());
         u.setStudentNo(req.getStudentNo());
         u.setPhone(req.getPhone());
@@ -245,10 +256,6 @@ public class UserService {
         } else {
             u.setDept(null);
         }
-        Role role = roleRepository.findById(req.getRoleId()).orElseThrow(() -> new BizException(1006, "角色不存在"));
-        if (!OrgContext.getOrDefault().equals(role.getOrgId())) throw new BizException(404,"角色不存在");
-        if (authorization != null) authorization.verifyAssignableRole(role.getId());
-        else checkAssignableLevel(role, currentLevel);
         u.setRole(role);
         u.setOrgId(OrgContext.getOrDefault());
         u.setUpdatedAt(LocalDateTime.now());
@@ -284,13 +291,14 @@ public class UserService {
         }
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteUser(Long id, Integer currentLevel) {
         if (authorization != null) authorization.verifyUserMutation(id);
-        User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        User u = userRepository.lockById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         if (!OrgContext.getOrDefault().equals(u.getOrgId())) throw new BizException(404,"用户不存在");
         if (authorization == null) checkDeleteLevel(u, currentLevel);
         u.setDeleted(u.getId());
+        u.setTokenInvalidBefore(com.pams.security.JwtUtil.revocationWatermark(LocalDateTime.now(), u.getTokenInvalidBefore()));
         if (authorization != null) authorization.invalidatePendingAccountCredentials(id);
         if (authorization != null) authorization.userChanged(OrgContext.getOrDefault());
         u.setUpdatedAt(LocalDateTime.now());
@@ -302,16 +310,16 @@ public class UserService {
      * 生产代码必须走 {@link #deleteUser(Long, Integer)} 传真实操作者级别。
      */
     @Deprecated
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteUser(Long id) {
         deleteUser(id, null);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void resetPassword(Long id, Integer currentLevel) {
         if (authorization != null) authorization.verifyUserMutation(id);
         if (authorization != null) throw new BizException(409,"固定密码重置已关闭，需接入本人一次性设置凭证流程");
-        User u = userRepository.findById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        User u = userRepository.lockById(id).orElseThrow(() -> new BizException(1004, "用户不存在"));
         checkResetPasswordLevel(u, currentLevel);
         u.setPassword(passwordEncoder.encode("123456"));
         // 审计 #3：改密即吊销该用户既有 token（推进失效水位），否则旧 token 仍可调用全部 API
@@ -325,7 +333,7 @@ public class UserService {
      * 生产代码必须走 {@link #resetPassword(Long, Integer)} 传真实操作者级别。
      */
     @Deprecated
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void resetPassword(Long id) {
         resetPassword(id, null);
     }
@@ -333,7 +341,7 @@ public class UserService {
     /** 当前用户自行修改密码：校验旧密码 + 新密码长度 */
     @Transactional
     public void changePassword(Long userId, String oldPassword, String newPassword) {
-        User u = userRepository.findById(userId).orElseThrow(() -> new BizException(1004, "用户不存在"));
+        User u = userRepository.lockById(userId).orElseThrow(() -> new BizException(1004, "用户不存在"));
         if (!passwordEncoder.matches(oldPassword, u.getPassword())) {
             throw new BizException(1009, "旧密码不正确");
         }

@@ -47,8 +47,10 @@ class ActivityScheduleServiceTest {
                     account.setStatus(1);
                     return account;
                 }).toList());
+        var organizations = mock(com.pams.module.org.repository.OrganizationRepository.class);
+        when(organizations.findForUpdate(1L)).thenReturn(Optional.of(new com.pams.module.org.entity.Organization()));
         service = new ActivityScheduleService(matcher, schedules, people, attendances,
-                mock(DepartmentRepository.class), users, mock(ActivityRepository.class));
+                mock(DepartmentRepository.class), users, mock(ActivityRepository.class), organizations);
         schedule = new Schedule(); schedule.setId(1L); schedule.setScheduleType(Schedule.TYPE_ACTIVITY);
         schedule.setStatus(Schedule.STATUS_PUBLISHED); schedule.setSource(Schedule.SOURCE_AUTO);
         schedule.setScheduleDate(LocalDate.of(2026, 10, 14)); schedule.setStartTime(LocalTime.of(14, 0)); schedule.setEndTime(LocalTime.of(15, 40)); schedule.setDeptId(5L);

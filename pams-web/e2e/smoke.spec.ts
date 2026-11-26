@@ -33,29 +33,33 @@ test.describe('冒烟链路', () => {
     const name = `E2E冒烟活动-${Date.now()}`
     await page.getByRole('button', { name: /新增活动/ }).click()
     await page.getByLabel(/活动名称/).fill(name)
+    const created = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/activities' && response.request().method() === 'POST',
+    )
     await page.getByRole('button', { name: /保\s*存/ }).click()
-    await expect(page.getByText('创建成功')).toBeVisible()
+    const result = await (await created).json()
+    expect(result.code).toBe(200)
+    try {
+      const row = page.getByRole('row').filter({ hasText: name })
+      await expect(row).toBeVisible()
+      await row.getByRole('button', { name: '详情' }).click()
+      await expect(page).toHaveURL(new RegExp(`/activities/${result.data}(?:[/?#]|$)`))
 
-    // 列表出现新建活动，通过行内「详情」进入
-    const row = page.locator('tr', { hasText: name }).first()
-    await expect(row).toBeVisible()
-    await row.getByRole('button', { name: '详情' }).click()
-    await expect(page).toHaveURL(/\/activities\/\d+/)
-
-    // 详情核心 Tab 可达（策划书 / 座位表 / 签到）。新活动尚无策划书 → 空态提供「创建策划书」入口
-    await page.getByRole('tab', { name: '策划书' }).click()
-    await expect(page.getByRole('button', { name: '创建策划书' }).first()).toBeVisible()
-    await page.getByRole('tab', { name: '座位表' }).click()
-    // antd Radio.Button 原生 input 是隐藏元素（可见的是样式化 label），断言 checked 而非 visible
-    await expect(page.getByRole('radio', { name: '可视化编辑' })).toBeChecked()
-    await page.getByRole('tab', { name: '签到' }).click()
-
-    // 回列表删除冒烟数据（teacher 有 activity:delete）。antd 两字按钮自动加空格（删 除）
-    await page.goto('/activities')
-    const delRow = page.locator('tr', { hasText: name }).first()
-    await delRow.getByRole('button', { name: /删\s*除/ }).click()
-    await page.getByRole('button', { name: /^删\s*除$/ }).click()
-    await expect(page.getByText('已删除')).toBeVisible()
+      await page.getByRole('tab', { name: '策划书' }).click()
+      await expect(page.getByRole('button', { name: '创建策划书' }).first()).toBeVisible()
+      await page.getByRole('tab', { name: '座位表' }).click()
+      await page.getByText('可视化编辑', { exact: true }).click()
+      await expect(page.getByRole('radio', { name: '可视化编辑' })).toBeChecked()
+      const signinTab = page.getByRole('tab', { name: '签到' })
+      await signinTab.click()
+      await expect(signinTab).toHaveAttribute('aria-selected', 'true')
+    } finally {
+      const token = await page.evaluate(() => JSON.parse(localStorage.getItem('pams_token') ?? '{}').state?.token)
+      const deleted = await page.request.delete(`/api/activities/${result.data}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect((await deleted.json()).code).toBe(200)
+    }
   })
 
   test('干事登录 → 用户管理菜单不可见（权限码口径）', async ({ page }) => {

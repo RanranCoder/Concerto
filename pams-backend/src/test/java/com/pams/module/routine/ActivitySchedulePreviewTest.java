@@ -24,7 +24,8 @@ class ActivitySchedulePreviewTest {
     final AttendanceRepository attendance = mock(AttendanceRepository.class);
     final ActivityRepository activities = mock(ActivityRepository.class);
     final ActivityScheduleService service = new ActivityScheduleService(matcher, schedules, people, attendance,
-            mock(DepartmentRepository.class), mock(UserRepository.class), activities);
+            mock(DepartmentRepository.class), mock(UserRepository.class), activities,
+            mock(com.pams.module.org.repository.OrganizationRepository.class));
 
     ActivityScheduleGenerateRequest request() {
         var req = new ActivityScheduleGenerateRequest();

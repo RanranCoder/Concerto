@@ -29,7 +29,10 @@ class BatchSixAcceptance {
                     System.out.println("Evidence directory: "+output);
                     boolean browser=List.of(args).contains("--browser");
                     String suites=browser?"BatchSixBrowserIntegrationTest":"AgentEditorialIntegrationTest,ControlledExecutionIntegrationTest,BatchSixMySqlAcceptanceTest,BatchSixProcessRecoveryTest,AgentTaskPlanIntegrationTest,AgentNotificationIntegrationTest,ConversationRecallIntegrationTest";
-                    var command=new ProcessBuilder("C:/dev/Git/bin/bash.exe","-c","mvn -q -f pams-backend/pom.xml -Dtest="+suites+" -Dpams.batch6.output=../docs/audits/agent-acceptance-20261102/batch6-mysql-"+suffix+" -Dsurefire.runOrder=alphabetical test");
+                    var command = new ProcessBuilder("C:/dev/Git/bin/bash.exe", "-c",
+                            "exec mvn -q -f pams-backend/pom.xml -Dsurefire.runOrder=alphabetical \"$@\" test",
+                            "batch-six", "-Dtest=" + suites, "-Dpams.batch6.output=" + output,
+                            "-Dpams.surefire.reports-directory=" + output.resolve("surefire-reports"));
                     command.directory(repo.toFile());var env=command.environment();
                     env.put("PAMS_S5_BATCH6","true");env.put("PAMS_S5_BATCH5","true");env.put("PAMS_S5_DB_URL",url);env.put("PAMS_S5_DB_USER",user);env.put("PAMS_S5_DB_PASSWORD",password);
                     env.put("PAMS_TEST_AGENT_PROVIDER","stub");env.put("PAMS_RUN_CONTROLLED_PLANNING_REAL","false");

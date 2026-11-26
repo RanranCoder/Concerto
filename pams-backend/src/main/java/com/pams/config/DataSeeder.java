@@ -121,7 +121,7 @@ public class DataSeeder implements ApplicationRunner {
             new org.springframework.transaction.support.TransactionTemplate(seedTransactionManager).executeWithoutResult(status -> {
                 seedOrg();
                 seedMemberSessions();
-                if (!isTestProfile()) seedDemoData();
+                if (isDevProfile() && !isTestProfile()) seedDemoData();
             });
         } finally {
             if(previous==null)com.pams.common.OrgContext.clear();else com.pams.common.OrgContext.set(previous);

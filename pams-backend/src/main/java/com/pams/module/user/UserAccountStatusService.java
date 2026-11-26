@@ -7,6 +7,7 @@ import com.pams.module.user.dto.UserStatusRequest;
 import com.pams.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -22,7 +23,8 @@ public class UserAccountStatusService {
         this.users = users;
         this.authorization = authorization;
         this.transaction = new TransactionTemplate(manager);
-        this.transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public List<Map<String, Object>> apply(UserStatusRequest request) {

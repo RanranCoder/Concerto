@@ -23,7 +23,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     List<User> findByOrgIdAndRoleCode(Long orgId, String roleCode);
     List<User> findByStudentNo(String studentNo);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> lockById(@Param("id") Long id);
+
     /** 查已软删的同名账号（native query 绕过 @SQLRestriction，供 createUser 复活用）。 */
     @Query(value = "SELECT * FROM sys_user WHERE username = :username AND deleted <> 0 ORDER BY id DESC LIMIT 1", nativeQuery = true)
     Optional<User> findDeletedByUsername(@Param("username") String username);
+
+    @Query(value = "SELECT * FROM sys_user WHERE username = :username AND deleted <> 0 FOR UPDATE", nativeQuery = true)
+    Optional<User> lockDeletedByUsername(@Param("username") String username);
 }

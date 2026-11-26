@@ -44,7 +44,8 @@ class ActivityScheduleDelegationTest {
     private final UserRepository users = mock(UserRepository.class);
     private final ActivityRepository activities = mock(ActivityRepository.class);
     private final ActivityScheduleService service =
-            new ActivityScheduleService(matcher, schedules, people, attendance, departments, users, activities);
+            new ActivityScheduleService(matcher, schedules, people, attendance, departments, users, activities,
+                    mock(com.pams.module.org.repository.OrganizationRepository.class));
     private final ActivityScheduleGenerateRequest request = new ActivityScheduleGenerateRequest();
 
     @BeforeEach

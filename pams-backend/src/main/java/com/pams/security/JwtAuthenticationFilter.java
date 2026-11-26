@@ -45,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // 已禁用用户（status=0 或 null）即使持有有效 JWT 也不放行，保持匿名走 401。
                 // 与 AuthController.login 的 status 判定保持一致。
                 // isRevoked：审计 #3 用户级吊销水位——登出/改密后旧 token 同样不放行。
-                if (u != null && u.getRole()!=null && permissionService.validUser(u.getId())
+                if (u != null && u.getId().equals(claims.get("uid", Long.class))
+                        && u.getRole()!=null && permissionService.validUser(u.getId())
                         && !JwtUtil.isRevoked(claims.getIssuedAt(), u.getTokenInvalidBefore())) {
                     String roleCode = u.getRole().getCode();
                     LoginUser lu = new LoginUser(

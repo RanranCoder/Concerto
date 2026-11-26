@@ -1,4 +1,5 @@
 @echo off
+setlocal DisableDelayedExpansion
 chcp 65001 >nul
 
 rem ── 载入 .env ─────────────────────────────────────────────────────────────
@@ -22,13 +23,16 @@ rem 本地开发密钥：.env 已提供则沿用（重启后不必重新登录�
 if not defined PAMS_JWT_SECRET (
     for /f %%i in ('powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"') do set PAMS_JWT_SECRET=%%i
 )
-echo [1/4] 检查 MySQL 服务...
-mysqladmin -u root -p%DB_PASSWORD% ping >nul 2>&1 || (echo 请先启动 MySQL 服务 & pause & exit /b)
-echo [2/4] 初始化数据库...
-mysql -u root -p%DB_PASSWORD% < %~dp0database\init_db.sql
-echo [3/4] 启动后端 (http://localhost:8080)...
-start "pams-backend" cmd /k "cd /d %~dp0pams-backend && set PAMS_JWT_SECRET=%PAMS_JWT_SECRET%&& mvn spring-boot:run -Dspring-boot.run.profiles=dev"
-echo [4/4] 启动前端 (http://localhost:3000)...
-start "pams-web" cmd /k "cd /d %~dp0pams-web && npm run dev"
+if defined SPRING_DATASOURCE_URL (
+    echo [1/3] 使用已配置的数据源，请确认目标库已经创建。
+) else (
+    echo [1/3] 初始化本地数据库 pams_db...
+    mysql --host=localhost --user=root --password="%DB_PASSWORD%" < "%~dp0database\init_db.sql" || (echo 数据库初始化失败，请检查 MySQL 服务与登录配置。 & exit /b 1)
+    set "SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+)
+echo [2/3] 启动后端 (http://localhost:8080)...
+start "pams-backend" /D "%~dp0pams-backend" cmd /k "mvn spring-boot:run -Dspring-boot.run.profiles=dev"
+echo [3/3] 启动前端 (http://localhost:3000)...
+start "pams-web" /D "%~dp0pams-web" cmd /k "npm run dev"
 timeout /t 15 >nul
 start http://localhost:3000

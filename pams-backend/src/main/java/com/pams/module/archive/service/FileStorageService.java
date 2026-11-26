@@ -5,14 +5,18 @@ import com.pams.module.archive.entity.FileRecord;
 import com.pams.module.archive.repository.FileRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 
@@ -115,12 +119,27 @@ public class FileStorageService {
             rec.setStoredName(storedName);
             rec.setPath(sub + "/" + storedName);
             rec.setSize(file.getSize());
-            rec.setContentType(file.getContentType());
+            rec.setContentType(downloadMediaType(original, target).toString());
             rec.setBizType(bizType == null ? bizTypeOf(original) : bizType);
             rec.setUploaderId(uploaderId);
             return fileRecordRepository.save(rec);
         } catch (IOException e) {
             throw new BizException(4001, "文件保存失败");
         }
+    }
+
+    /** Derive the download type from the server's allowlist, including for older records. */
+    public MediaType downloadMediaType(String filename, Path target) throws IOException {
+        int dot = filename.lastIndexOf('.');
+        String extension = dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+        if (!ALLOWED_EXTENSIONS.contains(extension)) return MediaType.APPLICATION_OCTET_STREAM;
+        if ("pdf".equals(extension)) {
+            byte[] signature = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+            try (var input = Files.newInputStream(target)) {
+                return Arrays.equals(input.readNBytes(signature.length), signature)
+                        ? MediaType.APPLICATION_PDF : MediaType.APPLICATION_OCTET_STREAM;
+            }
+        }
+        return MediaTypeFactory.getMediaType("file." + extension).orElse(MediaType.APPLICATION_OCTET_STREAM);
     }
 }

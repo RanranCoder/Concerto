@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Tenant-bound authorization. No write operation resolves a role by a global role code. */
@@ -266,13 +267,13 @@ public class TenantAuthorizationService {
     return result;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> previewDelegation(
       long target, boolean active, Set<String> allowed, LocalDateTime expires, long version) {
     return previewDelegation(target, active, allowed, expires, version, null);
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> previewDelegation(
       long target,
       boolean active,
@@ -284,6 +285,7 @@ public class TenantAuthorizationService {
     long uid = actor("role:grant");
     long org = org(uid);
     lockOrg(org);
+    actor("role:grant");
     if (!owner(uid)) throw new BizException(403, "仅所有者可维护管理员");
     if (target == uid || org != number(identity(target).get("org_id")) || !valid(target))
       throw new BizException(400, "请选择本组织其他有效账号");
@@ -568,6 +570,7 @@ public class TenantAuthorizationService {
     return one("SELECT * FROM sys_role WHERE id=? AND org_id=?", id, org);
   }
 
+  // Mutation transactions use READ_COMMITTED so reads after this lock see intervening revocations.
   private void lockOrg(long org) {
     one("SELECT id FROM organization WHERE id=? FOR UPDATE", org);
   }
@@ -819,7 +822,7 @@ public class TenantAuthorizationService {
     if ("MEMBER_ACCOUNT_CREATE".equals(action)) bump(authority.orgId());
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void markProvisioned(long org) {
     db.update("INSERT INTO authorization_bootstrap(org_id) VALUES(?)", org);
   }
@@ -872,7 +875,7 @@ public class TenantAuthorizationService {
         "SELECT code,name,template_version AS version FROM role_template ORDER BY code");
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void metadata(long id, long version, String name, String description) {
     long uid = actor("role:manage"), org = org(uid);
     lockOrg(org);
@@ -907,7 +910,7 @@ public class TenantAuthorizationService {
     audit(org, uid, "UPDATE_ROLE", id, Map.of("name", name.trim()));
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void deleteDraft(long id) {
     long uid = actor("role:manage"), org = org(uid);
     lockOrg(org);
@@ -942,7 +945,7 @@ public class TenantAuthorizationService {
     if (actual != draftVersion) throw new BizException(409, "工作稿版本已变化");
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void deleteDraft(long id, long version, long draftVersion) {
     long uid = actor("role:manage");
     lockOrg(org(uid));
@@ -950,7 +953,7 @@ public class TenantAuthorizationService {
     deleteDraft(id);
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void discardDraft(long id, long version, long draftVersion) {
     long uid = actor("role:manage"), org = org(uid);
     lockOrg(org);
@@ -1111,12 +1114,12 @@ public class TenantAuthorizationService {
     return out;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public long create(String name, String description, Long sourceRole) {
     return create(name, description, sourceRole, null);
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public long createCombined(
       String name, String description, Long source, String template, List<String> templates) {
     if (templates == null || templates.isEmpty())
@@ -1154,7 +1157,7 @@ public class TenantAuthorizationService {
     return id;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public long create(String name, String description, Long sourceRole, String templateCode) {
     long uid = actor("role:manage"), org = org(uid);
     lockOrg(org);
@@ -1265,7 +1268,7 @@ public class TenantAuthorizationService {
     return result;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public long saveDraftChanges(long id, long version, List<Map<String, Object>> changes) {
     long uid = actor("role:manage"), org = org(uid);
     lockOrg(org);
@@ -1500,12 +1503,12 @@ public class TenantAuthorizationService {
     if (count > 0) throw new BizException(409, "角色仍被有效用户、岗位或邀请使用，请先处理引用");
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> preview(long id, String action, long expectedVersion) {
     return preview(id, action, expectedVersion, null);
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> preview(long id, String action, long expectedVersion, String reason) {
     reason = normalizeReason(reason);
     long uid = actor("role:grant"), org = org(uid);
@@ -1582,12 +1585,12 @@ public class TenantAuthorizationService {
     return out;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> previewAssignment(long target, long roleId) {
     return previewAssignment(target, roleId, null);
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> previewAssignment(long target, long roleId, String reason) {
     reason = normalizeReason(reason);
     long uid = actor("role:assign"), org = org(uid);
@@ -1625,7 +1628,7 @@ public class TenantAuthorizationService {
     return published(r).stream().filter(g -> enabled.contains(g.get("permission"))).toList();
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public Map<String, Object> apply(String changeId) {
     long uid = actor("role:view"), org = org(uid);
     lockOrg(org);
@@ -1805,7 +1808,7 @@ public class TenantAuthorizationService {
     return out;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void delegate(
       long target, boolean active, Set<String> allowed, LocalDateTime expires, long version) {
     long uid = actor("role:grant"), org = org(uid);
@@ -1857,7 +1860,7 @@ public class TenantAuthorizationService {
   }
 
   /** Called only from startup/provisioning, never exposed to clients. */
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void initializeOrg(long org) {
     String packs = db.queryForObject("SELECT enabled_packs FROM organization WHERE id=?", String.class, org);
     // Only registration reads the new pack choices. Legacy placeholder values must not activate packs on startup.
@@ -1930,7 +1933,7 @@ public class TenantAuthorizationService {
     }
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public void setPack(long org, String code, boolean enabled) {
     lockOrg(org);
     if (isPackEnabled(org, code) == enabled) return;

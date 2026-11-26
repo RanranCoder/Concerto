@@ -52,7 +52,7 @@ Runtime credentials, logs, reports and release candidates stay under the ignored
 JAR, frontend assets, Nginx configuration and hashes; it excludes environment files
 and database snapshots. Each invocation creates a fresh candidate directory so
 obsolete frontend assets cannot leak into a later candidate. The manifest target
-defaults to `http://concerto.yuanlab.work`. Set
+defaults to `https://concerto.yuanlab.work`. Set
 `PAMS_NOTIFICATION_ACCEPTANCE_TARGET` to the HTTP(S) origin used by reviewers
 if the acceptance entry point differs.
 
@@ -70,14 +70,20 @@ database, and do not roll back only the application image after changing the sch
 Before a production snapshot or permission report, run `production-preflight.sh`
 on the deployment host with `PAMS_EXPECTED_SCHEMA` set to the reviewed database.
 It reads the running backend's explicit datasource URL, rejects a mismatched
-schema or separate Flyway target, and queries that schema. A database named by
+schema, a separate Flyway target, or a host and port outside the selected MySQL
+container. A database named by
 `MYSQL_DATABASE` or a repository default is not evidence of the application's
 actual target. Credentials and full runtime URLs are never printed.
 
 The internal hostname is `concerto.yuanlab.work`. Internal DNS resolves it to
 the current deployment host. Install `concerto-domain.conf` as the host Nginx
-configuration for that hostname. It accepts HTTP on port 80 and forwards to
-the local listener on port 8080. Both proxy layers disable buffering and
+configuration for that hostname. Set `ssl_certificate` and `ssl_certificate_key`
+to the certificate and key trusted by clients, then check the configuration with
+`nginx -t` before reloading. Port 80 redirects to HTTPS on port 443, which forwards
+to the local listener on port 8080. Enable `PAMS_COOKIE_SECURE=true` and
+`PAMS_TRUST_PROXY_HEADERS=true` in the backend Compose environment when incoming
+traffic uses this host Nginx, which replaces the incoming forwarding chain.
+Keep the backend and Compose listener isolated from public clients. Both proxy layers disable buffering and
 compression for SSE. If Compose uses a different `PAMS_WEB_PORT`, update
 all three `proxy_pass` destinations before reloading Nginx. Follow the root
 README's deployment instructions when upgrading a host that still uses port 8081.
@@ -85,7 +91,7 @@ README's deployment instructions when upgrading a host that still uses port 8081
 Check the deployment through DNS from the internal network:
 
 ```sh
-curl --fail --silent --show-error http://concerto.yuanlab.work/api/ping
+curl --fail --silent --show-error https://concerto.yuanlab.work/api/ping
 ```
 
 Check the container port mapping directly from the deployment host:

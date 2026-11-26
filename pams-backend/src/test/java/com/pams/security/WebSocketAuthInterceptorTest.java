@@ -68,6 +68,7 @@ class WebSocketAuthInterceptorTest {
         Claims claims = mock(Claims.class);
         when(jwt.parse("token")).thenReturn(claims);
         when(claims.getSubject()).thenReturn("user");
+        when(claims.get("uid", Long.class)).thenReturn(5L);
         when(claims.getIssuedAt()).thenReturn(Date.from(Instant.now().minusSeconds(60)));
         when(claims.getExpiration()).thenReturn(Date.from(Instant.now().plusSeconds(60)));
         User user = new User();

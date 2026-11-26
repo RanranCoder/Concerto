@@ -1,11 +1,13 @@
 package com.pams.module.org.service;
 
 import com.pams.common.BizException;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
@@ -20,7 +22,9 @@ public class OrgRegisterRateLimiter {
     private static final int MAX_ATTEMPTS_PER_MINUTE = 20;
     private static final long ATTEMPT_WINDOW_MILLIS = 60 * 1000L;
 
-    private final Map<String, Window> windows = new ConcurrentHashMap<>();
+    private final Cache<String, Window> windows = Caffeine.newBuilder()
+            .maximumSize(10_000).expireAfterAccess(Duration.ofMillis(WINDOW_MILLIS)).build();
+    private final Object[] locks = new Object[256];
     private final Clock clock;
 
     public OrgRegisterRateLimiter() {
@@ -29,13 +33,14 @@ public class OrgRegisterRateLimiter {
 
     OrgRegisterRateLimiter(Clock clock) {
         this.clock = clock;
+        Arrays.setAll(locks, ignored -> new Object());
     }
 
     /** 同来源的检查和创建串行执行，避免并发请求穿透成功次数上限。 */
     public <T> T register(String key, Supplier<T> createOrganization) {
         String k = (key == null || key.isBlank()) ? "unknown" : key;
-        Window w = windows.computeIfAbsent(k, ignored -> new Window());
-        synchronized (w) {
+        synchronized (locks[Math.floorMod(k.hashCode(), locks.length)]) {
+            Window w = windows.get(k, ignored -> new Window());
             long now = clock.millis();
             if (now - w.successStartAt >= WINDOW_MILLIS) {
                 w.successCount = 0;

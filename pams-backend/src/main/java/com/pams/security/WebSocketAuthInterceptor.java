@@ -64,7 +64,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             var claims = jwtUtil.parse(header.substring(7));
             if (claims.getSubject() == null || claims.getExpiration() == null) return false;
             User user = userRepository.findByUsername(claims.getSubject()).orElse(null);
-            if (user == null) return false;
+            if (user == null || !user.getId().equals(claims.get("uid", Long.class))) return false;
             var session = new Session(user.getId(), user.getOrgId(), claims.getIssuedAt(),
                     claims.getExpiration().toInstant());
             if (!valid(session, user) || sessions.putIfAbsent(sessionId, session) != null) return false;
