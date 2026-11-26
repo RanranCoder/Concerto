@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 // 使用隔离的接口样本验证真实 React 页面；不调用真实后端或写入用户数据。
-test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, baseURL: 'http://localhost:5173', viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Shanghai' })
+test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Shanghai' })
 const output = resolve('..', 'docs', 'ui-v6-implementation')
 const user = { id: 1, username: 'teacher', realName: '林老师', roleCode: 'TEACHER', roleLevel: 5, deptName: '党建办公室', permissions: ['activity:view', 'activity:create', 'activity:edit', 'activity:delete', 'schedule:view', 'material:view', 'member:view', 'kb:read', 'template:view', 'quality:view', 'notice:view', 'user:view', 'user:permission'] }
 

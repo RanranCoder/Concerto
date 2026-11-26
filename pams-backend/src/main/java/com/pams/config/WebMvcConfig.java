@@ -12,7 +12,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private final String[] corsOriginPatterns;
 
     public WebMvcConfig(@Value("${pams.upload-dir}") String uploadDir,
-                        @Value("${pams.cors-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://172.18.38.131:*,https://dangjian.yuanlab.work,http://dangjian.yuanlab.work,https://pams.ranran.org.cn,https://*.ranran.org.cn}") String corsOriginPatterns) {
+                        @Value("${pams.cors-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://concerto.yuanlab.work,https://concerto.yuanlab.work,https://dangjian.yuanlab.work,http://dangjian.yuanlab.work,https://pams.ranran.org.cn,https://*.ranran.org.cn}") String corsOriginPatterns) {
         this.uploadDir = uploadDir;
         this.corsOriginPatterns = corsOriginPatterns.split("\\s*,\\s*");
     }

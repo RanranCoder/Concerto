@@ -51,7 +51,10 @@ Runtime credentials, logs, reports and release candidates stay under the ignored
 `.backups/notification-acceptance/` directory. Packaging includes only the backend
 JAR, frontend assets, Nginx configuration and hashes; it excludes environment files
 and database snapshots. Each invocation creates a fresh candidate directory so
-obsolete frontend assets cannot leak into a later candidate.
+obsolete frontend assets cannot leak into a later candidate. The manifest target
+defaults to `http://concerto.yuanlab.work`. Set
+`PAMS_NOTIFICATION_ACCEPTANCE_TARGET` to the HTTP(S) origin used by reviewers
+if the acceptance entry point differs.
 
 For a server-side snapshot rehearsal, `NotificationAcceptanceMigration` can run
 through Spring Boot's `PropertiesLauncher`. It requires the explicit marker
@@ -71,8 +74,22 @@ schema or separate Flyway target, and queries that schema. A database named by
 `MYSQL_DATABASE` or a repository default is not evidence of the application's
 actual target. Credentials and full runtime URLs are never printed.
 
-The internal hostname is `concerto.yuanlab.work`. Install `concerto-domain.conf`
-as the host Nginx vhost forwarding port 80 to the existing 8081 service; both
-proxy layers explicitly disable buffering/compression for SSE. Internal DNS
-must publish `concerto.yuanlab.work A 172.18.38.131`. This private address is
-for the LAN; the HTTP binding does not provision DNS or an HTTPS certificate.
+The internal hostname is `concerto.yuanlab.work`. Internal DNS resolves it to
+the current deployment host. Install `concerto-domain.conf` as the host Nginx
+configuration for that hostname. It accepts HTTP on port 80 and forwards to
+the local listener on port 8080. Both proxy layers disable buffering and
+compression for SSE. If Compose uses a different `PAMS_WEB_PORT`, update
+all three `proxy_pass` destinations before reloading Nginx. Follow the root
+README's deployment instructions when upgrading a host that still uses port 8081.
+
+Check the deployment through DNS from the internal network:
+
+```sh
+curl --fail --silent --show-error http://concerto.yuanlab.work/api/ping
+```
+
+Check the container port mapping directly from the deployment host:
+
+```sh
+curl --fail --silent --show-error http://localhost:8080/api/ping
+```

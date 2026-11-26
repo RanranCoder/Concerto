@@ -171,7 +171,7 @@ for (const mode of ['light', 'dark']) for (const width of [1440, 390]) {
     await page.screenshot({ path: `../docs/design/ai-services/settings-${mode}-${width}.png`, fullPage: true, animations: 'disabled' })
     if (mode === 'light' && width === 1440) {
       const snapshot = await page.content()
-      await writeFile('../docs/design/ai-services/settings-snapshot.html', snapshot.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/(src|href)="\/(?!\/)/g, '$1="http://localhost:5173/'))
+      await writeFile('../docs/design/ai-services/settings-snapshot.html', snapshot.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/(src|href)="\/(?!\/)/g, `$1="${new URL(page.url()).origin}/`))
     }
     await page.getByRole('button', { name: '编辑 / 测试' }).click()
     await expect(page.getByRole('dialog').getByLabel('Base URL', { exact: true })).toBeVisible()

@@ -28,7 +28,7 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-等待后端完成 Flyway 迁移并启动，然后访问 <http://127.0.0.1:8081>。首次使用时，从登录页进入「创建组织」，填写组织信息、添加部门或小组、设置管理员账号并选择所需扩展。创建完成后，用管理员账号登录即可继续设置组织架构和权限。 [环境变量示例](.env.example) · [Compose 配置](docker-compose.yml)
+等待后端完成 Flyway 迁移并启动，然后访问 <http://127.0.0.1:3000>。后端在容器网络内监听 `8080`，由前端容器代理访问。首次使用时，从登录页进入「创建组织」，填写组织信息、添加部门或小组、设置管理员账号并选择所需扩展。创建完成后，用管理员账号登录即可继续设置组织架构和权限。 [环境变量示例](.env.example) · [Compose 配置](docker-compose.yml)
 
 ## 主要功能
 
@@ -88,7 +88,7 @@ mvn -f pams-backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=dev
 npm --prefix pams-web run dev
 ```
 
-前端访问 <http://localhost:5173>。Vite 将 `/api`、`/uploads` 和 `/ws` 代理到 `http://localhost:8080`。使用 IntelliJ IDEA 时可导入根 `pom.xml`，运行 `com.pams.PartyAffairsManagementSystemApplication`，并使用相同的数据库连接变量和 `dev` profile。 [Vite 配置](pams-web/vite.config.ts)
+前端访问 <http://localhost:3000>。Vite 将 `/api`、`/uploads` 和 `/ws` 代理到 `http://localhost:8080`。如果 `3000` 已被占用，Vite 会报错退出。使用 IntelliJ IDEA 时可导入根 `pom.xml`，运行 `com.pams.PartyAffairsManagementSystemApplication`，并使用相同的数据库连接变量和 `dev` profile。 [Vite 配置](pams-web/vite.config.ts)
 
 ### Windows 启动脚本
 
@@ -113,7 +113,7 @@ npm --prefix pams-web run build
 
 后端测试使用 H2 与 Flyway，前端单元测试使用 Vitest，构建命令会执行 TypeScript 检查和 Vite 打包。
 
-运行完整 Playwright 测试前，先启动本地 MySQL 和 `dev` 后端。默认配置会启动或复用 Vite，部分 Windows 用例使用本机 Microsoft Edge。
+运行完整 Playwright 测试前，先启动本地 MySQL 和 `dev` 后端。默认配置会在 `127.0.0.1:13000` 单独启动 Vite。部分 Windows 用例使用本机 Microsoft Edge。
 
 ```bash
 cd pams-web
@@ -123,7 +123,9 @@ npm run test:e2e
 
 ## 部署
 
-Compose 默认将前端发布到 `127.0.0.1:8081`。对外提供服务时，可由反向代理终止 HTTPS 并转发到该端口，同时支持 WebSocket 和通知 SSE，关闭通知流的代理缓冲。 [Nginx 配置](pams-web/nginx.conf)
+直接运行 `docker compose up` 时，前端默认发布到 `127.0.0.1:3000`。通过 `deploy.sh` 更新服务器时，前端默认发布到 `127.0.0.1:8080`。两种方式均可通过调用命令的环境变量或 `.env` 设置 `PAMS_WEB_PORT`，命令环境变量优先。宿主机 Nginx 示例的上游端口是 `8080`。使用其他端口时，请同步更新常规请求、WebSocket 和通知 SSE 的上游端口。 [容器内 Nginx 配置](pams-web/nginx.conf) · [宿主机 Nginx 配置](scripts/notification-acceptance/concerto-domain.conf)
+
+从使用 `8081` 的旧版首次升级时，请先在服务器的 `.env` 中设置 `PAMS_WEB_PORT=8081`，再执行 `./deploy.sh`。这样旧版脚本拉取新版 Compose 后，已安装的 Nginx 仍能转发。若要迁移到 `8080`，请在维护窗口内同时更新 `.env` 和宿主机 Nginx 的上游配置，运行部署脚本并重新加载 Nginx，然后通过域名验证 `/api/ping`。
 
 `main` 分支更新后，GitHub Actions 先运行后端和前端测试，通过后构建并推送镜像。使用 GHCR 预构建镜像时，在服务器的 `.env` 中设置 `PAMS_IMAGE_PREFIX=ghcr.io/ranrancoder/pams`。镜像默认使用 `latest`，也可通过 `PAMS_IMAGE_TAG` 选择已发布标签。
 

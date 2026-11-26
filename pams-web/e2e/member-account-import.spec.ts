@@ -96,7 +96,7 @@ test('preview each assignment, create accounts, download credentials and recover
   const book = XLSX.read(await readFile((await download.path())!), { type: 'buffer' })
   const records = XLSX.utils.sheet_to_json<Record<string, string>>(book.Sheets[book.SheetNames[0]])
   expect(records[0].用户名).toBe('20260001')
-  expect(records[0].设密链接).toBe(`http://localhost:5173/activate-account#token=${'a'.repeat(43)}`)
+  expect(records[0].设密链接).toBe(`${new URL(page.url()).origin}/activate-account#token=${'a'.repeat(43)}`)
   await page.getByRole('button', { name: /完\s*成$/ }).click()
   await page.getByRole('button', { name: '从花名册导入账号' }).click()
   await page.getByRole('combobox', { name: '选择历史开户批次' }).click()

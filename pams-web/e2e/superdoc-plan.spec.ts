@@ -4,7 +4,10 @@ import JSZip from 'jszip'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 }, baseURL: process.env.PAMS_SUPERDOC_URL || 'http://localhost:5173', actionTimeout: 15_000 })
+if (process.env.PAMS_SUPERDOC_URL) {
+  test.use({ baseURL: process.env.PAMS_SUPERDOC_URL })
+}
+test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 }, actionTimeout: 15_000 })
 test.setTimeout(180_000)
 const output = path.resolve('../docs/design/superdoc-ribbon')
 

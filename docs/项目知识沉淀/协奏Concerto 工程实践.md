@@ -11,7 +11,7 @@
 ```
 ┌────────────────────────────────────────────────┐
 │  pams-web（React 18 / Vite / AntD 5 / Zustand） │
-│  端口 5173，经 Vite 代理 /api、/ws、/uploads     │
+│  端口 3000，经 Vite 代理 /api、/ws、/uploads     │
 └──────────────┬─────────────────────────────────┘
                │ REST + STOMP WebSocket
 ┌──────────────▼─────────────────────────────────┐
@@ -156,7 +156,7 @@ com.pams
 | 项 | 约定 |
 |---|---|
 | 后端端口 | 8080（`spring-boot:run` 有子 JVM，停服须按 8080 实际 PID 杀进程） |
-| 前端端口 | 5173（WorkBuddy 环境下勿占用 7661） |
+| 前端端口 | 3000（WorkBuddy 环境下勿占用 7661） |
 | 前端类型检查 | 必须用 `tsc -b`：根 tsconfig 是 solution-style（`files: []` + references），直接 `tsc --noEmit` 会空转零输出 |
 | Vite 直启 | 可 `node node_modules/vite/bin/vite.js` 绕过 npm 脚本 |
 | Vite 代理 | `/api`、`/uploads`（changeOrigin + 同源重写，可被 `PAMS_E2E_API_TARGET` 覆盖且强制 localhost）、`/ws`（ws:true） |

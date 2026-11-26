@@ -162,7 +162,7 @@ src/
 ## 10. 构建与测试
 
 - **类型检查**：`tsc -b`（solution-style 必须走构建模式）。
-- **Vite**：dev 5173；代理 `/api`、`/uploads`（changeOrigin + 同源 Origin 重写，目标默认 `http://localhost:8080`，可被 `PAMS_E2E_API_TARGET` 覆盖且强制 localhost）、`/ws`（ws:true）；别名 `@ → ./src`。
+- **Vite**：dev 3000；代理 `/api`、`/uploads`（changeOrigin + 同源 Origin 重写，目标默认 `http://localhost:8080`，可被 `PAMS_E2E_API_TARGET` 覆盖且强制 localhost）、`/ws`（ws:true）；别名 `@ → ./src`。
 - **单测**：`scripts/test.mjs` 驱动 vitest（node 环境，exclude `e2e/**`）；utils 下工具函数普遍配 `.test.ts`。
 - **E2E**：Playwright 25 个 spec（`e2e/`），覆盖登录、权限、活动、签到、Concerto Agent 对话等主链路。
 - 容器化：`Dockerfile` + `nginx.conf` 静态托管。

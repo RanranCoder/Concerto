@@ -4,12 +4,21 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 与直接运行 Compose 一样，显式传入的端口优先于 .env。
+requested_web_port=
+if [[ -v PAMS_WEB_PORT ]]; then
+  requested_web_port="${PAMS_WEB_PORT:-8080}"
+fi
+
 # .env 只有 docker compose 会自动读；脚本分支判断也依赖 PAMS_IMAGE_PREFIX，需手动加载
 if [ -f .env ]; then
   set -a
   . ./.env
   set +a
 fi
+
+# 服务器反向代理默认转发到该端口。
+export PAMS_WEB_PORT="${requested_web_port:-${PAMS_WEB_PORT:-8080}}"
 
 echo "==> [1/3] git pull"
 git pull --ff-only

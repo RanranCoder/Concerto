@@ -1,6 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 
-test.use({ baseURL: process.env.PAMS_E2E_BASE_URL ?? 'http://localhost:5173', channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 } })
+if (process.env.PAMS_E2E_BASE_URL !== undefined) {
+  test.use({ baseURL: process.env.PAMS_E2E_BASE_URL })
+}
+test.use({ channel: process.platform === 'win32' ? 'msedge' : undefined, viewport: { width: 1440, height: 1000 } })
 
 const notification = { id: 8, type: 'SYSTEM', title: '顶栏通知测试', content: '这是一条通知内容', entityType: null, entityId: null, senderName: null, read: false, createdAt: '2026-10-19T08:30:00' }
 

@@ -15,7 +15,8 @@ export default defineConfig({
     global: 'globalThis',
   },
   server: {
-    port: 5173,
+    port: 3000,
+    strictPort: true,
     proxy: {
       '/api': {
         target: apiTarget,
@@ -33,6 +34,9 @@ export default defineConfig({
       '/uploads': { target: apiTarget, changeOrigin: true },
       '/ws': { target: apiTarget, ws: true },
     },
+  },
+  preview: {
+    strictPort: false,
   },
   test: {
     environment: 'node',

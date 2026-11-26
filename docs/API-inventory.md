@@ -62,7 +62,7 @@
 | 项 | 值 |
 | --- | --- |
 | 后端端口 | `http://localhost:8080`（`server.port`） |
-| 前端开发端口 | `http://localhost:5173`，Vite 代理 `/api`、`/uploads`、`/ws` → 8080 |
+| 前端开发端口 | `http://localhost:3000`，Vite 代理 `/api`、`/uploads`、`/ws` → 8080 |
 | 接口前缀 | 绝大多数为 `/api/**`；`GET /uploads/{*path}` 为历史图片直出；`/ws` 为 WebSocket 握手 |
 | Content-Type | `application/json;charset=UTF-8`；上传接口为 `multipart/form-data` |
 | 文件上传上限 | 单文件 100MB、单请求 200MB（`spring.servlet.multipart`） |
