@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: ${PAMS_PG_URL}
+    username: ${PAMS_PG_USER}
+    password: ${PAMS_PG_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      read-only: true
+      connection-init-sql: SET search_path TO pams
+  flyway:
+    enabled: false
+
+pams:
+  postgresql:
+    min-schema-version: '74'
+    max-schema-version: '74'

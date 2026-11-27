@@ -5,6 +5,7 @@ import com.pams.module.agent.repository.AgentDefinitionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Component
+@Profile("!postgresql-candidate")
 public class AgentDefinitionSeeder implements ApplicationRunner {
 
     private final AgentDefinitionRepository repository;

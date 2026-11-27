@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +18,19 @@ import java.util.concurrent.TimeUnit;
 public class RuntimeLease {
     private static final Logger log = LoggerFactory.getLogger(RuntimeLease.class);
     private final JdbcTemplate db;
+    private final Environment environment;
     private final java.util.concurrent.ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("agent-runtime-lease").factory());
 
-    public RuntimeLease(JdbcTemplate db) {
+    public RuntimeLease(JdbcTemplate db, Environment environment) {
         this.db = db;
+        this.environment = environment;
     }
 
     @Order(0)
     @EventListener(ApplicationReadyEvent.class)
     void start() {
+        if (environment.matchesProfiles("postgresql-candidate")) return;
         renew();
         scheduler.scheduleWithFixedDelay(this::renew, 5, 5, TimeUnit.SECONDS);
     }

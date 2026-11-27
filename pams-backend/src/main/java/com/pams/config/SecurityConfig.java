@@ -50,7 +50,7 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
-                .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/ping").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/ping", "/api/ready").permitAll()
                 // 组织注册：免登录（新组织尚无账号），限流在 OrgService 内做
                 .requestMatchers(HttpMethod.POST, "/api/orgs/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/account-setup").permitAll()

@@ -7,6 +7,7 @@ import com.pams.module.routine.repository.ScheduleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import com.pams.common.OrgContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,6 +24,7 @@ import java.util.List;
  * 硬性约束：绝不覆盖 status_source=MANUAL 的考勤行；排班置 ENDED 后不再重复处理（幂等）。
  */
 @Component
+@Profile("!postgresql-candidate")
 public class AttendanceAutoJob {
 
     private static final Logger log = LoggerFactory.getLogger(AttendanceAutoJob.class);

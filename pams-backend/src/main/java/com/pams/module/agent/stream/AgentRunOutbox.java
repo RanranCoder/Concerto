@@ -36,7 +36,7 @@ public class AgentRunOutbox {
     public void startup() { tick(); }
     @Scheduled(fixedDelayString="${pams.agent.outbox-poll-ms:2000}",initialDelay=5000)
     public void tick() {
-        if(!props.isRuntimeRecoveryEnabled() || environment.matchesProfiles("test")) return;
+        if(!props.isRuntimeRecoveryEnabled() || environment.matchesProfiles("test", "postgresql-candidate")) return;
         try { reconcile(); deliverOnce(); } catch(Exception e) { log.warn("协作恢复扫描失败，将重试",e); }
     }
     /** Exposed for deterministic recovery tests. Metadata only; every tenant is restored explicitly. */

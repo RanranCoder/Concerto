@@ -37,6 +37,7 @@ import com.pams.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -48,6 +49,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 @Component
+@Profile("!postgresql-candidate")
 @org.springframework.core.annotation.Order(0)
 public class DataSeeder implements ApplicationRunner {
     @org.springframework.beans.factory.annotation.Autowired

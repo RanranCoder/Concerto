@@ -1,13 +1,13 @@
 package com.pams.module.permission.service;
 
 import jakarta.annotation.PostConstruct;
-import org.springframework.context.annotation.DependsOn;
+import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /** A reverted authority projection may only run with the previous application release. */
 @Component
-@DependsOn("flywayInitializer")
+@DependsOnDatabaseInitialization
 public class AuthorizationRollbackGuard {
   private final JdbcTemplate db;
 

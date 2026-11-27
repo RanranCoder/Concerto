@@ -3,6 +3,7 @@ package com.pams.module.permission.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 import org.springframework.boot.*;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** One-time conversion of explicitly granted legacy administration. */
 @Component
+@Profile("!postgresql-candidate")
 @Order(1)
 @lombok.extern.slf4j.Slf4j
 public class AuthorizationBootstrap implements ApplicationRunner {
