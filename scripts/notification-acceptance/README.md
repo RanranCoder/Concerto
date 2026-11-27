@@ -99,3 +99,10 @@ Check the container port mapping directly from the deployment host:
 ```sh
 curl --fail --silent --show-error http://localhost:8080/api/ping
 ```
+## PostgreSQL regression
+
+Create a disposable local `pams_acceptance_*` database and complete the `empty-seed` migration. Use the runtime role. Set `PAMS_PG_ACCEPTANCE_URL` to a plain loopback JDBC URL, for example `jdbc:postgresql://127.0.0.1:5432/pams_acceptance_example`. Set `PAMS_PG_ACCEPTANCE_USER` and `PAMS_PG_ACCEPTANCE_PASSWORD` before running the suite. The suite exercises notification policies, delivery and replay, as well as PostgreSQL lease and attendance concurrency. [Database preparation](../postgresql/README.md)
+
+```bash
+node scripts/notification-acceptance/run.mjs postgresql-test
+```

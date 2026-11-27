@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.*;
 import com.pams.module.notification.dto.*;
 import com.pams.module.notification.entity.*;
@@ -120,7 +121,7 @@ public class NotificationService {
       NotificationType t;try{t=NotificationType.valueOf(p.getType());}catch(IllegalArgumentException e){continue;}
       if(t==NotificationType.SYSTEM || t==NotificationType.GOVERNANCE_CHANGED)continue;
       db.update("INSERT INTO notification_preference(org_id,user_id,event_type,enabled) VALUES(?,?,?,?) "
-        +"ON DUPLICATE KEY UPDATE enabled=?",NotificationPipeline.org(),uid,t.name(),p.isEnabled(),p.isEnabled());
+        +SqlDialect.upsert(db,"org_id,user_id,event_type","enabled=?"),NotificationPipeline.org(),uid,t.name(),p.isEnabled(),p.isEnabled());
     }
   }
 }

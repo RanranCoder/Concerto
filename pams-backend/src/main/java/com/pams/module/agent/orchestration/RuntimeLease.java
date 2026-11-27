@@ -1,5 +1,6 @@
 package com.pams.module.agent.orchestration;
 
+import com.pams.config.SqlDialect;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,15 @@ public class RuntimeLease {
 
     private void renew() {
         try {
+            if (SqlDialect.postgresql(db)) {
+                db.update("""
+                        INSERT INTO agent_runtime_lease(owner_id, expires_at)
+                        VALUES (?, clock_timestamp() + INTERVAL '30 seconds')
+                        ON CONFLICT (owner_id) DO UPDATE SET expires_at = clock_timestamp() + INTERVAL '30 seconds'
+                        """, RuntimeIdentity.ID);
+                db.update("DELETE FROM agent_runtime_lease WHERE expires_at < clock_timestamp() - INTERVAL '1 day'");
+                return;
+            }
             db.update("""
                     INSERT INTO agent_runtime_lease(owner_id, expires_at)
                     VALUES (?, TIMESTAMPADD(SECOND, 30, CURRENT_TIMESTAMP))
@@ -50,11 +60,10 @@ public class RuntimeLease {
 
     public boolean expired(String owner, LocalDateTime claimedAt) {
         if (owner != null) {
-            var leases = db.queryForList("""
-                    SELECT CASE WHEN expires_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END
-                    FROM agent_runtime_lease WHERE owner_id = ?
-                    """, Integer.class, owner);
-            if (!leases.isEmpty()) return leases.getFirst() == 1;
+            String now = SqlDialect.postgresql(db) ? "clock_timestamp()" : "CURRENT_TIMESTAMP";
+            var leases = db.queryForList("SELECT expires_at <= " + now
+                    + " FROM agent_runtime_lease WHERE owner_id = ?", Boolean.class, owner);
+            if (!leases.isEmpty()) return leases.getFirst();
         }
         // Rolling upgrades may still have work claimed by an older version without heartbeats.
         return claimedAt != null && !claimedAt.isAfter(LocalDateTime.now().minusMinutes(30));

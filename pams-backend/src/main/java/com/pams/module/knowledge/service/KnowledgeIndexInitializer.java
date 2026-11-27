@@ -1,11 +1,11 @@
 package com.pams.module.knowledge.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.module.knowledge.retriever.KnowledgeSearchMode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +23,6 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@Profile("!postgresql-candidate")
 public class KnowledgeIndexInitializer implements ApplicationRunner {
 
     private static final String INDEX_NAME = "ft_kb_chunk_content";
@@ -44,6 +43,18 @@ public class KnowledgeIndexInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         try {
+            if (SqlDialect.postgresql(jdbc)) {
+                int indexes = jdbc.queryForObject("""
+                        SELECT COUNT(*) FROM pg_index i
+                        JOIN pg_class c ON c.oid=i.indexrelid
+                        JOIN pg_namespace n ON n.oid=c.relnamespace
+                        WHERE n.nspname='pams' AND i.indisvalid
+                          AND c.relname IN ('idx_kb_chunk_title_trgm','idx_kb_chunk_content_trgm')
+                        """, Integer.class);
+                if (indexes == 2) mode.markTrigram("PostgreSQL 中文检索索引已就绪");
+                else mode.markDegraded("PostgreSQL 中文检索索引缺失");
+                return;
+            }
             if (indexExists()) {
                 mode.markFulltext("全文索引 " + INDEX_NAME + " 已存在");
                 log.info("知识库检索模式：全文索引已就绪（ngram）");

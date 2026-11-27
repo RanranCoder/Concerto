@@ -20,6 +20,7 @@ public class KnowledgeSearchMode {
 
     /** 全文索引是否可用；不可用时检索降级为 LIKE */
     private volatile boolean fulltextAvailable = false;
+    private volatile boolean trigram = false;
 
     /** 说明：为什么降级、当时发生了什么 —— 排查时这句话比布尔值有用得多 */
     private volatile String note = "未初始化";
@@ -29,6 +30,13 @@ public class KnowledgeSearchMode {
     public String note() { return note; }
 
     public void markFulltext(String note) {
+        this.trigram = false;
+        this.fulltextAvailable = true;
+        this.note = note;
+    }
+
+    public void markTrigram(String note) {
+        this.trigram = true;
         this.fulltextAvailable = true;
         this.note = note;
     }
@@ -39,5 +47,5 @@ public class KnowledgeSearchMode {
     }
 
     /** 供健康检查/统计展示 */
-    public String mode() { return fulltextAvailable ? "fulltext-ngram" : "like-fallback"; }
+    public String mode() { return fulltextAvailable ? (trigram ? "postgresql-trigram" : "fulltext-ngram") : "like-fallback"; }
 }

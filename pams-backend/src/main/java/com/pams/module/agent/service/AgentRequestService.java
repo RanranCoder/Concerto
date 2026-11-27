@@ -1,5 +1,6 @@
 package com.pams.module.agent.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.*;
 import com.pams.module.agent.core.ToolContext;
 import com.pams.module.agent.entity.AgentRequest;
@@ -33,7 +34,8 @@ public class AgentRequestService {
         validate(id);
         if(userId==null || OrgContext.get()==null || !authorization.valid(userId)) throw new BizException(403,"发起人身份失效");
         long authVersion=((Number)authorization.identity(userId).get("authz_version")).longValue();
-        db.update("insert into agent_request(id,user_id,org_id,authz_version,status,cancelled,updated_at) values(?,?,?,?,'CREATED',false,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE id=id",id,userId,OrgContext.get(),authVersion);
+        db.update("insert into agent_request(id,user_id,org_id,authz_version,status,cancelled,updated_at) values(?,?,?,?,'CREATED',false,CURRENT_TIMESTAMP)"
+                +SqlDialect.insertOnce(db,"id","id"),id,userId,OrgContext.get(),authVersion);
     }
     private AgentRequest check(AgentRequest r,Long uid) {
         if(!Objects.equals(uid,r.getUserId()) || !Objects.equals(OrgContext.get(),r.getOrgId())) throw new BizException(404,"请求不存在");

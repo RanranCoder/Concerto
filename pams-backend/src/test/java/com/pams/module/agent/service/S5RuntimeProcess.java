@@ -10,6 +10,7 @@ import com.pams.module.agent.repository.*;
 import com.pams.module.agent.stream.*;
 import com.pams.module.permission.service.TenantAuthorizationService;
 import com.pams.security.LoginUser;
+import com.pams.support.S5Database;
 import org.springframework.boot.SpringApplication;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,14 +24,14 @@ import java.util.*;
 public class S5RuntimeProcess {
     public static void main(String[] args) throws Exception {
         String url=System.getenv("SPRING_DATASOURCE_URL");
-        if(url==null || !url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/pams_s5_[a-zA-Z0-9_]+\\?.*"))throw new IllegalStateException("Refusing a non-sandbox database");
+        boolean postgres=S5Database.postgresql(url);
         String phase=args[0];
         var app=SpringApplication.run(PartyAffairsManagementSystemApplication.class,
             "--spring.profiles.active=test","--server.port="+("serve".equals(phase)?"18080":"0"),
             "--pams.agent.thinking=false","--pams.agent.max-tokens=2048","--pams.agent.timeout-ms=60000",
             "--pams.agent.max-tool-iterations=4","--logging.level.root=WARN","--spring.main.banner-mode=off");
         if("serve".equals(phase)) {
-            String database=app.getBean(JdbcTemplate.class).queryForObject("select database()",String.class);
+            String database=app.getBean(JdbcTemplate.class).queryForObject(postgres?"select current_database()":"select database()",String.class);
             Files.writeString(Path.of(args[1]),new ObjectMapper().writeValueAsString(Map.of("database",database,"pid",ProcessHandle.current().pid(),"port",18080)));
             return;
         }

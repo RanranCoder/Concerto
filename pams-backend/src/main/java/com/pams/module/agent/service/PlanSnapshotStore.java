@@ -1,5 +1,6 @@
 package com.pams.module.agent.service;
 
+import com.pams.config.SqlDialect;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
@@ -34,7 +35,8 @@ public class PlanSnapshotStore {
             try {BudgetDocxRevision.validate(bytes);eligible=true;} catch(Exception ignored) { /* read remains available */ }
         }
         try {
-            db.update("INSERT INTO agent_plan_snapshot(id,org_id,user_id,plan_id,conversation_id,baseline,source_base64,blocks_json,covered_through,total_blocks,eligible,expires_at) VALUES(?,?,?,?,?,?,?,?,0,?,?,?) ON DUPLICATE KEY UPDATE id=id",
+            db.update("INSERT INTO agent_plan_snapshot(id,org_id,user_id,plan_id,conversation_id,baseline,source_base64,blocks_json,covered_through,total_blocks,eligible,expires_at) VALUES(?,?,?,?,?,?,?,?,0,?,?,?)"
+                    +SqlDialect.insertOnce(db,"id","id"),
                     id,ctx.getLoginUser().getOrgId(),ctx.getUserId(),planId,ctx.getConversationId(),baseline,
                     Base64.getEncoder().encodeToString(bytes),json.writeValueAsString(doc.blocks()),doc.blocks().size(),eligible,LocalDateTime.now().plusHours(2));
         } catch(com.fasterxml.jackson.core.JsonProcessingException e) {throw new IllegalStateException(e);}

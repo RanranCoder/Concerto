@@ -1,5 +1,6 @@
 package com.pams.module.agent.service;
 
+import com.pams.support.S5Database;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.nio.file.*;
@@ -11,14 +12,21 @@ class S5ProcessRecoveryTest {
     static ProcessBuilder child(String phase,Path checkpoint,Path log) {
         var builder=new ProcessBuilder(Path.of(System.getProperty("java.home"),"bin","java").toString(),"-Xmx384m","-Dfile.encoding=UTF-8","-cp",
             System.getProperty("surefire.test.class.path",System.getProperty("java.class.path")),S5RuntimeProcess.class.getName(),phase,checkpoint.toString());
-        var env=builder.environment();env.put("SPRING_DATASOURCE_URL",System.getenv("PAMS_S5_DB_URL"));env.put("SPRING_DATASOURCE_USERNAME",System.getenv("PAMS_S5_DB_USER"));
-        env.put("SPRING_DATASOURCE_PASSWORD",System.getenv("PAMS_S5_DB_PASSWORD"));env.put("SPRING_DATASOURCE_DRIVER_CLASS_NAME","com.mysql.cj.jdbc.Driver");
-        env.put("SPRING_FLYWAY_LOCATIONS","classpath:db/migration,classpath:db/migration-mysql");
+        String url=System.getenv("PAMS_S5_DB_URL");
+        boolean postgres=S5Database.postgresql(url);
+        String jdbcUrl=postgres?url+(url.contains("?")?"&":"?")+"currentSchema=pams&stringtype=unspecified":url;
+        var env=builder.environment();env.put("SPRING_DATASOURCE_URL",jdbcUrl);env.put("SPRING_DATASOURCE_USERNAME",System.getenv("PAMS_S5_DB_USER"));
+        env.put("SPRING_DATASOURCE_PASSWORD",System.getenv("PAMS_S5_DB_PASSWORD"));
+        env.put("SPRING_DATASOURCE_DRIVER_CLASS_NAME",postgres?"org.postgresql.Driver":"com.mysql.cj.jdbc.Driver");
+        if(postgres) {
+            env.put("SPRING_FLYWAY_ENABLED","false");
+        } else env.put("SPRING_FLYWAY_LOCATIONS","classpath:db/migration,classpath:db/migration-mysql");
         if(!"serve".equals(phase))env.put("PAMS_TEST_AGENT_PROVIDER","stub");
         return builder.redirectErrorStream(true).redirectOutput(log.toFile());
     }
     @Test void aRealKilledJvmPreservesPendingConfirmationAndNeverReplaysAnUncertainCommit() throws Exception {
-        Path dir=Path.of("../docs/audits/lingsi-upgrade-implementation/s5-process").toAbsolutePath().normalize();Files.createDirectories(dir);
+        Path dir=Path.of(System.getProperty("pams.s5.process-output","../docs/audits/lingsi-upgrade-implementation/s5-process"))
+                .toAbsolutePath().normalize();Files.createDirectories(dir);
         Path checkpoint=dir.resolve("checkpoint-"+System.currentTimeMillis()+".json");
         Process prepare=child("prepare",checkpoint,dir.resolve("prepare.log")).start();
         try {

@@ -49,7 +49,7 @@ public class KbSnapshot implements OrgScoped {
     private String title;
 
     /** 叙述化聚合事实（**只允许计数与组织名**） */
-    @Lob
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
 

@@ -6,6 +6,14 @@
 
 ## 启动现有演示库
 
+PostgreSQL 演示使用独立的 `pams_concerto_demo`。按 PostgreSQL 指引准备空库并执行 `empty-seed` 迁移。先用运行账号和 `postgresql` profile 启动一次后端，完成基础字典初始化，再停止后端。以迁移账号导入演示数据，然后用运行账号重新启动。 [PostgreSQL 迁移指引](../postgresql/README.md)
+
+```bash
+psql -X -U pams_migrator -d pams_concerto_demo -f scripts/concerto-demo/postgresql.sql
+```
+
+以下命令适用于 MySQL 演示环境。
+
 在项目根目录的 PowerShell 中运行（根据自己的数据库环境修改用户名和密码）：
 
 ```powershell

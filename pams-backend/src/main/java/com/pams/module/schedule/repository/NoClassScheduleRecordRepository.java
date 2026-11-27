@@ -31,4 +31,15 @@ public interface NoClassScheduleRecordRepository extends JpaRepository<NoClassSc
     void saveLatest(@Param("orgId") Long orgId, @Param("deptId") Long deptId,
                     @Param("deptName") String deptName, @Param("semester") String semester,
                     @Param("gridJson") String gridJson, @Param("createdAt") LocalDateTime createdAt);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO no_class_schedule (org_id, dept_id, dept_name, semester, grid_json, created_at)
+            VALUES (:orgId, :deptId, :deptName, :semester, :gridJson, :createdAt)
+            ON CONFLICT (org_id, dept_id, semester) DO UPDATE
+            SET dept_name = EXCLUDED.dept_name, grid_json = EXCLUDED.grid_json, created_at = EXCLUDED.created_at
+            """, nativeQuery = true)
+    void saveLatestPostgresql(@Param("orgId") Long orgId, @Param("deptId") Long deptId,
+                             @Param("deptName") String deptName, @Param("semester") String semester,
+                             @Param("gridJson") String gridJson, @Param("createdAt") LocalDateTime createdAt);
 }

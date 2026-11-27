@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.module.notification.entity.NotificationType;
 import com.pams.module.permission.service.TenantAuthorizationService;
 import jakarta.persistence.EntityManager;
@@ -28,7 +29,7 @@ public class NotificationReminderService {
     entities.flush();
     long org=NotificationPipeline.org();Source source=source(type,id,now);
     db.update("INSERT INTO notification_reminder_source(org_id,resource_type,resource_id,fingerprint,generation,active,updated_at) "
-      +"VALUES(?,?,?,'',0,FALSE,?) ON DUPLICATE KEY UPDATE resource_id=?",org,type,id,now,id);
+      +"VALUES(?,?,?,'',0,FALSE,?)" + SqlDialect.insertOnce(db,"org_id,resource_type,resource_id","resource_id"),org,type,id,now);
     var state=db.queryForMap("SELECT * FROM notification_reminder_source WHERE org_id=? AND resource_type=? AND resource_id=? FOR UPDATE",org,type,id);
     String fingerprint=source==null?"missing":source.fingerprint();boolean active=source!=null && source.active();
     long generation=((Number)state.get("generation")).longValue();
@@ -57,8 +58,9 @@ public class NotificationReminderService {
   }
   private void ensure(Source source,long generation,long user,String rule,LocalDateTime due,LocalDateTime expires,String window,LocalDateTime now) {
     db.update("INSERT INTO notification_reminder(org_id,resource_type,resource_id,generation,user_id,rule_key,window_key,due_at,expires_at,status,next_attempt_at,created_at,updated_at) "
-      +"VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?,?,?) ON DUPLICATE KEY UPDATE resource_id=?",
-      NotificationPipeline.org(),source.type(),source.id(),generation,user,rule,window==null?Long.toString(generation):window,due,expires,now,now,now,source.id());
+      +"VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?,?,?)"
+      +SqlDialect.insertOnce(db,"org_id,resource_type,resource_id,user_id,rule_key,window_key","resource_id"),
+      NotificationPipeline.org(),source.type(),source.id(),generation,user,rule,window==null?Long.toString(generation):window,due,expires,now,now,now);
   }
   @Transactional
   public void dispatch(long id,LocalDateTime now) {

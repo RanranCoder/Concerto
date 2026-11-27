@@ -1,5 +1,6 @@
 package com.pams.module.agent.provider;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.BizException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -97,8 +98,8 @@ public class ProviderSecrets {
             // Adopt an existing explicit key only after proving it decrypts existing ciphertext.
             var existing = db.queryForList("select api_key_ciphertext from agent_provider_config", String.class);
             for (String ciphertext : existing) decryptWith(ciphertext, selected);
-            try { db.update("insert into agent_provider_key_state(id,fingerprint) values(1,?)", fingerprint); }
-            catch (org.springframework.dao.DuplicateKeyException concurrentInitializer) { /* Read the winner below. */ }
+            db.update("insert into agent_provider_key_state(id,fingerprint) values(1,?)"
+                    + SqlDialect.insertOnce(db,"id","id"), fingerprint);
             state = db.queryForList("select fingerprint from agent_provider_key_state where id=1", String.class);
         }
         if (state.isEmpty() || !MessageDigest.isEqual(fingerprint.getBytes(StandardCharsets.UTF_8), state.getFirst().getBytes(StandardCharsets.UTF_8)))

@@ -1,5 +1,6 @@
 package com.pams.module.schedule.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.BizException;
 import com.pams.module.schedule.entity.CourseSchedule;
 import com.pams.module.schedule.entity.ScheduleConfig;
@@ -77,14 +78,14 @@ public class CourseScheduleService {
     @SuppressWarnings("unchecked")
     public void saveMySchedule(Long userId, String semester, List<Map<String, Object>> cells) {
         if (semester == null || semester.isBlank()) throw new BizException(2701, "请选择学期");
-        scheduleRepo.deleteByUserIdAndSemester(userId, semester);
         if (jdbc != null) {
             jdbc.update("""
                     INSERT INTO course_schedule_submission (org_id, user_id, semester, submitted_at)
                     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                    ON DUPLICATE KEY UPDATE submitted_at = CURRENT_TIMESTAMP
-                    """, com.pams.common.OrgContext.getOrDefault(), userId, semester);
+                    """ + SqlDialect.upsert(jdbc,"org_id,user_id,semester","submitted_at=CURRENT_TIMESTAMP"),
+                    com.pams.common.OrgContext.getOrDefault(), userId, semester);
         }
+        scheduleRepo.deleteByUserIdAndSemester(userId, semester);
         if (cells == null) return;
         for (Map<String, Object> cell : cells) {
             CourseSchedule cs = new CourseSchedule();

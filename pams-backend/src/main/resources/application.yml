@@ -2,6 +2,9 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    group:
+      postgresql-candidate: postgresql
   application:
     name: pams-backend
   config:

@@ -125,6 +125,8 @@ npm run test:e2e
 
 ## 部署
 
+PostgreSQL 预发使用独立的 Compose 项目、迁移任务和数据库角色。 [PostgreSQL 迁移与候选验收](scripts/postgresql/README.md)
+
 直接运行 `docker compose up` 时，前端默认发布到 `127.0.0.1:3000`。通过 `deploy.sh` 更新服务器时，前端默认发布到 `127.0.0.1:8080`。两种方式均可通过调用命令的环境变量或 `.env` 设置 `PAMS_WEB_PORT`，命令环境变量优先。宿主机 Nginx 示例的上游端口是 `8080`。使用其他端口时，请同步更新常规请求、WebSocket 和通知 SSE 的上游端口。 [容器内 Nginx 配置](pams-web/nginx.conf) · [宿主机 Nginx 配置](scripts/notification-acceptance/concerto-domain.conf)
 
 从使用 `8081` 的旧版首次升级时，请先在服务器的 `.env` 中设置 `PAMS_WEB_PORT=8081`，再执行 `./deploy.sh`。这样旧版脚本拉取新版 Compose 后，已安装的 Nginx 仍能转发。若要迁移到 `8080`，请在维护窗口内同时更新 `.env` 和宿主机 Nginx 的上游配置，运行部署脚本并重新加载 Nginx，然后通过域名验证 `/api/ping`。

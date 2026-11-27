@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${PAMS_PG_URL}
+    username: ${PAMS_PG_USER}
+    password: ${PAMS_PG_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-init-sql: SET search_path TO pams
+      data-source-properties:
+        # JDBC writers pass JSON text that PostgreSQL resolves against the target jsonb column.
+        stringtype: unspecified
+  flyway:
+    enabled: false
+
+pams:
+  postgresql:
+    min-schema-version: '75'
+    max-schema-version: '75'

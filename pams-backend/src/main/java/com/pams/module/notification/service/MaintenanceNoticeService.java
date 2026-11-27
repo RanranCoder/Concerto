@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.BizException;
 import com.pams.module.notification.entity.NotificationType;
 import com.pams.module.permission.service.TenantAuthorizationService;
@@ -30,7 +31,8 @@ public class MaintenanceNoticeService {
   public Subscription subscribe(long uid,boolean enabled) {
     authorize(uid);long org=NotificationPipeline.org();LocalDateTime now=LocalDateTime.now(PendingWorkService.ZONE);
     // An already enabled subscription keeps its original boundary, including on repeated requests.
-    db.update("INSERT INTO notification_maintenance_subscription(org_id,user_id,enabled,enabled_at,updated_at) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE enabled_at=CASE WHEN enabled=FALSE AND ?=TRUE THEN ? ELSE enabled_at END,enabled=?,updated_at=?",org,uid,enabled,now,now,enabled,now,enabled,now);
+    db.update("INSERT INTO notification_maintenance_subscription(org_id,user_id,enabled,enabled_at,updated_at) VALUES(?,?,?,?,?)"
+      +SqlDialect.upsert(db,"org_id,user_id","enabled_at=CASE WHEN notification_maintenance_subscription.enabled=FALSE AND ?=TRUE THEN ? ELSE notification_maintenance_subscription.enabled_at END,enabled=?,updated_at=?"),org,uid,enabled,now,now,enabled,now,enabled,now);
     return subscription(uid);
   }
   @Transactional

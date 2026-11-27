@@ -8,10 +8,12 @@ import com.pams.module.routine.service.ActivityScheduleService;
 import com.pams.module.routine.service.AttendanceAutoJob;
 import com.pams.module.routine.service.AttendanceManageService;
 import com.pams.module.routine.service.AttendanceWindow;
+import com.pams.config.SqlDialect;
+import com.pams.support.PostgresqlAcceptanceDatabase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@EnabledIfEnvironmentVariable(named = "PAMS_ROUTINE_MYSQL_TEST", matches = "1")
+@EnabledIf("databaseRequested")
 @Timeout(35)
 class RoutineMySqlConcurrencyTest {
     @Autowired JdbcTemplate db;
@@ -43,8 +45,17 @@ class RoutineMySqlConcurrencyTest {
     @Autowired AttendanceManageService attendance;
     @Autowired ActivityScheduleService publication;
 
+    static boolean databaseRequested() {
+        return "1".equals(System.getenv("PAMS_ROUTINE_MYSQL_TEST"))
+                || "1".equals(System.getenv("PAMS_POSTGRESQL_ACCEPTANCE"));
+    }
+
     @DynamicPropertySource
-    static void isolatedMysql(DynamicPropertyRegistry registry) {
+    static void isolatedDatabase(DynamicPropertyRegistry registry) {
+        if ("1".equals(System.getenv("PAMS_POSTGRESQL_ACCEPTANCE"))) {
+            PostgresqlAcceptanceDatabase.register(registry);
+            return;
+        }
         String url = System.getenv("SPRING_DATASOURCE_URL");
         if (url == null || !url.matches("jdbc:mysql://(?:127\\.0\\.0\\.1|localhost):[0-9]+/pams_attendance_acceptance_[0-9]{14}(?:\\?.*)?")) {
             throw new IllegalStateException("A dedicated local pams_attendance_acceptance schema is required");
@@ -56,6 +67,10 @@ class RoutineMySqlConcurrencyTest {
 
     @BeforeEach
     void requireIsolatedSchema() {
+        if (SqlDialect.postgresql(db)) {
+            assertThat(db.queryForObject("SELECT current_database()", String.class)).startsWith("pams_acceptance_");
+            return;
+        }
         assertThat(db.queryForObject("SELECT DATABASE()", String.class))
                 .matches("pams_attendance_acceptance_[0-9]{14}");
     }
@@ -68,8 +83,8 @@ class RoutineMySqlConcurrencyTest {
         long activity = db.queryForObject("SELECT id FROM activity WHERE name=?", Long.class, name);
         db.update("""
                 INSERT INTO schedule(schedule_type,activity_id,schedule_date,start_time,end_time,status,org_id)
-                VALUES ('ACTIVITY',?,?,'00:00:01',?,'PUBLISHED',1)
-                """, activity, end.toLocalDate(), end.toLocalTime());
+                VALUES ('ACTIVITY',?,?,?,?,'PUBLISHED',1)
+                """, activity, end.toLocalDate(), java.time.LocalTime.of(0, 0, 1), end.toLocalTime());
         long schedule = db.queryForObject("SELECT id FROM schedule WHERE activity_id=?", Long.class, activity);
         db.update("INSERT INTO schedule_person(schedule_id,user_id,person_name,org_id) VALUES (?,733,'回归成员',1)", schedule);
         db.update("""
@@ -98,7 +113,9 @@ class RoutineMySqlConcurrencyTest {
     @Test
     void overlappingDraftsForTheSameMemberCannotBothPublish() throws Exception {
         long member = db.queryForObject("SELECT MIN(id) FROM sys_user WHERE org_id=1 AND status=1 AND deleted=0", Long.class);
-        var date = AttendanceWindow.now().toLocalDate().plusDays(5);
+        var firstFreeDate = AttendanceWindow.now().toLocalDate().plusDays(5);
+        var lastFixture = db.queryForObject("SELECT MAX(schedule_date) FROM schedule WHERE org_id=1", java.time.LocalDate.class);
+        var date = lastFixture != null && !lastFixture.isBefore(firstFreeDate) ? lastFixture.plusDays(1) : firstFreeDate;
         long first = draftFor(member, date);
         long second = draftFor(member, date);
         var start = new CountDownLatch(1);

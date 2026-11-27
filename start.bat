@@ -23,6 +23,15 @@ rem 本地开发密钥：.env 已提供则沿用（重启后不必重新登录�
 if not defined PAMS_JWT_SECRET (
     for /f %%i in ('powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"') do set PAMS_JWT_SECRET=%%i
 )
+set "PAMS_START_PROFILES=dev"
+if /i "%PAMS_DB_ENGINE%"=="postgresql" (
+    if not defined PAMS_PG_URL (echo 请设置 PAMS_PG_URL 并执行 PostgreSQL 迁移。 & exit /b 1)
+    if not defined PAMS_PG_USER (echo 请设置 PostgreSQL 运行账号 PAMS_PG_USER。 & exit /b 1)
+    if not defined PAMS_PG_PASSWORD (echo 请设置 PostgreSQL 运行密码 PAMS_PG_PASSWORD。 & exit /b 1)
+    set "PAMS_START_PROFILES=postgresql,dev"
+    echo [1/3] 使用已迁移的本地 PostgreSQL 开发库。
+    goto start_services
+)
 if defined SPRING_DATASOURCE_URL (
     echo [1/3] 使用已配置的数据源，请确认目标库已经创建。
 ) else (
@@ -30,8 +39,9 @@ if defined SPRING_DATASOURCE_URL (
     mysql --host=localhost --user=root --password="%DB_PASSWORD%" < "%~dp0database\init_db.sql" || (echo 数据库初始化失败，请检查 MySQL 服务与登录配置。 & exit /b 1)
     set "SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/pams_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
 )
+:start_services
 echo [2/3] 启动后端 (http://localhost:8080)...
-start "pams-backend" /D "%~dp0pams-backend" cmd /k "mvn spring-boot:run -Dspring-boot.run.profiles=dev"
+start "pams-backend" /D "%~dp0pams-backend" cmd /k "mvn spring-boot:run -Dspring-boot.run.profiles=%PAMS_START_PROFILES%"
 echo [3/3] 启动前端 (http://localhost:3000)...
 start "pams-web" /D "%~dp0pams-web" cmd /k "npm run dev"
 timeout /t 15 >nul

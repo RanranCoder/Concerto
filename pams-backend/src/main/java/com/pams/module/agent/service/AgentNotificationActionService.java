@@ -1,5 +1,6 @@
 package com.pams.module.agent.service;
 
+import com.pams.config.SqlDialect;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pams.common.BizException;
 import com.pams.module.agent.core.*;
@@ -38,7 +39,8 @@ public class AgentNotificationActionService {
             groups.add(column+" IN ("+String.join(",",Collections.nCopies(values.size(),"?"))+")");parameters.addAll(values);
         }
         String sql="SELECT u.id FROM sys_user u JOIN sys_role r ON r.id=u.role_id AND r.org_id=u.org_id LEFT JOIN sys_department d ON d.id=u.dept_id AND d.org_id=u.org_id WHERE u.org_id=? AND u.deleted=0 AND u.status=1 AND r.status='ACTIVE' AND ("
-                +String.join("INTERSECTION".equals(selector.get("combination"))?" AND ":" OR ",groups)+") ORDER BY u.id LIMIT 201"+(lock?" FOR UPDATE":"");
+                +String.join("INTERSECTION".equals(selector.get("combination"))?" AND ":" OR ",groups)+") ORDER BY u.id LIMIT 201"
+                +(lock?(SqlDialect.postgresql(db)?" FOR UPDATE OF u,r":" FOR UPDATE"):"");
         var users=db.queryForList(sql,Long.class,parameters.toArray());if(users.size()>200)throw new BizException(400,"受众超过200人，请缩小范围或使用原生发布界面");return users;
     }
     @Transactional

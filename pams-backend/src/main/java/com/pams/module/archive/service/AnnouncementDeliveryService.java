@@ -1,5 +1,6 @@
 package com.pams.module.archive.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.*;
 import com.pams.module.archive.dto.AnnouncementRequest;
 import com.pams.module.archive.entity.Announcement;
@@ -27,7 +28,8 @@ public class AnnouncementDeliveryService {
       long uid=((Number)row.get("id")).longValue();
       Long dept=row.get("dept_id")==null?null:((Number)row.get("dept_id")).longValue();
       if(Objects.equals(sender,uid) || !(req.isAudienceAll() || selected.contains(uid) || (dept!=null && departments.contains(dept))) || !auth.business(uid).contains("notice:view"))continue;
-      if(a.isRequireConfirmation())db.update("INSERT INTO announcement_receipt(org_id,announcement_id,user_id,version) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE user_id=?",org,a.getId(),uid,a.getConfirmationVersion(),uid);
+      if(a.isRequireConfirmation())db.update("INSERT INTO announcement_receipt(org_id,announcement_id,user_id,version) VALUES(?,?,?,?)"
+        +SqlDialect.insertOnce(db,"org_id,announcement_id,user_id,version","user_id"),org,a.getId(),uid,a.getConfirmationVersion());
       pipeline.record(NotificationType.ANNOUNCEMENT,req.isImportantCorrection()?"公告重要更正":"新公告",
           "《"+a.getTitle()+"》"+(a.isRequireConfirmation()?"需要你单独确认，请查看公告。":"已发布，请查看公告。"),"ANNOUNCEMENT",a.getId(),sender,uid,null,null);
       pipeline.invalidate(uid);

@@ -2,6 +2,8 @@ package com.pams.module.agent.orchestration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.OrgContext;
+import com.pams.config.SqlDialect;
+import com.pams.support.S5Database;
 import com.pams.module.agent.core.*;
 import com.pams.module.agent.entity.*;
 import com.pams.module.agent.repository.*;
@@ -36,10 +38,15 @@ class S5AcceptanceTest {
         "createActivity","createMember","createSeatLayout","draftArticleFromActivity","draftPlanSections","generateActivitySchedule","generateActivityTasks","previewCreditBatch","publishAnnouncement","sendNotification");
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
         String url=System.getenv("PAMS_S5_DB_URL");
-        if(url==null || !url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/pams_s5_[a-zA-Z0-9_]+\\?.*"))throw new IllegalStateException("S5 requires an isolated pams_s5_* database on a local tunnel");
+        boolean postgres=S5Database.postgresql(url);
         registry.add("spring.datasource.url",()->url);registry.add("spring.datasource.username",()->System.getenv("PAMS_S5_DB_USER"));
-        registry.add("spring.datasource.password",()->System.getenv("PAMS_S5_DB_PASSWORD"));registry.add("spring.datasource.driver-class-name",()->"com.mysql.cj.jdbc.Driver");
-        registry.add("spring.flyway.locations",()->"classpath:db/migration,classpath:db/migration-mysql");
+        registry.add("spring.datasource.password",()->System.getenv("PAMS_S5_DB_PASSWORD"));
+        registry.add("spring.datasource.driver-class-name",()->postgres?"org.postgresql.Driver":"com.mysql.cj.jdbc.Driver");
+        if(postgres) {
+            registry.add("spring.flyway.enabled",()->false);
+            registry.add("spring.datasource.hikari.connection-init-sql",()->"SET search_path TO pams");
+            registry.add("spring.datasource.hikari.data-source-properties.stringtype",()->"unspecified");
+        } else registry.add("spring.flyway.locations",()->"classpath:db/migration,classpath:db/migration-mysql");
     }
     @Autowired JdbcTemplate db;
     @Autowired ToolRegistry tools;
@@ -87,30 +94,42 @@ class S5AcceptanceTest {
         var notification=preview("sendNotification",Map.of("title",prefix+"-查询通知样本","content","独立测试库通知样本","recipientUserId",1));
         assertThat(gate.confirm(notification.plan().planId(),notification.plan().confirmToken(),ctx).get("status")).isEqualTo("SUCCESS");
         notificationWorker.tick(); // Scheduled delivery is intentionally disabled under the test profile.
-        db.update("insert ignore into sys_role(id,org_id,code,name,level,data_scope,status) values(9001,1,'S5_NONE','S5 无业务授权',1,'SELF',1)");
-        db.update("insert ignore into sys_user(id,org_id,username,password,real_name,role_id,status) values(9001,1,'s5-none','not-a-login-password','S5 无权限测试用户',9001,1)");
+        db.update("insert into sys_role(id,org_id,code,name,level,data_scope,status) values(9001,1,'S5_NONE','S5 无业务授权',1,'SELF','ACTIVE')"
+                +SqlDialect.insertOnce(db,"id","id"));
+        db.update("insert into sys_user(id,org_id,username,password,real_name,role_id,status) values(9001,1,'s5-none','not-a-login-password','S5 无权限测试用户',9001,1)"
+                +SqlDialect.insertOnce(db,"id","id"));
         db.update("insert into signin_roster(activity_id,fields_json,org_id) values(?,?,1)",activity,"{\"姓名\":\"S5 合成学生\",\"学号\":\"S50001\"}");
         db.update("insert into party_member(name,org_id) values(?,1)",prefix+"-合成发展对象");
         db.update("insert into material(name,biz_type,activity_id,uploader_id,org_id) values(?,'ACTIVITY',?,1,1)",prefix+"-材料",activity);
-        db.update("insert into schedule_config(period,label,start_time,end_time,org_id) select 3,'S5 节次','14:00:00','15:40:00',1 where not exists(select 1 from schedule_config where org_id=1 and period=3)");
-        db.update("insert into task(activity_id,name,assignee,start_date,end_date,status,org_id) values(?,?,?,DATE_SUB(CURDATE(),INTERVAL 2 DAY),DATE_SUB(CURDATE(),INTERVAL 1 DAY),'TODO',1)",activity,prefix+"-个人待办",ctx.getLoginUser().getRealName());
+        db.update("insert into schedule_config(period,label,start_time,end_time,org_id) select 3,'S5 节次',TIME '14:00:00',TIME '15:40:00',1 where not exists(select 1 from schedule_config where org_id=1 and period=3)");
+        var today=java.time.LocalDate.now();
+        db.update("insert into task(activity_id,name,assignee,start_date,end_date,status,org_id) values(?,?,?,?,?,'TODO',1)",
+                activity,prefix+"-个人待办",ctx.getLoginUser().getRealName(),today.minusDays(2),today.minusDays(1));
         db.update("insert into schedule(schedule_type,notes,schedule_date,status,org_id) values('CLASS_DUTY',?,'2026-11-20','PUBLISHED',1)",prefix+"-考勤排班");
         Long attendanceSchedule=db.queryForObject("select id from schedule where notes=?",Long.class,prefix+"-考勤排班");
         db.update("insert into attendance(schedule_id,person_id,person_name,status,status_source,org_id) values(?,1,?,'NORMAL','MANUAL',1)",attendanceSchedule,ctx.getLoginUser().getRealName());
         var rows=new ArrayList<Map<String,Object>>();
+        String availableName=db.queryForObject("SELECT real_name FROM sys_user WHERE org_id=1 AND dept_id=? "
+                +"AND status=1 AND deleted=0 ORDER BY id LIMIT 1",String.class,dept);
         for(Integer period:db.queryForList("select period from schedule_config",Integer.class)) {
-            var days=new LinkedHashMap<String,Object>();for(int d=1;d<=5;d++)days.put(""+d,List.of(Map.of("name","S5 合成值班员","freeWeeks","")));
+            var days=new LinkedHashMap<String,Object>();for(int d=1;d<=5;d++)days.put(""+d,List.of(Map.of("name",availableName,"freeWeeks","")));
             rows.add(Map.of("period",period,"days",days));
         }
-        db.update("insert into no_class_schedule(dept_id,dept_name,semester,grid_json,org_id) values(?,?,'S5-TEST',?,1) on duplicate key update grid_json=values(grid_json)",dept,"S5 测试部门",json.writeValueAsString(rows));
-        db.update("insert ignore into organization(id,name,type,enabled_packs,owner_user_id) values(99001,'S5 空数据隔离组织','PARTY','[\"party\"]',99001)");
+        String grid=json.writeValueAsString(rows);
+        db.update("insert into no_class_schedule(dept_id,dept_name,semester,grid_json,org_id) values(?,?,'S5-TEST',?,1)"
+                +SqlDialect.upsert(db,"org_id,dept_id,semester","grid_json=?"),dept,"S5 测试部门",grid,grid);
+        db.update("insert into organization(id,name,type,enabled_packs,owner_user_id) values(99001,'S5 空数据隔离组织','PARTY','[\"party\"]',99001)"
+                +SqlDialect.insertOnce(db,"id","id"));
         auth.initializeOrg(99001L);
         Long emptyRole=db.queryForObject("select id from sys_role where org_id=99001 and code='TEACHER'",Long.class);
-        db.update("insert ignore into sys_user(id,org_id,username,password,real_name,role_id,status) values(99001,99001,'s5-empty','not-a-login-password','S5 空数据用户',?,1)",emptyRole);
+        db.update("insert into sys_user(id,org_id,username,password,real_name,role_id,status) values(99001,99001,'s5-empty','not-a-login-password','S5 空数据用户',?,1)"
+                +SqlDialect.insertOnce(db,"id","id"),emptyRole);
         db.update("insert into activity(name,type,status,start_date,created_by,org_id) values(?,'OTHER','ASSIGNED','2026-11-20',99001,99001)",prefix+"-空数据活动");
         emptyActivity=db.queryForObject("select id from activity where org_id=99001 and name=?",Long.class,prefix+"-空数据活动");
         for(int i=0;i<2;i++)db.update("insert into activity(name,type,status,start_date,created_by,org_id) values(?,'OTHER','ASSIGNED','2026-11-20',1,1)",prefix+"-歧义活动");
-        save("environment.json",Map.of("database",db.queryForObject("select database()",String.class),"mysql",db.queryForObject("select version()",String.class),"prefix",prefix,"activityId",activity,"fixture","synthetic-only-v1"));
+        boolean postgres=SqlDialect.postgresql(db);
+        save("environment.json",Map.of("database",db.queryForObject(postgres?"select current_database()":"select database()",String.class),
+                postgres?"postgresql":"mysql",db.queryForObject("select version()",String.class),"prefix",prefix,"activityId",activity,"fixture","synthetic-only-v1"));
     }
     private SpecialistAgent.Result preview(String name,Map<String,Object> args) {
         return specialist.execute("generalist","S5 确定性工具验收",ctx,List.of(new com.pams.module.agent.llm.LlmProvider.ToolCallRequest("s5-call",name,args)),ctx.getStreamId(),ctx.getLoginUser().getUsername());

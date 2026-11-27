@@ -1,5 +1,7 @@
 package com.pams.module.schedule.service;
 
+import com.pams.config.SqlDialect;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pams.common.BizException;
@@ -56,6 +58,8 @@ import java.util.regex.Pattern;
 public class NoClassScheduleImportService {
     @Autowired
     private BusinessNoticeService notices;
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private static final String EXPORT_FOLDER = "无课表";
     private static final Pattern SEMESTER_PATTERN = Pattern.compile("\\d{4}-\\d{4}-\\d");
@@ -160,8 +164,13 @@ public class NoClassScheduleImportService {
 
     private void persistRecord(Long orgId, Long deptId, String deptName, String semester, List<NoClassScheduleRowVO> rows) {
         try {
-            recordRepository.saveLatest(orgId, deptId, deptName, semester,
-                    objectMapper.writeValueAsString(rows), LocalDateTime.now());
+            String grid = objectMapper.writeValueAsString(rows);
+            LocalDateTime now = LocalDateTime.now();
+            if (jdbc != null && SqlDialect.postgresql(jdbc)) {
+                recordRepository.saveLatestPostgresql(orgId, deptId, deptName, semester, grid, now);
+            } else {
+                recordRepository.saveLatest(orgId, deptId, deptName, semester, grid, now);
+            }
         } catch (Exception e) {
             log.error("无课表保存失败，组织 {}，部门 {}，学期 {}", orgId, deptId, semester, e);
             throw new BizException(2704, "无课表保存失败，请重试");

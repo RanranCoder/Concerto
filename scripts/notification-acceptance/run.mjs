@@ -5,6 +5,32 @@ import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+const mode=process.argv[2]||'start';
+if(mode==='postgresql-test') {
+  const url=process.env.PAMS_PG_ACCEPTANCE_URL;
+  const user=process.env.PAMS_PG_ACCEPTANCE_USER;
+  const password=process.env.PAMS_PG_ACCEPTANCE_PASSWORD;
+  if(!url || !/^jdbc:postgresql:\/\/127\.0\.0\.1:[0-9]+\/pams_acceptance_[a-zA-Z0-9_]+$/.test(url) || !user || !password) {
+    throw Error('A migrated local pams_acceptance_* database and runtime credentials are required');
+  }
+  const tests='NotificationPolicyTest,NotificationPolicyHttpTest,NotificationServiceTest,NotificationStageThreeTest,MaintenanceNoticeTest,NotificationReminderTest,NotificationStreamHttpTest,PendingWorkTest,PostgresqlBusinessTest,RoutineMySqlConcurrencyTest';
+  const args=['-B','-pl','pams-backend',`-Dtest=${tests}`,'test'];
+  const windows=process.platform==='win32';
+  const result=spawnSync(windows?'C:\\dev\\Git\\bin\\bash.exe':'mvn',
+    windows?['-c',`mvn ${args.join(' ')}`]:args,
+    {cwd:root,stdio:'inherit',env:{...process.env,
+      SPRING_CONFIG_IMPORT:'optional:file:./acceptance-empty.properties',
+      SPRING_DATASOURCE_URL:`${url}?currentSchema=pams&stringtype=unspecified`,
+      SPRING_DATASOURCE_USERNAME:user,
+      SPRING_DATASOURCE_PASSWORD:password,
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME:'org.postgresql.Driver',
+      SPRING_FLYWAY_ENABLED:'false',
+      PAMS_POSTGRESQL_ACCEPTANCE:'1',
+      PAMS_TEST_AGENT_PROVIDER:'stub'
+    }});
+  if(result.error) throw result.error;
+  process.exit(result.status??1);
+}
 const runtime=path.join(root,'.backups/notification-acceptance');fs.mkdirSync(runtime,{recursive:true});
 const envFile=path.join(runtime,'runtime.env');
 if(!fs.existsSync(envFile))fs.writeFileSync(envFile,`ACCEPTANCE_DB_PASSWORD=${randomBytes(24).toString('hex')}\nACCEPTANCE_JWT_SECRET=${randomBytes(40).toString('hex')}\n`,{mode:0o600});
@@ -17,7 +43,6 @@ function run(cmd,args,options={}) {
   return r.stdout;
 }
 function sql(statement){return run('docker',[...compose,'exec','-T','mysql','sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --batch --skip-column-names'],{input:statement});}
-const mode=process.argv[2]||'start';
 if(mode==='start') console.log(run('docker',[...compose,'up','-d','--wait','mysql']));
 else if(mode==='test') {
   const db=JSON.parse(run('docker',[...compose,'ps','--format','json','mysql']).trim());
@@ -39,4 +64,4 @@ else if(mode==='test') {
   console.log(JSON.stringify({suite:'mysql8-notification',exitCode:result.status,log:'.backups/notification-acceptance/mysql-tests.log'}));process.exitCode=result.status??1;
 } else if(mode==='serve') console.log(run('docker',[...compose,'up','-d','backend','web']));
 else if(mode==='stop') console.log(run('docker',[...compose,'down']));
-else throw Error('Use start, test, serve or stop');
+else throw Error('Use start, test, postgresql-test, serve or stop');

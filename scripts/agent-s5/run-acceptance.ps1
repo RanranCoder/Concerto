@@ -1,7 +1,7 @@
 param([switch]$Live, [switch]$Browser)
 $ErrorActionPreference = 'Stop'
 $taskUrl = $env:PAMS_S5_DB_URL
-if (!$taskUrl -or $taskUrl -notmatch '^jdbc:mysql://127\.0\.0\.1:[0-9]+/pams_s5_[a-zA-Z0-9_]+\?.*$') {
+if (!$taskUrl -or $taskUrl -notmatch '^jdbc:(mysql|postgresql)://127\.0\.0\.1:[0-9]+/pams_s5_[a-zA-Z0-9_]+(?:\?.*)?$') {
     throw 'PAMS_S5_DB_URL must point to an isolated pams_s5_* database on a loopback port.'
 }
 if (!$env:PAMS_S5_DB_USER -or !$env:PAMS_S5_DB_PASSWORD) { throw 'S5 database credentials are required.' }

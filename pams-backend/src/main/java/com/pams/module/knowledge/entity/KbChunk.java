@@ -57,7 +57,7 @@ public class KbChunk implements OrgScoped {
     @Column(length = 300)
     private String path;
 
-    @Lob
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 

@@ -50,7 +50,7 @@ public class KbDocument implements OrgScoped {
     @Column(length = 50)
     private String category;
 
-    @Lob
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String body;
 

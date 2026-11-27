@@ -1,5 +1,6 @@
 package com.pams.module.agent.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.BizException;
 import com.pams.module.agent.core.*;
 import com.pams.module.agent.entity.AgentMessage;
@@ -38,9 +39,8 @@ public class LongTermMemory {
     }
     private boolean lock(ToolContext ctx) {
         Long org=org(ctx);
-        if(db.queryForObject("select count(*) from agent_memory_setting where org_id=? and user_id=?",Integer.class,org,ctx.getUserId())==0)
-            try {db.update("insert into agent_memory_setting(org_id,user_id,enabled) values(?,?,true)",org,ctx.getUserId());}
-            catch(DuplicateKeyException ignored) { /* another request created the owner's lock row */ }
+        db.update("insert into agent_memory_setting(org_id,user_id,enabled) values(?,?,true)"
+                + SqlDialect.insertOnce(db,"org_id,user_id","user_id"),org,ctx.getUserId());
         return Boolean.TRUE.equals(db.queryForObject("select enabled from agent_memory_setting where org_id=? and user_id=? for update",Boolean.class,org,ctx.getUserId()));
     }
     @Transactional public void setEnabled(ToolContext ctx,boolean enabled) {

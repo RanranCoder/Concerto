@@ -1,0 +1,61 @@
+services:
+  postgresql:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PAMS_PG_DATABASE:-pams_db}
+      POSTGRES_PASSWORD: ${PAMS_PG_ADMIN_PASSWORD:?Set the PostgreSQL administrator password}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+      TZ: Asia/Shanghai
+    volumes:
+      - postgresql-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  backend:
+    build:
+      context: ./pams-backend
+    image: ${PAMS_IMAGE_PREFIX:-pams}-backend:${PAMS_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${PAMS_PG_PROFILE:-postgresql-candidate}
+      PAMS_PG_URL: ${PAMS_PG_URL:-jdbc:postgresql://postgresql:5432/${PAMS_PG_DATABASE:-pams_db}}
+      PAMS_PG_USER: ${PAMS_PG_USER:-pams_candidate}
+      PAMS_PG_PASSWORD: ${PAMS_PG_PASSWORD:-}
+      PAMS_JWT_SECRET: ${PAMS_JWT_SECRET:?Generate a unique PAMS_JWT_SECRET before starting Compose}
+      PAMS_COOKIE_SECURE: ${PAMS_COOKIE_SECURE:-false}
+      PAMS_TRUST_PROXY_HEADERS: ${PAMS_TRUST_PROXY_HEADERS:-false}
+      PAMS_AGENT_API_KEY: ${PAMS_AGENT_API_KEY:-}
+      PAMS_AGENT_PROTOCOL: ${PAMS_AGENT_PROTOCOL:-openai_responses}
+      PAMS_AGENT_TIMEOUT_MS: ${PAMS_AGENT_TIMEOUT_MS:-120000}
+      PAMS_AGENT_BASE_URL: ${PAMS_AGENT_BASE_URL:-https://api.openai.com/v1}
+      PAMS_AGENT_MODEL: ${PAMS_AGENT_MODEL:-}
+      PAMS_AGENT_SUMMARY_ENABLED: ${PAMS_AGENT_SUMMARY_ENABLED:-false}
+      PAMS_AI_ENCRYPTION_KEY: ${PAMS_AI_ENCRYPTION_KEY:-}
+      PAMS_AI_KEY_FILE: /app/data/secrets/ai-provider.key
+      PAMS_AI_INTERNAL_HOSTS: ${PAMS_AI_INTERNAL_HOSTS:-}
+      PAMS_UPLOAD_DIR: /app/uploads
+      TZ: Asia/Shanghai
+    volumes:
+      - uploads:/app/uploads
+      - ai-secrets:/app/data/secrets
+  web:
+    build:
+      context: ./pams-web
+      args:
+        VITE_SUPERDOC_LICENSE_KEY: ${VITE_SUPERDOC_LICENSE_KEY:-}
+    image: ${PAMS_IMAGE_PREFIX:-pams}-web:${PAMS_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "127.0.0.1:${PAMS_WEB_PORT:-3000}:80"
+
+volumes:
+  postgresql-data:
+  uploads:
+  ai-secrets:

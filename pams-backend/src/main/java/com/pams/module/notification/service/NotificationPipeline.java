@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.*;
 import com.pams.module.notification.entity.*;
 import com.pams.module.notification.repository.NotificationRepository;
@@ -73,22 +74,41 @@ public class NotificationPipeline {
   }
   private Notification recordAudience(NotificationType type,String title,String content,String entity,Long entityId,Long sender,List<Long> audience,String eventKey) {
     long org=org();
-    var existing=db.queryForList("SELECT id FROM notification WHERE org_id=? AND event_key=?",Long.class,org,eventKey);
+    String entityType=entity==null?null:entity.toUpperCase(Locale.ROOT);
     Notification n;
-    if(existing.isEmpty()) {
-      n=new Notification(); n.setOrgId(org);n.setType(type);n.setTitle(title);n.setContent(content);
-      n.setEntityType(entity==null?null:entity.toUpperCase(Locale.ROOT));n.setEntityId(entityId);
-      n.setSenderId(sender);n.setEventKey(eventKey);n.setCreatedAt(LocalDateTime.now());n.setIsRead(0);n.setDeleted(0);
-      n.setActivityId(activityId(n.getEntityType(),entityId));
-      n=messages.saveAndFlush(n);
+    boolean created;
+    if(SqlDialect.postgresql(db)) {
+      // Resolve simultaneous requests by the unique business key without aborting either transaction.
+      created=db.update("""
+        INSERT INTO notification(org_id,type,title,content,entity_type,entity_id,sender_id,event_key,created_at,activity_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT (org_id,event_key) DO NOTHING
+        """,org,type.name(),title,content,entityType,entityId,sender,eventKey,LocalDateTime.now(),activityId(entityType,entityId))>0;
+      long id=db.queryForObject("SELECT id FROM notification WHERE org_id=? AND event_key=?",Long.class,org,eventKey);
+      n=messages.findById(id).orElseThrow();
+    } else {
+      var existing=db.queryForList("SELECT id FROM notification WHERE org_id=? AND event_key=?",Long.class,org,eventKey);
+      created=existing.isEmpty();
+      n=created?createMessage(type,title,content,entityType,entityId,sender,eventKey,org)
+        :messages.findById(existing.getFirst()).orElseThrow();
+    }
+    if(created) {
       db.update("INSERT INTO notification_outbox(org_id,message_id,status,next_attempt_at,created_at) VALUES(?,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",org,n.getId());
     } else {
-      n=messages.findById(existing.getFirst()).orElseThrow();
-      db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'fact_merge_hits',1) ON DUPLICATE KEY UPDATE total_value=total_value+1",org);
+      db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'fact_merge_hits',1)"
+        +SqlDialect.upsert(db,"org_id,metric_key","total_value=notification_metric.total_value+1"),org);
     }
     Long outbox=db.queryForObject("SELECT id FROM notification_outbox WHERE org_id=? AND message_id=?",Long.class,org,n.getId());
-    for(Long user:audience) db.update("INSERT INTO notification_outbox_recipient(outbox_id,user_id) VALUES(?,?) ON DUPLICATE KEY UPDATE user_id=?",outbox,user,user);
+    for(Long user:audience) db.update("INSERT INTO notification_outbox_recipient(outbox_id,user_id) VALUES(?,?)"
+      +SqlDialect.insertOnce(db,"outbox_id,user_id","user_id"),outbox,user);
     return n;
+  }
+  private Notification createMessage(NotificationType type,String title,String content,String entityType,
+                                     Long entityId,Long sender,String eventKey,long org) {
+    Notification n=new Notification(); n.setOrgId(org);n.setType(type);n.setTitle(title);n.setContent(content);
+    n.setEntityType(entityType);n.setEntityId(entityId);
+    n.setSenderId(sender);n.setEventKey(eventKey);n.setCreatedAt(LocalDateTime.now());n.setIsRead(0);n.setDeleted(0);
+    n.setActivityId(activityId(entityType,entityId));
+    return messages.saveAndFlush(n);
   }
   private Long activityId(String type,Long id) {
     if(type==null || id==null) return null;
@@ -106,6 +126,7 @@ public class NotificationPipeline {
   }
   public void invalidate(long user) {
     db.update("INSERT INTO notification_delivery(org_id,message_id,user_id,status,next_attempt_at,created_at) "
-      +"VALUES(?,0,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE status='PENDING',next_attempt_at=CURRENT_TIMESTAMP,lease_token=NULL,lease_until=NULL,attempts=0,completed_at=NULL,created_at=CURRENT_TIMESTAMP",org(),user);
+      +"VALUES(?,0,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+      +SqlDialect.upsert(db,"org_id,message_id,user_id","status='PENDING',next_attempt_at=CURRENT_TIMESTAMP,lease_token=NULL,lease_until=NULL,attempts=0,completed_at=NULL,created_at=CURRENT_TIMESTAMP"),org(),user);
   }
 }

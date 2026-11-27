@@ -25,6 +25,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
 CREATE SCHEMA pams AUTHORIZATION :"migrator";
 CREATE SCHEMA pams_flyway AUTHORIZATION :"migrator";
+CREATE EXTENSION pg_trgm WITH SCHEMA pams;
 GRANT USAGE ON SCHEMA pams, pams_flyway TO :"runtime", :"candidate";
 
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA pams

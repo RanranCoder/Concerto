@@ -1,14 +1,17 @@
 package com.pams.module.knowledge.retriever;
 
 import com.pams.common.OrgContext;
+import com.pams.config.SqlDialect;
 import com.pams.module.agent.core.ToolContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 分块检索的 SQL 层（JdbcTemplate）。
@@ -43,12 +46,16 @@ public class ChunkSearchRepository {
     private static final String SELECT_COLS = """
             SELECT c.id, c.source_type, c.source_id, c.source_key, c.seq,
                    c.title, c.path, c.content, c.tier, c.sensitivity, c.as_of, %s AS score
-            FROM kb_chunk c
+            FROM %s c
             WHERE %s
             """;
+    private static final Pattern TRIGRAM_WORD = Pattern.compile("[\\p{IsHan}]{3,}|[A-Za-z0-9]{3,}");
 
     /** T1 全文检索（BM25 类相关度） */
     public List<ScoredChunk> fulltextT1(String query, ToolContext ctx, int limit) {
+        if (SqlDialect.postgresql(jdbc)) {
+            return trigramT1(query, ctx, limit);
+        }
         List<Object> args = new ArrayList<>();
         // ⚠️ 参数顺序 = SQL 里占位符出现的顺序，不能想当然。
         // SELECT 子句里的 MATCH ... AGAINST (?) 在整条 SQL 中**最先出现**，
@@ -61,12 +68,38 @@ public class ChunkSearchRepository {
 
         String sql = String.format(SELECT_COLS,
                 "MATCH(c.title, c.content) AGAINST (? IN NATURAL LANGUAGE MODE)",
+                "kb_chunk",
                 where + " AND c.tier = 'T1' AND MATCH(c.title, c.content) AGAINST (? IN NATURAL LANGUAGE MODE)");
         sql += " ORDER BY score DESC LIMIT ?";
 
         args.add(query);
         args.add(limit);
         return jdbc.query(sql, this::map, args.toArray());
+    }
+
+    private List<ScoredChunk> trigramT1(String query, ToolContext ctx, int limit) {
+        List<String> phrases = TRIGRAM_WORD.matcher(query).results()
+                .map(match -> "%" + escapeLike(match.group()) + "%")
+                .distinct().limit(QueryTokenizer.MAX_TOKENS).toList();
+        if (phrases.isEmpty()) return likeT1(query, ctx, limit);
+
+        List<Object> args = new ArrayList<>();
+        String where = permClause(ctx, args);
+        String matches = String.join(" OR ", java.util.Collections.nCopies(phrases.size(),
+                "(c.title ILIKE ? OR c.content ILIKE ?)"));
+        for (String phrase : phrases) {
+            args.add(phrase);
+            args.add(phrase);
+        }
+        args.add(limit);
+        var ranked = new LinkedHashMap<Long, ScoredChunk>();
+        String sql = String.format(SELECT_COLS, "2.0", "kb_chunk", where + " AND c.tier = 'T1' AND (" + matches + ")")
+                + " ORDER BY c.id ASC LIMIT ?";
+        for (ScoredChunk chunk : jdbc.query(sql, this::map, args.toArray())) ranked.put(chunk.id(), chunk);
+        if (ranked.size() < limit) {
+            for (ScoredChunk chunk : likeT1(query, ctx, limit)) ranked.putIfAbsent(chunk.id(), chunk);
+        }
+        return ranked.values().stream().limit(limit).toList();
     }
 
     /**
@@ -85,19 +118,21 @@ public class ChunkSearchRepository {
 
         List<Object> args = new ArrayList<>();
         String where = permClause(ctx, args);
+        boolean postgresql = SqlDialect.postgresql(jdbc);
 
         StringBuilder cond = new StringBuilder();
         for (int i = 0; i < tokens.size(); i++) {
             if (i > 0) cond.append(" OR ");
-            cond.append("(c.title LIKE ? OR c.content LIKE ?)");
+            cond.append(postgresql
+                    ? "(strpos(lower(c.title), lower(?)) > 0 OR strpos(lower(c.content), lower(?)) > 0)"
+                    : "(c.title LIKE ? OR c.content LIKE ?)");
         }
 
-        String sql = String.format(SELECT_COLS, "1.0",
-                where + " AND c.tier = 'T1' AND (" + cond + ")");
-        sql += " LIMIT ?";
+        String sql = postgresql ? scopedSubstringQuery(where, "T1", cond.toString())
+                : String.format(SELECT_COLS, "1.0", "kb_chunk", where + " AND c.tier = 'T1' AND (" + cond + ")") + " LIMIT ?";
 
         for (String t : tokens) {
-            String like = "%" + escapeLike(t) + "%";
+            String like = postgresql ? t : "%" + escapeLike(t) + "%";
             args.add(like);
             args.add(like);
         }
@@ -120,18 +155,26 @@ public class ChunkSearchRepository {
         String where = permClause(ctx, args);
 
         StringBuilder cond = new StringBuilder();
+        boolean postgresql = SqlDialect.postgresql(jdbc);
+        String match = postgresql ? "strpos(lower(c.title), lower(?)) > 0" : "c.title LIKE ?";
         for (int i = 0; i < tokens.size(); i++) {
             if (i > 0) cond.append(" OR ");
-            cond.append("c.title LIKE ?");
+            cond.append(match);
         }
 
-        String sql = String.format(SELECT_COLS, "1.0",
-                where + " AND c.tier = 'T2' AND (" + cond + ")");
-        sql += " ORDER BY c.id ASC LIMIT ?";
+        String sql = postgresql ? scopedSubstringQuery(where, "T2", cond.toString())
+                : String.format(SELECT_COLS, "1.0", "kb_chunk", where + " AND c.tier = 'T2' AND (" + cond + ")")
+                    + " ORDER BY c.id ASC LIMIT ?";
 
-        for (String t : tokens) args.add("%" + escapeLike(t) + "%");
+        for (String t : tokens) args.add(postgresql ? t : "%" + escapeLike(t) + "%");
         args.add(limit);
         return jdbc.query(sql, this::map, args.toArray());
+    }
+
+    private String scopedSubstringQuery(String scope, String tier, String matches) {
+        // Keep substring evaluation inside the tenant and authorization scope.
+        String scoped = "(SELECT * FROM kb_chunk c WHERE " + scope + " AND c.tier = '" + tier + "' OFFSET 0)";
+        return String.format(SELECT_COLS, "1.0", scoped, "(" + matches + ")") + " ORDER BY c.id ASC LIMIT ?";
     }
 
     /* ------------------------------------------------------------------ 权限粗筛 */

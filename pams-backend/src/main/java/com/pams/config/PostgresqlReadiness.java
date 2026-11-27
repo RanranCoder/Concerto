@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,17 +16,20 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Profile("postgresql-candidate")
+@Profile("postgresql")
 @RestController
-public class PostgresqlCandidateReadiness implements ApplicationRunner {
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class PostgresqlReadiness implements ApplicationRunner {
     private final JdbcTemplate db;
     private final MigrationVersion minVersion;
     private final MigrationVersion maxVersion;
+    private final boolean candidate;
 
-    public PostgresqlCandidateReadiness(JdbcTemplate db,
+    public PostgresqlReadiness(JdbcTemplate db, Environment environment,
             @Value("${pams.postgresql.min-schema-version}") String min,
             @Value("${pams.postgresql.max-schema-version}") String max) {
         this.db = db;
+        this.candidate = environment.matchesProfiles("postgresql-candidate");
         this.minVersion = MigrationVersion.fromVersion(min);
         this.maxVersion = MigrationVersion.fromVersion(max);
         if (minVersion.compareTo(maxVersion) > 0) {
@@ -47,17 +53,28 @@ public class PostgresqlCandidateReadiness implements ApplicationRunner {
     }
 
     private void check() {
-        requireReadOnlyRole();
+        requireRuntimeRole();
+        if (candidate) requireReadOnlyRole();
         requireCompatibleVersion();
     }
 
-    private void requireReadOnlyRole() {
-        Boolean readOnly = db.queryForObject("""
+    private void requireRuntimeRole() {
+        Boolean allowed = db.queryForObject("""
                 SELECT current_schema() = 'pams'
                    AND NOT has_database_privilege(current_database(), 'CREATE, TEMP')
                    AND NOT has_schema_privilege('pams', 'CREATE')
                    AND NOT has_schema_privilege('pams_flyway', 'CREATE')
-                   AND NOT EXISTS (
+                   AND NOT has_table_privilege('pams_flyway.flyway_schema_history', 'INSERT, UPDATE, DELETE, TRUNCATE')
+                   AND has_table_privilege('pams.sys_user', 'INSERT') = ?
+                """, Boolean.class, !candidate);
+        if (!Boolean.TRUE.equals(allowed)) {
+            throw new IllegalStateException("PostgreSQL application requires the configured runtime database role");
+        }
+    }
+
+    private void requireReadOnlyRole() {
+        Boolean readOnly = db.queryForObject("""
+                SELECT NOT EXISTS (
                        SELECT 1 FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
                        WHERE n.nspname IN ('pams', 'pams_flyway')
                        AND CASE

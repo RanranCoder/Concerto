@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.BizException;
 import com.pams.module.notification.entity.NotificationType;
 import java.time.*;
@@ -41,7 +42,8 @@ public class NotificationPolicyService {
         || request.quietStart().equals(request.quietEnd()))throw new BizException(400,"请设置有效的免打扰起止时间及摘要时间");
     for(LocalTime value:List.of(request.quietStart(),request.quietEnd(),request.digestTime()))if(value.getSecond()!=0 || value.getNano()!=0)throw new BizException(400,"通知策略时间精度为分钟");
     long org=NotificationPipeline.org();LocalDateTime now=LocalDateTime.now(PendingWorkService.ZONE);
-    db.update("INSERT INTO notification_org_policy(org_id,quiet_start,quiet_end,digest_time,digest_since,updated_at) VALUES(?,'22:00:00','08:00:00','09:00:00',?,?) ON DUPLICATE KEY UPDATE org_id=?",org,now,now,org);
+    db.update("INSERT INTO notification_org_policy(org_id,quiet_start,quiet_end,digest_time,digest_since,updated_at) VALUES(?,'22:00:00','08:00:00','09:00:00',?,?)"
+      +SqlDialect.insertOnce(db,"org_id","org_id"),org,now,now);
     Policy old=get(true);if(old.version()!=request.version())throw new BizException(409,"组织通知策略已变化，请刷新后重试");
     LocalDateTime since=request.digestEnabled() && !old.digestEnabled()?now:old.digestSince();
     db.update("UPDATE notification_org_policy SET quiet_enabled=?,quiet_start=?,quiet_end=?,digest_enabled=?,digest_time=?,digest_since=?,version=version+1,updated_by=?,updated_at=? WHERE org_id=?",

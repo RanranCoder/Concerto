@@ -1,5 +1,6 @@
 package com.pams.module.notification.service;
 
+import com.pams.config.SqlDialect;
 import com.pams.common.OrgContext;
 import com.pams.module.notification.repository.NotificationRepository;
 import java.time.LocalDateTime;
@@ -39,7 +40,7 @@ public class NotificationOutboxWorker {
       int claimed=tx.execute(s->{
         int changed=db.update("UPDATE "+table+" SET status='PROCESSING',lease_token=?,lease_until=?,attempts=attempts+1 "
           +"WHERE id=? AND org_id=? AND status IN ('PENDING','PROCESSING') AND next_attempt_at<=CURRENT_TIMESTAMP AND (lease_until IS NULL OR lease_until<CURRENT_TIMESTAMP)",lease,LocalDateTime.now().plusSeconds(60),id,org);
-        if(changed>0 && db.queryForObject("SELECT attempts FROM "+table+" WHERE id=? AND org_id=?",Integer.class,id,org)>1)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,?,1) ON DUPLICATE KEY UPDATE total_value=total_value+1",org,delivery?"delivery_retry_claims":"outbox_retry_claims");
+        if(changed>0 && db.queryForObject("SELECT attempts FROM "+table+" WHERE id=? AND org_id=?",Integer.class,id,org)>1)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,?,1)" + SqlDialect.upsert(db,"org_id,metric_key","total_value=notification_metric.total_value+1"),org,delivery?"delivery_retry_claims":"outbox_retry_claims");
         return changed;
       });
       if(claimed==0)continue;
@@ -70,11 +71,11 @@ public class NotificationOutboxWorker {
       if(!visibility.canRead(uid,n)){skipped++;continue;}
       if(db.queryForObject("SELECT COUNT(*) FROM notification_inbox WHERE org_id=? AND message_id=? AND user_id=?",Long.class,org,message,uid)>0)duplicate++;
       db.update("INSERT INTO notification_inbox(org_id,message_id,user_id,created_at,silent_at_materialization) VALUES(?,?,?,?,?) "
-        +"ON DUPLICATE KEY UPDATE user_id=?",org,message,uid,n.getCreatedAt(),silent,uid);
+        +SqlDialect.insertOnce(db,"org_id,message_id,user_id","user_id"),org,message,uid,n.getCreatedAt(),silent);
       db.update("INSERT INTO notification_delivery(org_id,message_id,user_id,status,next_attempt_at,created_at) VALUES(?,?,?,'PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) "
-        +"ON DUPLICATE KEY UPDATE user_id=?",org,message,uid,uid);
+        +SqlDialect.insertOnce(db,"org_id,message_id,user_id","user_id"),org,message,uid);
     }
-    if(duplicate>0)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'inbox_duplicate_hits',?) ON DUPLICATE KEY UPDATE total_value=total_value+?",org,duplicate,duplicate);
+    if(duplicate>0)db.update("INSERT INTO notification_metric(org_id,metric_key,total_value) VALUES(?,'inbox_duplicate_hits',?)" + SqlDialect.upsert(db,"org_id,metric_key","total_value=notification_metric.total_value+?"),org,duplicate,duplicate);
     db.update("UPDATE notification_outbox SET status='COMPLETED',lease_token=NULL,lease_until=NULL,last_error=NULL,completed_at=CURRENT_TIMESTAMP,recipient_count=?,skipped_count=? WHERE id=? AND org_id=? AND lease_token=?",recipients.size(),skipped,id,org,lease);
   }
   private void deliver(long id,long org,String lease) {

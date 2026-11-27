@@ -55,12 +55,12 @@ public class KbRetrievalLog implements OrgScoped {
     private String streamId;
 
     /** 实际用于检索的 query（一期 = 用户原话；P1 起为改写结果） */
-    @Lob
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Column(name = "query_text", columnDefinition = "TEXT", nullable = false)
     private String queryText;
 
     /** 用户原话（已脱敏）。留它是为了比对"改写有没有改错" */
-    @Lob
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Column(name = "raw_question", columnDefinition = "TEXT")
     private String rawQuestion;
 

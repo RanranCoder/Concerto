@@ -5,8 +5,8 @@
 ## 环境
 
 - Java 21、Maven、Node.js、`pams-web` 的 npm 依赖；浏览器验收需要 Playwright 浏览器（Windows 使用 Edge）。
-- 新建独立 MySQL 8.0 库，名称为 `pams_s5_...`。测试账号仅拥有该库的权限。通过本机端口或 SSH 隧道连接。
-- 设置 `PAMS_S5_DB_URL`（如 `jdbc:mysql://127.0.0.1:13316/pams_s5_example?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false`）、`PAMS_S5_DB_USER`、`PAMS_S5_DB_PASSWORD`。凭据放在进程环境，不写入 Git 或命令参数。
+- 新建独立 MySQL 8.0 或 PostgreSQL 18 库，名称为 `pams_s5_...`。测试账号仅拥有该库的权限。通过本机端口或 SSH 隧道连接。PostgreSQL 先执行 `empty-seed` 迁移，并使用运行账号。 [PostgreSQL 迁移指引](../postgresql/README.md)
+- 设置 `PAMS_S5_DB_URL`、`PAMS_S5_DB_USER`、`PAMS_S5_DB_PASSWORD`。PostgreSQL 示例为 `jdbc:postgresql://127.0.0.1:5432/pams_s5_example?currentSchema=pams&stringtype=unspecified`。凭据通过进程环境注入。
 - 真实模型至少需要同时配置 `PAMS_AGENT_API_KEY` 与 `PAMS_AGENT_MODEL`，并按服务设置 `PAMS_AGENT_PROTOCOL`、`PAMS_AGENT_BASE_URL`。可使用进程环境或本地 `.env`。模型验收使用合成业务数据。
 
 库名与回环地址在 Spring 建立连接前校验。数据为测试 profile 的合成账号和专用场景，不导入本地或线上的业务备份。测试保留结果便于检查；重复执行会追加唯一名称的数据，推荐为每轮新建隔离库。
