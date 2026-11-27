@@ -14,6 +14,7 @@
 | 通知与 MySQL、Nginx 和 SSE 联调 | [通知验收](../scripts/notification-acceptance/README.md) |
 | 独立演示库与本地演示种子 | [协奏演示库](../scripts/concerto-demo/README.md)、[本地演示数据](../scripts/demo-data/README.md) |
 | 设计规范和模块实现背景 | [设计与原型索引](design/README.md) |
+| Python、PostgreSQL、消息队列、Redis 与 CI/CD 演进 | [项目技术框架 PRD](Concerto-项目技术框架PRD.md) |
 
 ## 设计和历史记录
 
