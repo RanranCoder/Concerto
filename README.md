@@ -113,6 +113,8 @@ npm --prefix pams-web run build
 
 后端测试使用 H2 与 Flyway，前端单元测试使用 Vitest，构建命令会执行 TypeScript 检查和 Vite 打包。
 
+`feature` 分支推送以及以 `feature` 或 `main` 为目标的 PR 会自动运行 `Backend tests` 和 `Web tests and build`。后者先使用 `npm ci` 按锁文件安装依赖。在 GitHub 仓库的分支规则中将这两个检查设为必需状态检查，可要求它们通过后才能合并。 [CI 工作流](.github/workflows/ci.yml)
+
 运行完整 Playwright 测试前，先启动本地 MySQL 和 `dev` 后端。默认配置会在 `127.0.0.1:13000` 单独启动 Vite。部分 Windows 用例使用本机 Microsoft Edge。
 
 ```bash
@@ -127,7 +129,7 @@ npm run test:e2e
 
 从使用 `8081` 的旧版首次升级时，请先在服务器的 `.env` 中设置 `PAMS_WEB_PORT=8081`，再执行 `./deploy.sh`。这样旧版脚本拉取新版 Compose 后，已安装的 Nginx 仍能转发。若要迁移到 `8080`，请在维护窗口内同时更新 `.env` 和宿主机 Nginx 的上游配置，运行部署脚本并重新加载 Nginx，然后通过域名验证 `/api/ping`。
 
-`main` 分支更新后，GitHub Actions 先运行后端和前端测试，通过后以完整提交 SHA 为标签推送两套镜像。使用 GHCR 预构建镜像时，在服务器的 `.env` 中设置 `PAMS_IMAGE_PREFIX=ghcr.io/ranrancoder/pams`，并配置独立生成的 `PAMS_JWT_SECRET`。`deploy.sh` 默认部署当前提交，也可通过 `PAMS_IMAGE_TAG` 固定到已发布的提交 SHA。旧配置中的 `PAMS_IMAGE_TAG=latest` 需移除。直接用 Compose 拉取预构建镜像时，请显式设置 `PAMS_IMAGE_TAG`。
+`main` 分支更新后，GitHub Actions 复用 CI 的后端测试、Web 单测和生产构建，通过后以完整提交 SHA 为标签推送两套镜像。使用 GHCR 预构建镜像时，在服务器的 `.env` 中设置 `PAMS_IMAGE_PREFIX=ghcr.io/ranrancoder/pams`，并配置独立生成的 `PAMS_JWT_SECRET`。`deploy.sh` 默认部署当前提交，也可通过 `PAMS_IMAGE_TAG` 固定到已发布的提交 SHA。旧配置中的 `PAMS_IMAGE_TAG=latest` 需移除。直接用 Compose 拉取预构建镜像时，请显式设置 `PAMS_IMAGE_TAG`。
 
 ```bash
 ./deploy.sh

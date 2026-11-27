@@ -10,24 +10,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: pams-web/package-lock.json
-      - run: mvn -B -pl pams-backend test
-      - run: npm ci
-        working-directory: pams-web
-      - run: npm test
-        working-directory: pams-web
+    uses: ./.github/workflows/ci.yml
 
   build-push:
     needs: test
