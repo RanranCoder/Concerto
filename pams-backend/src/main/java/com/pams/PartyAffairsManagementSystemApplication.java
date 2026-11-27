@@ -1,6 +1,7 @@
 package com.pams;
 
 import com.pams.config.PostgresqlMigration;
+import com.pams.migration.HistoricalImport;
 import java.util.Arrays;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,6 +13,14 @@ public class PartyAffairsManagementSystemApplication {
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && "migrate-postgresql".equals(args[0])) {
             PostgresqlMigration.run(Arrays.copyOfRange(args, 1, args.length));
+            return;
+        }
+        if (args.length > 0 && "import-mysql-history".equals(args[0])) {
+            HistoricalImport.run(Arrays.copyOfRange(args, 1, args.length));
+            return;
+        }
+        if (args.length > 0 && "open-postgresql-writes".equals(args[0])) {
+            HistoricalImport.openWrites(Arrays.copyOfRange(args, 1, args.length));
             return;
         }
         SpringApplication.run(PartyAffairsManagementSystemApplication.class, args);

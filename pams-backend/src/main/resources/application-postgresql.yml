@@ -14,5 +14,5 @@ spring:
 
 pams:
   postgresql:
-    min-schema-version: '75'
-    max-schema-version: '75'
+    min-schema-version: '76'
+    max-schema-version: '76'

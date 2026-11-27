@@ -1,6 +1,6 @@
 # PostgreSQL 迁移和候选验收
 
-使用 PostgreSQL 18 和当前 Spring Boot 管理的 PostgreSQL JDBC 与 Flyway 模块。V74 建立业务基线，V75 添加中文检索索引。业务表位于 `pams`，Flyway 历史和初始化模式位于 `pams_flyway`。
+使用 PostgreSQL 18 和当前 Spring Boot 管理的 PostgreSQL JDBC 与 Flyway 模块。V74 建立业务基线，V75 添加中文检索索引，V76 增加存量导入和开写记录。业务表位于 `pams`，Flyway 历史和初始化模式位于 `pams_flyway`。 [存量导入与恢复](historical-cutover.md)
 
 基线取自隔离 MySQL 空库完整执行 V74 迁移链后的结构。自增列使用可显式导入历史主键的标识列。MySQL `DATETIME` 保留本地时间，`TIMESTAMP` 转为带时区时间戳。MySQL JSON 转为 `jsonb`。文本唯一键使用 ICU 的大小写和重音不敏感比较。历史导入和序列校准在批次 1C 实施。
 
@@ -61,7 +61,7 @@ curl --fail http://127.0.0.1:18074/api/ping
 curl --fail http://127.0.0.1:18074/api/ready
 ```
 
-候选启动时验证只读权限、初始化模式和成功迁移版本。版本由 `pams.postgresql.min-schema-version` 和 `pams.postgresql.max-schema-version` 指定，批次 1B 均为 75。候选关闭 Flyway、业务种子、启动租约续期、后台恢复和定时任务。读写运行使用 `postgresql` profile 与运行角色。Windows 开发可设置 `PAMS_DB_ENGINE=postgresql` 以及本机 `PAMS_PG_URL`、`PAMS_PG_USER`、`PAMS_PG_PASSWORD` 后执行 `start.bat`。
+候选启动时验证只读权限、初始化模式和成功迁移版本。版本由 `pams.postgresql.min-schema-version` 和 `pams.postgresql.max-schema-version` 指定，批次 1C 均为 76。候选关闭 Flyway、业务种子、启动租约续期、后台恢复和定时任务。读写运行使用 `postgresql` profile 与运行角色。Windows 开发可设置 `PAMS_DB_ENGINE=postgresql` 以及本机 `PAMS_PG_URL`、`PAMS_PG_USER`、`PAMS_PG_PASSWORD` 后执行 `start.bat`。
 
 ## 独立 Compose 环境
 

@@ -1,14 +1,11 @@
 package com.pams.config;
 
+import jakarta.annotation.PostConstruct;
 import java.util.Comparator;
 import org.flywaydb.core.api.MigrationVersion;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,8 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Profile("postgresql")
 @RestController
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class PostgresqlReadiness implements ApplicationRunner {
+public class PostgresqlReadiness {
     private final JdbcTemplate db;
     private final MigrationVersion minVersion;
     private final MigrationVersion maxVersion;
@@ -37,8 +33,8 @@ public class PostgresqlReadiness implements ApplicationRunner {
         }
     }
 
-    @Override
-    public void run(ApplicationArguments args) {
+    @PostConstruct
+    void initialize() {
         check();
     }
 
@@ -105,9 +101,18 @@ public class PostgresqlReadiness implements ApplicationRunner {
             throw new IllegalStateException("PostgreSQL schema version " + actual + " outside "
                     + minVersion + "–" + maxVersion);
         }
-        if (!Boolean.TRUE.equals(db.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM pams_flyway.bootstrap_mode)", Boolean.class))) {
+        var modes = db.queryForList("SELECT mode FROM pams_flyway.bootstrap_mode", String.class);
+        if (modes.isEmpty()) {
             throw new IllegalStateException("PostgreSQL initialization has not finished");
+        }
+        if ("historical-import".equals(modes.getFirst())) {
+            Boolean admitted = db.queryForObject("""
+                    SELECT EXISTS (SELECT 1 FROM pams_flyway.historical_import_state
+                                   WHERE ? OR opened_at IS NOT NULL)
+                    """, Boolean.class, candidate);
+            if (!Boolean.TRUE.equals(admitted)) {
+                throw new IllegalStateException("PostgreSQL historical import must be reconciled and explicitly opened for writes");
+            }
         }
     }
 }

@@ -20,36 +20,47 @@ public final class PostgresqlMigration {
             throw new IllegalArgumentException("Usage: migrate-postgresql empty-seed|historical-import");
         }
         String mode = args[0];
-        String url = requiredEnv("PAMS_PG_MIGRATION_URL");
-        String user = requiredEnv("PAMS_PG_MIGRATION_USER");
-        String password = requiredEnv("PAMS_PG_MIGRATION_PASSWORD");
-        if (!url.startsWith("jdbc:postgresql://")) {
-            throw new IllegalArgumentException("PAMS_PG_MIGRATION_URL must be a PostgreSQL JDBC URL");
-        }
-        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+        try (Connection conn = connect()) {
             acquireMigrationLock(conn);
-            String previousMode = recordedMode(conn);
-            if (previousMode != null && !previousMode.equals(mode)) {
-                throw new IllegalStateException("Database was initialized in mode " + previousMode);
-            }
-            Flyway flyway = Flyway.configure()
-                    .dataSource(url, user, password)
-                    .locations("classpath:db/migration-postgresql")
-                    .defaultSchema(HISTORY_SCHEMA)
-                    .schemas(HISTORY_SCHEMA)
-                    .createSchemas(false)
-                    .load();
-            flyway.migrate();
-            flyway.validate();
-            if (previousMode == null) {
-                recordMode(conn, mode);
-            }
-            System.out.println("PostgreSQL migration complete. Version "
-                    + flyway.info().current().getVersion() + ", mode " + mode);
+            migrate(conn, mode);
         }
     }
 
-    private static void acquireMigrationLock(Connection conn) throws SQLException {
+    public static Connection connect() throws SQLException {
+        return DriverManager.getConnection(migrationUrl(), requiredEnv("PAMS_PG_MIGRATION_USER"),
+                requiredEnv("PAMS_PG_MIGRATION_PASSWORD"));
+    }
+
+    private static String migrationUrl() {
+        String url = requiredEnv("PAMS_PG_MIGRATION_URL");
+        if (!url.startsWith("jdbc:postgresql://")) {
+            throw new IllegalArgumentException("PAMS_PG_MIGRATION_URL must be a PostgreSQL JDBC URL");
+        }
+        return url;
+    }
+
+    private static void migrate(Connection conn, String mode) throws SQLException, IOException {
+        String previousMode = recordedMode(conn);
+        if (previousMode != null && !previousMode.equals(mode)) {
+            throw new IllegalStateException("Database was initialized in mode " + previousMode);
+        }
+        Flyway flyway = Flyway.configure()
+                .dataSource(migrationUrl(), requiredEnv("PAMS_PG_MIGRATION_USER"), requiredEnv("PAMS_PG_MIGRATION_PASSWORD"))
+                .locations("classpath:db/migration-postgresql")
+                .defaultSchema(HISTORY_SCHEMA)
+                .schemas(HISTORY_SCHEMA)
+                .createSchemas(false)
+                .load();
+        flyway.migrate();
+        flyway.validate();
+        if (previousMode == null) {
+            recordMode(conn, mode);
+        }
+        System.out.println("PostgreSQL migration complete. Version "
+                + flyway.info().current().getVersion() + ", mode " + mode);
+    }
+
+    public static void acquireMigrationLock(Connection conn) throws SQLException {
         // Session lock also covers reference data initialization and deployments from other hosts.
         try (var statement = conn.createStatement();
                 var rows = statement.executeQuery("SELECT pg_try_advisory_lock(1129270866, 1)")) {
